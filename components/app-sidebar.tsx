@@ -67,7 +67,7 @@ const data = {
         },
         {
           title: "Settings",
-          url: "#",
+          url: "/settings",
         },
       ],
     },
@@ -121,7 +121,7 @@ const data = {
     },
     {
       title: "Settings",
-      url: "#",
+      url: "/settings",
       icon: (
         <Settings2Icon
         />
@@ -129,7 +129,7 @@ const data = {
       items: [
         {
           title: "General",
-          url: "#",
+          url: "/settings",
         },
         {
           title: "Team",
