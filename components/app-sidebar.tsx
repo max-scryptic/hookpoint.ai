@@ -1,10 +1,10 @@
 "use client"
 
 import * as React from "react"
+import Image from "next/image"
 
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
-import { TeamSwitcher } from "@/components/team-switcher"
 import {
   Sidebar,
   SidebarContent,
@@ -12,7 +12,7 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import { GalleryVerticalEndIcon, AudioLinesIcon, TerminalIcon, TerminalSquareIcon } from "lucide-react"
+import { TerminalSquareIcon } from "lucide-react"
 
 const data = {
   user: {
@@ -20,32 +20,6 @@ const data = {
     email: "user@hookpoint.ai",
     avatar: "/avatars/shadcn.jpg",
   },
-  teams: [
-    {
-      name: "Hookpoint.ai",
-      logo: (
-        <GalleryVerticalEndIcon
-        />
-      ),
-      plan: "Workspace",
-    },
-    {
-      name: "Growth",
-      logo: (
-        <AudioLinesIcon
-        />
-      ),
-      plan: "Team",
-    },
-    {
-      name: "Sandbox",
-      logo: (
-        <TerminalIcon
-        />
-      ),
-      plan: "Prototype",
-    },
-  ],
   navMain: [
     {
       title: "Dashboard",
@@ -59,11 +33,34 @@ const data = {
   ],
 }
 
+function SidebarBrand() {
+  return (
+    <div
+      aria-label="hookpoint.ai"
+      className="flex h-12 items-center gap-2 rounded-md px-2 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+    >
+      <div className="flex aspect-square size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-black">
+        <Image
+          src="/brand/hookpoint-logo-on-black.png"
+          alt=""
+          width={64}
+          height={64}
+          className="size-full scale-[1.7] object-cover"
+          priority
+        />
+      </div>
+      <span className="min-w-0 truncate text-sm font-semibold tracking-normal text-sidebar-foreground group-data-[collapsible=icon]:hidden">
+        hookpoint.ai
+      </span>
+    </div>
+  )
+}
+
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <TeamSwitcher teams={data.teams} />
+        <SidebarBrand />
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
