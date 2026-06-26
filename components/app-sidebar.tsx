@@ -1,8 +1,8 @@
 "use client"
 
 import * as React from "react"
-import Image from "next/image"
 
+import { BrandLogo } from "@/components/brand-logo"
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
 import { createClient } from "@/lib/supabase/client"
@@ -35,16 +35,7 @@ function SidebarBrand() {
       aria-label="hookpoint.ai"
       className="flex h-12 items-center gap-2 rounded-md px-2 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
     >
-      <div className="flex aspect-square size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-black">
-        <Image
-          src="/brand/hookpoint-logo-on-black.png"
-          alt=""
-          width={64}
-          height={64}
-          className="size-full scale-[1.7] object-cover"
-          priority
-        />
-      </div>
+      <BrandLogo className="size-8" priority />
       <span className="min-w-0 truncate text-sm font-semibold tracking-normal text-sidebar-foreground group-data-[collapsible=icon]:hidden">
         hookpoint.ai
       </span>
