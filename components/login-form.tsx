@@ -44,7 +44,6 @@ export function LoginForm({
     const formData = new FormData(event.currentTarget)
     const email = String(formData.get("email") ?? "")
     const password = String(formData.get("password") ?? "")
-    const username = String(formData.get("username") ?? "")
     const supabase = createClient()
 
     const response = isSignup
@@ -52,9 +51,6 @@ export function LoginForm({
           email,
           password,
           options: {
-            data: {
-              username,
-            },
             emailRedirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
           },
         })
@@ -133,20 +129,6 @@ export function LoginForm({
               <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">
                 Or continue with
               </FieldSeparator>
-              {isSignup && (
-                <Field>
-                  <FieldLabel htmlFor="username">Username</FieldLabel>
-                  <Input
-                    id="username"
-                    name="username"
-                    type="text"
-                    placeholder="hookpoint"
-                    autoComplete="username"
-                    minLength={3}
-                    required
-                  />
-                </Field>
-              )}
               <Field>
                 <FieldLabel htmlFor="email">Email</FieldLabel>
                 <Input
