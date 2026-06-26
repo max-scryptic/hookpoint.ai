@@ -1,6 +1,6 @@
 import { AppSidebar } from "@/components/app-sidebar"
 import { ModeToggle } from "@/components/mode-toggle"
-import { requireAuthenticatedUser } from "@/lib/auth"
+import { getSidebarDefaultOpen } from "@/lib/sidebar-state"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -24,13 +24,11 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 
-export const dynamic = "force-dynamic"
-
 export default async function SettingsPage() {
-  await requireAuthenticatedUser()
+  const defaultOpen = await getSidebarDefaultOpen()
 
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={defaultOpen}>
       <AppSidebar />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
