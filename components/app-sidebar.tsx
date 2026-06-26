@@ -5,6 +5,7 @@ import Image from "next/image"
 
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
+import { createClient } from "@/lib/supabase/client"
 import {
   Sidebar,
   SidebarContent,
@@ -15,11 +16,6 @@ import {
 import { TerminalSquareIcon } from "lucide-react"
 
 const data = {
-  user: {
-    name: "Hookpoint User",
-    email: "user@hookpoint.ai",
-    avatar: "/avatars/shadcn.jpg",
-  },
   navMain: [
     {
       title: "Dashboard",
@@ -57,6 +53,26 @@ function SidebarBrand() {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const [userEmail, setUserEmail] = React.useState("")
+
+  React.useEffect(() => {
+    const supabase = createClient()
+
+    supabase.auth.getUser().then(({ data }) => {
+      setUserEmail(data.user?.email ?? "")
+    })
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUserEmail(session?.user.email ?? "")
+      },
+    )
+
+    return () => {
+      authListener.subscription.unsubscribe()
+    }
+  }, [])
+
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
@@ -66,7 +82,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavMain items={data.navMain} />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser user={{ email: userEmail }} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

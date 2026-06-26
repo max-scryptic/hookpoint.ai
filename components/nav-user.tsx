@@ -28,13 +28,14 @@ export function NavUser({
   user,
 }: {
   user: {
-    name: string
     email: string
-    avatar: string
+    avatar?: string
   }
 }) {
   const { isMobile } = useSidebar()
   const router = useRouter()
+  const displayEmail = user.email || "Signed in"
+  const avatarFallback = displayEmail.slice(0, 2).toUpperCase()
 
   async function handleLogout() {
     const supabase = createClient()
@@ -53,12 +54,13 @@ export function NavUser({
             }
           >
             <Avatar>
-              <AvatarImage src={user.avatar} alt={user.name} />
-              <AvatarFallback>CN</AvatarFallback>
+              {user.avatar ? (
+                <AvatarImage src={user.avatar} alt={displayEmail} />
+              ) : null}
+              <AvatarFallback>{avatarFallback}</AvatarFallback>
             </Avatar>
             <div className="grid flex-1 text-left text-sm leading-tight">
-              <span className="truncate font-medium">{user.name}</span>
-              <span className="truncate text-xs">{user.email}</span>
+              <span className="truncate font-medium">{displayEmail}</span>
             </div>
             <ChevronsUpDownIcon className="ml-auto size-4" />
           </DropdownMenuTrigger>
@@ -72,12 +74,13 @@ export function NavUser({
               <DropdownMenuLabel className="p-0 font-normal">
                 <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                   <Avatar>
-                    <AvatarImage src={user.avatar} alt={user.name} />
-                    <AvatarFallback>CN</AvatarFallback>
+                    {user.avatar ? (
+                      <AvatarImage src={user.avatar} alt={displayEmail} />
+                    ) : null}
+                    <AvatarFallback>{avatarFallback}</AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-medium">{user.name}</span>
-                    <span className="truncate text-xs">{user.email}</span>
+                    <span className="truncate font-medium">{displayEmail}</span>
                   </div>
                 </div>
               </DropdownMenuLabel>
