@@ -1,4 +1,5 @@
 import { AppSidebar } from "@/components/app-sidebar"
+import { requireAuthenticatedUser } from "@/lib/auth"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -14,7 +15,11 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 
-export default function Page() {
+export const dynamic = "force-dynamic"
+
+export default async function Page() {
+  await requireAuthenticatedUser()
+
   return (
     <SidebarProvider>
       <AppSidebar />
