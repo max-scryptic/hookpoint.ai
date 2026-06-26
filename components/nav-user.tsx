@@ -20,7 +20,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { ChevronsUpDownIcon, SparklesIcon, BadgeCheckIcon, CreditCardIcon, BellIcon, LogOutIcon } from "lucide-react"
+import { ChevronsUpDownIcon, SparklesIcon, BadgeCheckIcon, CreditCardIcon, BellIcon, Settings2Icon, LogOutIcon } from "lucide-react"
 
 export function NavUser({
   user,
@@ -95,6 +95,11 @@ export function NavUser({
                 <BellIcon
                 />
                 Notifications
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Settings2Icon
+                />
+                Settings
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
