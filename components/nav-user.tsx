@@ -110,7 +110,7 @@ export function NavUser({
                 />
                 Notifications
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem render={<a href="/settings" />}>
                 <Settings2Icon
                 />
                 Settings
