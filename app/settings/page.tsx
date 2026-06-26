@@ -1,5 +1,6 @@
 import { AppSidebar } from "@/components/app-sidebar"
 import { ModeToggle } from "@/components/mode-toggle"
+import { requireAuthenticatedUser } from "@/lib/auth"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -23,7 +24,11 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 
-export default function SettingsPage() {
+export const dynamic = "force-dynamic"
+
+export default async function SettingsPage() {
+  await requireAuthenticatedUser()
+
   return (
     <SidebarProvider>
       <AppSidebar />
