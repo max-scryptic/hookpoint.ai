@@ -57,6 +57,12 @@ export function VideoBrowser({ initial }: { initial: VideosPage }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // search.list (forMine=true) doesn't reliably return a prevPageToken, so we
+  // can't depend on it to page backwards. Instead we track the token used for
+  // each page we've visited; the last entry is the current page's token and
+  // `null` is the first page. "Newer" re-fetches with the prior entry.
+  const [tokenHistory, setTokenHistory] = useState<Array<string | null>>([null])
+
   // Debounce the search box so typing doesn't fire a request per keystroke.
   useEffect(() => {
     const id = setTimeout(() => setDebouncedSearch(search.trim()), 400)
@@ -64,7 +70,7 @@ export function VideoBrowser({ initial }: { initial: VideosPage }) {
   }, [search])
 
   const fetchPage = useCallback(
-    async (pageToken: string | null) => {
+    async (pageToken: string | null): Promise<boolean> => {
       setLoading(true)
       setError(null)
 
@@ -84,15 +90,17 @@ export function VideoBrowser({ initial }: { initial: VideosPage }) {
         }
         if (!res.ok) {
           setError(data.message ?? data.error ?? "Couldn't load your videos.")
-          return
+          return false
         }
         setPage({
           videos: data.videos ?? [],
           nextPageToken: data.nextPageToken ?? null,
           prevPageToken: data.prevPageToken ?? null,
         })
+        return true
       } catch {
         setError("Something went wrong loading your videos.")
+        return false
       } finally {
         setLoading(false)
       }
@@ -109,19 +117,26 @@ export function VideoBrowser({ initial }: { initial: VideosPage }) {
       return
     }
     setPageNumber(1)
+    setTokenHistory([null])
     fetchPage(null)
   }, [fetchPage])
 
-  function goNext() {
+  async function goNext() {
     if (!page.nextPageToken || loading) return
-    setPageNumber((n) => n + 1)
-    fetchPage(page.nextPageToken)
+    const token = page.nextPageToken
+    if (await fetchPage(token)) {
+      setTokenHistory((history) => [...history, token])
+      setPageNumber((n) => n + 1)
+    }
   }
 
-  function goPrev() {
-    if (!page.prevPageToken || loading) return
-    setPageNumber((n) => Math.max(1, n - 1))
-    fetchPage(page.prevPageToken)
+  async function goPrev() {
+    if (tokenHistory.length <= 1 || loading) return
+    const prevToken = tokenHistory[tokenHistory.length - 2]
+    if (await fetchPage(prevToken)) {
+      setTokenHistory((history) => history.slice(0, -1))
+      setPageNumber((n) => Math.max(1, n - 1))
+    }
   }
 
   function clearFilters() {
@@ -251,7 +266,7 @@ export function VideoBrowser({ initial }: { initial: VideosPage }) {
             size="sm"
             className="gap-1.5"
             onClick={goPrev}
-            disabled={!page.prevPageToken || loading}
+            disabled={tokenHistory.length <= 1 || loading}
           >
             <ChevronLeftIcon className="size-4" />
             Newer
