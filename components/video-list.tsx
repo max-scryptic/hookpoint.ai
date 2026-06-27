@@ -133,7 +133,7 @@ function VideoActions({
         {/* Already-analysed videos can only be viewed — re-analysing would spend
             API quota to reproduce results we've already cached. */}
         <DropdownMenuItem
-          render={<Link href={`/dashboard/analyse-video/${video.id}`} />}
+          render={<Link href={`/dashboard/analysed-video/${video.id}`} />}
         >
           {isAnalysed ? (
             <>

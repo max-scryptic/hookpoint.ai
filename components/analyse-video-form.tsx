@@ -67,7 +67,7 @@ export function AnalyseVideoForm() {
         return
       }
 
-      router.push(`/dashboard/analyse-video/${data.videoId}`)
+      router.push(`/dashboard/analysed-video/${data.videoId}`)
     } catch {
       setError("Something went wrong. Please try again.")
       setIsValidating(false)
@@ -104,7 +104,7 @@ export function AnalyseVideoForm() {
             {alreadyAnalysed.title ? ` “${alreadyAnalysed.title}”` : " this video"}.
           </span>
           <Link
-            href={`/dashboard/analyse-video/${alreadyAnalysed.videoId}`}
+            href={`/dashboard/analysed-video/${alreadyAnalysed.videoId}`}
             className="font-medium text-emerald-600 underline underline-offset-4 dark:text-emerald-500"
           >
             View analysis
