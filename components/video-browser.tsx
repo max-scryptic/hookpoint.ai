@@ -10,6 +10,7 @@ import {
   ListFilterIcon,
   LockIcon,
   SearchIcon,
+  VideoOffIcon,
   XIcon,
 } from "lucide-react"
 import { type DateRange } from "react-day-picker"
@@ -176,6 +177,13 @@ export function VideoBrowser({ initial }: { initial: VideosPage }) {
     PRIVACY_OPTIONS.find((option) => option.value === privacy)?.label ??
     "All visibility"
 
+  // When a query returns nothing, show a blank slate instead of the list and
+  // hide the pagination controls — there are no further pages to step through.
+  const isEmpty = visibleVideos.length === 0
+  const emptyMessage = hasActiveFilters
+    ? "No videos match your filters."
+    : "No videos found on your YouTube channel yet."
+
   return (
     <div className="flex flex-col gap-3">
       {/* Filter bar */}
@@ -242,41 +250,46 @@ export function VideoBrowser({ initial }: { initial: VideosPage }) {
         aria-busy={loading}
         className={loading ? "pointer-events-none opacity-60 transition-opacity" : "transition-opacity"}
       >
-        {visibleVideos.length === 0 && hasActiveFilters ? (
-          <div className="rounded-xl border bg-muted/30 p-8 text-center text-sm text-muted-foreground">
-            No videos match these filters.
+        {isEmpty ? (
+          <div className="flex flex-col items-center justify-center gap-3 rounded-xl border bg-muted/30 px-6 py-16 text-center">
+            <div className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              <VideoOffIcon className="size-6" />
+            </div>
+            <p className="text-sm text-muted-foreground">{emptyMessage}</p>
           </div>
         ) : (
           <VideoList videos={visibleVideos} />
         )}
       </div>
 
-      {/* Pagination */}
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">Page {pageNumber}</p>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={goPrev}
-            disabled={tokenHistory.length <= 1 || loading}
-          >
-            <ChevronLeftIcon className="size-4" />
-            Newer
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={goNext}
-            disabled={!page.nextPageToken || loading}
-          >
-            Older
-            <ChevronRightIcon className="size-4" />
-          </Button>
+      {/* Pagination — hidden when there are no videos to page through. */}
+      {!isEmpty && (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">Page {pageNumber}</p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={goPrev}
+              disabled={tokenHistory.length <= 1 || loading}
+            >
+              <ChevronLeftIcon className="size-4" />
+              Newer
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={goNext}
+              disabled={!page.nextPageToken || loading}
+            >
+              Older
+              <ChevronRightIcon className="size-4" />
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
