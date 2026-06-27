@@ -18,10 +18,12 @@ export function DatePickerWithRange({
   value,
   onChange,
   className,
+  placeholder = "Pick a date range",
 }: {
   value?: DateRange
   onChange?: (range: DateRange | undefined) => void
   className?: string
+  placeholder?: string
 }) {
   return (
     <Popover>
@@ -49,7 +51,7 @@ export function DatePickerWithRange({
             format(value.from, "LLL dd, y")
           )
         ) : (
-          <span>Pick a date range</span>
+          <span>{placeholder}</span>
         )}
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
