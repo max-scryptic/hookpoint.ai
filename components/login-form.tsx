@@ -51,7 +51,11 @@ export function LoginForm({
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
+            // Email confirmation goes through /auth/confirm (token_hash + verifyOtp),
+            // which—unlike the PKCE code exchange used by /auth/callback—does not
+            // depend on the browser-side code_verifier cookie. That cookie is often
+            // missing because the email link opens in a different tab/app/browser.
+            emailRedirectTo: `${window.location.origin}/auth/confirm?next=/dashboard`,
           },
         })
       : await supabase.auth.signInWithPassword({
