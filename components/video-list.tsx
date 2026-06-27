@@ -3,6 +3,8 @@
 import Image from "next/image"
 import Link from "next/link"
 import {
+  BarChart3Icon,
+  CircleCheckIcon,
   EyeIcon,
   GlobeIcon,
   LinkIcon,
@@ -96,7 +98,23 @@ function Thumbnail({ video }: { video: RecentVideo }) {
   )
 }
 
-function VideoActions({ video }: { video: RecentVideo }) {
+// A green tick shown for videos that have already been analysed.
+function AnalysedBadge() {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-600 dark:text-emerald-500">
+      <CircleCheckIcon className="size-4" />
+      Analysed
+    </span>
+  )
+}
+
+function VideoActions({
+  video,
+  isAnalysed,
+}: {
+  video: RecentVideo
+  isAnalysed: boolean
+}) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -112,18 +130,36 @@ function VideoActions({ video }: { video: RecentVideo }) {
         <MoreVerticalIcon className="size-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
+        {/* Already-analysed videos can only be viewed — re-analysing would spend
+            API quota to reproduce results we've already cached. */}
         <DropdownMenuItem
           render={<Link href={`/dashboard/analyse-video/${video.id}`} />}
         >
-          <EyeIcon className="size-4" />
-          Analyse video
+          {isAnalysed ? (
+            <>
+              <BarChart3Icon className="size-4" />
+              View analysis
+            </>
+          ) : (
+            <>
+              <EyeIcon className="size-4" />
+              Analyse video
+            </>
+          )}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )
 }
 
-export function VideoList({ videos }: { videos: RecentVideo[] }) {
+export function VideoList({
+  videos,
+  analysedIds,
+}: {
+  videos: RecentVideo[]
+  // IDs of videos the user has already analysed.
+  analysedIds?: Set<string>
+}) {
   if (videos.length === 0) {
     return (
       <div className="rounded-xl border bg-muted/30 p-8 text-center text-sm text-muted-foreground">
@@ -148,14 +184,24 @@ export function VideoList({ videos }: { videos: RecentVideo[] }) {
             <th className="hidden px-4 py-3 text-right font-medium lg:table-cell">
               Comments
             </th>
+            <th className="hidden px-4 py-3 font-medium sm:table-cell">
+              Analysed
+            </th>
             <th className="w-12 px-4 py-3">
               <span className="sr-only">Actions</span>
             </th>
           </tr>
         </thead>
         <tbody className="divide-y">
-          {videos.map((video) => (
-            <tr key={video.id} className="align-top hover:bg-muted/40">
+          {videos.map((video) => {
+            const isAnalysed = analysedIds?.has(video.id) ?? false
+            return (
+            <tr
+              key={video.id}
+              className={`align-top hover:bg-muted/40 ${
+                isAnalysed ? "bg-muted/30" : ""
+              }`}
+            >
               <td className="px-4 py-3">
                 <div className="flex gap-3 sm:gap-4">
                   <Thumbnail video={video} />
@@ -177,6 +223,11 @@ export function VideoList({ videos }: { videos: RecentVideo[] }) {
                       <span className="sm:hidden">
                         {formatCount(video.viewCount)} views
                       </span>
+                      {isAnalysed && (
+                        <span className="sm:hidden">
+                          <AnalysedBadge />
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -193,11 +244,19 @@ export function VideoList({ videos }: { videos: RecentVideo[] }) {
               <td className="hidden px-4 py-3 text-right text-sm tabular-nums text-muted-foreground lg:table-cell">
                 {formatCount(video.commentCount)}
               </td>
+              <td className="hidden px-4 py-3 sm:table-cell">
+                {isAnalysed ? (
+                  <AnalysedBadge />
+                ) : (
+                  <span className="text-sm text-muted-foreground">—</span>
+                )}
+              </td>
               <td className="px-4 py-3 text-right">
-                <VideoActions video={video} />
+                <VideoActions video={video} isAnalysed={isAnalysed} />
               </td>
             </tr>
-          ))}
+            )
+          })}
         </tbody>
       </table>
     </div>
