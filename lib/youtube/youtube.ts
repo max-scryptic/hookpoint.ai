@@ -5,6 +5,8 @@
 const DATA_API = "https://www.googleapis.com/youtube/v3"
 const ANALYTICS_API = "https://youtubeanalytics.googleapis.com/v2"
 
+export type VideoPrivacyStatus = "public" | "unlisted" | "private"
+
 export interface VideoDetails {
   id: string
   title: string
@@ -12,9 +14,15 @@ export interface VideoDetails {
   publishedAt: string
   durationSeconds: number
   thumbnailUrl: string | null
+  // Richer metadata captured at analyse time so the Analysed Videos list can
+  // render full stats (description, view/comment counts, visibility) without
+  // re-calling the YouTube API. Optional because rows analysed before these
+  // fields existed won't have them.
+  description?: string
+  viewCount?: number | null
+  commentCount?: number | null
+  privacyStatus?: VideoPrivacyStatus
 }
-
-export type VideoPrivacyStatus = "public" | "unlisted" | "private"
 
 export interface RecentVideo {
   id: string
@@ -296,7 +304,9 @@ export async function getVideoDetails(
   videoId: string,
 ): Promise<VideoDetails | null> {
   const url = new URL(`${DATA_API}/videos`)
-  url.searchParams.set("part", "snippet,contentDetails")
+  // statistics + status come back on the same videos.list call (still 1 quota
+  // unit) so we can persist full metadata at analyse time.
+  url.searchParams.set("part", "snippet,contentDetails,statistics,status")
   url.searchParams.set("id", videoId)
 
   const response = await fetch(url, {
@@ -314,11 +324,14 @@ export async function getVideoDetails(
       id: string
       snippet?: {
         title?: string
+        description?: string
         channelId?: string
         publishedAt?: string
         thumbnails?: Record<string, { url?: string }>
       }
       contentDetails?: { duration?: string }
+      statistics?: { viewCount?: string; commentCount?: string }
+      status?: { privacyStatus?: string }
     }>
   }
 
@@ -333,6 +346,14 @@ export async function getVideoDetails(
     thumbnails.default?.url ??
     null
 
+  const viewCount = item.statistics?.viewCount
+  const commentCount = item.statistics?.commentCount
+  const privacy = item.status?.privacyStatus
+  const privacyStatus: VideoPrivacyStatus =
+    privacy === "public" || privacy === "unlisted" || privacy === "private"
+      ? privacy
+      : "private"
+
   return {
     id: item.id,
     title: item.snippet?.title ?? "",
@@ -340,6 +361,10 @@ export async function getVideoDetails(
     publishedAt: item.snippet?.publishedAt ?? "",
     durationSeconds: parseIso8601Duration(item.contentDetails?.duration ?? "PT0S"),
     thumbnailUrl,
+    description: item.snippet?.description ?? "",
+    viewCount: viewCount != null ? Number(viewCount) : null,
+    commentCount: commentCount != null ? Number(commentCount) : null,
+    privacyStatus,
   }
 }
 

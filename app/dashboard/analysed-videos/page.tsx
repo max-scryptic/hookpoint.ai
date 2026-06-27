@@ -1,5 +1,5 @@
 import { AppSidebar } from "@/components/app-sidebar"
-import { AnalysedVideoList } from "@/components/analysed-video-list"
+import { AnalysedVideoBrowser } from "@/components/analysed-video-browser"
 import { requireAuthenticatedUser } from "@/lib/auth"
 import { getSidebarDefaultOpen } from "@/lib/sidebar-state"
 import { createClient } from "@/lib/supabase/server"
@@ -81,7 +81,7 @@ export default async function Page() {
           </div>
 
           {result.status === "ok" && (
-            <AnalysedVideoList videos={result.videos} />
+            <AnalysedVideoBrowser videos={result.videos} />
           )}
 
           {result.status === "error" && (

@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import type { RecentVideo, VideoPrivacyStatus } from "@/lib/youtube/youtube"
 
-function formatPublishedAt(iso: string): string {
+export function formatPublishedAt(iso: string): string {
   if (!iso) return ""
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return ""
@@ -33,7 +33,7 @@ function formatPublishedAt(iso: string): string {
   })
 }
 
-function formatCount(value: number | null): string {
+export function formatCount(value: number | null): string {
   if (value == null) return "—"
   return value.toLocaleString()
 }
@@ -57,7 +57,7 @@ const VISIBILITY_META: Record<
   private: { label: "Private", icon: LockIcon },
 }
 
-function VisibilityCell({ status }: { status: VideoPrivacyStatus }) {
+export function VisibilityCell({ status }: { status: VideoPrivacyStatus }) {
   const { label, icon: Icon } = VISIBILITY_META[status]
   return (
     <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
@@ -67,7 +67,7 @@ function VisibilityCell({ status }: { status: VideoPrivacyStatus }) {
   )
 }
 
-function Thumbnail({ video }: { video: RecentVideo }) {
+export function Thumbnail({ video }: { video: RecentVideo }) {
   const duration = formatDuration(video.durationSeconds)
   return (
     <a
