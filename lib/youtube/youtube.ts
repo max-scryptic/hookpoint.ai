@@ -67,6 +67,15 @@ export interface DropOff {
   watchRatioDrop: number
 }
 
+export interface RetentionGain {
+  fromTimestampSeconds: number
+  toTimestampSeconds: number
+  // How much absolute retention was gained across this segment (positive
+  // number). A gain means more viewers were watching at the end of the segment
+  // than the start — typically a re-watched or replayed moment.
+  watchRatioGain: number
+}
+
 // Accepts the common YouTube URL shapes (watch?v=, youtu.be/, /shorts/,
 // /embed/) as well as a bare 11-character video ID. Returns null if nothing
 // looks like a video ID.
@@ -408,6 +417,35 @@ export function detectDropOffs(
 
   return drops
     .sort((a, b) => b.watchRatioDrop - a.watchRatioDrop)
+    .slice(0, limit)
+}
+
+// The mirror image of detectDropOffs: finds the segments where retention rises
+// fastest. A rising curve means viewers re-watched or skipped back to a moment,
+// so these are the points that held or grew the audience. Walks consecutive
+// points, keeps gains larger than `minGain` absolute watch-ratio, and returns
+// the largest `limit` of them (biggest gain first).
+export function detectRetentionGains(
+  points: RetentionPoint[],
+  { minGain = 0.03, limit = 5 }: { minGain?: number; limit?: number } = {},
+): RetentionGain[] {
+  const gains: RetentionGain[] = []
+
+  for (let i = 1; i < points.length; i++) {
+    const prev = points[i - 1]
+    const curr = points[i]
+    const delta = curr.watchRatio - prev.watchRatio
+    if (delta >= minGain) {
+      gains.push({
+        fromTimestampSeconds: prev.timestampSeconds,
+        toTimestampSeconds: curr.timestampSeconds,
+        watchRatioGain: delta,
+      })
+    }
+  }
+
+  return gains
+    .sort((a, b) => b.watchRatioGain - a.watchRatioGain)
     .slice(0, limit)
 }
 
