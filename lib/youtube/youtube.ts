@@ -14,12 +14,19 @@ export interface VideoDetails {
   thumbnailUrl: string | null
 }
 
+export type VideoPrivacyStatus = "public" | "unlisted" | "private"
+
 export interface RecentVideo {
   id: string
   title: string
   description: string
   publishedAt: string
   thumbnailUrl: string | null
+  // Enriched from videos.list; null when the stat is hidden or unavailable.
+  viewCount: number | null
+  commentCount: number | null
+  durationSeconds: number | null
+  privacyStatus: VideoPrivacyStatus
 }
 
 export interface RetentionPoint {
@@ -122,7 +129,7 @@ export async function getRecentVideos(
     }>
   }
 
-  return (json.items ?? [])
+  const videos = (json.items ?? [])
     .map((item): RecentVideo | null => {
       const id = item.id?.videoId
       if (!id) return null
@@ -140,9 +147,82 @@ export async function getRecentVideos(
         description: item.snippet?.description ?? "",
         publishedAt: item.snippet?.publishedAt ?? "",
         thumbnailUrl,
+        viewCount: null,
+        commentCount: null,
+        durationSeconds: null,
+        privacyStatus: "private",
       }
     })
     .filter((video): video is RecentVideo => video !== null)
+
+  // search.list omits statistics, privacy status and duration, so enrich the
+  // results with a single videos.list call keyed on the IDs we just collected.
+  await enrichWithVideoDetails(accessToken, videos)
+
+  return videos
+}
+
+// Mutates the passed videos in place, filling in viewCount, commentCount,
+// durationSeconds and privacyStatus from the videos.list endpoint. Failures are
+// swallowed so the list still renders with the snippet data already in hand.
+async function enrichWithVideoDetails(
+  accessToken: string,
+  videos: RecentVideo[],
+): Promise<void> {
+  if (videos.length === 0) return
+
+  const url = new URL(`${DATA_API}/videos`)
+  url.searchParams.set("part", "statistics,status,contentDetails")
+  url.searchParams.set("id", videos.map((video) => video.id).join(","))
+
+  let response: Response
+  try {
+    response = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+    })
+  } catch (error) {
+    console.error("Failed to enrich recent videos with details", error)
+    return
+  }
+
+  if (!response.ok) {
+    console.error(
+      `YouTube Data API error enriching videos (${response.status}): ${await response.text()}`,
+    )
+    return
+  }
+
+  const json = (await response.json()) as {
+    items?: Array<{
+      id?: string
+      statistics?: { viewCount?: string; commentCount?: string }
+      status?: { privacyStatus?: string }
+      contentDetails?: { duration?: string }
+    }>
+  }
+
+  const byId = new Map(
+    (json.items ?? []).map((item) => [item.id ?? "", item] as const),
+  )
+
+  for (const video of videos) {
+    const details = byId.get(video.id)
+    if (!details) continue
+
+    const viewCount = details.statistics?.viewCount
+    const commentCount = details.statistics?.commentCount
+    const duration = details.contentDetails?.duration
+
+    video.viewCount = viewCount != null ? Number(viewCount) : null
+    video.commentCount = commentCount != null ? Number(commentCount) : null
+    video.durationSeconds = duration ? parseIso8601Duration(duration) : null
+
+    const privacy = details.status?.privacyStatus
+    if (privacy === "public" || privacy === "unlisted" || privacy === "private") {
+      video.privacyStatus = privacy
+    }
+  }
 }
 
 // Returns the channel ID of the authenticated user's own channel, or null if
