@@ -1,6 +1,5 @@
-import Image from "next/image"
-
 import { AppSidebar } from "@/components/app-sidebar"
+import { AnalysedVideoDetail } from "@/components/analysed-video-detail"
 import { requireAuthenticatedUser } from "@/lib/auth"
 import { getSidebarDefaultOpen } from "@/lib/sidebar-state"
 import { createClient } from "@/lib/supabase/server"
@@ -14,9 +13,12 @@ import {
 } from "@/lib/youtube/google-auth"
 import {
   detectDropOffs,
+  detectRetentionGains,
   getAudienceRetention,
   getVideoDetails,
   type DropOff,
+  type RetentionGain,
+  type RetentionPoint,
   type VideoDetails,
 } from "@/lib/youtube/youtube"
 import {
@@ -37,7 +39,13 @@ import {
 export const dynamic = "force-dynamic"
 
 type AnalysisResult =
-  | { status: "ok"; video: VideoDetails; dropOffs: DropOff[] }
+  | {
+      status: "ok"
+      video: VideoDetails
+      retention: RetentionPoint[]
+      dropOffs: DropOff[]
+      gains: RetentionGain[]
+    }
   | { status: "not_found" }
   | { status: "no_data" }
   | { status: "reconnect" }
@@ -51,13 +59,16 @@ async function analyse(
     const supabase = await createClient()
 
     // Serve a previously-saved analysis when we have one, so we don't re-spend
-    // YouTube API quota on a video we've already looked at.
+    // YouTube API quota on a video we've already looked at. Gains are derived
+    // from the stored curve on the fly, so older rows render them too.
     const cached = await getAnalysedVideo(supabase, userId, videoId)
-    if (cached?.videoDetails) {
+    if (cached?.videoDetails && cached.retention) {
       return {
         status: "ok",
         video: cached.videoDetails,
-        dropOffs: cached.dropOffs ?? [],
+        retention: cached.retention,
+        dropOffs: cached.dropOffs ?? detectDropOffs(cached.retention),
+        gains: detectRetentionGains(cached.retention),
       }
     }
 
@@ -70,6 +81,7 @@ async function analyse(
     if (retention.length === 0) return { status: "no_data" }
 
     const dropOffs = detectDropOffs(retention)
+    const gains = detectRetentionGains(retention)
 
     // Persist everything we fetched so future visits hit the cache above.
     try {
@@ -79,7 +91,7 @@ async function analyse(
       console.error("Failed to save analysed video", saveError)
     }
 
-    return { status: "ok", video, dropOffs }
+    return { status: "ok", video, retention, dropOffs, gains }
   } catch (error) {
     if (error instanceof ReconsentRequiredError) {
       return { status: "reconnect" }
@@ -87,16 +99,6 @@ async function analyse(
     console.error("Failed to analyse video", error)
     return { status: "error" }
   }
-}
-
-function formatTimestamp(totalSeconds: number): string {
-  const seconds = Math.max(0, Math.round(totalSeconds))
-  const hrs = Math.floor(seconds / 3600)
-  const mins = Math.floor((seconds % 3600) / 60)
-  const secs = seconds % 60
-  const mm = hrs > 0 ? String(mins).padStart(2, "0") : String(mins)
-  const ss = String(secs).padStart(2, "0")
-  return hrs > 0 ? `${hrs}:${mm}:${ss}` : `${mm}:${ss}`
 }
 
 export default async function Page({
@@ -143,58 +145,12 @@ export default async function Page({
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
           {result.status === "ok" && (
-            <>
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                {result.video.thumbnailUrl && (
-                  <div className="relative aspect-video w-full shrink-0 overflow-hidden rounded-xl bg-muted sm:w-64">
-                    <Image
-                      src={result.video.thumbnailUrl}
-                      alt={result.video.title}
-                      fill
-                      sizes="256px"
-                      className="object-cover"
-                    />
-                  </div>
-                )}
-                <div>
-                  <h1 className="text-2xl font-semibold tracking-normal">
-                    {result.video.title}
-                  </h1>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Biggest audience drop-offs across this video.
-                  </p>
-                </div>
-              </div>
-
-              {result.dropOffs.length === 0 ? (
-                <div className="rounded-xl border bg-muted/30 p-8 text-sm text-muted-foreground">
-                  No sharp drop-offs detected — retention is fairly steady across
-                  this video.
-                </div>
-              ) : (
-                <ul className="divide-y rounded-xl border bg-card">
-                  {result.dropOffs.map((drop, index) => (
-                    <li
-                      key={`${drop.fromTimestampSeconds}-${index}`}
-                      className="flex items-center justify-between gap-4 p-4"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
-                          {index + 1}
-                        </span>
-                        <span className="font-mono text-sm">
-                          {formatTimestamp(drop.fromTimestampSeconds)} –{" "}
-                          {formatTimestamp(drop.toTimestampSeconds)}
-                        </span>
-                      </div>
-                      <span className="text-sm font-medium text-destructive">
-                        −{(drop.watchRatioDrop * 100).toFixed(1)}%
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </>
+            <AnalysedVideoDetail
+              video={result.video}
+              retention={result.retention}
+              dropOffs={result.dropOffs}
+              gains={result.gains}
+            />
           )}
 
           {result.status === "not_found" && (
