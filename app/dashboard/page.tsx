@@ -1,13 +1,9 @@
+import Link from "next/link"
+
 import { AppSidebar } from "@/components/app-sidebar"
-import { ConnectYouTubeButton } from "@/components/connect-youtube-button"
-import { RecentVideos } from "@/components/recent-videos"
 import { requireAuthenticatedUser } from "@/lib/auth"
 import { getSidebarDefaultOpen } from "@/lib/sidebar-state"
-import {
-  getGoogleAccessToken,
-  ReconsentRequiredError,
-} from "@/lib/youtube/google-auth"
-import { getRecentVideos, type RecentVideo } from "@/lib/youtube/youtube"
+import { buttonVariants } from "@/components/ui/button"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -25,31 +21,9 @@ import {
 
 export const dynamic = "force-dynamic"
 
-type VideosResult =
-  | { status: "ok"; videos: RecentVideo[] }
-  | { status: "reconnect" }
-  | { status: "error" }
-
-async function loadRecentVideos(userId: string): Promise<VideosResult> {
-  try {
-    const accessToken = await getGoogleAccessToken(userId)
-    const videos = await getRecentVideos(accessToken)
-    return { status: "ok", videos }
-  } catch (error) {
-    if (error instanceof ReconsentRequiredError) {
-      return { status: "reconnect" }
-    }
-    console.error("Failed to load recent YouTube videos", error)
-    return { status: "error" }
-  }
-}
-
 export default async function Page() {
-  const user = await requireAuthenticatedUser()
-  const [defaultOpen, result] = await Promise.all([
-    getSidebarDefaultOpen(),
-    loadRecentVideos(user.id),
-  ])
+  await requireAuthenticatedUser()
+  const defaultOpen = await getSidebarDefaultOpen()
 
   return (
     <SidebarProvider defaultOpen={defaultOpen}>
@@ -65,9 +39,7 @@ export default async function Page() {
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="#">
-                    Hookpoint.ai
-                  </BreadcrumbLink>
+                  <BreadcrumbLink href="#">Hookpoint.ai</BreadcrumbLink>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator className="hidden md:block" />
                 <BreadcrumbItem>
@@ -79,34 +51,28 @@ export default async function Page() {
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
           <div>
-            <h1 className="text-2xl font-semibold tracking-normal">
-              Recent videos
-            </h1>
+            <h1 className="text-2xl font-semibold tracking-normal">Dashboard</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Your most recent uploads from YouTube.
+              Welcome back. Analyse your YouTube videos to find where viewers
+              drop off.
             </p>
           </div>
 
-          {result.status === "ok" && <RecentVideos videos={result.videos} />}
-
-          {result.status === "reconnect" && (
-            <div className="flex flex-col items-start gap-3 rounded-xl border bg-muted/30 p-8">
-              <div>
-                <p className="font-medium">Connect your YouTube account</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  We need access to your YouTube account to show your videos and
-                  analyze retention.
-                </p>
-              </div>
-              <ConnectYouTubeButton />
+          <div className="flex flex-col items-start gap-3 rounded-xl border bg-muted/30 p-8">
+            <div>
+              <p className="font-medium">Analyse a video</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Pick one of your recent uploads or paste a video URL to see its
+                audience retention.
+              </p>
             </div>
-          )}
-
-          {result.status === "error" && (
-            <div className="rounded-xl border bg-muted/30 p-8 text-sm text-muted-foreground">
-              We couldn&apos;t load your videos right now. Please try again later.
-            </div>
-          )}
+            <Link
+              href="/dashboard/analyse-video"
+              className={buttonVariants()}
+            >
+              Analyse Video
+            </Link>
+          </div>
         </div>
       </SidebarInset>
     </SidebarProvider>

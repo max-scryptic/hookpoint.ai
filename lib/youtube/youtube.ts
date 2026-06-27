@@ -17,6 +17,7 @@ export interface VideoDetails {
 export interface RecentVideo {
   id: string
   title: string
+  description: string
   publishedAt: string
   thumbnailUrl: string | null
 }
@@ -114,6 +115,7 @@ export async function getRecentVideos(
       id?: { videoId?: string }
       snippet?: {
         title?: string
+        description?: string
         publishedAt?: string
         thumbnails?: Record<string, { url?: string }>
       }
@@ -135,11 +137,37 @@ export async function getRecentVideos(
       return {
         id,
         title: item.snippet?.title ?? "",
+        description: item.snippet?.description ?? "",
         publishedAt: item.snippet?.publishedAt ?? "",
         thumbnailUrl,
       }
     })
     .filter((video): video is RecentVideo => video !== null)
+}
+
+// Returns the channel ID of the authenticated user's own channel, or null if
+// the account has no channel. Used to confirm a pasted video belongs to the
+// connected channel before analysing it.
+export async function getMyChannelId(
+  accessToken: string,
+): Promise<string | null> {
+  const url = new URL(`${DATA_API}/channels`)
+  url.searchParams.set("part", "id")
+  url.searchParams.set("mine", "true")
+
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: "no-store",
+  })
+
+  if (!response.ok) {
+    throw new Error(
+      `YouTube Data API error (${response.status}): ${await response.text()}`,
+    )
+  }
+
+  const json = (await response.json()) as { items?: Array<{ id?: string }> }
+  return json.items?.[0]?.id ?? null
 }
 
 export async function getVideoDetails(

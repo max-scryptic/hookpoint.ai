@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { usePathname } from "next/navigation"
 
 import { BrandLogo } from "@/components/brand-logo"
 import { NavMain } from "@/components/nav-main"
@@ -13,21 +14,20 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import { TerminalSquareIcon } from "lucide-react"
+import { TerminalSquareIcon, VideoIcon } from "lucide-react"
 
-const data = {
-  navMain: [
-    {
-      title: "Dashboard",
-      url: "/dashboard",
-      icon: (
-        <TerminalSquareIcon
-        />
-      ),
-      isActive: true,
-    },
-  ],
-}
+const navMain = [
+  {
+    title: "Dashboard",
+    url: "/dashboard",
+    icon: <TerminalSquareIcon />,
+  },
+  {
+    title: "Analyse Video",
+    url: "/dashboard/analyse-video",
+    icon: <VideoIcon />,
+  },
+]
 
 function SidebarBrand() {
   return (
@@ -44,7 +44,16 @@ function SidebarBrand() {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const pathname = usePathname()
   const [userEmail, setUserEmail] = React.useState("")
+
+  const items = navMain.map((item) => ({
+    ...item,
+    isActive:
+      item.url === "/dashboard"
+        ? pathname === "/dashboard"
+        : pathname === item.url || pathname.startsWith(`${item.url}/`),
+  }))
 
   React.useEffect(() => {
     const supabase = createClient()
@@ -70,7 +79,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarBrand />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
+        <NavMain items={items} />
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={{ email: userEmail }} />
