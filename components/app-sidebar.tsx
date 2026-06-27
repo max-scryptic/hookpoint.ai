@@ -30,6 +30,9 @@ const navMain = [
   {
     title: "Analysed Videos",
     url: "/dashboard/analysed-videos",
+    // Also light up while viewing a single analysed video at
+    // /dashboard/analysed-video/[videoId].
+    match: "/dashboard/analysed-video",
     icon: <ListVideoIcon />,
   },
 ]
@@ -52,13 +55,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
   const [userEmail, setUserEmail] = React.useState("")
 
-  const items = navMain.map((item) => ({
-    ...item,
-    isActive:
-      item.url === "/dashboard"
-        ? pathname === "/dashboard"
-        : pathname === item.url || pathname.startsWith(`${item.url}/`),
-  }))
+  const items = navMain.map((item) => {
+    const matchPrefix = "match" in item ? item.match : undefined
+    return {
+      ...item,
+      isActive:
+        item.url === "/dashboard"
+          ? pathname === "/dashboard"
+          : pathname === item.url ||
+            pathname.startsWith(`${item.url}/`) ||
+            (matchPrefix !== undefined && pathname.startsWith(matchPrefix)),
+    }
+  })
 
   React.useEffect(() => {
     const supabase = createClient()

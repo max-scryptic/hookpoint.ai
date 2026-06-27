@@ -112,7 +112,7 @@ function RowActions({ video }: { video: RecentVideo }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem
-          render={<Link href={`/dashboard/analyse-video/${video.id}`} />}
+          render={<Link href={`/dashboard/analysed-video/${video.id}`} />}
         >
           <BarChart3Icon className="size-4" />
           View analysis
