@@ -47,15 +47,16 @@ const PRIVACY_OPTIONS: Array<{
 ]
 
 export function VideoBrowser({ initial }: { initial: VideosPage }) {
-  // Filter inputs. `search`/`dateFrom`/`dateTo` query YouTube server-side;
-  // `privacy` is applied client-side because search.list can't filter on it.
+  // Filter inputs. Only `search` queries YouTube server-side; `privacy` and the
+  // date range are applied client-side because search.list with forMine=true
+  // can't filter on privacy and rejects publishedAfter/publishedBefore.
   const [search, setSearch] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
   const [privacy, setPrivacy] = useState<PrivacyFilter>("all")
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
 
-  // YouTube's publishedAfter/publishedBefore params take YYYY-MM-DD; derive
-  // those from the picker's Date range so the rest of the fetch logic is unchanged.
+  // Normalise the picker's Date range to YYYY-MM-DD strings for comparison
+  // against each video's (UTC) publish date.
   const dateFrom = dateRange?.from ? format(dateRange.from, "yyyy-MM-dd") : ""
   const dateTo = dateRange?.to ? format(dateRange.to, "yyyy-MM-dd") : ""
 
@@ -84,8 +85,6 @@ export function VideoBrowser({ initial }: { initial: VideosPage }) {
       const params = new URLSearchParams()
       if (pageToken) params.set("pageToken", pageToken)
       if (debouncedSearch) params.set("q", debouncedSearch)
-      if (dateFrom) params.set("publishedAfter", dateFrom)
-      if (dateTo) params.set("publishedBefore", dateTo)
 
       try {
         const res = await fetch(`/api/videos?${params.toString()}`, {
@@ -112,7 +111,7 @@ export function VideoBrowser({ initial }: { initial: VideosPage }) {
         setLoading(false)
       }
     },
-    [debouncedSearch, dateFrom, dateTo],
+    [debouncedSearch],
   )
 
   // Re-query from the first page whenever a server-side filter changes. Skipped
@@ -152,10 +151,20 @@ export function VideoBrowser({ initial }: { initial: VideosPage }) {
     setDateRange(undefined)
   }
 
-  const visibleVideos =
-    privacy === "all"
-      ? page.videos
-      : page.videos.filter((video) => video.privacyStatus === privacy)
+  // Privacy and date range are filtered here rather than server-side (see the
+  // note where the filter state is declared). Each video's publishedAt is an
+  // ISO timestamp; its date portion compares directly against the YYYY-MM-DD
+  // bounds, with `dateTo` inclusive of the whole day.
+  const visibleVideos = page.videos.filter((video) => {
+    if (privacy !== "all" && video.privacyStatus !== privacy) return false
+    if (dateFrom || dateTo) {
+      const publishedDate = video.publishedAt.slice(0, 10)
+      if (!publishedDate) return false
+      if (dateFrom && publishedDate < dateFrom) return false
+      if (dateTo && publishedDate > dateTo) return false
+    }
+    return true
+  })
 
   const hasActiveFilters =
     debouncedSearch !== "" ||
