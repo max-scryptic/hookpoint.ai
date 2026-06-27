@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import { format } from "date-fns"
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -11,6 +12,7 @@ import {
   SearchIcon,
   XIcon,
 } from "lucide-react"
+import { type DateRange } from "react-day-picker"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,6 +23,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { DatePickerWithRange } from "@/components/date-range-picker"
 import { VideoList } from "@/components/video-list"
 import type { RecentVideo, VideoPrivacyStatus } from "@/lib/youtube/youtube"
 
@@ -49,8 +52,12 @@ export function VideoBrowser({ initial }: { initial: VideosPage }) {
   const [search, setSearch] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
   const [privacy, setPrivacy] = useState<PrivacyFilter>("all")
-  const [dateFrom, setDateFrom] = useState("")
-  const [dateTo, setDateTo] = useState("")
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
+
+  // YouTube's publishedAfter/publishedBefore params take YYYY-MM-DD; derive
+  // those from the picker's Date range so the rest of the fetch logic is unchanged.
+  const dateFrom = dateRange?.from ? format(dateRange.from, "yyyy-MM-dd") : ""
+  const dateTo = dateRange?.to ? format(dateRange.to, "yyyy-MM-dd") : ""
 
   const [page, setPage] = useState<VideosPage>(initial)
   const [pageNumber, setPageNumber] = useState(1)
@@ -127,8 +134,7 @@ export function VideoBrowser({ initial }: { initial: VideosPage }) {
   function clearFilters() {
     setSearch("")
     setPrivacy("all")
-    setDateFrom("")
-    setDateTo("")
+    setDateRange(undefined)
   }
 
   const visibleVideos =
@@ -186,28 +192,7 @@ export function VideoBrowser({ initial }: { initial: VideosPage }) {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <span className="hidden sm:inline">From</span>
-          <Input
-            type="date"
-            value={dateFrom}
-            max={dateTo || undefined}
-            onChange={(event) => setDateFrom(event.target.value)}
-            aria-label="Published on or after"
-            className="h-9 w-[9.5rem]"
-          />
-        </label>
-        <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <span className="hidden sm:inline">To</span>
-          <Input
-            type="date"
-            value={dateTo}
-            min={dateFrom || undefined}
-            onChange={(event) => setDateTo(event.target.value)}
-            aria-label="Published on or before"
-            className="h-9 w-[9.5rem]"
-          />
-        </label>
+        <DatePickerWithRange value={dateRange} onChange={setDateRange} />
 
         {hasActiveFilters && (
           <Button
