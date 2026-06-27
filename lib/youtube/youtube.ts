@@ -14,6 +14,13 @@ export interface VideoDetails {
   thumbnailUrl: string | null
 }
 
+export interface RecentVideo {
+  id: string
+  title: string
+  publishedAt: string
+  thumbnailUrl: string | null
+}
+
 export interface RetentionPoint {
   // Fraction of the video elapsed, 0.0 -> 1.0.
   elapsedRatio: number
@@ -74,6 +81,65 @@ export function parseIso8601Duration(duration: string): number {
   if (!match) return 0
   const [, h, m, s] = match
   return Number(h ?? 0) * 3600 + Number(m ?? 0) * 60 + Number(s ?? 0)
+}
+
+// Fetches the authenticated user's most recently published uploads, newest
+// first. `search.list` with forMine=true returns only videos owned by the
+// signed-in channel, in a single request.
+export async function getRecentVideos(
+  accessToken: string,
+  maxResults = 12,
+): Promise<RecentVideo[]> {
+  const url = new URL(`${DATA_API}/search`)
+  url.searchParams.set("part", "snippet")
+  url.searchParams.set("forMine", "true")
+  url.searchParams.set("type", "video")
+  url.searchParams.set("order", "date")
+  url.searchParams.set("maxResults", String(maxResults))
+
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    // Per-user, token-scoped data — never cache at the fetch layer.
+    cache: "no-store",
+  })
+
+  if (!response.ok) {
+    throw new Error(
+      `YouTube Data API error (${response.status}): ${await response.text()}`,
+    )
+  }
+
+  const json = (await response.json()) as {
+    items?: Array<{
+      id?: { videoId?: string }
+      snippet?: {
+        title?: string
+        publishedAt?: string
+        thumbnails?: Record<string, { url?: string }>
+      }
+    }>
+  }
+
+  return (json.items ?? [])
+    .map((item): RecentVideo | null => {
+      const id = item.id?.videoId
+      if (!id) return null
+
+      const thumbnails = item.snippet?.thumbnails ?? {}
+      const thumbnailUrl =
+        thumbnails.high?.url ??
+        thumbnails.medium?.url ??
+        thumbnails.default?.url ??
+        null
+
+      return {
+        id,
+        title: item.snippet?.title ?? "",
+        publishedAt: item.snippet?.publishedAt ?? "",
+        thumbnailUrl,
+      }
+    })
+    .filter((video): video is RecentVideo => video !== null)
 }
 
 export async function getVideoDetails(

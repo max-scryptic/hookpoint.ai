@@ -1,5 +1,13 @@
 import { AppSidebar } from "@/components/app-sidebar"
+import { ConnectYouTubeButton } from "@/components/connect-youtube-button"
+import { RecentVideos } from "@/components/recent-videos"
+import { requireAuthenticatedUser } from "@/lib/auth"
 import { getSidebarDefaultOpen } from "@/lib/sidebar-state"
+import {
+  getGoogleAccessToken,
+  ReconsentRequiredError,
+} from "@/lib/youtube/google-auth"
+import { getRecentVideos, type RecentVideo } from "@/lib/youtube/youtube"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -15,8 +23,33 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 
+export const dynamic = "force-dynamic"
+
+type VideosResult =
+  | { status: "ok"; videos: RecentVideo[] }
+  | { status: "reconnect" }
+  | { status: "error" }
+
+async function loadRecentVideos(userId: string): Promise<VideosResult> {
+  try {
+    const accessToken = await getGoogleAccessToken(userId)
+    const videos = await getRecentVideos(accessToken)
+    return { status: "ok", videos }
+  } catch (error) {
+    if (error instanceof ReconsentRequiredError) {
+      return { status: "reconnect" }
+    }
+    console.error("Failed to load recent YouTube videos", error)
+    return { status: "error" }
+  }
+}
+
 export default async function Page() {
-  const defaultOpen = await getSidebarDefaultOpen()
+  const user = await requireAuthenticatedUser()
+  const [defaultOpen, result] = await Promise.all([
+    getSidebarDefaultOpen(),
+    loadRecentVideos(user.id),
+  ])
 
   return (
     <SidebarProvider defaultOpen={defaultOpen}>
@@ -45,12 +78,35 @@ export default async function Page() {
           </div>
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-          <div className="grid auto-rows-min gap-4 md:grid-cols-3">
-            <div className="aspect-video rounded-xl bg-muted/50" />
-            <div className="aspect-video rounded-xl bg-muted/50" />
-            <div className="aspect-video rounded-xl bg-muted/50" />
+          <div>
+            <h1 className="text-2xl font-semibold tracking-normal">
+              Recent videos
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Your most recent uploads from YouTube.
+            </p>
           </div>
-          <div className="min-h-[100vh] flex-1 rounded-xl bg-muted/50 md:min-h-min" />
+
+          {result.status === "ok" && <RecentVideos videos={result.videos} />}
+
+          {result.status === "reconnect" && (
+            <div className="flex flex-col items-start gap-3 rounded-xl border bg-muted/30 p-8">
+              <div>
+                <p className="font-medium">Connect your YouTube account</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  We need access to your YouTube account to show your videos and
+                  analyze retention.
+                </p>
+              </div>
+              <ConnectYouTubeButton />
+            </div>
+          )}
+
+          {result.status === "error" && (
+            <div className="rounded-xl border bg-muted/30 p-8 text-sm text-muted-foreground">
+              We couldn&apos;t load your videos right now. Please try again later.
+            </div>
+          )}
         </div>
       </SidebarInset>
     </SidebarProvider>
