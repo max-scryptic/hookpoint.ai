@@ -96,6 +96,17 @@ export function LoginForm({
       provider: "google",
       options: {
         redirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
+        // Request the YouTube read + analytics scopes Hookpoint needs to fetch
+        // retention data. access_type=offline + prompt=consent make Google
+        // return a refresh token (captured in the auth callback).
+        scopes: [
+          "https://www.googleapis.com/auth/yt-analytics.readonly",
+          "https://www.googleapis.com/auth/youtube.readonly",
+        ].join(" "),
+        queryParams: {
+          access_type: "offline",
+          prompt: "consent",
+        },
       },
     })
 

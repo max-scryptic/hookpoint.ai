@@ -44,7 +44,7 @@ create trigger set_public_users_updated_at
   execute function private.set_updated_at();
 
 create or replace function private.username_from_auth_user(auth_user auth.users)
-returns citext
+returns public.citext
 language plpgsql
 set search_path = ''
 as $$
@@ -71,7 +71,7 @@ begin
     )
   );
 
-  return coalesce(nullif(generated_username, ''), 'user')::citext;
+  return coalesce(nullif(generated_username, ''), 'user')::public.citext;
 end;
 $$;
 
@@ -82,8 +82,8 @@ security definer
 set search_path = ''
 as $$
 declare
-  base_username citext;
-  candidate_username citext;
+  base_username public.citext;
+  candidate_username public.citext;
   suffix text;
   attempt integer := 0;
 begin
@@ -96,7 +96,7 @@ begin
     candidate_username := (
       base_username::text || '_' || suffix ||
       case when attempt = 1 then '' else '_' || attempt::text end
-    )::citext;
+    )::public.citext;
   end loop;
 
   insert into public.users (id, username, email, avatar_url)
