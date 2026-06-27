@@ -93,7 +93,12 @@ export default async function Page() {
           {result.status === "ok" && (
             <>
               <AnalyseVideoForm />
-              <VideoBrowser initial={result.page} />
+              <div className="mt-4 flex flex-col gap-3">
+                <h2 className="text-sm font-medium text-muted-foreground">
+                  Your Videos
+                </h2>
+                <VideoBrowser initial={result.page} />
+              </div>
             </>
           )}
 
