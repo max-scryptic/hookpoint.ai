@@ -16,7 +16,7 @@ export function BrandLogo({
   return (
     <div
       className={cn(
-        "flex aspect-square shrink-0 items-center justify-center overflow-hidden rounded-lg bg-black",
+        "flex aspect-square shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[oklch(0.21_0.04_270)]",
         className
       )}
     >
