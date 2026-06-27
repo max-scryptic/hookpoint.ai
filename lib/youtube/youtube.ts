@@ -43,9 +43,6 @@ export interface GetRecentVideosOptions {
   pageToken?: string | null
   // Free-text title/description search passed to search.list's `q` param.
   query?: string | null
-  // RFC 3339 bounds (e.g. "2020-01-01T00:00:00Z") for the publish date.
-  publishedAfter?: string | null
-  publishedBefore?: string | null
 }
 
 export interface RetentionPoint {
@@ -112,22 +109,18 @@ export function parseIso8601Duration(duration: string): number {
 
 // Fetches a page of the authenticated user's uploads, newest first.
 // `search.list` with forMine=true returns only videos owned by the signed-in
-// channel. Title/description search (`query`) and publish-date bounds are
-// applied server-side; pagination is cursor-based via `pageToken`, so each page
-// is a separate request (search.list caps results at 50 per page). Privacy
-// status is NOT filterable here — it only arrives with the enrichment call —
-// so callers filter on privacy client-side.
+// channel. Title/description search (`query`) is applied server-side via the
+// `q` param; pagination is cursor-based via `pageToken`, so each page is a
+// separate request (search.list caps results at 50 per page). Neither privacy
+// status nor a publish-date range can be filtered here — the publishedAfter/
+// publishedBefore params return a 400 when combined with forMine=true, and
+// privacy only arrives with the enrichment call — so callers filter on both
+// client-side.
 export async function getRecentVideos(
   accessToken: string,
   options: GetRecentVideosOptions = {},
 ): Promise<RecentVideosPage> {
-  const {
-    maxResults = 12,
-    pageToken,
-    query,
-    publishedAfter,
-    publishedBefore,
-  } = options
+  const { maxResults = 12, pageToken, query } = options
 
   const url = new URL(`${DATA_API}/search`)
   url.searchParams.set("part", "snippet")
@@ -137,8 +130,6 @@ export async function getRecentVideos(
   url.searchParams.set("maxResults", String(maxResults))
   if (pageToken) url.searchParams.set("pageToken", pageToken)
   if (query) url.searchParams.set("q", query)
-  if (publishedAfter) url.searchParams.set("publishedAfter", publishedAfter)
-  if (publishedBefore) url.searchParams.set("publishedBefore", publishedBefore)
 
   const response = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
