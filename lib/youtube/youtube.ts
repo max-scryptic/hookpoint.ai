@@ -29,6 +29,25 @@ export interface RecentVideo {
   privacyStatus: VideoPrivacyStatus
 }
 
+export interface RecentVideosPage {
+  videos: RecentVideo[]
+  // Opaque YouTube cursors for the surrounding pages; null when there is no
+  // newer/older page in the current result set.
+  nextPageToken: string | null
+  prevPageToken: string | null
+}
+
+export interface GetRecentVideosOptions {
+  maxResults?: number
+  // Opaque cursor from a previous page's next/prev token.
+  pageToken?: string | null
+  // Free-text title/description search passed to search.list's `q` param.
+  query?: string | null
+  // RFC 3339 bounds (e.g. "2020-01-01T00:00:00Z") for the publish date.
+  publishedAfter?: string | null
+  publishedBefore?: string | null
+}
+
 export interface RetentionPoint {
   // Fraction of the video elapsed, 0.0 -> 1.0.
   elapsedRatio: number
@@ -91,19 +110,35 @@ export function parseIso8601Duration(duration: string): number {
   return Number(h ?? 0) * 3600 + Number(m ?? 0) * 60 + Number(s ?? 0)
 }
 
-// Fetches the authenticated user's most recently published uploads, newest
-// first. `search.list` with forMine=true returns only videos owned by the
-// signed-in channel, in a single request.
+// Fetches a page of the authenticated user's uploads, newest first.
+// `search.list` with forMine=true returns only videos owned by the signed-in
+// channel. Title/description search (`query`) and publish-date bounds are
+// applied server-side; pagination is cursor-based via `pageToken`, so each page
+// is a separate request (search.list caps results at 50 per page). Privacy
+// status is NOT filterable here — it only arrives with the enrichment call —
+// so callers filter on privacy client-side.
 export async function getRecentVideos(
   accessToken: string,
-  maxResults = 12,
-): Promise<RecentVideo[]> {
+  options: GetRecentVideosOptions = {},
+): Promise<RecentVideosPage> {
+  const {
+    maxResults = 12,
+    pageToken,
+    query,
+    publishedAfter,
+    publishedBefore,
+  } = options
+
   const url = new URL(`${DATA_API}/search`)
   url.searchParams.set("part", "snippet")
   url.searchParams.set("forMine", "true")
   url.searchParams.set("type", "video")
   url.searchParams.set("order", "date")
   url.searchParams.set("maxResults", String(maxResults))
+  if (pageToken) url.searchParams.set("pageToken", pageToken)
+  if (query) url.searchParams.set("q", query)
+  if (publishedAfter) url.searchParams.set("publishedAfter", publishedAfter)
+  if (publishedBefore) url.searchParams.set("publishedBefore", publishedBefore)
 
   const response = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -118,6 +153,8 @@ export async function getRecentVideos(
   }
 
   const json = (await response.json()) as {
+    nextPageToken?: string
+    prevPageToken?: string
     items?: Array<{
       id?: { videoId?: string }
       snippet?: {
@@ -159,7 +196,11 @@ export async function getRecentVideos(
   // results with a single videos.list call keyed on the IDs we just collected.
   await enrichWithVideoDetails(accessToken, videos)
 
-  return videos
+  return {
+    videos,
+    nextPageToken: json.nextPageToken ?? null,
+    prevPageToken: json.prevPageToken ?? null,
+  }
 }
 
 // Mutates the passed videos in place, filling in viewCount, commentCount,

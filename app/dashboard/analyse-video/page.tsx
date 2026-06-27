@@ -1,14 +1,17 @@
 import { AppSidebar } from "@/components/app-sidebar"
 import { AnalyseVideoForm } from "@/components/analyse-video-form"
 import { ConnectYouTubeButton } from "@/components/connect-youtube-button"
-import { VideoList } from "@/components/video-list"
+import { VideoBrowser } from "@/components/video-browser"
 import { requireAuthenticatedUser } from "@/lib/auth"
 import { getSidebarDefaultOpen } from "@/lib/sidebar-state"
 import {
   getGoogleAccessToken,
   ReconsentRequiredError,
 } from "@/lib/youtube/google-auth"
-import { getRecentVideos, type RecentVideo } from "@/lib/youtube/youtube"
+import {
+  getRecentVideos,
+  type RecentVideosPage,
+} from "@/lib/youtube/youtube"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -27,15 +30,15 @@ import {
 export const dynamic = "force-dynamic"
 
 type VideosResult =
-  | { status: "ok"; videos: RecentVideo[] }
+  | { status: "ok"; page: RecentVideosPage }
   | { status: "reconnect" }
   | { status: "error" }
 
 async function loadRecentVideos(userId: string): Promise<VideosResult> {
   try {
     const accessToken = await getGoogleAccessToken(userId)
-    const videos = await getRecentVideos(accessToken)
-    return { status: "ok", videos }
+    const page = await getRecentVideos(accessToken)
+    return { status: "ok", page }
   } catch (error) {
     if (error instanceof ReconsentRequiredError) {
       return { status: "reconnect" }
@@ -90,7 +93,7 @@ export default async function Page() {
           {result.status === "ok" && (
             <>
               <AnalyseVideoForm />
-              <VideoList videos={result.videos} />
+              <VideoBrowser initial={result.page} />
             </>
           )}
 
