@@ -18,6 +18,7 @@ import {
   FieldSeparator,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { PasswordValidator, isPasswordValid } from "@/components/password-validator"
 import { createClient } from "@/lib/supabase/client"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -34,6 +35,7 @@ export function LoginForm({
   const [isLoading, setIsLoading] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [password, setPassword] = useState("")
 
   async function handlePasswordAuth(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -43,8 +45,13 @@ export function LoginForm({
 
     const formData = new FormData(event.currentTarget)
     const email = String(formData.get("email") ?? "")
-    const password = String(formData.get("password") ?? "")
     const supabase = createClient()
+
+    if (isSignup && !isPasswordValid(password)) {
+      setError("Please choose a password that meets all the requirements.")
+      setIsLoading(false)
+      return
+    }
 
     const response = isSignup
       ? await supabase.auth.signUp({
@@ -161,9 +168,14 @@ export function LoginForm({
                   name="password"
                   type="password"
                   autoComplete={isSignup ? "new-password" : "current-password"}
-                  minLength={6}
+                  minLength={isSignup ? 8 : 6}
                   required
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
                 />
+                {isSignup && password.length > 0 && (
+                  <PasswordValidator password={password} className="mt-1" />
+                )}
               </Field>
               {(error || message) && (
                 <Field>
