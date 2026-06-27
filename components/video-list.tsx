@@ -111,7 +111,7 @@ function VideoActions({ video }: { video: RecentVideo }) {
       >
         <MoreVerticalIcon className="size-4" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent align="end" className="w-auto min-w-40">
         <DropdownMenuItem
           render={<Link href={`/dashboard/analyse-video/${video.id}`} />}
         >
