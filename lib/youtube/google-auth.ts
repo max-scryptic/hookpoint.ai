@@ -1,11 +1,9 @@
 import { createAdminClient } from "@/lib/supabase/admin"
 
-// The scopes Hookpoint requests. Keep in sync with the scopes configured on the
-// OAuth consent screen and passed to signInWithOAuth in the login form.
-export const GOOGLE_SCOPES = [
-  "https://www.googleapis.com/auth/yt-analytics.readonly",
-  "https://www.googleapis.com/auth/youtube.readonly",
-] as const
+// Re-exported for server callers (e.g. the auth callback). The canonical
+// definition lives in ./scopes so client code can import it without pulling in
+// this module's server-only admin client.
+export { GOOGLE_SCOPES } from "@/lib/youtube/scopes"
 
 const GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 
