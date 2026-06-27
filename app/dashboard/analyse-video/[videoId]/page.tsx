@@ -3,6 +3,11 @@ import Image from "next/image"
 import { AppSidebar } from "@/components/app-sidebar"
 import { requireAuthenticatedUser } from "@/lib/auth"
 import { getSidebarDefaultOpen } from "@/lib/sidebar-state"
+import { createClient } from "@/lib/supabase/server"
+import {
+  getAnalysedVideo,
+  saveAnalysedVideo,
+} from "@/lib/analysed-videos"
 import {
   getGoogleAccessToken,
   ReconsentRequiredError,
@@ -43,6 +48,19 @@ async function analyse(
   videoId: string,
 ): Promise<AnalysisResult> {
   try {
+    const supabase = await createClient()
+
+    // Serve a previously-saved analysis when we have one, so we don't re-spend
+    // YouTube API quota on a video we've already looked at.
+    const cached = await getAnalysedVideo(supabase, userId, videoId)
+    if (cached?.videoDetails) {
+      return {
+        status: "ok",
+        video: cached.videoDetails,
+        dropOffs: cached.dropOffs ?? [],
+      }
+    }
+
     const accessToken = await getGoogleAccessToken(userId)
 
     const video = await getVideoDetails(accessToken, videoId)
@@ -51,7 +69,17 @@ async function analyse(
     const retention = await getAudienceRetention(accessToken, video)
     if (retention.length === 0) return { status: "no_data" }
 
-    return { status: "ok", video, dropOffs: detectDropOffs(retention) }
+    const dropOffs = detectDropOffs(retention)
+
+    // Persist everything we fetched so future visits hit the cache above.
+    try {
+      await saveAnalysedVideo(supabase, { userId, video, retention, dropOffs })
+    } catch (saveError) {
+      // Saving is best-effort — never block showing the analysis on a DB write.
+      console.error("Failed to save analysed video", saveError)
+    }
+
+    return { status: "ok", video, dropOffs }
   } catch (error) {
     if (error instanceof ReconsentRequiredError) {
       return { status: "reconnect" }

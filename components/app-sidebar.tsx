@@ -14,7 +14,7 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import { TerminalSquareIcon, VideoIcon } from "lucide-react"
+import { ListVideoIcon, TerminalSquareIcon, VideoIcon } from "lucide-react"
 
 const navMain = [
   {
@@ -26,6 +26,11 @@ const navMain = [
     title: "Analyse Video",
     url: "/dashboard/analyse-video",
     icon: <VideoIcon />,
+  },
+  {
+    title: "Analysed Videos",
+    url: "/dashboard/analysed-videos",
+    icon: <ListVideoIcon />,
   },
 ]
 

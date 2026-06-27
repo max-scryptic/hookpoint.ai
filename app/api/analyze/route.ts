@@ -1,6 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import {
+  getAnalysedVideo,
+  saveAnalysedVideo,
+} from "@/lib/analysed-videos"
+import {
   getGoogleAccessToken,
   ReconsentRequiredError,
 } from "@/lib/youtube/google-auth"
@@ -41,6 +45,17 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // Replay a saved analysis when we have one — calling YouTube costs quota.
+    const cached = await getAnalysedVideo(supabase, user.id, videoId)
+    if (cached?.videoDetails && cached.retention) {
+      return NextResponse.json({
+        video: cached.videoDetails,
+        retention: cached.retention,
+        dropOffs: cached.dropOffs ?? [],
+        cached: true,
+      })
+    }
+
     const accessToken = await getGoogleAccessToken(user.id)
 
     const video = await getVideoDetails(accessToken, videoId)
@@ -65,6 +80,19 @@ export async function POST(request: NextRequest) {
     }
 
     const dropOffs = detectDropOffs(retention)
+
+    // Persist the analysis so subsequent requests are served from the cache
+    // above. Best-effort: a DB failure shouldn't fail the analysis response.
+    try {
+      await saveAnalysedVideo(supabase, {
+        userId: user.id,
+        video,
+        retention,
+        dropOffs,
+      })
+    } catch (saveError) {
+      console.error("Failed to save analysed video", saveError)
+    }
 
     return NextResponse.json({ video, retention, dropOffs })
   } catch (error) {
