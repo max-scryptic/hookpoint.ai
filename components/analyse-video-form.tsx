@@ -1,16 +1,25 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { CircleCheckIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { parseVideoId } from "@/lib/youtube/youtube"
 
+interface AlreadyAnalysed {
+  videoId: string
+  title?: string
+}
+
 export function AnalyseVideoForm() {
   const router = useRouter()
   const [url, setUrl] = useState("")
   const [error, setError] = useState<string | null>(null)
+  const [alreadyAnalysed, setAlreadyAnalysed] =
+    useState<AlreadyAnalysed | null>(null)
   const [isValidating, setIsValidating] = useState(false)
 
   // The button only lights up once the input looks like a YouTube video URL or
@@ -23,6 +32,7 @@ export function AnalyseVideoForm() {
     if (!canSubmit) return
 
     setError(null)
+    setAlreadyAnalysed(null)
     setIsValidating(true)
 
     try {
@@ -34,6 +44,8 @@ export function AnalyseVideoForm() {
       const data = (await response.json()) as {
         ok?: boolean
         videoId?: string
+        title?: string
+        alreadyAnalysed?: boolean
         error?: string
         message?: string
       }
@@ -44,6 +56,13 @@ export function AnalyseVideoForm() {
             ? (data.message ?? "Please reconnect your YouTube account.")
             : (data.error ?? "We couldn't validate that video."),
         )
+        setIsValidating(false)
+        return
+      }
+
+      // Already analysed: don't re-spend quota — surface the saved results.
+      if (data.alreadyAnalysed) {
+        setAlreadyAnalysed({ videoId: data.videoId, title: data.title })
         setIsValidating(false)
         return
       }
@@ -65,6 +84,7 @@ export function AnalyseVideoForm() {
           onChange={(event) => {
             setUrl(event.target.value)
             if (error) setError(null)
+            if (alreadyAnalysed) setAlreadyAnalysed(null)
           }}
           placeholder="Paste a YouTube video URL from your channel"
           aria-invalid={error ? true : undefined}
@@ -76,6 +96,21 @@ export function AnalyseVideoForm() {
         </Button>
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
+      {alreadyAnalysed && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+          <CircleCheckIcon className="size-4 shrink-0 text-emerald-600 dark:text-emerald-500" />
+          <span>
+            You&apos;ve already analysed
+            {alreadyAnalysed.title ? ` “${alreadyAnalysed.title}”` : " this video"}.
+          </span>
+          <Link
+            href={`/dashboard/analyse-video/${alreadyAnalysed.videoId}`}
+            className="font-medium text-emerald-600 underline underline-offset-4 dark:text-emerald-500"
+          >
+            View analysis
+          </Link>
+        </div>
+      )}
     </form>
   )
 }

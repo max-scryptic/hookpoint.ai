@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { getAnalysedVideo } from "@/lib/analysed-videos"
 import {
   getGoogleAccessToken,
   ReconsentRequiredError,
@@ -64,7 +65,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    return NextResponse.json({ ok: true, videoId, title: video.title })
+    // If we've already analysed this video, tell the form so it can point the
+    // user at the saved results instead of re-spending API quota.
+    const alreadyAnalysed = await getAnalysedVideo(supabase, user.id, videoId)
+
+    return NextResponse.json({
+      ok: true,
+      videoId,
+      title: video.title,
+      alreadyAnalysed: alreadyAnalysed !== null,
+    })
   } catch (error) {
     if (error instanceof ReconsentRequiredError) {
       return NextResponse.json(

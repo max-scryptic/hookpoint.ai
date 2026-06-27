@@ -113,6 +113,25 @@ export async function listAnalysedVideos(
   return (data as AnalysedVideoRow[] | null)?.map(mapRow) ?? []
 }
 
+// Returns the set of video IDs the user has already analysed. Kept deliberately
+// lightweight (IDs only) so the video list can flag analysed uploads across
+// every page without pulling down the full payloads.
+export async function listAnalysedVideoIds(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("analysed_videos")
+    .select("video_id")
+    .eq("user_id", userId)
+
+  if (error) {
+    throw new Error(`Failed to load analysed video ids: ${error.message}`)
+  }
+
+  return (data as { video_id: string }[] | null)?.map((r) => r.video_id) ?? []
+}
+
 // Fetches a single previously-analysed video, or null if it hasn't been
 // analysed yet. Used to serve cached results without re-spending API quota.
 export async function getAnalysedVideo(

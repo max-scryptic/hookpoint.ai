@@ -4,6 +4,8 @@ import { ConnectYouTubeButton } from "@/components/connect-youtube-button"
 import { VideoBrowser } from "@/components/video-browser"
 import { requireAuthenticatedUser } from "@/lib/auth"
 import { getSidebarDefaultOpen } from "@/lib/sidebar-state"
+import { createClient } from "@/lib/supabase/server"
+import { listAnalysedVideoIds } from "@/lib/analysed-videos"
 import {
   getGoogleAccessToken,
   ReconsentRequiredError,
@@ -48,11 +50,24 @@ async function loadRecentVideos(userId: string): Promise<VideosResult> {
   }
 }
 
+// Best-effort fetch of the user's analysed video IDs. The list still renders if
+// this fails — videos just won't be flagged as analysed.
+async function loadAnalysedVideoIds(userId: string): Promise<string[]> {
+  try {
+    const supabase = await createClient()
+    return await listAnalysedVideoIds(supabase, userId)
+  } catch (error) {
+    console.error("Failed to load analysed video ids", error)
+    return []
+  }
+}
+
 export default async function Page() {
   const user = await requireAuthenticatedUser()
-  const [defaultOpen, result] = await Promise.all([
+  const [defaultOpen, result, analysedVideoIds] = await Promise.all([
     getSidebarDefaultOpen(),
     loadRecentVideos(user.id),
+    loadAnalysedVideoIds(user.id),
   ])
 
   return (
@@ -97,7 +112,10 @@ export default async function Page() {
                 <h2 className="text-sm font-medium text-muted-foreground">
                   Your Videos
                 </h2>
-                <VideoBrowser initial={result.page} />
+                <VideoBrowser
+                  initial={result.page}
+                  analysedVideoIds={analysedVideoIds}
+                />
               </div>
             </>
           )}

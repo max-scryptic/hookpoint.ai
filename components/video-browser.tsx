@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { format } from "date-fns"
 import {
   ChevronLeftIcon,
@@ -46,10 +46,22 @@ const PRIVACY_OPTIONS: Array<{
   { value: "private", label: "Private", icon: LockIcon },
 ]
 
-export function VideoBrowser({ initial }: { initial: VideosPage }) {
-  // Filter inputs. Only `search` queries YouTube server-side; `privacy` and the
-  // date range are applied client-side because search.list with forMine=true
-  // can't filter on privacy and rejects publishedAfter/publishedBefore.
+export function VideoBrowser({
+  initial,
+  analysedVideoIds = [],
+}: {
+  initial: VideosPage
+  // The user's full set of analysed video IDs. Passed once and checked per row
+  // so analysed uploads stay flagged across every paginated page.
+  analysedVideoIds?: string[]
+}) {
+  const analysedIds = useMemo(
+    () => new Set(analysedVideoIds),
+    [analysedVideoIds],
+  )
+
+  // Filter inputs. `search`/`dateFrom`/`dateTo` query YouTube server-side;
+  // `privacy` is applied client-side because search.list can't filter on it.
   const [search, setSearch] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
   const [privacy, setPrivacy] = useState<PrivacyFilter>("all")
@@ -247,7 +259,7 @@ export function VideoBrowser({ initial }: { initial: VideosPage }) {
             No videos match these filters.
           </div>
         ) : (
-          <VideoList videos={visibleVideos} />
+          <VideoList videos={visibleVideos} analysedIds={analysedIds} />
         )}
       </div>
 
