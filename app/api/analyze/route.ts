@@ -10,6 +10,7 @@ import {
 } from "@/lib/youtube/google-auth"
 import {
   detectDropOffs,
+  detectRetentionGains,
   getAudienceRetention,
   getVideoDetails,
   parseVideoId,
@@ -51,7 +52,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         video: cached.videoDetails,
         retention: cached.retention,
-        dropOffs: cached.dropOffs ?? [],
+        dropOffs: cached.dropOffs ?? detectDropOffs(cached.retention),
+        gains: detectRetentionGains(cached.retention),
         cached: true,
       })
     }
@@ -80,6 +82,7 @@ export async function POST(request: NextRequest) {
     }
 
     const dropOffs = detectDropOffs(retention)
+    const gains = detectRetentionGains(retention)
 
     // Persist the analysis so subsequent requests are served from the cache
     // above. Best-effort: a DB failure shouldn't fail the analysis response.
@@ -94,7 +97,7 @@ export async function POST(request: NextRequest) {
       console.error("Failed to save analysed video", saveError)
     }
 
-    return NextResponse.json({ video, retention, dropOffs })
+    return NextResponse.json({ video, retention, dropOffs, gains })
   } catch (error) {
     if (error instanceof ReconsentRequiredError) {
       return NextResponse.json(
