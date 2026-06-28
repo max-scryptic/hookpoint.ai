@@ -300,7 +300,7 @@ export function AnalysedVideoBrowser({ videos }: { videos: AnalysedVideo[] }) {
         <div className="overflow-x-auto rounded-xl border bg-card">
           <table className="w-full border-collapse text-left">
             <thead>
-              <tr className="border-b text-xs font-medium text-muted-foreground">
+              <tr className="border-b bg-accent text-xs font-medium text-accent-foreground">
                 <th className="px-4 py-3 font-medium">Video</th>
                 <th className="hidden px-4 py-3 font-medium md:table-cell">
                   Visibility
