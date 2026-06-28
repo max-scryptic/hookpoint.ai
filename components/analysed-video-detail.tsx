@@ -528,27 +528,25 @@ export function AnalysedVideoDetail({
         frame={insights?.hookFrame ?? null}
       />
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <TrendingDownIcon className="size-4 text-destructive" />
-            <h2 className="text-sm font-medium">Biggest drop-offs</h2>
-          </div>
-          <DropList
-            retention={retention}
-            transcript={transcript}
-            insights={insights}
-          />
-        </section>
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center gap-2">
+          <TrendingDownIcon className="size-4 text-destructive" />
+          <h2 className="text-sm font-medium">Biggest drop-offs</h2>
+        </div>
+        <DropList
+          retention={retention}
+          transcript={transcript}
+          insights={insights}
+        />
+      </section>
 
-        <section className="flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <TrendingUpIcon className="size-4 text-emerald-600 dark:text-emerald-400" />
-            <h2 className="text-sm font-medium">Held or grew the audience</h2>
-          </div>
-          <GainList retention={retention} transcript={transcript} />
-        </section>
-      </div>
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center gap-2">
+          <TrendingUpIcon className="size-4 text-emerald-600 dark:text-emerald-400" />
+          <h2 className="text-sm font-medium">Held or grew the audience</h2>
+        </div>
+        <GainList retention={retention} transcript={transcript} />
+      </section>
     </div>
   )
 }
