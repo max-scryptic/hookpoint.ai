@@ -47,70 +47,42 @@ function buildProxyAgent(): ProxyAgent | null {
 // Built once per runtime and reused across requests.
 const proxyAgent = buildProxyAgent()
 
-// The public WEB InnerTube key. Used both for the anonymous WEB fallback and as
-// the key on the authenticated request (the player endpoint still wants a key
-// alongside the OAuth bearer).
+// The public WEB InnerTube key and a matching desktop User-Agent.
 const WEB_API_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8"
 
 const WEB_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
-// InnerTube clients we try, in order, to fetch the storyboard spec.
+// We use a single InnerTube client — anonymous WEB — routed through the
+// residential proxy. The other paths we used to try are all permanently dead
+// now, confirmed by production logs:
 //
-// From a datacenter IP (Vercel/AWS) every *anonymous* request is now refused:
-// the ANDROID/IOS clients answer 400, and WEB answers 200 with a LOGIN_REQUIRED
-// playabilityStatus ("Sign in to confirm you're not a bot") and no storyboard.
-// So the only reliable path is an *authenticated* request — one carrying the
-// user's Google OAuth token as a bearer. That request is tied to a real account
-// (the same account whose retention we already fetch), so YouTube doesn't
-// bot-challenge it. When a token is available we try it first; the anonymous
-// clients stay as a best-effort fallback (and for any caller without a token).
+//   * ANDROID / IOS  → 400 FAILED_PRECONDITION. These clients now require a
+//     PoToken / BotGuard attestation we can't mint server-side.
+//   * WEB + OAuth     → 400 INVALID_ARGUMENT. The `youtubei/v1/player` endpoint
+//     is first-party; it doesn't accept a generic Google OAuth token (our
+//     Data-API scopes), no matter the bearer. Only YouTube's own app client-IDs
+//     can authenticate to it.
 //
-// Each client carries its own long-standing public API key and a matching
-// User-Agent; the `oauth` client authenticates with the bearer token instead.
+// So WEB-anonymous is the only client with a chance, and only from a
+// residential exit (a datacenter IP gets LOGIN_REQUIRED). The catch: that exit
+// must be geo-located where the video is viewable — a public video coming back
+// "Video unavailable" means the proxy IP is in a blocked/mismatched region. See
+// STORYBOARD_PROXY_URL in .env.example for the required US geo-targeting.
 interface InnertubeClient {
   clientName: string
   clientVersion: string
   apiKey: string
   userAgent: string
   extra?: Record<string, unknown>
-  // When true, send the user's OAuth token as `Authorization: Bearer` so the
-  // request is authenticated rather than anonymous.
-  oauth?: boolean
 }
 
-// Tried first when an access token is available. WEB still returns the richest
-// storyboard spec; with a bearer token it's no longer bot-challenged.
-const AUTHENTICATED_CLIENT: InnertubeClient = {
+const WEB_CLIENT: InnertubeClient = {
   clientName: "WEB",
   clientVersion: "2.20240101.00.00",
   apiKey: WEB_API_KEY,
   userAgent: WEB_USER_AGENT,
-  oauth: true,
 }
-
-const INNERTUBE_CLIENTS: InnertubeClient[] = [
-  {
-    clientName: "ANDROID",
-    clientVersion: "19.09.37",
-    apiKey: "AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w",
-    userAgent: "com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip",
-    extra: { androidSdkVersion: 30 },
-  },
-  {
-    clientName: "IOS",
-    clientVersion: "19.09.3",
-    apiKey: "AIzaSyB-63vPrdThhKuerbB2N_l7Kwwcxj6yUAc",
-    userAgent:
-      "com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)",
-  },
-  {
-    clientName: "WEB",
-    clientVersion: "2.20240101.00.00",
-    apiKey: WEB_API_KEY,
-    userAgent: WEB_USER_AGENT,
-  },
-]
 
 // A single cropped frame ready to hand to a vision model.
 export interface VideoFrame {
@@ -197,103 +169,92 @@ function spriteUrl(
   return `${url}${sep}sigh=${level.sigh}`
 }
 
-// Hits the InnerTube player endpoint and returns the storyboard spec string, or
-// null. When an OAuth access token is supplied we try an authenticated request
-// first — anonymous datacenter requests are now bot-challenged, so the token is
-// what actually gets a spec back in production. Tries each remaining client in
-// turn and returns the first spec found. Every failure path logs — including a
-// 200 that carries no storyboard, which is how a bot-challenged anonymous
-// request looks — so a missing frame is never silent.
-async function fetchStoryboardSpec(
-  videoId: string,
-  accessToken?: string,
-): Promise<string | null> {
-  const clients = accessToken
-    ? [AUTHENTICATED_CLIENT, ...INNERTUBE_CLIENTS]
-    : INNERTUBE_CLIENTS
+// Hits the InnerTube player endpoint with the anonymous WEB client and returns
+// the storyboard spec string, or null. The request is routed through the
+// residential proxy when one is configured — without it a datacenter IP gets
+// bot-challenged. Every failure path logs (including a 200 that carries no
+// storyboard) so a missing frame is never silent.
+async function fetchStoryboardSpec(videoId: string): Promise<string | null> {
+  const client = WEB_CLIENT
 
   // Whether the spec request is actually being routed through the residential
-  // proxy. Folded into every log line below so a "no frames" run says outright
-  // if the proxy was live — a Vercel env var added after the running deployment
-  // was built isn't picked up until a redeploy, and "direct" makes that obvious.
+  // proxy. Folded into the log line below so a "no frames" run says outright if
+  // the proxy was live — a Vercel env var added after the running deployment was
+  // built isn't picked up until a redeploy, and "direct" makes that obvious.
   const route = proxyAgent ? "proxied" : "direct"
+  const label = `${client.clientName}, ${route}`
 
-  for (const client of clients) {
-    const label = `${client.oauth ? `${client.clientName}+oauth` : client.clientName}, ${route}`
-    let response: Awaited<ReturnType<typeof proxiedFetch>>
-    try {
-      response = await proxiedFetch(`${INNERTUBE_PLAYER_ENDPOINT}?key=${client.apiKey}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "User-Agent": client.userAgent,
-          Origin: "https://www.youtube.com",
-          ...(client.oauth && accessToken
-            ? {
-                Authorization: `Bearer ${accessToken}`,
-                "X-Goog-Api-Format-Version": "2",
-              }
-            : {}),
-        },
-        body: JSON.stringify({
-          videoId,
-          context: {
-            client: {
-              clientName: client.clientName,
-              clientVersion: client.clientVersion,
-              hl: "en",
-              gl: "US",
-              ...client.extra,
-            },
+  let response: Awaited<ReturnType<typeof proxiedFetch>>
+  try {
+    response = await proxiedFetch(`${INNERTUBE_PLAYER_ENDPOINT}?key=${client.apiKey}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "User-Agent": client.userAgent,
+        Origin: "https://www.youtube.com",
+      },
+      body: JSON.stringify({
+        videoId,
+        // contentCheckOk/racyCheckOk pre-acknowledge content warnings that would
+        // otherwise come back as an UNPLAYABLE playabilityStatus with no spec.
+        contentCheckOk: true,
+        racyCheckOk: true,
+        context: {
+          client: {
+            clientName: client.clientName,
+            clientVersion: client.clientVersion,
+            hl: "en",
+            gl: "US",
+            ...client.extra,
           },
-        }),
-        // Route through the residential proxy when configured; otherwise direct.
-        ...(proxyAgent ? { dispatcher: proxyAgent } : {}),
-      })
-    } catch (error) {
-      console.error(`Storyboard player request failed (${label})`, error)
-      continue
-    }
-
-    if (!response.ok) {
-      // Surface a slice of the body — for a 400 it carries the actual reason
-      // (e.g. an invalid argument or a rejected credential), which the bare
-      // status code hides.
-      let detail = ""
-      try {
-        const body = await response.text()
-        if (body) detail = `: ${body.slice(0, 300)}`
-      } catch {
-        // Ignore — the status code alone still tells us this client failed.
-      }
-      console.error(
-        `Storyboard player request error (${label}: ${response.status})${detail}`,
-      )
-      continue
-    }
-
-    const json = (await response.json()) as {
-      playabilityStatus?: { status?: string; reason?: string }
-      storyboards?: {
-        playerStoryboardSpecRenderer?: { spec?: string }
-      }
-    }
-
-    const spec = json.storyboards?.playerStoryboardSpecRenderer?.spec
-    if (spec) return spec
-
-    // 200, but no storyboard — usually a bot challenge (LOGIN_REQUIRED) on this
-    // client. Log why and fall through to the next.
-    console.error(
-      `Storyboard spec missing (${label}: playabilityStatus=${
-        json.playabilityStatus?.status ?? "unknown"
-      }${
-        json.playabilityStatus?.reason
-          ? ` "${json.playabilityStatus.reason}"`
-          : ""
-      })`,
-    )
+        },
+      }),
+      // Route through the residential proxy when configured; otherwise direct.
+      ...(proxyAgent ? { dispatcher: proxyAgent } : {}),
+    })
+  } catch (error) {
+    console.error(`Storyboard player request failed (${label})`, error)
+    return null
   }
+
+  if (!response.ok) {
+    // Surface a slice of the body — for a 400 it carries the actual reason,
+    // which the bare status code hides.
+    let detail = ""
+    try {
+      const body = await response.text()
+      if (body) detail = `: ${body.slice(0, 300)}`
+    } catch {
+      // Ignore — the status code alone still tells us the request failed.
+    }
+    console.error(
+      `Storyboard player request error (${label}: ${response.status})${detail}`,
+    )
+    return null
+  }
+
+  const json = (await response.json()) as {
+    playabilityStatus?: { status?: string; reason?: string }
+    storyboards?: {
+      playerStoryboardSpecRenderer?: { spec?: string }
+    }
+  }
+
+  const spec = json.storyboards?.playerStoryboardSpecRenderer?.spec
+  if (spec) return spec
+
+  // 200, but no storyboard. For a public video an UNPLAYABLE "Video unavailable"
+  // here means the proxy exit IP is in a blocked/mismatched region; LOGIN_REQUIRED
+  // means the request wasn't routed through a residential exit.
+  console.error(
+    `Storyboard spec missing (${label}: playabilityStatus=${
+      json.playabilityStatus?.status ?? "unknown"
+    }${
+      json.playabilityStatus?.reason
+        ? ` "${json.playabilityStatus.reason}"`
+        : ""
+    })`,
+  )
 
   return null
 }
@@ -303,13 +264,12 @@ async function fetchStoryboardSpec(
 // same order as the requested (de-duplicated, sorted) timestamps; timestamps
 // whose frame couldn't be produced are simply omitted.
 //
-// `accessToken` is the video owner's Google OAuth token. It's optional, but
-// without it the storyboard spec request is anonymous and YouTube bot-challenges
-// it from datacenter IPs — so in production this should always be supplied.
+// The storyboard spec request is anonymous (WEB), so in production it must be
+// routed through a residential proxy — see STORYBOARD_PROXY_URL. Without one a
+// datacenter IP is bot-challenged and no frames come back.
 export async function getVideoFrames(
   videoId: string,
   timestampsSeconds: number[],
-  accessToken?: string,
 ): Promise<VideoFrame[]> {
   if (timestampsSeconds.length === 0) return []
 
@@ -323,7 +283,7 @@ export async function getVideoFrames(
     return []
   }
 
-  const spec = await fetchStoryboardSpec(videoId, accessToken)
+  const spec = await fetchStoryboardSpec(videoId)
   if (!spec) return []
 
   const parsed = parseStoryboardSpec(spec)

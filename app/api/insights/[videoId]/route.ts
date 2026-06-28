@@ -6,7 +6,6 @@ import {
   healCachedTranscript,
   saveInsights,
 } from "@/lib/analysed-videos"
-import { getGoogleAccessToken } from "@/lib/youtube/google-auth"
 import { generateVideoInsights } from "@/lib/ai/insights"
 
 // POST /api/insights/[videoId]
@@ -52,23 +51,11 @@ export async function POST(
       cached.transcript,
     )
 
-    // The OAuth token lets the storyboard fetch authenticate so YouTube doesn't
-    // bot-challenge it. Best-effort: frames are optional, so if the token can't
-    // be obtained (e.g. the user must reconnect) we still generate insights from
-    // the transcript alone rather than failing the request.
-    let accessToken: string | undefined
-    try {
-      accessToken = await getGoogleAccessToken(user.id)
-    } catch (tokenError) {
-      console.error("Could not get Google token for frame capture", tokenError)
-    }
-
     const insights = await generateVideoInsights({
       videoId,
       video: cached.videoDetails,
       retention: cached.retention,
       transcript,
-      accessToken,
     })
 
     if (!insights) {
