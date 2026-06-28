@@ -81,6 +81,13 @@ export interface RetentionGain {
   watchRatioGain: number
 }
 
+// A single timestamped line of spoken text from a video's caption track.
+export interface TranscriptCue {
+  startSeconds: number
+  endSeconds: number
+  text: string
+}
+
 // Accepts the common YouTube URL shapes (watch?v=, youtu.be/, /shorts/,
 // /embed/) as well as a bare 11-character video ID. Returns null if nothing
 // looks like a video ID.
@@ -407,6 +414,157 @@ export async function getAudienceRetention(
       timestampSeconds: elapsedRatio * video.durationSeconds,
     }))
     .sort((a, b) => a.elapsedRatio - b.elapsedRatio)
+}
+
+// Fetches the spoken-word transcript for a video the authenticated user owns,
+// as a list of timestamped cues. Returns an empty array when the video has no
+// caption track or captions are disabled.
+//
+// Two Data API calls are made: captions.list (50 quota units) to find the best
+// track, then captions.download (200 units) to fetch the cue text. Both require
+// the youtube.force-ssl scope and only work on videos owned by the signed-in
+// channel — exactly the videos Hookpoint analyses.
+export async function getVideoTranscript(
+  accessToken: string,
+  videoId: string,
+): Promise<TranscriptCue[]> {
+  const trackId = await pickCaptionTrack(accessToken, videoId)
+  if (!trackId) return []
+
+  const url = new URL(`${DATA_API}/captions/${trackId}`)
+  // WebVTT is the easiest timestamped format to parse back into cues.
+  url.searchParams.set("tfmt", "vtt")
+
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: "no-store",
+  })
+
+  if (!response.ok) {
+    // A 403 here usually means the track isn't downloadable (e.g. some
+    // third-party-managed tracks). Treat transcript fetching as best-effort so
+    // it never blocks the core retention analysis.
+    console.error(
+      `YouTube captions.download error (${response.status}): ${await response.text()}`,
+    )
+    return []
+  }
+
+  return parseWebVtt(await response.text())
+}
+
+// Lists a video's caption tracks and returns the ID of the best one to download,
+// or null if there are none. Prefers a human-authored ("standard") track over an
+// auto-generated ("ASR") one, and English over other languages, but will fall
+// back to whatever exists so non-English channels still get a transcript.
+async function pickCaptionTrack(
+  accessToken: string,
+  videoId: string,
+): Promise<string | null> {
+  const url = new URL(`${DATA_API}/captions`)
+  url.searchParams.set("part", "snippet")
+  url.searchParams.set("videoId", videoId)
+
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: "no-store",
+  })
+
+  if (!response.ok) {
+    console.error(
+      `YouTube captions.list error (${response.status}): ${await response.text()}`,
+    )
+    return null
+  }
+
+  const json = (await response.json()) as {
+    items?: Array<{
+      id?: string
+      snippet?: { trackKind?: string; language?: string; isDraft?: boolean }
+    }>
+  }
+
+  const tracks = (json.items ?? []).filter(
+    (item) => item.id && !item.snippet?.isDraft,
+  )
+  if (tracks.length === 0) return null
+
+  const score = (item: (typeof tracks)[number]): number => {
+    const isManual = item.snippet?.trackKind !== "ASR"
+    const isEnglish = (item.snippet?.language ?? "").toLowerCase().startsWith("en")
+    // Manual tracks are far more accurate than auto-captions, so weight that
+    // above language; an English caption is a mild tiebreak on top.
+    return (isManual ? 2 : 0) + (isEnglish ? 1 : 0)
+  }
+
+  const best = tracks.reduce((a, b) => (score(b) > score(a) ? b : a))
+  return best.id ?? null
+}
+
+// Parses a WebVTT caption file into timestamped cues. Tolerant of the quirks
+// YouTube emits: a WEBVTT header, NOTE/STYLE/REGION blocks, optional cue
+// identifiers, cue-setting suffixes after the timestamp, and inline timing tags
+// (<00:00:01.000>, <c>…</c>) inside auto-generated caption text.
+export function parseWebVtt(vtt: string): TranscriptCue[] {
+  const cues: TranscriptCue[] = []
+  // Normalise line endings, then split into blank-line-separated blocks.
+  const blocks = vtt.replace(/\r\n?/g, "\n").split(/\n{2,}/)
+
+  for (const block of blocks) {
+    const lines = block.split("\n")
+    const timingLineIndex = lines.findIndex((line) => line.includes("-->"))
+    if (timingLineIndex === -1) continue
+
+    const timing = lines[timingLineIndex]
+    const match = timing.match(
+      /(\d{1,2}:\d{2}:\d{2}[.,]\d{1,3}|\d{1,2}:\d{2}[.,]\d{1,3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[.,]\d{1,3}|\d{1,2}:\d{2}[.,]\d{1,3})/,
+    )
+    if (!match) continue
+
+    const start = parseVttTimestamp(match[1])
+    const end = parseVttTimestamp(match[2])
+    if (start === null || end === null) continue
+
+    const text = lines
+      .slice(timingLineIndex + 1)
+      .join(" ")
+      // Strip inline tags like <00:00:01.000>, <c>, </c>.
+      .replace(/<[^>]*>/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+    if (!text) continue
+
+    cues.push({ startSeconds: start, endSeconds: end, text })
+  }
+
+  return cues
+}
+
+// Parses an "HH:MM:SS.mmm" or "MM:SS.mmm" WebVTT timestamp into seconds.
+function parseVttTimestamp(value: string): number | null {
+  const parts = value.replace(",", ".").split(":")
+  if (parts.length < 2 || parts.length > 3) return null
+  const nums = parts.map(Number)
+  if (nums.some((n) => Number.isNaN(n))) return null
+  return parts.length === 3
+    ? nums[0] * 3600 + nums[1] * 60 + nums[2]
+    : nums[0] * 60 + nums[1]
+}
+
+// Returns the transcript text spoken during a [from, to] time window, joined
+// into a single string. A cue counts as inside the window if it overlaps it at
+// all, so a drop-off that lands mid-sentence still picks up that sentence.
+export function transcriptForSegment(
+  cues: TranscriptCue[],
+  fromSeconds: number,
+  toSeconds: number,
+): string {
+  return cues
+    .filter((cue) => cue.endSeconds >= fromSeconds && cue.startSeconds <= toSeconds)
+    .map((cue) => cue.text)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim()
 }
 
 // Finds the segments where retention falls fastest. Walks consecutive points,

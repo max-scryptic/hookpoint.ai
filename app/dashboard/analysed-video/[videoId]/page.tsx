@@ -16,9 +16,11 @@ import {
   detectRetentionGains,
   getAudienceRetention,
   getVideoDetails,
+  getVideoTranscript,
   type DropOff,
   type RetentionGain,
   type RetentionPoint,
+  type TranscriptCue,
   type VideoDetails,
 } from "@/lib/youtube/youtube"
 import {
@@ -45,6 +47,7 @@ type AnalysisResult =
       retention: RetentionPoint[]
       dropOffs: DropOff[]
       gains: RetentionGain[]
+      transcript: TranscriptCue[]
     }
   | { status: "not_found" }
   | { status: "no_data" }
@@ -69,6 +72,7 @@ async function analyse(
         retention: cached.retention,
         dropOffs: cached.dropOffs ?? detectDropOffs(cached.retention),
         gains: detectRetentionGains(cached.retention),
+        transcript: cached.transcript ?? [],
       }
     }
 
@@ -82,16 +86,30 @@ async function analyse(
 
     const dropOffs = detectDropOffs(retention)
     const gains = detectRetentionGains(retention)
+    // Best-effort: a missing or caption-less transcript must not fail the
+    // analysis, so swallow errors and fall back to an empty transcript.
+    const transcript = await getVideoTranscript(accessToken, videoId).catch(
+      (transcriptError) => {
+        console.error("Failed to fetch transcript", transcriptError)
+        return [] as TranscriptCue[]
+      },
+    )
 
     // Persist everything we fetched so future visits hit the cache above.
     try {
-      await saveAnalysedVideo(supabase, { userId, video, retention, dropOffs })
+      await saveAnalysedVideo(supabase, {
+        userId,
+        video,
+        retention,
+        dropOffs,
+        transcript,
+      })
     } catch (saveError) {
       // Saving is best-effort — never block showing the analysis on a DB write.
       console.error("Failed to save analysed video", saveError)
     }
 
-    return { status: "ok", video, retention, dropOffs, gains }
+    return { status: "ok", video, retention, dropOffs, gains, transcript }
   } catch (error) {
     if (error instanceof ReconsentRequiredError) {
       return { status: "reconnect" }
@@ -154,6 +172,7 @@ export default async function Page({
               retention={result.retention}
               dropOffs={result.dropOffs}
               gains={result.gains}
+              transcript={result.transcript}
             />
           )}
 

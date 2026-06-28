@@ -13,7 +13,9 @@ import {
   detectRetentionGains,
   getAudienceRetention,
   getVideoDetails,
+  getVideoTranscript,
   parseVideoId,
+  type TranscriptCue,
 } from "@/lib/youtube/youtube"
 
 // POST /api/analyze  { url: string }
@@ -54,6 +56,7 @@ export async function POST(request: NextRequest) {
         retention: cached.retention,
         dropOffs: cached.dropOffs ?? detectDropOffs(cached.retention),
         gains: detectRetentionGains(cached.retention),
+        transcript: cached.transcript ?? [],
         cached: true,
       })
     }
@@ -83,6 +86,14 @@ export async function POST(request: NextRequest) {
 
     const dropOffs = detectDropOffs(retention)
     const gains = detectRetentionGains(retention)
+    // Best-effort: a missing or caption-less transcript must not fail the
+    // analysis, so swallow errors and fall back to an empty transcript.
+    const transcript = await getVideoTranscript(accessToken, videoId).catch(
+      (transcriptError) => {
+        console.error("Failed to fetch transcript", transcriptError)
+        return [] as TranscriptCue[]
+      },
+    )
 
     // Persist the analysis so subsequent requests are served from the cache
     // above. Best-effort: a DB failure shouldn't fail the analysis response.
@@ -92,12 +103,13 @@ export async function POST(request: NextRequest) {
         video,
         retention,
         dropOffs,
+        transcript,
       })
     } catch (saveError) {
       console.error("Failed to save analysed video", saveError)
     }
 
-    return NextResponse.json({ video, retention, dropOffs, gains })
+    return NextResponse.json({ video, retention, dropOffs, gains, transcript })
   } catch (error) {
     if (error instanceof ReconsentRequiredError) {
       return NextResponse.json(

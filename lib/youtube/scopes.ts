@@ -5,4 +5,8 @@
 export const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/yt-analytics.readonly",
   "https://www.googleapis.com/auth/youtube.readonly",
+  // captions.list / captions.download require force-ssl; youtube.readonly is not
+  // sufficient. Only grants access to captions on the user's own videos, which is
+  // all Hookpoint ever analyses.
+  "https://www.googleapis.com/auth/youtube.force-ssl",
 ] as const
