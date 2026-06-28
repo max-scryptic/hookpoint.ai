@@ -45,12 +45,20 @@ export interface RecentVideosPage {
   prevPageToken: string | null
 }
 
+// Sort orders search.list accepts for an uploads listing (forMine=true). YouTube
+// sorts each field in a single fixed direction — `date` is newest-first, `title`
+// is A–Z, `viewCount` is most-viewed-first — and offers no comment-count order,
+// so the upload list's sort menu is limited to these three.
+export type RecentVideosOrder = "date" | "title" | "viewCount"
+
 export interface GetRecentVideosOptions {
   maxResults?: number
   // Opaque cursor from a previous page's next/prev token.
   pageToken?: string | null
   // Free-text title/description search passed to search.list's `q` param.
   query?: string | null
+  // Server-side sort order. Defaults to newest-first.
+  order?: RecentVideosOrder
 }
 
 export interface RetentionPoint {
@@ -131,11 +139,13 @@ export function parseIso8601Duration(duration: string): number {
   return Number(h ?? 0) * 3600 + Number(m ?? 0) * 60 + Number(s ?? 0)
 }
 
-// Fetches a page of the authenticated user's uploads, newest first.
-// `search.list` with forMine=true returns only videos owned by the signed-in
-// channel. Title/description search (`query`) is applied server-side via the
-// `q` param; pagination is cursor-based via `pageToken`, so each page is a
-// separate request (search.list caps results at 50 per page). Neither privacy
+// Fetches a page of the authenticated user's uploads, sorted by `order`
+// (newest first by default). `search.list` with forMine=true returns only
+// videos owned by the signed-in channel. Title/description search (`query`) is
+// applied server-side via the `q` param; pagination is cursor-based via
+// `pageToken`, so each page is a separate request (search.list caps results at
+// 50 per page). Sorting is server-side too — because only one page is in memory
+// at a time, the client can't reorder the full result set itself. Neither privacy
 // status nor a publish-date range can be filtered here — the publishedAfter/
 // publishedBefore params return a 400 when combined with forMine=true, and
 // privacy only arrives with the enrichment call — so callers filter on both
@@ -144,13 +154,13 @@ export async function getRecentVideos(
   accessToken: string,
   options: GetRecentVideosOptions = {},
 ): Promise<RecentVideosPage> {
-  const { maxResults = 12, pageToken, query } = options
+  const { maxResults = 12, pageToken, query, order = "date" } = options
 
   const url = new URL(`${DATA_API}/search`)
   url.searchParams.set("part", "snippet")
   url.searchParams.set("forMine", "true")
   url.searchParams.set("type", "video")
-  url.searchParams.set("order", "date")
+  url.searchParams.set("order", order)
   url.searchParams.set("maxResults", String(maxResults))
   if (pageToken) url.searchParams.set("pageToken", pageToken)
   if (query) url.searchParams.set("q", query)
