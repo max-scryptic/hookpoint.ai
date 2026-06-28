@@ -241,6 +241,10 @@ export interface GenerateInsightsInput {
   video: VideoDetails
   retention: RetentionPoint[]
   transcript: TranscriptCue[]
+  // The video owner's Google OAuth token. Lets the storyboard fetch authenticate
+  // so YouTube doesn't bot-challenge it from a datacenter IP. Optional — frames
+  // are best-effort, so a missing token just means no on-screen frames.
+  accessToken?: string
 }
 
 // Runs the full insight pipeline: compute the moments that matter, best-effort
@@ -266,7 +270,11 @@ export async function generateVideoInsights(
   ]
   let frames: VideoFrame[] = []
   try {
-    frames = await getVideoFrames(input.videoId, frameTimestamps)
+    frames = await getVideoFrames(
+      input.videoId,
+      frameTimestamps,
+      input.accessToken,
+    )
   } catch (error) {
     console.error("Frame extraction failed; continuing without frames", error)
   }
