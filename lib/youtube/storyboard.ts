@@ -11,23 +11,48 @@
 // shape can drift, and sharp can fail to load in some runtimes. Any failure
 // returns no frames so the surrounding analysis still runs transcript-only.
 
-const INNERTUBE_PLAYER_ENDPOINT =
-  "https://www.youtube.com/youtubei/v1/player?key="
+const INNERTUBE_PLAYER_ENDPOINT = "https://www.youtube.com/youtubei/v1/player"
 
-// InnerTube clients we try, in order, to fetch the storyboard spec. YouTube
-// increasingly bot-challenges the plain WEB client from datacenter IPs
-// (Vercel/AWS): the player endpoint answers 200 but with a LOGIN_REQUIRED
-// playabilityStatus and no storyboard — so the previous WEB-only request quietly
-// returned no frames in production. The mobile clients still hand back
-// storyboard specs for public videos from server IPs without a PO token, so we
-// try them first and keep WEB as a last resort. Each client carries its own
-// long-standing public API key and a matching User-Agent.
+// The public WEB InnerTube key. Used both for the anonymous WEB fallback and as
+// the key on the authenticated request (the player endpoint still wants a key
+// alongside the OAuth bearer).
+const WEB_API_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8"
+
+const WEB_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+// InnerTube clients we try, in order, to fetch the storyboard spec.
+//
+// From a datacenter IP (Vercel/AWS) every *anonymous* request is now refused:
+// the ANDROID/IOS clients answer 400, and WEB answers 200 with a LOGIN_REQUIRED
+// playabilityStatus ("Sign in to confirm you're not a bot") and no storyboard.
+// So the only reliable path is an *authenticated* request — one carrying the
+// user's Google OAuth token as a bearer. That request is tied to a real account
+// (the same account whose retention we already fetch), so YouTube doesn't
+// bot-challenge it. When a token is available we try it first; the anonymous
+// clients stay as a best-effort fallback (and for any caller without a token).
+//
+// Each client carries its own long-standing public API key and a matching
+// User-Agent; the `oauth` client authenticates with the bearer token instead.
 interface InnertubeClient {
   clientName: string
   clientVersion: string
   apiKey: string
   userAgent: string
   extra?: Record<string, unknown>
+  // When true, send the user's OAuth token as `Authorization: Bearer` so the
+  // request is authenticated rather than anonymous.
+  oauth?: boolean
+}
+
+// Tried first when an access token is available. WEB still returns the richest
+// storyboard spec; with a bearer token it's no longer bot-challenged.
+const AUTHENTICATED_CLIENT: InnertubeClient = {
+  clientName: "WEB",
+  clientVersion: "2.20240101.00.00",
+  apiKey: WEB_API_KEY,
+  userAgent: WEB_USER_AGENT,
+  oauth: true,
 }
 
 const INNERTUBE_CLIENTS: InnertubeClient[] = [
@@ -48,9 +73,8 @@ const INNERTUBE_CLIENTS: InnertubeClient[] = [
   {
     clientName: "WEB",
     clientVersion: "2.20240101.00.00",
-    apiKey: "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
-    userAgent:
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    apiKey: WEB_API_KEY,
+    userAgent: WEB_USER_AGENT,
   },
 ]
 
@@ -140,21 +164,36 @@ function spriteUrl(
 }
 
 // Hits the InnerTube player endpoint and returns the storyboard spec string, or
-// null. Tries each client in turn and returns the first spec found; no auth is
-// required for storyboards on public or unlisted videos. Every failure path
-// logs — including a 200 response that simply carries no storyboard, which is
-// how a bot-challenged datacenter request looks — so a missing frame is never
-// silent.
-async function fetchStoryboardSpec(videoId: string): Promise<string | null> {
-  for (const client of INNERTUBE_CLIENTS) {
+// null. When an OAuth access token is supplied we try an authenticated request
+// first — anonymous datacenter requests are now bot-challenged, so the token is
+// what actually gets a spec back in production. Tries each remaining client in
+// turn and returns the first spec found. Every failure path logs — including a
+// 200 that carries no storyboard, which is how a bot-challenged anonymous
+// request looks — so a missing frame is never silent.
+async function fetchStoryboardSpec(
+  videoId: string,
+  accessToken?: string,
+): Promise<string | null> {
+  const clients = accessToken
+    ? [AUTHENTICATED_CLIENT, ...INNERTUBE_CLIENTS]
+    : INNERTUBE_CLIENTS
+
+  for (const client of clients) {
+    const label = client.oauth ? `${client.clientName}+oauth` : client.clientName
     let response: Response
     try {
-      response = await fetch(`${INNERTUBE_PLAYER_ENDPOINT}${client.apiKey}`, {
+      response = await fetch(`${INNERTUBE_PLAYER_ENDPOINT}?key=${client.apiKey}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "User-Agent": client.userAgent,
           Origin: "https://www.youtube.com",
+          ...(client.oauth && accessToken
+            ? {
+                Authorization: `Bearer ${accessToken}`,
+                "X-Goog-Api-Format-Version": "2",
+              }
+            : {}),
         },
         body: JSON.stringify({
           videoId,
@@ -171,16 +210,13 @@ async function fetchStoryboardSpec(videoId: string): Promise<string | null> {
         cache: "no-store",
       })
     } catch (error) {
-      console.error(
-        `Storyboard player request failed (${client.clientName})`,
-        error,
-      )
+      console.error(`Storyboard player request failed (${label})`, error)
       continue
     }
 
     if (!response.ok) {
       console.error(
-        `Storyboard player request error (${client.clientName}: ${response.status})`,
+        `Storyboard player request error (${label}: ${response.status})`,
       )
       continue
     }
@@ -198,7 +234,7 @@ async function fetchStoryboardSpec(videoId: string): Promise<string | null> {
     // 200, but no storyboard — usually a bot challenge (LOGIN_REQUIRED) on this
     // client. Log why and fall through to the next.
     console.error(
-      `Storyboard spec missing (${client.clientName}: playabilityStatus=${
+      `Storyboard spec missing (${label}: playabilityStatus=${
         json.playabilityStatus?.status ?? "unknown"
       }${
         json.playabilityStatus?.reason
@@ -215,9 +251,14 @@ async function fetchStoryboardSpec(videoId: string): Promise<string | null> {
 // each and reused across timestamps that share a sheet. Returns frames in the
 // same order as the requested (de-duplicated, sorted) timestamps; timestamps
 // whose frame couldn't be produced are simply omitted.
+//
+// `accessToken` is the video owner's Google OAuth token. It's optional, but
+// without it the storyboard spec request is anonymous and YouTube bot-challenges
+// it from datacenter IPs — so in production this should always be supplied.
 export async function getVideoFrames(
   videoId: string,
   timestampsSeconds: number[],
+  accessToken?: string,
 ): Promise<VideoFrame[]> {
   if (timestampsSeconds.length === 0) return []
 
@@ -231,7 +272,7 @@ export async function getVideoFrames(
     return []
   }
 
-  const spec = await fetchStoryboardSpec(videoId)
+  const spec = await fetchStoryboardSpec(videoId, accessToken)
   if (!spec) return []
 
   const parsed = parseStoryboardSpec(spec)
