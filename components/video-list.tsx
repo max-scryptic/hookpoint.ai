@@ -20,6 +20,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import type { RecentVideo, VideoPrivacyStatus } from "@/lib/youtube/youtube"
 
 export function formatPublishedAt(iso: string): string {
@@ -169,40 +177,44 @@ export function VideoList({
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border bg-card">
-      <table className="w-full border-collapse text-left">
-        <thead>
-          <tr className="border-b text-xs font-medium text-muted-foreground">
-            <th className="px-4 py-3 font-medium">Video</th>
-            <th className="hidden px-4 py-3 font-medium md:table-cell">
+    <div className="rounded-xl border bg-card">
+      <Table className="text-left">
+        <TableHeader>
+          <TableRow className="bg-accent text-xs text-accent-foreground hover:bg-accent">
+            <TableHead className="px-4 py-3 text-accent-foreground">
+              Video
+            </TableHead>
+            <TableHead className="hidden px-4 py-3 text-accent-foreground md:table-cell">
               Visibility
-            </th>
-            <th className="hidden px-4 py-3 font-medium lg:table-cell">Date</th>
-            <th className="hidden px-4 py-3 text-right font-medium sm:table-cell">
+            </TableHead>
+            <TableHead className="hidden px-4 py-3 text-accent-foreground lg:table-cell">
+              Date
+            </TableHead>
+            <TableHead className="hidden px-4 py-3 text-right text-accent-foreground sm:table-cell">
               Views
-            </th>
-            <th className="hidden px-4 py-3 text-right font-medium lg:table-cell">
+            </TableHead>
+            <TableHead className="hidden px-4 py-3 text-right text-accent-foreground lg:table-cell">
               Comments
-            </th>
-            <th className="hidden px-4 py-3 font-medium sm:table-cell">
+            </TableHead>
+            <TableHead className="hidden px-4 py-3 text-accent-foreground sm:table-cell">
               Analysed
-            </th>
-            <th className="w-12 px-4 py-3">
+            </TableHead>
+            <TableHead className="w-12 px-4 py-3">
               <span className="sr-only">Actions</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody className="divide-y">
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {videos.map((video) => {
             const isAnalysed = analysedIds?.has(video.id) ?? false
             return (
-            <tr
+            <TableRow
               key={video.id}
               className={`align-top hover:bg-muted/40 ${
                 isAnalysed ? "bg-muted/30" : ""
               }`}
             >
-              <td className="px-4 py-3">
+              <TableCell className="px-4 py-3 whitespace-normal">
                 <div className="flex gap-3 sm:gap-4">
                   <Thumbnail video={video} />
                   <div className="min-w-0 flex-1">
@@ -231,34 +243,34 @@ export function VideoList({
                     </div>
                   </div>
                 </div>
-              </td>
-              <td className="hidden px-4 py-3 md:table-cell">
+              </TableCell>
+              <TableCell className="hidden px-4 py-3 md:table-cell">
                 <VisibilityCell status={video.privacyStatus} />
-              </td>
-              <td className="hidden px-4 py-3 text-sm text-muted-foreground lg:table-cell">
+              </TableCell>
+              <TableCell className="hidden px-4 py-3 text-sm text-muted-foreground lg:table-cell">
                 {formatPublishedAt(video.publishedAt)}
-              </td>
-              <td className="hidden px-4 py-3 text-right text-sm tabular-nums text-muted-foreground sm:table-cell">
+              </TableCell>
+              <TableCell className="hidden px-4 py-3 text-right text-sm tabular-nums text-muted-foreground sm:table-cell">
                 {formatCount(video.viewCount)}
-              </td>
-              <td className="hidden px-4 py-3 text-right text-sm tabular-nums text-muted-foreground lg:table-cell">
+              </TableCell>
+              <TableCell className="hidden px-4 py-3 text-right text-sm tabular-nums text-muted-foreground lg:table-cell">
                 {formatCount(video.commentCount)}
-              </td>
-              <td className="hidden px-4 py-3 sm:table-cell">
+              </TableCell>
+              <TableCell className="hidden px-4 py-3 sm:table-cell">
                 {isAnalysed ? (
                   <AnalysedBadge />
                 ) : (
                   <span className="text-sm text-muted-foreground">—</span>
                 )}
-              </td>
-              <td className="px-4 py-3 text-right">
+              </TableCell>
+              <TableCell className="px-4 py-3 text-right">
                 <VideoActions video={video} isAnalysed={isAnalysed} />
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
             )
           })}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   )
 }

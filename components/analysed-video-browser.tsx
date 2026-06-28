@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { format } from "date-fns"
 import {
   ArrowUpDownIcon,
@@ -12,7 +13,6 @@ import {
   LinkIcon,
   ListFilterIcon,
   LockIcon,
-  MoreVerticalIcon,
   SearchIcon,
   VideoOffIcon,
   XIcon,
@@ -24,11 +24,18 @@ import { Input } from "@/components/ui/input"
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import { DatePickerWithRange } from "@/components/date-range-picker"
 import {
   Thumbnail,
@@ -152,34 +159,8 @@ function formatAnalysedAt(iso: string): string {
   })
 }
 
-function RowActions({ video }: { video: RecentVideo }) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-8 shrink-0"
-            aria-label={`Actions for ${video.title}`}
-          />
-        }
-      >
-        <MoreVerticalIcon className="size-4" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem
-          render={<Link href={`/dashboard/analysed-video/${video.id}`} />}
-        >
-          <BarChart3Icon className="size-4" />
-          View analysis
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
-
 export function AnalysedVideoBrowser({ videos }: { videos: AnalysedVideo[] }) {
+  const router = useRouter()
   const rows = useMemo(() => videos.map(toRow), [videos])
 
   // Filter inputs. All filtering is client-side because the full set is already
@@ -420,35 +401,49 @@ export function AnalysedVideoBrowser({ videos }: { videos: AnalysedVideo[] }) {
           )}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border bg-card">
-          <table className="w-full border-collapse text-left">
-            <thead>
-              <tr className="border-b text-xs font-medium text-muted-foreground">
-                <th className="px-4 py-3 font-medium">Video</th>
-                <th className="hidden px-4 py-3 font-medium md:table-cell">
+        <div className="rounded-xl border bg-card">
+          <Table className="text-left">
+            <TableHeader>
+              <TableRow className="bg-accent text-xs text-accent-foreground hover:bg-accent">
+                <TableHead className="px-4 py-3 text-accent-foreground">
+                  Video
+                </TableHead>
+                <TableHead className="hidden px-4 py-3 text-accent-foreground md:table-cell">
                   Visibility
-                </th>
-                <th className="hidden px-4 py-3 font-medium lg:table-cell">
+                </TableHead>
+                <TableHead className="hidden px-4 py-3 text-accent-foreground lg:table-cell">
                   Published
-                </th>
-                <th className="hidden px-4 py-3 text-right font-medium sm:table-cell">
+                </TableHead>
+                <TableHead className="hidden px-4 py-3 text-right text-accent-foreground sm:table-cell">
                   Views
-                </th>
-                <th className="hidden px-4 py-3 text-right font-medium lg:table-cell">
+                </TableHead>
+                <TableHead className="hidden px-4 py-3 text-right text-accent-foreground lg:table-cell">
                   Comments
-                </th>
-                <th className="hidden px-4 py-3 font-medium sm:table-cell">
+                </TableHead>
+                <TableHead className="hidden px-4 py-3 text-accent-foreground sm:table-cell">
                   Analysed
-                </th>
-                <th className="w-12 px-4 py-3">
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {pageRows.map(({ video, dateAnalysed, privacyKnown }) => (
-                <tr key={video.id} className="align-top hover:bg-muted/40">
-                  <td className="px-4 py-3">
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {pageRows.map(({ video, dateAnalysed, privacyKnown }) => {
+                const href = `/dashboard/analysed-video/${video.id}`
+                return (
+                <TableRow
+                  key={video.id}
+                  className="cursor-pointer align-top hover:bg-muted/40"
+                  onClick={() => router.push(href)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault()
+                      router.push(href)
+                    }
+                  }}
+                  tabIndex={0}
+                  role="link"
+                  aria-label={`View analysis for ${video.title}`}
+                >
+                  <TableCell className="px-4 py-3 whitespace-normal">
                     <div className="flex gap-3 sm:gap-4">
                       <Thumbnail video={video} />
                       <div className="min-w-0 flex-1">
@@ -477,33 +472,31 @@ export function AnalysedVideoBrowser({ videos }: { videos: AnalysedVideo[] }) {
                         </div>
                       </div>
                     </div>
-                  </td>
-                  <td className="hidden px-4 py-3 md:table-cell">
+                  </TableCell>
+                  <TableCell className="hidden px-4 py-3 md:table-cell">
                     {privacyKnown ? (
                       <VisibilityCell status={video.privacyStatus} />
                     ) : (
                       <span className="text-sm text-muted-foreground">—</span>
                     )}
-                  </td>
-                  <td className="hidden px-4 py-3 text-sm text-muted-foreground lg:table-cell">
+                  </TableCell>
+                  <TableCell className="hidden px-4 py-3 text-sm text-muted-foreground lg:table-cell">
                     {formatPublishedAt(video.publishedAt)}
-                  </td>
-                  <td className="hidden px-4 py-3 text-right text-sm tabular-nums text-muted-foreground sm:table-cell">
+                  </TableCell>
+                  <TableCell className="hidden px-4 py-3 text-right text-sm tabular-nums text-muted-foreground sm:table-cell">
                     {formatCount(video.viewCount)}
-                  </td>
-                  <td className="hidden px-4 py-3 text-right text-sm tabular-nums text-muted-foreground lg:table-cell">
+                  </TableCell>
+                  <TableCell className="hidden px-4 py-3 text-right text-sm tabular-nums text-muted-foreground lg:table-cell">
                     {formatCount(video.commentCount)}
-                  </td>
-                  <td className="hidden px-4 py-3 text-sm text-muted-foreground sm:table-cell">
+                  </TableCell>
+                  <TableCell className="hidden px-4 py-3 text-sm text-muted-foreground sm:table-cell">
                     {formatAnalysedAt(dateAnalysed)}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <RowActions video={video} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </TableCell>
+                </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
         </div>
       )}
 
