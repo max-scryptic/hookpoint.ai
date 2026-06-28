@@ -11,8 +11,48 @@
 // shape can drift, and sharp can fail to load in some runtimes. Any failure
 // returns no frames so the surrounding analysis still runs transcript-only.
 
-const INNERTUBE_PLAYER_URL =
-  "https://www.youtube.com/youtubei/v1/player?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8"
+const INNERTUBE_PLAYER_ENDPOINT =
+  "https://www.youtube.com/youtubei/v1/player?key="
+
+// InnerTube clients we try, in order, to fetch the storyboard spec. YouTube
+// increasingly bot-challenges the plain WEB client from datacenter IPs
+// (Vercel/AWS): the player endpoint answers 200 but with a LOGIN_REQUIRED
+// playabilityStatus and no storyboard — so the previous WEB-only request quietly
+// returned no frames in production. The mobile clients still hand back
+// storyboard specs for public videos from server IPs without a PO token, so we
+// try them first and keep WEB as a last resort. Each client carries its own
+// long-standing public API key and a matching User-Agent.
+interface InnertubeClient {
+  clientName: string
+  clientVersion: string
+  apiKey: string
+  userAgent: string
+  extra?: Record<string, unknown>
+}
+
+const INNERTUBE_CLIENTS: InnertubeClient[] = [
+  {
+    clientName: "ANDROID",
+    clientVersion: "19.09.37",
+    apiKey: "AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w",
+    userAgent: "com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip",
+    extra: { androidSdkVersion: 30 },
+  },
+  {
+    clientName: "IOS",
+    clientVersion: "19.09.3",
+    apiKey: "AIzaSyB-63vPrdThhKuerbB2N_l7Kwwcxj6yUAc",
+    userAgent:
+      "com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)",
+  },
+  {
+    clientName: "WEB",
+    clientVersion: "2.20240101.00.00",
+    apiKey: "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
+    userAgent:
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  },
+]
 
 // A single cropped frame ready to hand to a vision model.
 export interface VideoFrame {
@@ -100,41 +140,75 @@ function spriteUrl(
 }
 
 // Hits the InnerTube player endpoint and returns the storyboard spec string, or
-// null. We mimic a web client; no auth is required for storyboards on public or
-// unlisted videos.
+// null. Tries each client in turn and returns the first spec found; no auth is
+// required for storyboards on public or unlisted videos. Every failure path
+// logs — including a 200 response that simply carries no storyboard, which is
+// how a bot-challenged datacenter request looks — so a missing frame is never
+// silent.
 async function fetchStoryboardSpec(videoId: string): Promise<string | null> {
-  let response: Response
-  try {
-    response = await fetch(INNERTUBE_PLAYER_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        videoId,
-        context: {
-          client: {
-            clientName: "WEB",
-            clientVersion: "2.20240101.00.00",
-          },
+  for (const client of INNERTUBE_CLIENTS) {
+    let response: Response
+    try {
+      response = await fetch(`${INNERTUBE_PLAYER_ENDPOINT}${client.apiKey}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent": client.userAgent,
+          Origin: "https://www.youtube.com",
         },
-      }),
-      cache: "no-store",
-    })
-  } catch (error) {
-    console.error("Storyboard player request failed", error)
-    return null
-  }
-
-  if (!response.ok) {
-    console.error(`Storyboard player request error (${response.status})`)
-    return null
-  }
-
-  const json = (await response.json()) as {
-    storyboards?: {
-      playerStoryboardSpecRenderer?: { spec?: string }
+        body: JSON.stringify({
+          videoId,
+          context: {
+            client: {
+              clientName: client.clientName,
+              clientVersion: client.clientVersion,
+              hl: "en",
+              gl: "US",
+              ...client.extra,
+            },
+          },
+        }),
+        cache: "no-store",
+      })
+    } catch (error) {
+      console.error(
+        `Storyboard player request failed (${client.clientName})`,
+        error,
+      )
+      continue
     }
+
+    if (!response.ok) {
+      console.error(
+        `Storyboard player request error (${client.clientName}: ${response.status})`,
+      )
+      continue
+    }
+
+    const json = (await response.json()) as {
+      playabilityStatus?: { status?: string; reason?: string }
+      storyboards?: {
+        playerStoryboardSpecRenderer?: { spec?: string }
+      }
+    }
+
+    const spec = json.storyboards?.playerStoryboardSpecRenderer?.spec
+    if (spec) return spec
+
+    // 200, but no storyboard — usually a bot challenge (LOGIN_REQUIRED) on this
+    // client. Log why and fall through to the next.
+    console.error(
+      `Storyboard spec missing (${client.clientName}: playabilityStatus=${
+        json.playabilityStatus?.status ?? "unknown"
+      }${
+        json.playabilityStatus?.reason
+          ? ` "${json.playabilityStatus.reason}"`
+          : ""
+      })`,
+    )
   }
-  return json.storyboards?.playerStoryboardSpecRenderer?.spec ?? null
+
+  return null
 }
 
 // Fetches and crops the requested frames. Sprite sheets are fetched at most once
