@@ -11,7 +11,41 @@
 // shape can drift, and sharp can fail to load in some runtimes. Any failure
 // returns no frames so the surrounding analysis still runs transcript-only.
 
+import { ProxyAgent, fetch as proxiedFetch } from "undici"
+
 const INNERTUBE_PLAYER_ENDPOINT = "https://www.youtube.com/youtubei/v1/player"
+
+// Residential proxy for the storyboard *spec* request only. From a datacenter
+// IP (Vercel) YouTube bot-challenges the anonymous InnerTube player endpoint and
+// returns no storyboard; routing just that one small JSON request through a
+// residential exit makes it look like an ordinary viewer, so the challenge goes
+// away. Configured via STORYBOARD_PROXY_URL (http://user:pass@host:port); unset
+// means we go direct and frames are simply skipped, as before. The sprite-sheet
+// images come from ytimg, which isn't challenged, so those stay direct to keep
+// proxy bandwidth (and cost) to a minimum.
+function buildProxyAgent(): ProxyAgent | null {
+  const url = process.env.STORYBOARD_PROXY_URL
+  if (!url) return null
+  try {
+    const parsed = new URL(url)
+    // ProxyAgent wants the bare origin; credentials go in a Proxy-Authorization
+    // header so they survive regardless of how the agent parses the URI.
+    const token =
+      parsed.username || parsed.password
+        ? `Basic ${Buffer.from(
+            `${decodeURIComponent(parsed.username)}:${decodeURIComponent(parsed.password)}`,
+          ).toString("base64")}`
+        : undefined
+    const origin = `${parsed.protocol}//${parsed.host}`
+    return new ProxyAgent(token ? { uri: origin, token } : origin)
+  } catch (error) {
+    console.error("Invalid STORYBOARD_PROXY_URL; falling back to direct", error)
+    return null
+  }
+}
+
+// Built once per runtime and reused across requests.
+const proxyAgent = buildProxyAgent()
 
 // The public WEB InnerTube key. Used both for the anonymous WEB fallback and as
 // the key on the authenticated request (the player endpoint still wants a key
@@ -180,9 +214,9 @@ async function fetchStoryboardSpec(
 
   for (const client of clients) {
     const label = client.oauth ? `${client.clientName}+oauth` : client.clientName
-    let response: Response
+    let response: Awaited<ReturnType<typeof proxiedFetch>>
     try {
-      response = await fetch(`${INNERTUBE_PLAYER_ENDPOINT}?key=${client.apiKey}`, {
+      response = await proxiedFetch(`${INNERTUBE_PLAYER_ENDPOINT}?key=${client.apiKey}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -207,7 +241,8 @@ async function fetchStoryboardSpec(
             },
           },
         }),
-        cache: "no-store",
+        // Route through the residential proxy when configured; otherwise direct.
+        ...(proxyAgent ? { dispatcher: proxyAgent } : {}),
       })
     } catch (error) {
       console.error(`Storyboard player request failed (${label})`, error)
