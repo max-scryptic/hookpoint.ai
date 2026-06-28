@@ -26,6 +26,18 @@ const STAGE_INTERVAL_MS = 2600
 const PROGRESS_CEILING = 92
 const PROGRESS_INTERVAL_MS = 400
 
+// Full-screen backdrop + centred popup. Used both as the route loading fallback
+// (components/.../loading.tsx) and as an instant client-side overlay the moment
+// the user presses "Analyse Video" (analyse-video-form.tsx), so the two hand off
+// seamlessly — the user never sees a blank screen between press and report.
+export function AnalysisProcessingOverlay() {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
+      <AnalysisProcessing />
+    </div>
+  )
+}
+
 export function AnalysisProcessing() {
   const [stage, setStage] = useState(0)
   const [progress, setProgress] = useState(8)
