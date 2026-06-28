@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { format } from "date-fns"
 import {
+  ArrowUpDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   GlobeIcon,
@@ -26,7 +27,11 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { DatePickerWithRange } from "@/components/date-range-picker"
 import { VideoList } from "@/components/video-list"
-import type { RecentVideo, VideoPrivacyStatus } from "@/lib/youtube/youtube"
+import type {
+  RecentVideo,
+  RecentVideosOrder,
+  VideoPrivacyStatus,
+} from "@/lib/youtube/youtube"
 
 type PrivacyFilter = "all" | VideoPrivacyStatus
 
@@ -35,6 +40,15 @@ interface VideosPage {
   nextPageToken: string | null
   prevPageToken: string | null
 }
+
+// Sorting is server-side: search.list only keeps one page in memory at a time,
+// so the order has to be passed to the API and the list refetched from page 1.
+// YouTube limits forMine=true uploads to these three orders.
+const SORT_OPTIONS: Array<{ value: RecentVideosOrder; label: string }> = [
+  { value: "date", label: "Newest first" },
+  { value: "title", label: "Title (A–Z)" },
+  { value: "viewCount", label: "Most viewed" },
+]
 
 const PRIVACY_OPTIONS: Array<{
   value: PrivacyFilter
@@ -67,6 +81,7 @@ export function VideoBrowser({
   const [debouncedSearch, setDebouncedSearch] = useState("")
   const [privacy, setPrivacy] = useState<PrivacyFilter>("all")
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
+  const [order, setOrder] = useState<RecentVideosOrder>("date")
 
   // Normalise the picker's Date range to YYYY-MM-DD strings for comparison
   // against each video's (UTC) publish date.
@@ -98,6 +113,7 @@ export function VideoBrowser({
       const params = new URLSearchParams()
       if (pageToken) params.set("pageToken", pageToken)
       if (debouncedSearch) params.set("q", debouncedSearch)
+      if (order !== "date") params.set("order", order)
 
       try {
         const res = await fetch(`/api/videos?${params.toString()}`, {
@@ -124,7 +140,7 @@ export function VideoBrowser({
         setLoading(false)
       }
     },
-    [debouncedSearch],
+    [debouncedSearch, order],
   )
 
   // Re-query from the first page whenever a server-side filter changes. Skipped
@@ -162,6 +178,7 @@ export function VideoBrowser({
     setSearch("")
     setPrivacy("all")
     setDateRange(undefined)
+    setOrder("date")
   }
 
   // Privacy and date range are filtered here rather than server-side (see the
@@ -188,6 +205,10 @@ export function VideoBrowser({
   const privacyLabel =
     PRIVACY_OPTIONS.find((option) => option.value === privacy)?.label ??
     "All visibility"
+
+  const sortLabel =
+    SORT_OPTIONS.find((option) => option.value === order)?.label ??
+    "Newest first"
 
   // When a query returns nothing, show a blank slate instead of the list and
   // hide the pagination controls — there are no further pages to step through.
@@ -237,6 +258,29 @@ export function VideoBrowser({
         </DropdownMenu>
 
         <DatePickerWithRange value={dateRange} onChange={setDateRange} />
+
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button variant="outline" size="sm" className="h-9 gap-2" />
+            }
+          >
+            <ArrowUpDownIcon className="size-4" />
+            {sortLabel}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuRadioGroup
+              value={order}
+              onValueChange={(value) => setOrder(value as RecentVideosOrder)}
+            >
+              {SORT_OPTIONS.map(({ value, label }) => (
+                <DropdownMenuRadioItem key={value} value={value}>
+                  {label}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {hasActiveFilters && (
           <Button

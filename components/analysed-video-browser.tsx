@@ -5,6 +5,8 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { format } from "date-fns"
 import {
+  ArrowUpDownIcon,
+  BarChart3Icon,
   ChevronLeftIcon,
   ChevronRightIcon,
   GlobeIcon,
@@ -61,6 +63,29 @@ const PRIVACY_OPTIONS: Array<{
   { value: "private", label: "Private", icon: LockIcon },
 ]
 
+// Every analysed video is already in memory, so unlike the uploads list this
+// table sorts client-side and can offer every field in both directions.
+type SortOption =
+  | "analysed-desc"
+  | "analysed-asc"
+  | "published-desc"
+  | "published-asc"
+  | "title-asc"
+  | "title-desc"
+  | "views-desc"
+  | "views-asc"
+
+const SORT_OPTIONS: Array<{ value: SortOption; label: string }> = [
+  { value: "analysed-desc", label: "Recently analysed" },
+  { value: "analysed-asc", label: "Earliest analysed" },
+  { value: "published-desc", label: "Newest" },
+  { value: "published-asc", label: "Oldest" },
+  { value: "title-asc", label: "Title (A–Z)" },
+  { value: "title-desc", label: "Title (Z–A)" },
+  { value: "views-desc", label: "Most viewed" },
+  { value: "views-asc", label: "Least viewed" },
+]
+
 // The shape the table renders. `video` reuses the RecentVideo cell helpers; the
 // extra fields carry data those helpers don't cover.
 interface AnalysedRow {
@@ -69,6 +94,39 @@ interface AnalysedRow {
   // Rows analysed before we persisted visibility don't have a known status, so
   // they only ever match the "all" visibility filter.
   privacyKnown: boolean
+}
+
+// Treats a missing count as the given sentinel so null view counts always sort
+// to the bottom regardless of direction.
+function withFallback(value: number | null, fallback: number): number {
+  return value == null ? fallback : value
+}
+
+function compareRows(a: AnalysedRow, b: AnalysedRow, sort: SortOption): number {
+  switch (sort) {
+    case "analysed-desc":
+      return b.dateAnalysed.localeCompare(a.dateAnalysed)
+    case "analysed-asc":
+      return a.dateAnalysed.localeCompare(b.dateAnalysed)
+    case "published-desc":
+      return b.video.publishedAt.localeCompare(a.video.publishedAt)
+    case "published-asc":
+      return a.video.publishedAt.localeCompare(b.video.publishedAt)
+    case "title-asc":
+      return a.video.title.localeCompare(b.video.title)
+    case "title-desc":
+      return b.video.title.localeCompare(a.video.title)
+    case "views-desc":
+      return (
+        withFallback(b.video.viewCount, -Infinity) -
+        withFallback(a.video.viewCount, -Infinity)
+      )
+    case "views-asc":
+      return (
+        withFallback(a.video.viewCount, Infinity) -
+        withFallback(b.video.viewCount, Infinity)
+      )
+  }
 }
 
 function toRow(analysed: AnalysedVideo): AnalysedRow {
@@ -117,6 +175,8 @@ export function AnalysedVideoBrowser({ videos }: { videos: AnalysedVideo[] }) {
   const [analysedRange, setAnalysedRange] = useState<DateRange | undefined>(
     undefined,
   )
+  // Defaults to "Recently analysed", which matches the order the rows arrive in.
+  const [sort, setSort] = useState<SortOption>("analysed-desc")
   const [pageNumber, setPageNumber] = useState(1)
 
   // Debounce the search box so typing doesn't refilter on every keystroke.
@@ -170,6 +230,11 @@ export function AnalysedVideoBrowser({ videos }: { videos: AnalysedVideo[] }) {
     analysedTo,
   ])
 
+  const sorted = useMemo(
+    () => [...filtered].sort((a, b) => compareRows(a, b, sort)),
+    [filtered, sort],
+  )
+
   const hasActiveFilters =
     debouncedSearch !== "" ||
     privacy !== "all" ||
@@ -181,10 +246,10 @@ export function AnalysedVideoBrowser({ videos }: { videos: AnalysedVideo[] }) {
   // Filter changes reset the view to page 1 (handled in the setters below); the
   // current page is clamped on render so a shrinking result set can never leave
   // us stranded past the last page.
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
   const currentPage = Math.min(pageNumber, pageCount)
 
-  const pageRows = filtered.slice(
+  const pageRows = sorted.slice(
     (currentPage - 1) * PAGE_SIZE,
     currentPage * PAGE_SIZE,
   )
@@ -209,17 +274,27 @@ export function AnalysedVideoBrowser({ videos }: { videos: AnalysedVideo[] }) {
     setPageNumber(1)
   }
 
+  function changeSort(value: SortOption) {
+    setSort(value)
+    setPageNumber(1)
+  }
+
   function clearFilters() {
     setSearch("")
     setPrivacy("all")
     setPublishedRange(undefined)
     setAnalysedRange(undefined)
+    setSort("analysed-desc")
     setPageNumber(1)
   }
 
   const privacyLabel =
     PRIVACY_OPTIONS.find((option) => option.value === privacy)?.label ??
     "All visibility"
+
+  const sortLabel =
+    SORT_OPTIONS.find((option) => option.value === sort)?.label ??
+    "Recently analysed"
 
   const isEmpty = filtered.length === 0
   const emptyMessage = hasActiveFilters
@@ -274,6 +349,27 @@ export function AnalysedVideoBrowser({ videos }: { videos: AnalysedVideo[] }) {
           onChange={changeAnalysedRange}
           placeholder="Analysed"
         />
+
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={<Button variant="outline" size="sm" className="h-9 gap-2" />}
+          >
+            <ArrowUpDownIcon className="size-4" />
+            {sortLabel}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuRadioGroup
+              value={sort}
+              onValueChange={(value) => changeSort(value as SortOption)}
+            >
+              {SORT_OPTIONS.map(({ value, label }) => (
+                <DropdownMenuRadioItem key={value} value={value}>
+                  {label}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {hasActiveFilters && (
           <Button

@@ -4,7 +4,10 @@ import {
   getGoogleAccessToken,
   ReconsentRequiredError,
 } from "@/lib/youtube/google-auth"
-import { getRecentVideos } from "@/lib/youtube/youtube"
+import {
+  getRecentVideos,
+  type RecentVideosOrder,
+} from "@/lib/youtube/youtube"
 
 // Keep page sizes bounded — search.list allows up to 50 per page.
 const MAX_PAGE_SIZE = 50
@@ -29,6 +32,12 @@ export async function GET(request: NextRequest) {
   const query = params.get("q")?.trim() || null
   const pageToken = params.get("pageToken") || null
 
+  // Only the orders search.list supports with forMine=true; anything else
+  // falls back to newest-first.
+  const orderParam = params.get("order")
+  const order: RecentVideosOrder =
+    orderParam === "title" || orderParam === "viewCount" ? orderParam : "date"
+
   const requestedMax = Number(params.get("maxResults"))
   const maxResults =
     Number.isFinite(requestedMax) && requestedMax > 0
@@ -41,6 +50,7 @@ export async function GET(request: NextRequest) {
       maxResults,
       pageToken,
       query,
+      order,
     })
 
     return NextResponse.json(page)
