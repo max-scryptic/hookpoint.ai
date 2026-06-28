@@ -5,6 +5,7 @@ import { getSidebarDefaultOpen } from "@/lib/sidebar-state"
 import { createClient } from "@/lib/supabase/server"
 import {
   getAnalysedVideo,
+  healCachedTranscript,
   saveAnalysedVideo,
 } from "@/lib/analysed-videos"
 import {
@@ -72,7 +73,12 @@ async function analyse(
         retention: cached.retention,
         dropOffs: cached.dropOffs ?? detectDropOffs(cached.retention),
         gains: detectRetentionGains(cached.retention),
-        transcript: cached.transcript ?? [],
+        transcript: await healCachedTranscript(
+          supabase,
+          userId,
+          videoId,
+          cached.transcript,
+        ),
       }
     }
 

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import {
   getAnalysedVideo,
+  healCachedTranscript,
   saveAnalysedVideo,
 } from "@/lib/analysed-videos"
 import {
@@ -56,7 +57,12 @@ export async function POST(request: NextRequest) {
         retention: cached.retention,
         dropOffs: cached.dropOffs ?? detectDropOffs(cached.retention),
         gains: detectRetentionGains(cached.retention),
-        transcript: cached.transcript ?? [],
+        transcript: await healCachedTranscript(
+          supabase,
+          user.id,
+          videoId,
+          cached.transcript,
+        ),
         cached: true,
       })
     }
