@@ -177,7 +177,7 @@ export function VideoList({
   }
 
   return (
-    <div className="rounded-xl border bg-card">
+    <div className="overflow-hidden rounded-xl border bg-card">
       <Table className="text-left">
         <TableHeader>
           <TableRow className="bg-accent text-xs text-accent-foreground hover:bg-accent">
