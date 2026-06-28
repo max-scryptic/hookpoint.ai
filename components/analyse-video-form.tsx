@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { CircleCheckIcon } from "lucide-react"
 
+import { AnalysisProcessingOverlay } from "@/components/analysis-processing"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { parseVideoId } from "@/lib/youtube/youtube"
@@ -21,6 +22,11 @@ export function AnalyseVideoForm() {
   const [alreadyAnalysed, setAlreadyAnalysed] =
     useState<AlreadyAnalysed | null>(null)
   const [isValidating, setIsValidating] = useState(false)
+  // Once we start a brand-new analysis we show a full-screen popup right away —
+  // it covers the validate request and the navigation, and hands off to the
+  // route's loading.tsx (same popup) so there's no blank gap before the report.
+  // Stays true through router.push; the form unmounts on navigation.
+  const [isAnalysing, setIsAnalysing] = useState(false)
 
   // The button only lights up once the input looks like a YouTube video URL or
   // ID. Ownership of the video is confirmed server-side on submit.
@@ -34,6 +40,7 @@ export function AnalyseVideoForm() {
     setError(null)
     setAlreadyAnalysed(null)
     setIsValidating(true)
+    setIsAnalysing(true)
 
     try {
       const response = await fetch("/api/validate-video", {
@@ -57,6 +64,7 @@ export function AnalyseVideoForm() {
             : (data.error ?? "We couldn't validate that video."),
         )
         setIsValidating(false)
+        setIsAnalysing(false)
         return
       }
 
@@ -64,18 +72,24 @@ export function AnalyseVideoForm() {
       if (data.alreadyAnalysed) {
         setAlreadyAnalysed({ videoId: data.videoId, title: data.title })
         setIsValidating(false)
+        setIsAnalysing(false)
         return
       }
 
+      // Leave the popup up — it carries through the navigation and is replaced by
+      // the analysed-video route's matching loading.tsx popup.
       router.push(`/dashboard/analysed-video/${data.videoId}`)
     } catch {
       setError("Something went wrong. Please try again.")
       setIsValidating(false)
+      setIsAnalysing(false)
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+    <>
+      {isAnalysing && <AnalysisProcessingOverlay />}
+      <form onSubmit={handleSubmit} className="flex flex-col gap-2">
       <div className="flex items-start gap-2">
         <Input
           type="url"
@@ -112,5 +126,6 @@ export function AnalyseVideoForm() {
         </div>
       )}
     </form>
+    </>
   )
 }

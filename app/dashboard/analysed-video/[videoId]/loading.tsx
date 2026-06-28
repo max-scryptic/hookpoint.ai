@@ -1,6 +1,5 @@
 import { AppSidebar } from "@/components/app-sidebar"
-import { AnalysisProcessing } from "@/components/analysis-processing"
-import { getSidebarDefaultOpen } from "@/lib/sidebar-state"
+import { AnalysisProcessingOverlay } from "@/components/analysis-processing"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -23,11 +22,14 @@ import {
 // that work is happening during what can be a slow request. Next swaps this for
 // the finished page once it's ready, so the user lands on their report with no
 // manual redirect.
-export default async function Loading() {
-  const defaultOpen = await getSidebarDefaultOpen()
-
+//
+// Kept fully synchronous (no cookies/await) so Next can treat it as an instant
+// loading boundary — reading the sidebar cookie here would make the fallback
+// dynamic and delay it, which showed up as a blank screen before the report
+// swapped in. The sidebar just defaults to open for the brief loading state.
+export default function Loading() {
   return (
-    <SidebarProvider defaultOpen={defaultOpen}>
+    <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
@@ -56,13 +58,10 @@ export default async function Loading() {
             </Breadcrumb>
           </div>
         </header>
-        <div className="relative flex flex-1 flex-col gap-4 p-4 pt-0">
-          {/* Backdrop + centred popup so the user knows analysis is underway. */}
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 backdrop-blur-sm">
-            <AnalysisProcessing />
-          </div>
-        </div>
+        <div className="flex flex-1 flex-col gap-4 p-4 pt-0" />
       </SidebarInset>
+      {/* Backdrop + centred popup so the user knows analysis is underway. */}
+      <AnalysisProcessingOverlay />
     </SidebarProvider>
   )
 }
