@@ -2,11 +2,13 @@ import Image from "next/image"
 import { TrendingDownIcon, TrendingUpIcon } from "lucide-react"
 
 import { RetentionChart } from "@/components/retention-chart"
-import type {
-  DropOff,
-  RetentionGain,
-  RetentionPoint,
-  VideoDetails,
+import {
+  transcriptForSegment,
+  type DropOff,
+  type RetentionGain,
+  type RetentionPoint,
+  type TranscriptCue,
+  type VideoDetails,
 } from "@/lib/youtube/youtube"
 
 function formatTimestamp(totalSeconds: number): string {
@@ -24,6 +26,8 @@ interface SegmentRow {
   toTimestampSeconds: number
   // Signed change in retention across the segment, as a percentage-point delta.
   deltaPercent: number
+  // What was being said across this segment, when a transcript is available.
+  transcript: string
 }
 
 function SegmentList({
@@ -50,21 +54,28 @@ function SegmentList({
       {rows.map((row, index) => (
         <li
           key={`${row.fromTimestampSeconds}-${index}`}
-          className="flex items-center justify-between gap-4 p-4"
+          className="flex flex-col gap-2 p-4"
         >
-          <div className="flex items-center gap-3">
-            <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
-              {index + 1}
-            </span>
-            <span className="font-mono text-sm">
-              {formatTimestamp(row.fromTimestampSeconds)} –{" "}
-              {formatTimestamp(row.toTimestampSeconds)}
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                {index + 1}
+              </span>
+              <span className="font-mono text-sm">
+                {formatTimestamp(row.fromTimestampSeconds)} –{" "}
+                {formatTimestamp(row.toTimestampSeconds)}
+              </span>
+            </div>
+            <span className={`text-sm font-medium ${accent}`}>
+              {row.deltaPercent >= 0 ? "+" : "−"}
+              {Math.abs(row.deltaPercent).toFixed(1)}%
             </span>
           </div>
-          <span className={`text-sm font-medium ${accent}`}>
-            {row.deltaPercent >= 0 ? "+" : "−"}
-            {Math.abs(row.deltaPercent).toFixed(1)}%
-          </span>
+          {row.transcript && (
+            <p className="pl-10 text-sm text-muted-foreground">
+              “{row.transcript}”
+            </p>
+          )}
         </li>
       ))}
     </ul>
@@ -76,22 +87,34 @@ export function AnalysedVideoDetail({
   retention,
   dropOffs,
   gains,
+  transcript = [],
 }: {
   video: VideoDetails
   retention: RetentionPoint[]
   dropOffs: DropOff[]
   gains: RetentionGain[]
+  transcript?: TranscriptCue[]
 }) {
   const dropRows: SegmentRow[] = dropOffs.map((drop) => ({
     fromTimestampSeconds: drop.fromTimestampSeconds,
     toTimestampSeconds: drop.toTimestampSeconds,
     deltaPercent: -drop.watchRatioDrop * 100,
+    transcript: transcriptForSegment(
+      transcript,
+      drop.fromTimestampSeconds,
+      drop.toTimestampSeconds,
+    ),
   }))
 
   const gainRows: SegmentRow[] = gains.map((gain) => ({
     fromTimestampSeconds: gain.fromTimestampSeconds,
     toTimestampSeconds: gain.toTimestampSeconds,
     deltaPercent: gain.watchRatioGain * 100,
+    transcript: transcriptForSegment(
+      transcript,
+      gain.fromTimestampSeconds,
+      gain.toTimestampSeconds,
+    ),
   }))
 
   return (
