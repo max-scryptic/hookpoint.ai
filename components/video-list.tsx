@@ -246,26 +246,26 @@ export function VideoList({
                   </div>
                 </div>
               </TableCell>
-              <TableCell className="hidden px-4 py-3 md:table-cell">
+              <TableCell className="hidden px-4 py-3 align-top md:table-cell">
                 <VisibilityCell status={video.privacyStatus} />
               </TableCell>
-              <TableCell className="hidden px-4 py-3 text-sm text-muted-foreground lg:table-cell">
+              <TableCell className="hidden px-4 py-3 align-top text-sm text-muted-foreground lg:table-cell">
                 {formatPublishedAt(video.publishedAt)}
               </TableCell>
-              <TableCell className="hidden px-4 py-3 text-right text-sm tabular-nums text-muted-foreground sm:table-cell">
+              <TableCell className="hidden px-4 py-3 align-top text-right text-sm tabular-nums text-muted-foreground sm:table-cell">
                 {formatCount(video.viewCount)}
               </TableCell>
-              <TableCell className="hidden px-4 py-3 text-right text-sm tabular-nums text-muted-foreground lg:table-cell">
+              <TableCell className="hidden px-4 py-3 align-top text-right text-sm tabular-nums text-muted-foreground lg:table-cell">
                 {formatCount(video.commentCount)}
               </TableCell>
-              <TableCell className="hidden px-4 py-3 sm:table-cell">
+              <TableCell className="hidden px-4 py-3 align-top sm:table-cell">
                 {isAnalysed ? (
                   <AnalysedBadge />
                 ) : (
                   <span className="text-sm text-muted-foreground">—</span>
                 )}
               </TableCell>
-              <TableCell className="px-4 py-3 text-right">
+              <TableCell className="px-4 py-3 align-top text-right">
                 <VideoActions video={video} isAnalysed={isAnalysed} />
               </TableCell>
             </TableRow>
