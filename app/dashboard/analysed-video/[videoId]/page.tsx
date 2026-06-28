@@ -14,16 +14,15 @@ import {
 } from "@/lib/youtube/google-auth"
 import {
   detectDropOffs,
-  detectRetentionGains,
   getAudienceRetention,
   getVideoDetails,
   getVideoTranscript,
   type DropOff,
-  type RetentionGain,
   type RetentionPoint,
   type TranscriptCue,
   type VideoDetails,
 } from "@/lib/youtube/youtube"
+import type { VideoInsights } from "@/lib/ai/insights"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -47,8 +46,8 @@ type AnalysisResult =
       video: VideoDetails
       retention: RetentionPoint[]
       dropOffs: DropOff[]
-      gains: RetentionGain[]
       transcript: TranscriptCue[]
+      insights: VideoInsights | null
     }
   | { status: "not_found" }
   | { status: "no_data" }
@@ -72,13 +71,13 @@ async function analyse(
         video: cached.videoDetails,
         retention: cached.retention,
         dropOffs: cached.dropOffs ?? detectDropOffs(cached.retention),
-        gains: detectRetentionGains(cached.retention),
         transcript: await healCachedTranscript(
           supabase,
           userId,
           videoId,
           cached.transcript,
         ),
+        insights: cached.insights,
       }
     }
 
@@ -91,7 +90,6 @@ async function analyse(
     if (retention.length === 0) return { status: "no_data" }
 
     const dropOffs = detectDropOffs(retention)
-    const gains = detectRetentionGains(retention)
     // Best-effort: a missing or caption-less transcript must not fail the
     // analysis, so swallow errors and fall back to an empty transcript.
     const transcript = await getVideoTranscript(accessToken, videoId).catch(
@@ -115,7 +113,7 @@ async function analyse(
       console.error("Failed to save analysed video", saveError)
     }
 
-    return { status: "ok", video, retention, dropOffs, gains, transcript }
+    return { status: "ok", video, retention, dropOffs, transcript, insights: null }
   } catch (error) {
     if (error instanceof ReconsentRequiredError) {
       return { status: "reconnect" }
@@ -176,9 +174,9 @@ export default async function Page({
             <AnalysedVideoDetail
               video={result.video}
               retention={result.retention}
-              dropOffs={result.dropOffs}
-              gains={result.gains}
               transcript={result.transcript}
+              initialInsights={result.insights}
+              aiEnabled={Boolean(process.env.ANTHROPIC_API_KEY)}
             />
           )}
 
