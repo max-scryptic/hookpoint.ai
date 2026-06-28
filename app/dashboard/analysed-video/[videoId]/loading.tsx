@@ -1,6 +1,5 @@
-import { Loader2Icon } from "lucide-react"
-
 import { AppSidebar } from "@/components/app-sidebar"
+import { AnalysisProcessing } from "@/components/analysis-processing"
 import { getSidebarDefaultOpen } from "@/lib/sidebar-state"
 import {
   Breadcrumb,
@@ -17,11 +16,13 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 
-// Shown automatically while the server component for a video renders — i.e.
-// while we fetch the video's details and audience retention from YouTube. The
-// shell mirrors the analysis page so navigating in doesn't flash an empty
-// screen, and the popup reassures the user that work is happening behind the
-// scenes during what can be a slow request.
+// Shown automatically while the analysed-video server component renders — i.e.
+// while we fetch the video's details + retention from YouTube and run the AI
+// analysis up front (see ./page.tsx). The shell mirrors that page so navigating
+// in doesn't flash an empty screen, and the centred popup reassures the user
+// that work is happening during what can be a slow request. Next swaps this for
+// the finished page once it's ready, so the user lands on their report with no
+// manual redirect.
 export default async function Loading() {
   const defaultOpen = await getSidebarDefaultOpen()
 
@@ -39,8 +40,12 @@ export default async function Loading() {
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="/dashboard/analyse-video">
-                    Analyse Video
+                  <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator className="hidden md:block" />
+                <BreadcrumbItem className="hidden md:block">
+                  <BreadcrumbLink href="/dashboard/analysed-videos">
+                    Analysed Videos
                   </BreadcrumbLink>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator className="hidden md:block" />
@@ -54,27 +59,7 @@ export default async function Loading() {
         <div className="relative flex flex-1 flex-col gap-4 p-4 pt-0">
           {/* Backdrop + centred popup so the user knows analysis is underway. */}
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 backdrop-blur-sm">
-            <div
-              role="status"
-              aria-live="polite"
-              className="mx-4 flex w-full max-w-sm flex-col items-center gap-4 rounded-xl bg-card p-6 text-center shadow-lg ring-1 ring-foreground/10"
-            >
-              <Loader2Icon className="size-8 animate-spin text-primary" />
-              <div className="space-y-1">
-                <p className="font-heading text-base font-medium">
-                  Analysing your video
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  We&apos;re fetching the audience retention data from YouTube.
-                  This can take a moment — please wait.
-                </p>
-              </div>
-              {/* Indeterminate bar: the request duration is unknown, so we loop
-                  a sliding sliver rather than fake a percentage. */}
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                <div className="h-full w-1/4 rounded-full bg-primary animate-indeterminate-progress" />
-              </div>
-            </div>
+            <AnalysisProcessing />
           </div>
         </div>
       </SidebarInset>
