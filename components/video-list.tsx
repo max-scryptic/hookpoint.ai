@@ -137,7 +137,9 @@ function VideoActions({
       >
         <MoreVerticalIcon className="size-4" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      {/* Width sizes to content (w-auto) instead of matching the tiny icon
+          trigger, so labels like "Analyse video" stay on one line. */}
+      <DropdownMenuContent align="end" className="w-auto">
         {/* Already-analysed videos can only be viewed — re-analysing would spend
             API quota to reproduce results we've already cached. */}
         <DropdownMenuItem
