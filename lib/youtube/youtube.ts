@@ -690,6 +690,149 @@ export function detectRetentionGains(
     .slice(0, limit)
 }
 
+// A drop-off that has been judged "significant" — i.e. steeper than the video's
+// own typical decline, or landing on a moment that underperforms similar videos.
+// These are the moments worth explaining; ordinary monotonic decay is not.
+export interface SignificantDropOff extends DropOff {
+  // YouTube's relativeRetentionPerformance at the end of the segment (0..1,
+  // where <0.5 is below the median video of similar length). Null when YouTube
+  // has too little data to report it.
+  relativePerformance: number | null
+  // How many times steeper this drop is than the video's median per-step drop.
+  // 2.0 means "twice as steep as the typical decline here".
+  steepness: number
+  // True when the drop is steeper than the abnormal-steepness threshold (as
+  // opposed to being surfaced only because it underperforms similar videos).
+  isAbnormallySteep: boolean
+}
+
+// Returns the median of a list of numbers, or 0 for an empty list.
+function median(values: number[]): number {
+  if (values.length === 0) return 0
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 0
+    ? (sorted[mid - 1] + sorted[mid]) / 2
+    : sorted[mid]
+}
+
+// Finds the drop-offs that are actually worth a creator's attention, as opposed
+// to the natural decay every video shows. A point is surfaced when EITHER:
+//   • its drop is meaningfully steeper than the video's own median step drop
+//     (steepness >= steepnessFactor), OR
+//   • viewers were underperforming similar videos there (relativePerformance
+//     below `underperformBelow`) while still losing a non-trivial share.
+// This is the gate that keeps the AI from inventing reasons for noise. Results
+// are sorted steepest-first and capped at `limit`.
+export function detectSignificantDropOffs(
+  points: RetentionPoint[],
+  {
+    minDrop = 0.02,
+    steepnessFactor = 1.8,
+    underperformBelow = 0.5,
+    limit = 5,
+  }: {
+    minDrop?: number
+    steepnessFactor?: number
+    underperformBelow?: number
+    limit?: number
+  } = {},
+): SignificantDropOff[] {
+  if (points.length < 2) return []
+
+  // Baseline = the typical positive step-to-step drop across the whole curve.
+  const stepDrops: number[] = []
+  for (let i = 1; i < points.length; i++) {
+    const delta = points[i - 1].watchRatio - points[i].watchRatio
+    if (delta > 0) stepDrops.push(delta)
+  }
+  const baseline = median(stepDrops) || minDrop
+
+  const drops: SignificantDropOff[] = []
+  for (let i = 1; i < points.length; i++) {
+    const prev = points[i - 1]
+    const curr = points[i]
+    const delta = prev.watchRatio - curr.watchRatio
+    if (delta < minDrop) continue
+
+    const steepness = delta / baseline
+    const relativePerformance = curr.relativePerformance
+    const isAbnormallySteep = steepness >= steepnessFactor
+    const underperforms =
+      relativePerformance != null && relativePerformance < underperformBelow
+
+    if (!isAbnormallySteep && !underperforms) continue
+
+    drops.push({
+      fromTimestampSeconds: prev.timestampSeconds,
+      toTimestampSeconds: curr.timestampSeconds,
+      watchRatioDrop: delta,
+      relativePerformance,
+      steepness,
+      isAbnormallySteep,
+    })
+  }
+
+  return drops
+    .sort((a, b) => b.watchRatioDrop - a.watchRatioDrop)
+    .slice(0, limit)
+}
+
+// The hook is the opening of a video — by far the highest-leverage stretch,
+// since most of a video's audience is won or lost in the first 30 seconds. This
+// summarises how the opening performed so we can score and analyse it on its own.
+export interface HookStats {
+  // The window analysed, in seconds (typically the first 30s, clamped to the
+  // video length for very short videos).
+  windowSeconds: number
+  // Absolute retention at the start of the curve (≈ how many viewers actually
+  // started watching vs. the curve's baseline). Usually ~1.0.
+  startWatchRatio: number
+  // Absolute retention at the end of the hook window.
+  endWatchRatio: number
+  // Share of viewers lost across the hook window (startWatchRatio - endWatchRatio).
+  drop: number
+  // Average relativeRetentionPerformance across the hook window, or null when
+  // YouTube reports no relative data for these points.
+  relativePerformance: number | null
+}
+
+// Computes hook performance over the first `windowSeconds` of the video.
+export function computeHookStats(
+  points: RetentionPoint[],
+  durationSeconds: number,
+  windowSeconds = 30,
+): HookStats | null {
+  if (points.length === 0) return null
+
+  const sorted = [...points].sort(
+    (a, b) => a.timestampSeconds - b.timestampSeconds,
+  )
+  const window = Math.min(windowSeconds, durationSeconds || windowSeconds)
+
+  const start = sorted[0]
+  // Last sampled point at or before the end of the hook window; fall back to the
+  // start when the first sample already lands past the window (very short clips).
+  const within = sorted.filter((p) => p.timestampSeconds <= window)
+  const end = within.length > 0 ? within[within.length - 1] : start
+
+  const relPerfs = within
+    .map((p) => p.relativePerformance)
+    .filter((v): v is number => v != null)
+  const relativePerformance =
+    relPerfs.length > 0
+      ? relPerfs.reduce((sum, v) => sum + v, 0) / relPerfs.length
+      : null
+
+  return {
+    windowSeconds: window,
+    startWatchRatio: start.watchRatio,
+    endWatchRatio: end.watchRatio,
+    drop: Math.max(0, start.watchRatio - end.watchRatio),
+    relativePerformance,
+  }
+}
+
 // Extracts the YYYY-MM-DD portion of an ISO timestamp, which is the format the
 // Analytics API expects for startDate/endDate.
 function isoDate(iso: string | undefined): string | null {

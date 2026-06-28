@@ -5,6 +5,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import type { VideoInsights } from "@/lib/ai/insights"
 import {
   dedupeTranscriptCues,
   type DropOff,
@@ -26,6 +27,9 @@ export interface AnalysedVideo {
   dropOffs: DropOff[] | null
   transcript: TranscriptCue[] | null
   rawAnalytics: Record<string, unknown> | null
+  // AI-generated hook score, per-drop hypotheses and summary; null until the
+  // user generates insights for this video.
+  insights: VideoInsights | null
 }
 
 // Raw row shape as returned by Supabase (snake_case columns).
@@ -40,10 +44,11 @@ interface AnalysedVideoRow {
   drop_offs: DropOff[] | null
   transcript: TranscriptCue[] | null
   raw_analytics: Record<string, unknown> | null
+  insights: VideoInsights | null
 }
 
 const COLUMNS =
-  "id, user_id, video_id, video_title, date_analysed, video_details, retention, drop_offs, transcript, raw_analytics"
+  "id, user_id, video_id, video_title, date_analysed, video_details, retention, drop_offs, transcript, raw_analytics, insights"
 
 function mapRow(row: AnalysedVideoRow): AnalysedVideo {
   return {
@@ -57,6 +62,7 @@ function mapRow(row: AnalysedVideoRow): AnalysedVideo {
     dropOffs: row.drop_offs,
     transcript: row.transcript,
     rawAnalytics: row.raw_analytics,
+    insights: row.insights,
   }
 }
 
@@ -191,4 +197,23 @@ export async function getAnalysedVideo(
   }
 
   return data ? mapRow(data as AnalysedVideoRow) : null
+}
+
+// Persists AI insights onto an existing analysis. Only the insights column is
+// touched, so the cached retention/transcript and list ordering stay put.
+export async function saveInsights(
+  supabase: SupabaseClient,
+  userId: string,
+  videoId: string,
+  insights: VideoInsights,
+): Promise<void> {
+  const { error } = await supabase
+    .from("analysed_videos")
+    .update({ insights })
+    .eq("user_id", userId)
+    .eq("video_id", videoId)
+
+  if (error) {
+    throw new Error(`Failed to save insights: ${error.message}`)
+  }
 }
