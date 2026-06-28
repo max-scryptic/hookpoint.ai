@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { Loader2Icon } from "lucide-react"
 
 // The messages we cycle through while the analysis server render is in flight.
@@ -36,6 +37,45 @@ export function AnalysisProcessingOverlay() {
       <AnalysisProcessing />
     </div>
   )
+}
+
+// The route's loading.tsx fallback renders for *every* navigation to the
+// analysed-video page, including opening a video that's already analysed (a fast
+// cache read). We only want the processing popup when a brand-new analysis is
+// actually running, so the form tags fresh-analysis navigations with
+// `?analysing=1` (see analyse-video-form.tsx) and we show the overlay only then.
+// Without the marker the loading boundary stays a bare shell — no misleading
+// "Analysing…" popup over a video that's already done.
+function AnalysisProcessingGateInner() {
+  const params = useSearchParams()
+  if (params.get("analysing") !== "1") return null
+  return <AnalysisProcessingOverlay />
+}
+
+export function AnalysisProcessingGate() {
+  // useSearchParams must sit under a Suspense boundary.
+  return (
+    <Suspense fallback={null}>
+      <AnalysisProcessingGateInner />
+    </Suspense>
+  )
+}
+
+// Rendered on the finished analysed-video page to drop the `?analysing=1` marker
+// from the URL once we've arrived. We use history.replaceState rather than
+// router.replace so it just rewrites the address bar without kicking off another
+// navigation (which would re-trigger the loading boundary). This keeps the URL
+// clean and stops a later refresh/share from flashing the popup over a cached
+// video.
+export function StripAnalysingParam() {
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    if (url.searchParams.has("analysing")) {
+      url.searchParams.delete("analysing")
+      window.history.replaceState(null, "", url.pathname + url.search + url.hash)
+    }
+  }, [])
+  return null
 }
 
 export function AnalysisProcessing() {

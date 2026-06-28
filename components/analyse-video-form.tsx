@@ -77,8 +77,10 @@ export function AnalyseVideoForm() {
       }
 
       // Leave the popup up — it carries through the navigation and is replaced by
-      // the analysed-video route's matching loading.tsx popup.
-      router.push(`/dashboard/analysed-video/${data.videoId}`)
+      // the analysed-video route's matching loading.tsx popup. The `analysing=1`
+      // marker tells that route's loading boundary this is a genuine fresh
+      // analysis, so it shows the popup (the page strips the param once loaded).
+      router.push(`/dashboard/analysed-video/${data.videoId}?analysing=1`)
     } catch {
       setError("Something went wrong. Please try again.")
       setIsValidating(false)

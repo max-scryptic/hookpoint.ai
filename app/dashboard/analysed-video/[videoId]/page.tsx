@@ -1,5 +1,6 @@
 import { AppSidebar } from "@/components/app-sidebar"
 import { AnalysedVideoDetail } from "@/components/analysed-video-detail"
+import { StripAnalysingParam } from "@/components/analysis-processing"
 import { requireAuthenticatedUser } from "@/lib/auth"
 import { getSidebarDefaultOpen } from "@/lib/sidebar-state"
 import { createClient } from "@/lib/supabase/server"
@@ -189,6 +190,7 @@ export default async function Page({
             </Breadcrumb>
           </div>
         </header>
+        <StripAnalysingParam />
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
           {result.status === "ok" && (
             <AnalysedVideoDetail

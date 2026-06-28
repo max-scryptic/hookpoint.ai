@@ -1,5 +1,5 @@
 import { AppSidebar } from "@/components/app-sidebar"
-import { AnalysisProcessingOverlay } from "@/components/analysis-processing"
+import { AnalysisProcessingGate } from "@/components/analysis-processing"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -60,8 +60,9 @@ export default function Loading() {
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0" />
       </SidebarInset>
-      {/* Backdrop + centred popup so the user knows analysis is underway. */}
-      <AnalysisProcessingOverlay />
+      {/* Backdrop + centred popup, but only for a genuine fresh analysis
+          (?analysing=1) — opening an already-analysed video skips it. */}
+      <AnalysisProcessingGate />
     </SidebarProvider>
   )
 }
