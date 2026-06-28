@@ -362,7 +362,7 @@ function InsightsBar({
           </Button>
         ) : (
           <p className="shrink-0 text-sm text-muted-foreground">
-            Set <code className="font-mono">ANTHROPIC_API_KEY</code> to enable.
+            Set <code className="font-mono">OPENAI_API_KEY</code> to enable.
           </p>
         )}
         {error && (

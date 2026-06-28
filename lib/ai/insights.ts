@@ -1,12 +1,13 @@
 // Generates the AI layer of a video analysis: a hook score, a per-drop
 // hypothesis for why viewers left, and an overall summary. Grounded in the
-// transcript spoken around each moment and — when available — the actual frames
-// on screen there, so explanations sit next to real evidence rather than vibes.
+// transcript spoken around each moment, the video's title/thumbnail promise,
+// and — when available — the actual frames on screen there, so explanations sit
+// next to real evidence rather than vibes.
 //
-// Gated on ANTHROPIC_API_KEY: with no key configured, generateVideoInsights
+// Gated on OPENAI_API_KEY: with no key configured, generateVideoInsights
 // returns null and the rest of the app behaves exactly as before.
 
-import Anthropic from "@anthropic-ai/sdk"
+import OpenAI from "openai"
 
 import {
   computeHookStats,
@@ -18,7 +19,9 @@ import {
 } from "@/lib/youtube/youtube"
 import { getVideoFrames, type VideoFrame } from "@/lib/youtube/storyboard"
 
-const MODEL = "claude-opus-4-8"
+// Override with OPENAI_INSIGHTS_MODEL — e.g. "gpt-4o-mini" for ~10x cheaper
+// calls at some cost to reasoning quality.
+const MODEL = process.env.OPENAI_INSIGHTS_MODEL || "gpt-4o"
 
 // The AI's read on a single significant drop-off.
 export interface DropInsight {
@@ -58,8 +61,8 @@ export interface VideoInsights {
   drops: DropInsight[]
 }
 
-// The JSON shape we ask the model to return. Structured outputs guarantee it
-// validates, so parsing is safe.
+// The JSON shape we ask the model to return. OpenAI structured outputs
+// (strict mode) guarantees it validates, so parsing is safe.
 const RESPONSE_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -99,19 +102,23 @@ function formatTimestamp(totalSeconds: number): string {
   return `${mins}:${String(secs).padStart(2, "0")}`
 }
 
-const SYSTEM_PROMPT = `You are a YouTube retention analyst helping a creator understand why viewers leave their videos. You are given a video's title, its audience-retention summary, the transcript spoken around key moments, and — when available — the actual frames shown on screen at those moments.
+const SYSTEM_PROMPT = `You are a YouTube retention analyst helping a creator understand why viewers leave their videos. You are given a video's title, its thumbnail, its audience-retention summary, the transcript spoken around key moments, and — when available — the actual frames shown on screen at those moments.
 
-Be specific, practical, and honest. Ground every claim in the evidence provided (what was said, what was shown, how steep the drop was, how it compares to similar videos). Frame each drop explanation as a hypothesis, not a certainty — viewers often decide to leave slightly before they click away, and a single moment rarely tells the whole story. Never invent details that aren't supported by the transcript or frames. Prefer concrete, do-this-next suggestions over generic advice. Keep each field tight: hypotheses and suggestions are 1-2 sentences; the summary is 2-4 sentences.`
+Be specific, practical, and honest. Ground every claim in the evidence provided (what was said, what was shown, how steep the drop was, how it compares to similar videos, whether the opening delivers on the title and thumbnail's promise). Frame each drop explanation as a hypothesis, not a certainty — viewers often decide to leave slightly before they click away, and a single moment rarely tells the whole story. Never invent details that aren't supported by the transcript or frames. Prefer concrete, do-this-next suggestions over generic advice. Keep each field tight: hypotheses and suggestions are 1-2 sentences; the summary is 2-4 sentences.`
 
-// Builds the user-message content blocks: a text brief plus one image block per
-// available frame, each labelled with its timestamp and which moment it shows.
+type ContentPart = OpenAI.Chat.Completions.ChatCompletionContentPart
+
+// Builds the user-message content: a text brief, the thumbnail, plus one image
+// per available frame, each labelled with its timestamp and which moment it
+// shows. Frames are sent at low detail — they're tiny storyboard cells, so high
+// detail would just burn tokens.
 function buildContent(
   video: VideoDetails,
   hookStats: ReturnType<typeof computeHookStats>,
   drops: ReturnType<typeof detectSignificantDropOffs>,
   transcript: TranscriptCue[],
   frames: VideoFrame[],
-): Anthropic.MessageParam["content"] {
+): ContentPart[] {
   const framesByTime = new Map(frames.map((f) => [Math.round(f.timestampSeconds), f]))
 
   const hookTranscript = transcriptForSegment(
@@ -149,6 +156,7 @@ function buildContent(
 
   const brief = `Video title: "${video.title}"
 Duration: ${formatTimestamp(video.durationSeconds)}
+${video.thumbnailUrl ? "The thumbnail is attached below." : "No thumbnail available."}
 
 HOOK (first ${Math.round(hookStats?.windowSeconds ?? 30)}s):
 ${hookSummary}
@@ -161,12 +169,21 @@ ${frames.length > 0 ? "Frames captured at these moments are attached below, each
 
 Return:
 - summary: 2-4 sentences on the overall retention story and the single highest-leverage fix.
-- hook: a score 0-100, a one-line verdict, and an analysis paragraph. Judge whether the opening delivers on the title's promise and gets to value fast.
+- hook: a score 0-100, a one-line verdict, and an analysis paragraph. Judge whether the opening delivers on the title and thumbnail's promise and gets to value fast.
 - drops: for EACH drop above (by its index), a hypothesis for why viewers left and a concrete suggestion. Return an empty array if there were no drops.`
 
-  const content: Anthropic.ContentBlockParam[] = [{ type: "text", text: brief }]
+  const content: ContentPart[] = [{ type: "text", text: brief }]
 
-  // Attach frames after the brief, labelled so the model can tie each to a moment.
+  if (video.thumbnailUrl) {
+    content.push({ type: "text", text: "Thumbnail:" })
+    content.push({
+      type: "image_url",
+      image_url: { url: video.thumbnailUrl, detail: "low" },
+    })
+  }
+
+  // Attach drop frames after the brief, labelled so the model can tie each to a
+  // moment.
   for (let i = 0; i < drops.length; i++) {
     const frame = framesByTime.get(Math.round(drops[i].fromTimestampSeconds))
     if (!frame) continue
@@ -175,14 +192,20 @@ Return:
       text: `Frame at ${formatTimestamp(drops[i].fromTimestampSeconds)} (Drop #${i}):`,
     })
     content.push({
-      type: "image",
-      source: { type: "base64", media_type: frame.mediaType, data: frame.base64 },
+      type: "image_url",
+      image_url: {
+        url: `data:${frame.mediaType};base64,${frame.base64}`,
+        detail: "low",
+      },
     })
   }
 
-  // A hook frame, if we grabbed one.
+  // A hook frame, if we grabbed one not already used for a drop.
   const hookFrame = frames.find(
-    (f) => !drops.some((d) => Math.round(d.fromTimestampSeconds) === Math.round(f.timestampSeconds)),
+    (f) =>
+      !drops.some(
+        (d) => Math.round(d.fromTimestampSeconds) === Math.round(f.timestampSeconds),
+      ),
   )
   if (hookFrame) {
     content.push({
@@ -190,11 +213,10 @@ Return:
       text: `Frame from the hook at ${formatTimestamp(hookFrame.timestampSeconds)}:`,
     })
     content.push({
-      type: "image",
-      source: {
-        type: "base64",
-        media_type: hookFrame.mediaType,
-        data: hookFrame.base64,
+      type: "image_url",
+      image_url: {
+        url: `data:${hookFrame.mediaType};base64,${hookFrame.base64}`,
+        detail: "low",
       },
     })
   }
@@ -210,13 +232,13 @@ export interface GenerateInsightsInput {
 }
 
 // Runs the full insight pipeline: compute the moments that matter, best-effort
-// fetch the frames around them, then ask Claude to explain them. Returns null
+// fetch the frames around them, then ask the model to explain them. Returns null
 // when no API key is configured. Throws on an actual API failure so the caller
 // can surface it.
 export async function generateVideoInsights(
   input: GenerateInsightsInput,
 ): Promise<VideoInsights | null> {
-  if (!process.env.ANTHROPIC_API_KEY) return null
+  if (!process.env.OPENAI_API_KEY) return null
 
   const { video, retention, transcript } = input
 
@@ -237,27 +259,35 @@ export async function generateVideoInsights(
     console.error("Frame extraction failed; continuing without frames", error)
   }
 
-  const client = new Anthropic()
-  const response = await client.messages.create({
+  const client = new OpenAI()
+  const response = await client.chat.completions.create({
     model: MODEL,
-    max_tokens: 4096,
-    thinking: { type: "adaptive" },
-    output_config: { format: { type: "json_schema", schema: RESPONSE_SCHEMA } },
-    system: SYSTEM_PROMPT,
     messages: [
+      { role: "system", content: SYSTEM_PROMPT },
       {
         role: "user",
         content: buildContent(video, hookStats, drops, transcript, frames),
       },
     ],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "video_insights",
+        strict: true,
+        schema: RESPONSE_SCHEMA,
+      },
+    },
   })
 
-  const textBlock = response.content.find((b) => b.type === "text")
-  if (!textBlock || textBlock.type !== "text") {
-    throw new Error("AI insight response contained no text")
+  const message = response.choices[0]?.message
+  if (message?.refusal) {
+    throw new Error(`AI insight request was refused: ${message.refusal}`)
+  }
+  if (!message?.content) {
+    throw new Error("AI insight response contained no content")
   }
 
-  const parsed = JSON.parse(textBlock.text) as {
+  const parsed = JSON.parse(message.content) as {
     summary: string
     hook: { score: number; verdict: string; analysis: string }
     drops: Array<{ index: number; hypothesis: string; suggestion: string }>

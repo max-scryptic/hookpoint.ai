@@ -28,7 +28,7 @@ export async function POST(
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json(
       { error: "AI insights are not configured on this server." },
       { status: 503 },

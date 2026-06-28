@@ -176,7 +176,7 @@ export default async function Page({
               retention={result.retention}
               transcript={result.transcript}
               initialInsights={result.insights}
-              aiEnabled={Boolean(process.env.ANTHROPIC_API_KEY)}
+              aiEnabled={Boolean(process.env.OPENAI_API_KEY)}
             />
           )}
 
