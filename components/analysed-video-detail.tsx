@@ -33,6 +33,25 @@ function formatTimestamp(totalSeconds: number): string {
   return hrs > 0 ? `${hrs}:${mm}:${ss}` : `${mm}:${ss}`
 }
 
+// A low-res on-screen frame captured from the YouTube storyboard at a given
+// moment, shown next to what was said there. Frames are data: URLs persisted on
+// the insight, so they only appear once AI insights have been generated.
+function FrameThumb({ src, label }: { src: string; label: string }) {
+  return (
+    <div className="relative aspect-video w-full shrink-0 overflow-hidden rounded-lg border bg-muted sm:w-40">
+      {/* Data URL: skip the Next image optimizer and render the bytes as-is. */}
+      <Image
+        src={src}
+        alt={label}
+        fill
+        unoptimized
+        sizes="160px"
+        className="object-cover"
+      />
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Hook performance card
 // ---------------------------------------------------------------------------
@@ -42,11 +61,13 @@ function HookCard({
   durationSeconds,
   transcript,
   hookInsight,
+  frame,
 }: {
   retention: RetentionPoint[]
   durationSeconds: number
   transcript: TranscriptCue[]
   hookInsight: VideoInsights["hook"] | null
+  frame: string | null
 }) {
   const stats = useMemo(
     () => computeHookStats(retention, durationSeconds),
@@ -104,11 +125,23 @@ function HookCard({
           </div>
         )}
 
-        {said && (
-          <p className="mt-3 text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">Opening line: </span>“
-            {said.length > 240 ? `${said.slice(0, 240)}…` : said}”
-          </p>
+        {(said || frame) && (
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-start">
+            {frame && (
+              <FrameThumb
+                src={frame}
+                label={`On screen during the hook`}
+              />
+            )}
+            {said && (
+              <p className="flex-1 text-sm text-muted-foreground">
+                <span className="font-medium text-foreground">
+                  Opening line:{" "}
+                </span>
+                “{said.length > 240 ? `${said.slice(0, 240)}…` : said}”
+              </p>
+            )}
+          </div>
         )}
       </div>
     </section>
@@ -196,21 +229,36 @@ function DropList({
               )}
             </div>
 
-            {said && (
-              <p className="pl-10 text-sm text-muted-foreground">“{said}”</p>
-            )}
-
-            {ai?.hypothesis && (
-              <div className="ml-10 rounded-lg border border-dashed bg-muted/30 p-3">
-                <p className="text-sm">
-                  <span className="font-medium">Likely cause: </span>
-                  {ai.hypothesis}
-                </p>
-                {ai.suggestion && (
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    <span className="font-medium text-foreground">Try: </span>
-                    {ai.suggestion}
-                  </p>
+            {(said || ai?.frame || ai?.hypothesis) && (
+              <div className="flex flex-col gap-2 pl-10 sm:flex-row sm:gap-3">
+                {ai?.frame && (
+                  <FrameThumb
+                    src={ai.frame}
+                    label={`On screen at ${formatTimestamp(drop.fromTimestampSeconds)}`}
+                  />
+                )}
+                {(said || ai?.hypothesis) && (
+                  <div className="flex flex-1 flex-col gap-2">
+                    {said && (
+                      <p className="text-sm text-muted-foreground">“{said}”</p>
+                    )}
+                    {ai?.hypothesis && (
+                      <div className="rounded-lg border border-dashed bg-muted/30 p-3">
+                        <p className="text-sm">
+                          <span className="font-medium">Likely cause: </span>
+                          {ai.hypothesis}
+                        </p>
+                        {ai.suggestion && (
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            <span className="font-medium text-foreground">
+                              Try:{" "}
+                            </span>
+                            {ai.suggestion}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             )}
@@ -477,6 +525,7 @@ export function AnalysedVideoDetail({
         durationSeconds={video.durationSeconds}
         transcript={transcript}
         hookInsight={insights?.hook ?? null}
+        frame={insights?.hookFrame ?? null}
       />
 
       <div className="grid gap-6 lg:grid-cols-2">

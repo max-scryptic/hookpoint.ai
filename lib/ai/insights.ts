@@ -33,6 +33,9 @@ export interface DropInsight {
   relativePerformance: number | null
   // Whether a frame for this moment was supplied to the model.
   hasFrame: boolean
+  // The low-res storyboard frame shown on screen at this moment, as a
+  // data: URL ready to render. Null when no frame could be captured.
+  frame: string | null
   // The model's best guess at why viewers left — framed as a hypothesis.
   hypothesis: string
   // A concrete, actionable fix.
@@ -58,6 +61,9 @@ export interface VideoInsights {
   // 2-4 sentence narrative tying the whole picture together.
   summary: string
   hook: HookInsight
+  // The low-res storyboard frame from the hook window, as a data: URL ready to
+  // render. Null when no hook frame could be captured.
+  hookFrame: string | null
   drops: DropInsight[]
 }
 
@@ -94,6 +100,12 @@ const RESPONSE_SCHEMA = {
   },
   required: ["summary", "hook", "drops"],
 } as const
+
+// A renderable data: URL for a captured frame — the same encoding we hand to
+// the vision model, persisted so the UI can show what was on screen.
+function frameDataUrl(frame: VideoFrame): string {
+  return `data:${frame.mediaType};base64,${frame.base64}`
+}
 
 function formatTimestamp(totalSeconds: number): string {
   const seconds = Math.max(0, Math.round(totalSeconds))
@@ -294,20 +306,33 @@ export async function generateVideoInsights(
   }
 
   const byIndex = new Map(parsed.drops.map((d) => [d.index, d]))
-  const frameTimes = new Set(frames.map((f) => Math.round(f.timestampSeconds)))
+  const framesByTime = new Map(
+    frames.map((f) => [Math.round(f.timestampSeconds), f]),
+  )
 
   const dropInsights: DropInsight[] = drops.map((drop, i) => {
     const ai = byIndex.get(i)
+    const frame = framesByTime.get(Math.round(drop.fromTimestampSeconds))
     return {
       fromTimestampSeconds: drop.fromTimestampSeconds,
       toTimestampSeconds: drop.toTimestampSeconds,
       watchRatioDrop: drop.watchRatioDrop,
       relativePerformance: drop.relativePerformance,
-      hasFrame: frameTimes.has(Math.round(drop.fromTimestampSeconds)),
+      hasFrame: !!frame,
+      frame: frame ? frameDataUrl(frame) : null,
       hypothesis: ai?.hypothesis ?? "",
       suggestion: ai?.suggestion ?? "",
     }
   })
+
+  // The hook frame is the captured frame that isn't already tied to a drop —
+  // the same one buildContent attaches for the model.
+  const hookFrame = frames.find(
+    (f) =>
+      !drops.some(
+        (d) => Math.round(d.fromTimestampSeconds) === Math.round(f.timestampSeconds),
+      ),
+  )
 
   return {
     generatedAt: new Date().toISOString(),
@@ -319,6 +344,7 @@ export async function generateVideoInsights(
       verdict: parsed.hook.verdict,
       analysis: parsed.hook.analysis,
     },
+    hookFrame: hookFrame ? frameDataUrl(hookFrame) : null,
     drops: dropInsights,
   }
 }
