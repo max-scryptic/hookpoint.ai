@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react"
 import Image from "next/image"
 import {
+  AreaChartIcon,
   GaugeIcon,
   Loader2Icon,
   SparklesIcon,
@@ -511,9 +512,10 @@ export function AnalysedVideoDetail({
       />
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-medium text-muted-foreground">
-          Audience retention
-        </h2>
+        <div className="flex items-center gap-2">
+          <AreaChartIcon className="size-4 text-muted-foreground" />
+          <h2 className="text-sm font-medium">Audience retention</h2>
+        </div>
         <RetentionChart
           points={retention}
           durationSeconds={video.durationSeconds}
