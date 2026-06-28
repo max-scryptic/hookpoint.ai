@@ -212,8 +212,14 @@ async function fetchStoryboardSpec(
     ? [AUTHENTICATED_CLIENT, ...INNERTUBE_CLIENTS]
     : INNERTUBE_CLIENTS
 
+  // Whether the spec request is actually being routed through the residential
+  // proxy. Folded into every log line below so a "no frames" run says outright
+  // if the proxy was live — a Vercel env var added after the running deployment
+  // was built isn't picked up until a redeploy, and "direct" makes that obvious.
+  const route = proxyAgent ? "proxied" : "direct"
+
   for (const client of clients) {
-    const label = client.oauth ? `${client.clientName}+oauth` : client.clientName
+    const label = `${client.oauth ? `${client.clientName}+oauth` : client.clientName}, ${route}`
     let response: Awaited<ReturnType<typeof proxiedFetch>>
     try {
       response = await proxiedFetch(`${INNERTUBE_PLAYER_ENDPOINT}?key=${client.apiKey}`, {
@@ -250,8 +256,18 @@ async function fetchStoryboardSpec(
     }
 
     if (!response.ok) {
+      // Surface a slice of the body — for a 400 it carries the actual reason
+      // (e.g. an invalid argument or a rejected credential), which the bare
+      // status code hides.
+      let detail = ""
+      try {
+        const body = await response.text()
+        if (body) detail = `: ${body.slice(0, 300)}`
+      } catch {
+        // Ignore — the status code alone still tells us this client failed.
+      }
       console.error(
-        `Storyboard player request error (${label}: ${response.status})`,
+        `Storyboard player request error (${label}: ${response.status})${detail}`,
       )
       continue
     }
