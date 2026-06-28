@@ -2,16 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { format } from "date-fns"
 import {
-  BarChart3Icon,
   ChevronLeftIcon,
   ChevronRightIcon,
   GlobeIcon,
   LinkIcon,
   ListFilterIcon,
   LockIcon,
-  MoreVerticalIcon,
   SearchIcon,
   VideoOffIcon,
   XIcon,
@@ -23,7 +22,6 @@ import { Input } from "@/components/ui/input"
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
@@ -95,34 +93,8 @@ function formatAnalysedAt(iso: string): string {
   })
 }
 
-function RowActions({ video }: { video: RecentVideo }) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-8 shrink-0"
-            aria-label={`Actions for ${video.title}`}
-          />
-        }
-      >
-        <MoreVerticalIcon className="size-4" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem
-          render={<Link href={`/dashboard/analysed-video/${video.id}`} />}
-        >
-          <BarChart3Icon className="size-4" />
-          View analysis
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
-
 export function AnalysedVideoBrowser({ videos }: { videos: AnalysedVideo[] }) {
+  const router = useRouter()
   const rows = useMemo(() => videos.map(toRow), [videos])
 
   // Filter inputs. All filtering is client-side because the full set is already
@@ -345,14 +317,26 @@ export function AnalysedVideoBrowser({ videos }: { videos: AnalysedVideo[] }) {
                 <th className="hidden px-4 py-3 font-medium sm:table-cell">
                   Analysed
                 </th>
-                <th className="w-12 px-4 py-3">
-                  <span className="sr-only">Actions</span>
-                </th>
               </tr>
             </thead>
             <tbody className="divide-y">
-              {pageRows.map(({ video, dateAnalysed, privacyKnown }) => (
-                <tr key={video.id} className="align-top hover:bg-muted/40">
+              {pageRows.map(({ video, dateAnalysed, privacyKnown }) => {
+                const href = `/dashboard/analysed-video/${video.id}`
+                return (
+                <tr
+                  key={video.id}
+                  className="cursor-pointer align-top hover:bg-muted/40"
+                  onClick={() => router.push(href)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault()
+                      router.push(href)
+                    }
+                  }}
+                  tabIndex={0}
+                  role="link"
+                  aria-label={`View analysis for ${video.title}`}
+                >
                   <td className="px-4 py-3">
                     <div className="flex gap-3 sm:gap-4">
                       <Thumbnail video={video} />
@@ -402,11 +386,9 @@ export function AnalysedVideoBrowser({ videos }: { videos: AnalysedVideo[] }) {
                   <td className="hidden px-4 py-3 text-sm text-muted-foreground sm:table-cell">
                     {formatAnalysedAt(dateAnalysed)}
                   </td>
-                  <td className="px-4 py-3 text-right">
-                    <RowActions video={video} />
-                  </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>
