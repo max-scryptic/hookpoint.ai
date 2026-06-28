@@ -5,11 +5,12 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import type {
-  DropOff,
-  RetentionPoint,
-  TranscriptCue,
-  VideoDetails,
+import {
+  dedupeTranscriptCues,
+  type DropOff,
+  type RetentionPoint,
+  type TranscriptCue,
+  type VideoDetails,
 } from "@/lib/youtube/youtube"
 
 // A persisted analysis. The JSONB payloads mirror the YouTube/Analytics shapes
@@ -137,6 +138,38 @@ export async function listAnalysedVideoIds(
   }
 
   return (data as { video_id: string }[] | null)?.map((r) => r.video_id) ?? []
+}
+
+// Returns a cached transcript with the YouTube auto-caption rolling-window
+// duplication collapsed. Rows analysed before that cleanup was added still hold
+// the duplicated cues, so we heal them on read and persist the result back
+// (best-effort) — fixing legacy analyses permanently without re-spending the
+// YouTube quota a full re-analysis would cost. Only the transcript column is
+// touched, so `date_analysed` and list ordering stay put.
+export async function healCachedTranscript(
+  supabase: SupabaseClient,
+  userId: string,
+  videoId: string,
+  stored: TranscriptCue[] | null,
+): Promise<TranscriptCue[]> {
+  const cleaned = dedupeTranscriptCues(stored ?? [])
+
+  const before = (stored ?? []).map((cue) => cue.text).join("\n")
+  const after = cleaned.map((cue) => cue.text).join("\n")
+  if (before !== after) {
+    const { error } = await supabase
+      .from("analysed_videos")
+      .update({ transcript: cleaned })
+      .eq("user_id", userId)
+      .eq("video_id", videoId)
+    if (error) {
+      // Healing is best-effort — never block serving the (cleaned) transcript
+      // on a write failure; we'll simply re-clean it on the next read.
+      console.error("Failed to persist healed transcript", error)
+    }
+  }
+
+  return cleaned
 }
 
 // Fetches a single previously-analysed video, or null if it hasn't been

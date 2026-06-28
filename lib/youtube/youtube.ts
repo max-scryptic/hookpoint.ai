@@ -547,7 +547,64 @@ export function parseWebVtt(vtt: string): TranscriptCue[] {
     cues.push({ startSeconds: start, endSeconds: end, text })
   }
 
-  return cues
+  return dedupeTranscriptCues(cues)
+}
+
+// Normalises a word for overlap comparison: lower-cased and stripped of edge
+// punctuation, so "Crypto" and "crypto," count as the same token.
+function normaliseWord(word: string): string {
+  return word.toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "")
+}
+
+// Collapses the rolling-window duplication that YouTube auto-generated (ASR)
+// caption tracks emit. Those tracks repaint the on-screen text every cue, so the
+// same phrase reappears verbatim across two or three consecutive cues — which,
+// once joined, reads as "Hey guys Hey guys Hey guys ...". For each cue we drop
+// the leading run of words that simply repeats the tail of what we've already
+// kept, and discard cues that are wholly duplicates. Human-authored tracks have
+// no such overlap, so they pass through untouched.
+export function dedupeTranscriptCues(cues: TranscriptCue[]): TranscriptCue[] {
+  // How far back to look for an overlap, in words. Caps the work per cue and
+  // guards against collapsing genuine long-range repetition in real speech.
+  const MAX_OVERLAP = 60
+
+  const result: TranscriptCue[] = []
+  // Trailing words of the text kept so far, used to detect each cue's overlap.
+  let tail: string[] = []
+
+  for (const cue of cues) {
+    const words = cue.text.split(/\s+/).filter(Boolean)
+    if (words.length === 0) continue
+
+    // Largest k such that the last k kept words equal this cue's first k words.
+    const maxK = Math.min(words.length, tail.length, MAX_OVERLAP)
+    let overlap = 0
+    for (let k = maxK; k >= 1; k--) {
+      let matches = true
+      for (let i = 0; i < k; i++) {
+        if (normaliseWord(tail[tail.length - k + i]) !== normaliseWord(words[i])) {
+          matches = false
+          break
+        }
+      }
+      if (matches) {
+        overlap = k
+        break
+      }
+    }
+
+    const fresh = words.slice(overlap)
+    if (fresh.length === 0) continue // cue was a verbatim repeat — drop it.
+
+    result.push({
+      startSeconds: cue.startSeconds,
+      endSeconds: cue.endSeconds,
+      text: fresh.join(" "),
+    })
+    tail = tail.concat(fresh).slice(-MAX_OVERLAP)
+  }
+
+  return result
 }
 
 // Parses an "HH:MM:SS.mmm" or "MM:SS.mmm" WebVTT timestamp into seconds.
