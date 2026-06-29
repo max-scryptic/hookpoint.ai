@@ -64,6 +64,11 @@ function RetentionWindows({
             window.fromSeconds,
             window.toSeconds,
           )
+          const endPercentage = Math.round(window.endWatchRatio * 100)
+          const lostPercentage = Math.max(
+            0,
+            Math.round(window.startWatchRatio * 100) - endPercentage,
+          )
           return (
             <div key={window.id} className="rounded-xl border bg-card p-4">
               <div className="flex items-baseline justify-between gap-2">
@@ -83,11 +88,11 @@ function RetentionWindows({
                   <div className="mt-3 flex flex-wrap items-start gap-x-6 gap-y-4">
                     <Metric
                       label="Viewers lost"
-                      value={`${(window.drop * 100).toFixed(1)}%`}
+                      value={`${lostPercentage}%`}
                     />
                     <Metric
                       label="Still watching at end"
-                      value={`${Math.round(window.endWatchRatio * 100)}%`}
+                      value={`${endPercentage}%`}
                     />
                     {window.relativePerformance != null && (
                       <Metric
@@ -327,7 +332,7 @@ export function AnalysedVideoDetail({
         <section className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <TrendingUpIcon className="size-4 text-emerald-600 dark:text-emerald-400" />
-            <h2 className="text-sm font-medium">Held or grew the audience</h2>
+            <h2 className="text-sm font-medium">Biggest retention gains</h2>
           </div>
           <GainList gains={gains} transcript={transcript} />
         </section>

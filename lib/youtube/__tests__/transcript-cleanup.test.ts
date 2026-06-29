@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import {
   cleanTranscriptCues,
-  stripCaptionBleeps,
+  stripUnreadableBracketedText,
   type TranscriptCue,
 } from "@/lib/youtube/youtube"
 
@@ -10,14 +10,16 @@ import {
 // the real character here is what makes these tests exercise the actual input.
 const NBSP = " "
 
-describe("stripCaptionBleeps", () => {
+describe("stripUnreadableBracketedText", () => {
   it("removes a bleep marker padded with non-breaking spaces", () => {
     const input = `lost a [${NBSP}__${NBSP}] ton of money`
-    expect(stripCaptionBleeps(input)).toBe("lost a ton of money")
+    expect(stripUnreadableBracketedText(input)).toBe("lost a ton of money")
   })
 
   it("removes a bleep marker padded with normal spaces", () => {
-    expect(stripCaptionBleeps("what a [ __ ] mess")).toBe("what a mess")
+    expect(stripUnreadableBracketedText("what a [ __ ] mess")).toBe(
+      "what a mess",
+    )
   })
 
   it("removes a bleep marker containing literal HTML entities", () => {
@@ -27,26 +29,45 @@ describe("stripCaptionBleeps", () => {
   })
 
   it("handles markers with no padding and varying underscore counts", () => {
-    expect(stripCaptionBleeps("oh [__] no")).toBe("oh no")
-    expect(stripCaptionBleeps("oh [____] no")).toBe("oh no")
+    expect(stripUnreadableBracketedText("oh [__] no")).toBe("oh no")
+    expect(stripUnreadableBracketedText("oh [____] no")).toBe("oh no")
+  })
+
+  it("removes other unreadable bracketed artifacts", () => {
+    expect(stripUnreadableBracketedText("wait [...] what [???]")).toBe(
+      "wait what",
+    )
+    expect(stripUnreadableBracketedText("intro [♪♪] welcome [---]")).toBe(
+      "intro welcome",
+    )
   })
 
   it("strips a marker at the start or end of the text", () => {
-    expect(stripCaptionBleeps(`[${NBSP}__${NBSP}] hello`)).toBe("hello")
-    expect(stripCaptionBleeps(`hello [${NBSP}__${NBSP}]`)).toBe("hello")
+    expect(stripUnreadableBracketedText(`[${NBSP}__${NBSP}] hello`)).toBe(
+      "hello",
+    )
+    expect(stripUnreadableBracketedText(`hello [${NBSP}__${NBSP}]`)).toBe(
+      "hello",
+    )
   })
 
-  it("leaves genuine bracketed annotations untouched", () => {
-    expect(stripCaptionBleeps("[Music] the beat drops")).toBe(
+  it("leaves readable bracketed annotations untouched", () => {
+    expect(stripUnreadableBracketedText("[Music] the beat drops")).toBe(
       "[Music] the beat drops",
     )
-    expect(stripCaptionBleeps("clap [Applause] clap")).toBe(
-      "clap [Applause] clap",
+    expect(stripUnreadableBracketedText("[Noise] clap [Applause] clap")).toBe(
+      "[Noise] clap [Applause] clap",
+    )
+    expect(stripUnreadableBracketedText("你好 [音乐] world")).toBe(
+      "你好 [音乐] world",
+    )
+    expect(stripUnreadableBracketedText("count [3] clap")).toBe(
+      "count [3] clap",
     )
   })
 
   it("returns an empty string for a cue that is only a bleep", () => {
-    expect(stripCaptionBleeps(`[${NBSP}__${NBSP}]`)).toBe("")
+    expect(stripUnreadableBracketedText(`[${NBSP}__${NBSP}]`)).toBe("")
   })
 })
 

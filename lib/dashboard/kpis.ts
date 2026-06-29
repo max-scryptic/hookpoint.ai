@@ -4,6 +4,12 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import {
+  detectRetentionGains,
+  type DropOff,
+  type RetentionPoint,
+} from "@/lib/youtube/youtube"
+
 export interface DashboardKpis {
   // How many videos the user has analysed (rows in `analysed_videos`).
   videosAnalysed: number
@@ -14,6 +20,10 @@ export interface DashboardKpis {
   // uploading a source file. Same video length, but only counted once a raw file
   // has actually landed in storage for that video.
   secondsDeeplyAnalysed: number
+  // Total detected drop-off points across every saved video analysis.
+  dropOffsDetected: number
+  // Total rising retention regions across every saved video analysis.
+  retentionGainsDetected: number
 }
 
 // Upload states where the raw bytes have genuinely landed in storage — i.e. the
@@ -33,13 +43,12 @@ export async function getDashboardKpis(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<DashboardKpis> {
-  // Pull just the durations we need rather than the full payload rows: the
-  // analysed-video length lives inside the `video_details` JSONB, and the deeply
-  // analysed length is the YouTube duration recorded against each source file.
+  // Pull the duration and retention insight payloads used by the headline
+  // totals. Deep-analysis length is recorded separately against source files.
   const [analysed, deep] = await Promise.all([
     supabase
       .from("analysed_videos")
-      .select("duration:video_details->durationSeconds")
+      .select("duration:video_details->durationSeconds, drop_offs, retention")
       .eq("user_id", userId),
     supabase
       .from("source_files")
@@ -61,7 +70,11 @@ export async function getDashboardKpis(
     console.error("Failed to load deep-analysis KPIs", deep.error)
   }
 
-  const analysedRows = (analysed.data ?? []) as { duration: number | null }[]
+  const analysedRows = (analysed.data ?? []) as {
+    duration: number | null
+    drop_offs: DropOff[] | null
+    retention: RetentionPoint[] | null
+  }[]
   const deepRows = (deep.error ? [] : (deep.data ?? [])) as {
     youtube_duration_seconds: number | null
   }[]
@@ -74,6 +87,18 @@ export async function getDashboardKpis(
     ),
     secondsDeeplyAnalysed: deepRows.reduce(
       (sum, row) => sum + toSeconds(row.youtube_duration_seconds),
+      0,
+    ),
+    dropOffsDetected: analysedRows.reduce(
+      (sum, row) => sum + (Array.isArray(row.drop_offs) ? row.drop_offs.length : 0),
+      0,
+    ),
+    retentionGainsDetected: analysedRows.reduce(
+      (sum, row) =>
+        sum +
+        (Array.isArray(row.retention)
+          ? detectRetentionGains(row.retention).length
+          : 0),
       0,
     ),
   }

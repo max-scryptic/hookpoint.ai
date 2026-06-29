@@ -1,4 +1,10 @@
-import { ClockIcon, SparklesIcon, VideoIcon } from "lucide-react"
+import {
+  ClockIcon,
+  SparklesIcon,
+  TrendingDownIcon,
+  TrendingUpIcon,
+  VideoIcon,
+} from "lucide-react"
 
 import {
   Card,
@@ -31,10 +37,20 @@ export function DashboardKpiCards({ kpis }: { kpis: DashboardKpis }) {
       value: formatMinutes(kpis.secondsDeeplyAnalysed),
       icon: SparklesIcon,
     },
+    {
+      label: "Drop-offs Detected",
+      value: kpis.dropOffsDetected.toLocaleString(),
+      icon: TrendingDownIcon,
+    },
+    {
+      label: "Retention Gains Detected",
+      value: kpis.retentionGainsDetected.toLocaleString(),
+      icon: TrendingUpIcon,
+    },
   ]
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
       {cards.map(({ label, value, icon: Icon }) => (
         <Card key={label} size="sm">
           <CardHeader>
