@@ -53,12 +53,16 @@ export async function getDashboardKpis(
       `Failed to load analysed-video KPIs: ${analysed.error.message}`,
     )
   }
+  // Deep analysis is an optional enhancement. In particular, deployments can
+  // briefly have analysed-video data before the source-files migration has
+  // been applied. Do not hide the core KPIs in that case; report zero for the
+  // deep-analysis duration and keep the full error visible in server logs.
   if (deep.error) {
-    throw new Error(`Failed to load deep-analysis KPIs: ${deep.error.message}`)
+    console.error("Failed to load deep-analysis KPIs", deep.error)
   }
 
   const analysedRows = (analysed.data ?? []) as { duration: number | null }[]
-  const deepRows = (deep.data ?? []) as {
+  const deepRows = (deep.error ? [] : (deep.data ?? [])) as {
     youtube_duration_seconds: number | null
   }[]
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { getDashboardKpis } from "@/lib/dashboard/kpis"
@@ -94,5 +94,32 @@ describe("getDashboardKpis", () => {
     })
 
     await expect(getDashboardKpis(supabase, "user-1")).rejects.toThrow(/boom/)
+  })
+
+  it("keeps core KPIs when the optional deep-analysis query fails", async () => {
+    const supabase = makeFakeSupabase({
+      analysed_videos: {
+        data: [{ duration: 600 }, { duration: 300 }],
+        error: null,
+      },
+      source_files: {
+        data: null,
+        error: { code: "42P01", message: "relation does not exist" },
+      },
+    })
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    const kpis = await getDashboardKpis(supabase, "user-1")
+
+    expect(kpis).toEqual({
+      videosAnalysed: 2,
+      secondsAnalysed: 900,
+      secondsDeeplyAnalysed: 0,
+    })
+    expect(consoleError).toHaveBeenCalledWith(
+      "Failed to load deep-analysis KPIs",
+      expect.objectContaining({ code: "42P01" }),
+    )
+    consoleError.mockRestore()
   })
 })
