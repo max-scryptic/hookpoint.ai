@@ -1,8 +1,6 @@
-import { AppSidebar } from "@/components/app-sidebar"
 import { AnalysedVideoDetail } from "@/components/analysed-video-detail"
 import { SourceFileUpload } from "@/components/source-file-upload"
 import { requireAuthenticatedUser } from "@/lib/auth"
-import { getSidebarDefaultOpen } from "@/lib/sidebar-state"
 import { createClient } from "@/lib/supabase/server"
 import {
   getAnalysedVideo,
@@ -34,13 +32,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { Separator } from "@/components/ui/separator"
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar"
-
-export const dynamic = "force-dynamic"
+import { SidebarTrigger } from "@/components/ui/sidebar"
 
 type AnalysisResult =
   | {
@@ -130,10 +122,7 @@ export default async function Page({
 }) {
   const { videoId } = await params
   const user = await requireAuthenticatedUser()
-  const [defaultOpen, result] = await Promise.all([
-    getSidebarDefaultOpen(),
-    analyse(user.id, videoId),
-  ])
+  const result = await analyse(user.id, videoId)
 
   const title = result.status === "ok" ? result.video.title : "Analysis"
 
@@ -152,79 +141,76 @@ export default async function Page({
   }
 
   return (
-    <SidebarProvider defaultOpen={defaultOpen}>
-      <AppSidebar />
-      <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-          <div className="flex items-center gap-2 px-4">
-            <SidebarTrigger className="-ml-1" />
-            <Separator
-              orientation="vertical"
-              className="mr-2 data-vertical:h-4 data-vertical:self-auto"
-            />
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden md:block" />
-                <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="/dashboard/analysed-videos">
-                    Analysed Videos
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden md:block" />
-                <BreadcrumbItem>
-                  <BreadcrumbPage className="max-w-[40ch] truncate">
-                    {title}
-                  </BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
-          </div>
-        </header>
-        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-          {result.status === "ok" && (
-            <>
-              <AnalysedVideoDetail
-                video={result.video}
-                retention={result.retention}
-                transcript={result.transcript}
-              />
-              <SourceFileUpload
-                videoId={videoId}
-                initialSourceFile={initialSourceFile}
-              />
-            </>
-          )}
-
-          {result.status === "not_found" && (
-            <div className="rounded-xl border bg-muted/30 p-8 text-sm text-muted-foreground">
-              We couldn&apos;t find that video on YouTube.
-            </div>
-          )}
-
-          {result.status === "no_data" && (
-            <div className="rounded-xl border bg-muted/30 p-8 text-sm text-muted-foreground">
-              No retention data available. Make sure this video is on the YouTube
-              channel you signed in with and has enough views.
-            </div>
-          )}
-
-          {result.status === "reconnect" && (
-            <div className="rounded-xl border bg-muted/30 p-8 text-sm text-muted-foreground">
-              Please reconnect your YouTube account to grant analytics access.
-            </div>
-          )}
-
-          {result.status === "error" && (
-            <div className="rounded-xl border bg-muted/30 p-8 text-sm text-muted-foreground">
-              We couldn&apos;t analyse that video right now. Please try again
-              later.
-            </div>
-          )}
+    <>
+      <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+        <div className="flex items-center gap-2 px-4">
+          <SidebarTrigger className="-ml-1" />
+          <Separator
+            orientation="vertical"
+            className="mr-2 data-vertical:h-4 data-vertical:self-auto"
+          />
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem className="hidden md:block">
+                <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator className="hidden md:block" />
+              <BreadcrumbItem className="hidden md:block">
+                <BreadcrumbLink href="/dashboard/analysed-videos">
+                  Analysed Videos
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator className="hidden md:block" />
+              <BreadcrumbItem>
+                <BreadcrumbPage className="max-w-[40ch] truncate">
+                  {title}
+                </BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
         </div>
-      </SidebarInset>
-    </SidebarProvider>
+      </header>
+      <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+        {result.status === "ok" && (
+          <>
+            <AnalysedVideoDetail
+              video={result.video}
+              retention={result.retention}
+              transcript={result.transcript}
+            />
+            <SourceFileUpload
+              videoId={videoId}
+              initialSourceFile={initialSourceFile}
+            />
+          </>
+        )}
+
+        {result.status === "not_found" && (
+          <div className="rounded-xl border bg-muted/30 p-8 text-sm text-muted-foreground">
+            We couldn&apos;t find that video on YouTube.
+          </div>
+        )}
+
+        {result.status === "no_data" && (
+          <div className="rounded-xl border bg-muted/30 p-8 text-sm text-muted-foreground">
+            No retention data available. Make sure this video is on the YouTube
+            channel you signed in with and has enough views.
+          </div>
+        )}
+
+        {result.status === "reconnect" && (
+          <div className="rounded-xl border bg-muted/30 p-8 text-sm text-muted-foreground">
+            Please reconnect your YouTube account to grant analytics access.
+          </div>
+        )}
+
+        {result.status === "error" && (
+          <div className="rounded-xl border bg-muted/30 p-8 text-sm text-muted-foreground">
+            We couldn&apos;t analyse that video right now. Please try again
+            later.
+          </div>
+        )}
+      </div>
+    </>
   )
 }
