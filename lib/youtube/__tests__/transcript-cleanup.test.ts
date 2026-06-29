@@ -11,23 +11,32 @@ import {
 const NBSP = " "
 
 describe("stripCaptionBleeps", () => {
-  it("removes a bleep marker padded with non-breaking spaces", () => {
+  it("replaces a bleep marker padded with non-breaking spaces", () => {
     const input = `lost a [${NBSP}__${NBSP}] ton of money`
-    expect(stripCaptionBleeps(input)).toBe("lost a ton of money")
+    expect(stripCaptionBleeps(input)).toBe("lost a ***** ton of money")
   })
 
-  it("removes a bleep marker padded with normal spaces", () => {
-    expect(stripCaptionBleeps("what a [ __ ] mess")).toBe("what a mess")
+  it("replaces a bleep marker padded with normal spaces", () => {
+    expect(stripCaptionBleeps("what a [ __ ] mess")).toBe("what a ***** mess")
+  })
+
+  it("replaces markers containing literal HTML space entities", () => {
+    expect(stripCaptionBleeps("lost [&nbsp;__&nbsp;] money")).toBe(
+      "lost ***** money",
+    )
+    expect(stripCaptionBleeps("lost [&#160;__&#xA0;] money")).toBe(
+      "lost ***** money",
+    )
   })
 
   it("handles markers with no padding and varying underscore counts", () => {
-    expect(stripCaptionBleeps("oh [__] no")).toBe("oh no")
-    expect(stripCaptionBleeps("oh [____] no")).toBe("oh no")
+    expect(stripCaptionBleeps("oh [__] no")).toBe("oh ***** no")
+    expect(stripCaptionBleeps("oh [____] no")).toBe("oh ***** no")
   })
 
   it("strips a marker at the start or end of the text", () => {
-    expect(stripCaptionBleeps(`[${NBSP}__${NBSP}] hello`)).toBe("hello")
-    expect(stripCaptionBleeps(`hello [${NBSP}__${NBSP}]`)).toBe("hello")
+    expect(stripCaptionBleeps(`[${NBSP}__${NBSP}] hello`)).toBe("***** hello")
+    expect(stripCaptionBleeps(`hello [${NBSP}__${NBSP}]`)).toBe("hello *****")
   })
 
   it("leaves genuine bracketed annotations untouched", () => {
@@ -39,22 +48,22 @@ describe("stripCaptionBleeps", () => {
     )
   })
 
-  it("returns an empty string for a cue that is only a bleep", () => {
-    expect(stripCaptionBleeps(`[${NBSP}__${NBSP}]`)).toBe("")
+  it("keeps a replacement for a cue that is only a bleep", () => {
+    expect(stripCaptionBleeps(`[${NBSP}__${NBSP}]`)).toBe("*****")
   })
 })
 
 describe("cleanTranscriptCues", () => {
-  it("strips bleeps from cue text", () => {
+  it("replaces bleeps in cue text", () => {
     const cues: TranscriptCue[] = [
       { startSeconds: 0, endSeconds: 2, text: `we lost a [${NBSP}__${NBSP}] ton` },
     ]
     expect(cleanTranscriptCues(cues)).toEqual([
-      { startSeconds: 0, endSeconds: 2, text: "we lost a ton" },
+      { startSeconds: 0, endSeconds: 2, text: "we lost a ***** ton" },
     ])
   })
 
-  it("drops a cue that is nothing but a bleep marker", () => {
+  it("keeps a cue that is nothing but a bleep marker", () => {
     const cues: TranscriptCue[] = [
       { startSeconds: 0, endSeconds: 1, text: "hello" },
       { startSeconds: 1, endSeconds: 2, text: `[${NBSP}__${NBSP}]` },
@@ -62,6 +71,7 @@ describe("cleanTranscriptCues", () => {
     ]
     expect(cleanTranscriptCues(cues)).toEqual([
       { startSeconds: 0, endSeconds: 1, text: "hello" },
+      { startSeconds: 1, endSeconds: 2, text: "*****" },
       { startSeconds: 2, endSeconds: 3, text: "world" },
     ])
   })
@@ -72,7 +82,7 @@ describe("cleanTranscriptCues", () => {
       { startSeconds: 2, endSeconds: 4, text: "ton of money we lost" },
     ]
     expect(cleanTranscriptCues(cues)).toEqual([
-      { startSeconds: 0, endSeconds: 2, text: "a ton of money" },
+      { startSeconds: 0, endSeconds: 2, text: "a ***** ton of money" },
       { startSeconds: 2, endSeconds: 4, text: "we lost" },
     ])
   })

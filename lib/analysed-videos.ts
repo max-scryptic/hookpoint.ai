@@ -88,7 +88,11 @@ export async function saveAnalysedVideo(
         video_details: input.video,
         retention: input.retention,
         drop_offs: input.dropOffs,
-        transcript: input.transcript ?? null,
+        // Keep the persistence boundary canonical even if a transcript comes
+        // from a source that did not pass through the WebVTT parser.
+        transcript: input.transcript
+          ? cleanTranscriptCues(input.transcript)
+          : null,
         raw_analytics: input.rawAnalytics ?? null,
       },
       { onConflict: "user_id,video_id" },
@@ -141,7 +145,7 @@ export async function listAnalysedVideoIds(
 }
 
 // Returns a cached transcript with the YouTube auto-caption rolling-window
-// duplication collapsed and the profanity bleep markers ("[ __ ]") stripped.
+// duplication collapsed and profanity bleep markers replaced with "*****".
 // Rows analysed before either cleanup was added still hold the raw cues, so we
 // heal them on read and persist the result back (best-effort) — fixing legacy
 // analyses permanently without re-spending the YouTube quota a full re-analysis

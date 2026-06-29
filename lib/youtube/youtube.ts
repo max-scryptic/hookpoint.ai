@@ -624,24 +624,25 @@ export function parseWebVtt(vtt: string): TranscriptCue[] {
 }
 
 // YouTube's auto-generated captions censor profanity with a bracketed bleep
-// marker — rendered as "[ __ ]", with non-breaking spaces (U+00A0) padding the
-// underscores. It carries no information, so we strip it out wherever it
-// appears in a cue and collapse the whitespace it leaves behind. Only brackets
-// containing nothing but underscores and whitespace are removed; genuine
-// caption annotations such as "[Music]" or "[Applause]" contain letters and so
-// are left untouched. `\s` matches the non-breaking space, which is why the
-// markers don't survive a normal whitespace collapse on their own.
+// marker — rendered as "[ __ ]", with either real non-breaking spaces (U+00A0)
+// or the literal HTML entity "&nbsp;" padding the underscores. Replace the whole
+// marker with a stable display value while leaving genuine caption annotations
+// such as "[Music]" and "[Applause]" untouched. Numeric NBSP entities are
+// included as well so cached captions from different track formats heal too.
 export function stripCaptionBleeps(text: string): string {
+  const padding = String.raw`(?:\s|_|&nbsp;|&#0*160;|&#x0*a0;)*`
+  const marker = new RegExp(String.raw`\[${padding}_${padding}\]`, "gi")
+
   return text
-    .replace(/\[[\s_]*_[\s_]*\]/g, " ")
+    .replace(marker, " ***** ")
     .replace(/\s+/g, " ")
     .trim()
 }
 
 // Canonical cleanup for a freshly parsed or previously cached transcript:
-// strips the auto-caption bleep markers from each cue (dropping any cue left
-// empty), then collapses the rolling-window duplication. Applied both at fetch
-// time and on read of cached rows, so legacy analyses are healed in place.
+// replaces auto-caption bleep markers, then collapses the rolling-window
+// duplication. Applied both at fetch time and on read of cached rows, so legacy
+// analyses are healed in place.
 export function cleanTranscriptCues(cues: TranscriptCue[]): TranscriptCue[] {
   const stripped: TranscriptCue[] = []
   for (const cue of cues) {
