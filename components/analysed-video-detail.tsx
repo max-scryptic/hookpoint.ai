@@ -15,6 +15,7 @@ import {
   detectRetentionGains,
   detectSignificantDropOffs,
   transcriptForSegment,
+  type RetentionGain,
   type RetentionPoint,
   type TranscriptCue,
   type VideoDetails,
@@ -196,22 +197,12 @@ function Badge({
 // ---------------------------------------------------------------------------
 
 function GainList({
-  retention,
+  gains,
   transcript,
 }: {
-  retention: RetentionPoint[]
+  gains: RetentionGain[]
   transcript: TranscriptCue[]
 }) {
-  const gains = useMemo(() => detectRetentionGains(retention), [retention])
-
-  if (gains.length === 0) {
-    return (
-      <div className="rounded-xl border bg-muted/30 p-6 text-sm text-muted-foreground">
-        No notable rewatch spikes — retention only declined across this video.
-      </div>
-    )
-  }
-
   return (
     <ul className="divide-y rounded-xl border bg-card">
       {gains.map((gain, index) => {
@@ -259,6 +250,8 @@ export function AnalysedVideoDetail({
   retention: RetentionPoint[]
   transcript?: TranscriptCue[]
 }) {
+  const gains = useMemo(() => detectRetentionGains(retention), [retention])
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
@@ -309,13 +302,15 @@ export function AnalysedVideoDetail({
         <DropList retention={retention} transcript={transcript} />
       </section>
 
-      <section className="flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <TrendingUpIcon className="size-4 text-emerald-600 dark:text-emerald-400" />
-          <h2 className="text-sm font-medium">Held or grew the audience</h2>
-        </div>
-        <GainList retention={retention} transcript={transcript} />
-      </section>
+      {gains.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <TrendingUpIcon className="size-4 text-emerald-600 dark:text-emerald-400" />
+            <h2 className="text-sm font-medium">Held or grew the audience</h2>
+          </div>
+          <GainList gains={gains} transcript={transcript} />
+        </section>
+      )}
     </div>
   )
 }
