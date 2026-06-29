@@ -32,7 +32,7 @@ function formatTimestamp(totalSeconds: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Retention windows (fixed, always-on opening windows analysed for every video)
+// The Hook (fixed, always-on opening windows analysed for every video)
 // ---------------------------------------------------------------------------
 
 function RetentionWindows({
@@ -54,7 +54,7 @@ function RetentionWindows({
     <section className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
         <GaugeIcon className="size-4 text-muted-foreground" />
-        <h2 className="text-sm font-medium">Retention windows</h2>
+        <h2 className="text-sm font-medium">The Hook</h2>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -132,8 +132,9 @@ function DropList({
   retention: RetentionPoint[]
   transcript: TranscriptCue[]
 }) {
-  // The two fixed windows above already cover the opening, so here we surface a
-  // handful (3–4) of the most significant *other* sudden drop-offs in the curve.
+  // The Hook section above already covers the opening (first 30s), so here we
+  // surface a handful (3–4) of the most significant *other* sudden drop-offs in
+  // the curve. detectSignificantDropOffs ignores the hook period by default.
   const drops = useMemo(
     () => detectSignificantDropOffs(retention, { limit: 4 }),
     [retention],
