@@ -1,5 +1,6 @@
 import { AppSidebar } from "@/components/app-sidebar"
 import { AnalysedVideoDetail } from "@/components/analysed-video-detail"
+import { SourceFileUpload } from "@/components/source-file-upload"
 import { requireAuthenticatedUser } from "@/lib/auth"
 import { getSidebarDefaultOpen } from "@/lib/sidebar-state"
 import { createClient } from "@/lib/supabase/server"
@@ -8,6 +9,8 @@ import {
   healCachedTranscript,
   saveAnalysedVideo,
 } from "@/lib/analysed-videos"
+import { getSourceFileForVideo } from "@/lib/source-files/source-files"
+import { serialiseSourceFile } from "@/lib/source-files/serialise"
 import {
   getGoogleAccessToken,
   ReconsentRequiredError,
@@ -134,6 +137,20 @@ export default async function Page({
 
   const title = result.status === "ok" ? result.video.title : "Analysis"
 
+  // Load any existing raw source file for this video so the upload section can
+  // render its current state on first paint. Best-effort: a failure here must
+  // not break the analysis view.
+  let initialSourceFile = null
+  if (result.status === "ok") {
+    try {
+      const supabase = await createClient()
+      const sourceFile = await getSourceFileForVideo(supabase, user.id, videoId)
+      initialSourceFile = sourceFile ? serialiseSourceFile(sourceFile) : null
+    } catch (error) {
+      console.error("Failed to load source file", error)
+    }
+  }
+
   return (
     <SidebarProvider defaultOpen={defaultOpen}>
       <AppSidebar />
@@ -168,11 +185,17 @@ export default async function Page({
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
           {result.status === "ok" && (
-            <AnalysedVideoDetail
-              video={result.video}
-              retention={result.retention}
-              transcript={result.transcript}
-            />
+            <>
+              <AnalysedVideoDetail
+                video={result.video}
+                retention={result.retention}
+                transcript={result.transcript}
+              />
+              <SourceFileUpload
+                videoId={videoId}
+                initialSourceFile={initialSourceFile}
+              />
+            </>
           )}
 
           {result.status === "not_found" && (
