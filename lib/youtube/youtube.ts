@@ -760,11 +760,16 @@ export function detectSignificantDropOffs(
     steepnessFactor = 1.8,
     underperformBelow = 0.5,
     limit = 5,
+    ignoreBeforeSeconds = HOOK_COVERAGE_END_SECONDS,
   }: {
     minDrop?: number
     steepnessFactor?: number
     underperformBelow?: number
     limit?: number
+    // Drop-offs landing at or before this mark are skipped. Defaults to the end
+    // of the fixed "The Hook" windows, which already break out the opening, so
+    // this list only surfaces drops the hook section doesn't already cover.
+    ignoreBeforeSeconds?: number
   } = {},
 ): SignificantDropOff[] {
   if (points.length < 2) return []
@@ -781,6 +786,8 @@ export function detectSignificantDropOffs(
   for (let i = 1; i < points.length; i++) {
     const prev = points[i - 1]
     const curr = points[i]
+    // Skip anything inside the opening already covered by The Hook windows.
+    if (curr.timestampSeconds <= ignoreBeforeSeconds) continue
     const delta = prev.watchRatio - curr.watchRatio
     if (delta < minDrop) continue
 
@@ -829,6 +836,15 @@ export const RETENTION_WINDOWS: RetentionWindowConfig[] = [
   { id: "initial-hook", label: "Initial Hook", fromSeconds: 0, toSeconds: 10 },
   { id: "hook-delivery", label: "Hook Delivery", fromSeconds: 10, toSeconds: 30 },
 ]
+
+// End of the opening stretch covered by the fixed "The Hook" windows above
+// (i.e. the last window's `toSeconds`). Drop-offs in this range are already
+// broken out window-by-window in The Hook, so the significant-drop detector
+// ignores them to avoid double-reporting the same opening moments.
+export const HOOK_COVERAGE_END_SECONDS = RETENTION_WINDOWS.reduce(
+  (end, window) => Math.max(end, window.toSeconds),
+  0,
+)
 
 // Performance summary for a single fixed retention window.
 export interface RetentionWindowStats extends RetentionWindowConfig {
