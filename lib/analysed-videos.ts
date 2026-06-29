@@ -88,7 +88,11 @@ export async function saveAnalysedVideo(
         video_details: input.video,
         retention: input.retention,
         drop_offs: input.dropOffs,
-        transcript: input.transcript ?? null,
+        // Keep the persistence boundary canonical even if a transcript comes
+        // from a source that did not pass through the WebVTT parser.
+        transcript: input.transcript
+          ? cleanTranscriptCues(input.transcript)
+          : null,
         raw_analytics: input.rawAnalytics ?? null,
       },
       { onConflict: "user_id,video_id" },
