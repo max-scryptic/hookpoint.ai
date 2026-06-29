@@ -1,11 +1,21 @@
+import Link from "next/link"
+
+import { buttonVariants } from "@/components/ui/button"
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+} from "@/components/ui/breadcrumb"
 import { Separator } from "@/components/ui/separator"
-import { Skeleton } from "@/components/ui/skeleton"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 
-// Default loading boundary for dashboard routes that don't define their own
-// (analyse-video, analysed-videos, the index). The sidebar shell in
-// app/dashboard/layout.tsx stays mounted, so switching tabs shows this content
-// skeleton instantly instead of a blank pane while the server renders the page.
+// Default loading boundary for the dashboard index. The index page has no data to
+// fetch, so rather than flash a generic skeleton we mirror its static content here
+// — the page then appears unchanged the instant its RSC payload arrives. Child
+// routes that do load data (analyse-video, analysed-videos, analysed-video) define
+// their own loading.tsx with a skeleton for just their data region. The sidebar
+// shell in app/dashboard/layout.tsx stays mounted across navigations.
 export default function Loading() {
   return (
     <>
@@ -16,16 +26,36 @@ export default function Loading() {
             orientation="vertical"
             className="mr-2 data-vertical:h-4 data-vertical:self-auto"
           />
-          <Skeleton className="h-4 w-32" />
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbPage>Dashboard</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
         </div>
       </header>
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-        <div className="flex flex-col gap-2">
-          <Skeleton className="h-7 w-48" />
-          <Skeleton className="h-4 w-80 max-w-full" />
+        <div>
+          <h1 className="text-2xl font-semibold tracking-normal">Dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Welcome back. Analyse your YouTube videos to find where viewers
+            drop off.
+          </p>
         </div>
-        <Skeleton className="h-40 w-full" />
-        <Skeleton className="h-40 w-full" />
+
+        <div className="flex flex-col items-start gap-3 rounded-xl border bg-muted/30 p-8">
+          <div>
+            <p className="font-medium">Analyse a video</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Pick one of your recent uploads or paste a video URL to see its
+              audience retention.
+            </p>
+          </div>
+          <Link href="/dashboard/analyse-video" className={buttonVariants()}>
+            Analyse Video
+          </Link>
+        </div>
       </div>
     </>
   )

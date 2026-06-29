@@ -43,10 +43,33 @@ export default function Loading() {
           </Breadcrumb>
         </div>
       </header>
-      <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-        <Skeleton className="h-7 w-2/3 max-w-md" />
-        <Skeleton className="h-64 w-full" />
-        <Skeleton className="h-48 w-full" />
+      <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
+        {/* Thumbnail + title */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+          <Skeleton className="aspect-video w-full shrink-0 rounded-xl sm:w-64" />
+          <div className="flex-1 space-y-2 py-1">
+            <Skeleton className="h-7 w-2/3 max-w-md" />
+            <Skeleton className="h-4 w-full max-w-lg" />
+          </div>
+        </div>
+
+        {/* Audience retention chart */}
+        <div className="space-y-3">
+          <Skeleton className="h-4 w-40" />
+          <Skeleton className="h-64 w-full rounded-xl" />
+        </div>
+
+        {/* Hook card */}
+        <div className="space-y-3">
+          <Skeleton className="h-4 w-28" />
+          <Skeleton className="h-28 w-full rounded-xl" />
+        </div>
+
+        {/* Biggest drop-offs */}
+        <div className="space-y-3">
+          <Skeleton className="h-4 w-36" />
+          <Skeleton className="h-40 w-full rounded-xl" />
+        </div>
       </div>
     </>
   )
