@@ -141,7 +141,8 @@ export async function listAnalysedVideoIds(
 }
 
 // Returns a cached transcript with the YouTube auto-caption rolling-window
-// duplication collapsed and the profanity bleep markers ("[ __ ]") stripped.
+// duplication collapsed and unreadable bracketed artifacts (such as "[ __ ]")
+// stripped while readable annotations (such as "[Music]") are preserved.
 // Rows analysed before either cleanup was added still hold the raw cues, so we
 // heal them on read and persist the result back (best-effort) — fixing legacy
 // analyses permanently without re-spending the YouTube quota a full re-analysis
