@@ -11,7 +11,7 @@ import {
 
 import { RetentionChart } from "@/components/retention-chart"
 import {
-  computeHookStats,
+  computeRetentionWindows,
   detectRetentionGains,
   detectSignificantDropOffs,
   transcriptForSegment,
@@ -32,10 +32,10 @@ function formatTimestamp(totalSeconds: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Hook performance card
+// Retention windows (fixed, always-on opening windows analysed for every video)
 // ---------------------------------------------------------------------------
 
-function HookCard({
+function RetentionWindows({
   retention,
   durationSeconds,
   transcript,
@@ -44,51 +44,69 @@ function HookCard({
   durationSeconds: number
   transcript: TranscriptCue[]
 }) {
-  const stats = useMemo(
-    () => computeHookStats(retention, durationSeconds),
+  const windows = useMemo(
+    () => computeRetentionWindows(retention, durationSeconds),
     [retention, durationSeconds],
   )
-  if (!stats) return null
-
-  const said = transcriptForSegment(transcript, 0, stats.windowSeconds)
+  if (windows.length === 0) return null
 
   return (
     <section className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
         <GaugeIcon className="size-4 text-muted-foreground" />
-        <h2 className="text-sm font-medium">
-          Hook · first {Math.round(stats.windowSeconds)}s
-        </h2>
+        <h2 className="text-sm font-medium">Retention windows</h2>
       </div>
 
-      <div className="rounded-xl border bg-card p-4">
-        <div className="flex flex-wrap items-start gap-x-8 gap-y-4">
-          <Metric
-            label="Viewers lost"
-            value={`${(stats.drop * 100).toFixed(1)}%`}
-          />
-          <Metric
-            label="Still watching at end of hook"
-            value={`${Math.round(stats.endWatchRatio * 100)}%`}
-          />
-          {stats.relativePerformance != null && (
-            <Metric
-              label="vs. similar videos"
-              value={`${Math.round(stats.relativePerformance * 100)}%`}
-            />
-          )}
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {windows.map((window) => {
+          const said = transcriptForSegment(
+            transcript,
+            window.fromSeconds,
+            window.toSeconds,
+          )
+          return (
+            <div key={window.id} className="rounded-xl border bg-card p-4">
+              <div className="flex items-baseline justify-between gap-2">
+                <h3 className="text-sm font-medium">{window.label}</h3>
+                <span className="font-mono text-xs text-muted-foreground">
+                  {formatTimestamp(window.fromSeconds)} –{" "}
+                  {formatTimestamp(window.toSeconds)}
+                </span>
+              </div>
 
-        {said && (
-          <div className="mt-3">
-            <p className="text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">
-                Opening line:{" "}
-              </span>
-              “{said.length > 240 ? `${said.slice(0, 240)}…` : said}”
-            </p>
-          </div>
-        )}
+              {window.outOfRange ? (
+                <p className="mt-3 text-sm text-muted-foreground">
+                  This video is too short to reach this window.
+                </p>
+              ) : (
+                <>
+                  <div className="mt-3 flex flex-wrap items-start gap-x-6 gap-y-4">
+                    <Metric
+                      label="Viewers lost"
+                      value={`${(window.drop * 100).toFixed(1)}%`}
+                    />
+                    <Metric
+                      label="Still watching at end"
+                      value={`${Math.round(window.endWatchRatio * 100)}%`}
+                    />
+                    {window.relativePerformance != null && (
+                      <Metric
+                        label="vs. similar videos"
+                        value={`${Math.round(window.relativePerformance * 100)}%`}
+                      />
+                    )}
+                  </div>
+
+                  {said && (
+                    <p className="mt-3 text-sm text-muted-foreground">
+                      “{said.length > 240 ? `${said.slice(0, 240)}…` : said}”
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          )
+        })}
       </div>
     </section>
   )
@@ -114,8 +132,10 @@ function DropList({
   retention: RetentionPoint[]
   transcript: TranscriptCue[]
 }) {
+  // The two fixed windows above already cover the opening, so here we surface a
+  // handful (3–4) of the most significant *other* sudden drop-offs in the curve.
   const drops = useMemo(
-    () => detectSignificantDropOffs(retention),
+    () => detectSignificantDropOffs(retention, { limit: 4 }),
     [retention],
   )
 
@@ -288,7 +308,7 @@ export function AnalysedVideoDetail({
         />
       </section>
 
-      <HookCard
+      <RetentionWindows
         retention={retention}
         durationSeconds={video.durationSeconds}
         transcript={transcript}

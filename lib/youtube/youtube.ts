@@ -778,44 +778,92 @@ export function detectSignificantDropOffs(
     .slice(0, limit)
 }
 
-// The hook is the opening of a video — by far the highest-leverage stretch,
-// since most of a video's audience is won or lost in the first 30 seconds. This
-// summarises how the opening performed so we can score and analyse it on its own.
-export interface HookStats {
-  // The window analysed, in seconds (typically the first 30s, clamped to the
-  // video length for very short videos).
-  windowSeconds: number
-  // Absolute retention at the start of the curve (≈ how many viewers actually
-  // started watching vs. the curve's baseline). Usually ~1.0.
-  startWatchRatio: number
-  // Absolute retention at the end of the hook window.
-  endWatchRatio: number
-  // Share of viewers lost across the hook window (startWatchRatio - endWatchRatio).
-  drop: number
-  // Average relativeRetentionPerformance across the hook window, or null when
-  // YouTube reports no relative data for these points.
-  relativePerformance: number | null
+// A named, fixed stretch of the video's opening that we analyse for EVERY video,
+// independent of where its drop-offs happen to land. The opening seconds are by
+// far the highest-leverage part of any video — most of the audience is won or
+// lost there — so we always break them out into these explicit windows.
+export interface RetentionWindowConfig {
+  // Stable identifier, used as a React key.
+  id: string
+  // Human-readable name shown in the UI (e.g. "Initial Hook").
+  label: string
+  // Window bounds in seconds from the start of the video, inclusive of
+  // `fromSeconds` and up to `toSeconds`.
+  fromSeconds: number
+  toSeconds: number
 }
 
-// Computes hook performance over the first `windowSeconds` of the video.
-export function computeHookStats(
+// The two retention windows analysed for every video by default. These are
+// intentionally hard-configured (not derived from the curve) so the same two
+// opening windows are always reported, no matter the video.
+export const RETENTION_WINDOWS: RetentionWindowConfig[] = [
+  { id: "initial-hook", label: "Initial Hook", fromSeconds: 0, toSeconds: 10 },
+  { id: "hook-delivery", label: "Hook Delivery", fromSeconds: 10, toSeconds: 30 },
+]
+
+// Performance summary for a single fixed retention window.
+export interface RetentionWindowStats extends RetentionWindowConfig {
+  // Absolute retention at the start of the window.
+  startWatchRatio: number
+  // Absolute retention at the end of the window.
+  endWatchRatio: number
+  // Share of viewers lost across the window (startWatchRatio - endWatchRatio).
+  // Clamped to >= 0; a flat or rising window reports 0.
+  drop: number
+  // Average relativeRetentionPerformance across the window, or null when
+  // YouTube reports no relative data for these points.
+  relativePerformance: number | null
+  // True when the video is too short to actually reach this window, so its
+  // figures are not meaningful and the UI can flag it.
+  outOfRange: boolean
+}
+
+// Linearly interpolates the absolute watch ratio at an arbitrary second mark.
+// The Analytics curve is sampled at fixed elapsed-time ratios (≈1% buckets), so
+// a short opening window may straddle, or fall entirely between, samples on a
+// long video. Interpolating gives a stable read at the exact window bounds
+// rather than depending on a sample happening to land inside the window.
+function watchRatioAt(sorted: RetentionPoint[], seconds: number): number {
+  if (sorted.length === 0) return 0
+  if (seconds <= sorted[0].timestampSeconds) return sorted[0].watchRatio
+  const last = sorted[sorted.length - 1]
+  if (seconds >= last.timestampSeconds) return last.watchRatio
+
+  for (let i = 1; i < sorted.length; i++) {
+    const a = sorted[i - 1]
+    const b = sorted[i]
+    if (seconds <= b.timestampSeconds) {
+      const span = b.timestampSeconds - a.timestampSeconds
+      if (span <= 0) return b.watchRatio
+      const t = (seconds - a.timestampSeconds) / span
+      return a.watchRatio + t * (b.watchRatio - a.watchRatio)
+    }
+  }
+  return last.watchRatio
+}
+
+// Computes performance for a single fixed window of the video.
+export function computeRetentionWindowStats(
   points: RetentionPoint[],
+  config: RetentionWindowConfig,
   durationSeconds: number,
-  windowSeconds = 30,
-): HookStats | null {
+): RetentionWindowStats | null {
   if (points.length === 0) return null
 
   const sorted = [...points].sort(
     (a, b) => a.timestampSeconds - b.timestampSeconds,
   )
-  const window = Math.min(windowSeconds, durationSeconds || windowSeconds)
 
-  const start = sorted[0]
-  // Last sampled point at or before the end of the hook window; fall back to the
-  // start when the first sample already lands past the window (very short clips).
-  const within = sorted.filter((p) => p.timestampSeconds <= window)
-  const end = within.length > 0 ? within[within.length - 1] : start
+  const startWatchRatio = watchRatioAt(sorted, config.fromSeconds)
+  const endWatchRatio = watchRatioAt(sorted, config.toSeconds)
 
+  // Average the relative-performance of the samples that fall inside the window;
+  // null when YouTube reported none there.
+  const within = sorted.filter(
+    (p) =>
+      p.timestampSeconds >= config.fromSeconds &&
+      p.timestampSeconds <= config.toSeconds,
+  )
   const relPerfs = within
     .map((p) => p.relativePerformance)
     .filter((v): v is number => v != null)
@@ -825,12 +873,29 @@ export function computeHookStats(
       : null
 
   return {
-    windowSeconds: window,
-    startWatchRatio: start.watchRatio,
-    endWatchRatio: end.watchRatio,
-    drop: Math.max(0, start.watchRatio - end.watchRatio),
+    ...config,
+    startWatchRatio,
+    endWatchRatio,
+    drop: Math.max(0, startWatchRatio - endWatchRatio),
     relativePerformance,
+    // A video that ends before the window opens never reaches it.
+    outOfRange: durationSeconds > 0 && durationSeconds <= config.fromSeconds,
   }
+}
+
+// Computes performance for every configured retention window, in order. Windows
+// the video is too short to reach are still returned (flagged `outOfRange`) so
+// the caller can decide whether to show them.
+export function computeRetentionWindows(
+  points: RetentionPoint[],
+  durationSeconds: number,
+  windows: RetentionWindowConfig[] = RETENTION_WINDOWS,
+): RetentionWindowStats[] {
+  return windows
+    .map((config) =>
+      computeRetentionWindowStats(points, config, durationSeconds),
+    )
+    .filter((stats): stats is RetentionWindowStats => stats !== null)
 }
 
 // Extracts the YYYY-MM-DD portion of an ISO timestamp, which is the format the
