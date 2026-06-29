@@ -45,6 +45,16 @@ export interface RecentVideosPage {
   prevPageToken: string | null
 }
 
+export interface YouTubeChannelDetails {
+  id: string
+  title: string
+  description: string
+  thumbnailUrl: string | null
+  subscriberCount: number | null
+  viewCount: number
+  videoCount: number
+}
+
 // Sort orders search.list accepts for an uploads listing (forMine=true). YouTube
 // sorts each field in a single fixed direction — `date` is newest-first, `title`
 // is A–Z, `viewCount` is most-viewed-first — and offers no comment-count order,
@@ -314,6 +324,69 @@ export async function getMyChannelId(
 
   const json = (await response.json()) as { items?: Array<{ id?: string }> }
   return json.items?.[0]?.id ?? null
+}
+
+// Returns the public profile and lifetime statistics for the authenticated
+// user's channel. Subscriber count can be hidden by the channel owner, in
+// which case YouTube omits it and we expose null to the UI.
+export async function getMyChannelDetails(
+  accessToken: string,
+): Promise<YouTubeChannelDetails | null> {
+  const url = new URL(`${DATA_API}/channels`)
+  url.searchParams.set("part", "snippet,statistics")
+  url.searchParams.set("mine", "true")
+
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: "no-store",
+  })
+
+  if (!response.ok) {
+    throw new Error(
+      `YouTube Data API error (${response.status}): ${await response.text()}`,
+    )
+  }
+
+  const json = (await response.json()) as {
+    items?: Array<{
+      id?: string
+      snippet?: {
+        title?: string
+        description?: string
+        thumbnails?: Record<string, { url?: string }>
+      }
+      statistics?: {
+        subscriberCount?: string
+        hiddenSubscriberCount?: boolean
+        viewCount?: string
+        videoCount?: string
+      }
+    }>
+  }
+
+  const item = json.items?.[0]
+  if (!item?.id) return null
+
+  const thumbnails = item.snippet?.thumbnails ?? {}
+  const thumbnailUrl =
+    thumbnails.high?.url ??
+    thumbnails.medium?.url ??
+    thumbnails.default?.url ??
+    null
+  const subscriberCount = item.statistics?.subscriberCount
+
+  return {
+    id: item.id,
+    title: item.snippet?.title ?? "YouTube channel",
+    description: item.snippet?.description ?? "",
+    thumbnailUrl,
+    subscriberCount:
+      item.statistics?.hiddenSubscriberCount || subscriberCount == null
+        ? null
+        : Number(subscriberCount),
+    viewCount: Number(item.statistics?.viewCount ?? 0),
+    videoCount: Number(item.statistics?.videoCount ?? 0),
+  }
 }
 
 export async function getVideoDetails(

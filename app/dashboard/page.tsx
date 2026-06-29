@@ -10,9 +10,15 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { DashboardKpiCards } from "@/components/dashboard-kpi-cards"
+import { ConnectedYouTubeAccountCard } from "@/components/connected-youtube-account-card"
 import { requireAuthenticatedUser } from "@/lib/auth"
 import { createClient } from "@/lib/supabase/server"
 import { getDashboardKpis, type DashboardKpis } from "@/lib/dashboard/kpis"
+import { getGoogleAccessToken } from "@/lib/youtube/google-auth"
+import {
+  getMyChannelDetails,
+  type YouTubeChannelDetails,
+} from "@/lib/youtube/youtube"
 
 // Best-effort KPI load: a failure here should degrade to the blank slate, never
 // take down the whole dashboard.
@@ -26,9 +32,26 @@ async function loadKpis(userId: string): Promise<DashboardKpis | null> {
   }
 }
 
+// The account summary is helpful context, but the rest of the dashboard should
+// remain usable if YouTube is temporarily unavailable or needs reconnecting.
+async function loadConnectedAccount(
+  userId: string,
+): Promise<YouTubeChannelDetails | null> {
+  try {
+    const accessToken = await getGoogleAccessToken(userId)
+    return await getMyChannelDetails(accessToken)
+  } catch (error) {
+    console.error("Failed to load connected YouTube account", error)
+    return null
+  }
+}
+
 export default async function Page() {
   const user = await requireAuthenticatedUser()
-  const kpis = await loadKpis(user.id)
+  const [kpis, connectedAccount] = await Promise.all([
+    loadKpis(user.id),
+    loadConnectedAccount(user.id),
+  ])
   // Show KPI cards once the user has analysed at least one video; otherwise keep
   // the blank-slate prompt to analyse their first one.
   const hasAnalysed = (kpis?.videosAnalysed ?? 0) > 0
@@ -59,6 +82,10 @@ export default async function Page() {
             drop off.
           </p>
         </div>
+
+        {connectedAccount && (
+          <ConnectedYouTubeAccountCard channel={connectedAccount} />
+        )}
 
         {hasAnalysed && kpis ? (
           <DashboardKpiCards kpis={kpis} />
