@@ -625,7 +625,8 @@ export function parseWebVtt(vtt: string): TranscriptCue[] {
 
 // YouTube's auto-generated captions censor profanity with a bracketed bleep
 // marker — rendered as "[ __ ]", with non-breaking spaces (U+00A0) padding the
-// underscores. It carries no information, so we strip it out wherever it
+// underscores. Some caption tracks leave those spaces encoded as the literal
+// text "&nbsp;". It carries no information, so we strip it out wherever it
 // appears in a cue and collapse the whitespace it leaves behind. Only brackets
 // containing nothing but underscores and whitespace are removed; genuine
 // caption annotations such as "[Music]" or "[Applause]" contain letters and so
@@ -633,6 +634,7 @@ export function parseWebVtt(vtt: string): TranscriptCue[] {
 // markers don't survive a normal whitespace collapse on their own.
 export function stripCaptionBleeps(text: string): string {
   return text
+    .replaceAll("[&nbsp;__&nbsp;]", " ")
     .replace(/\[[\s_]*_[\s_]*\]/g, " ")
     .replace(/\s+/g, " ")
     .trim()

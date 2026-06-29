@@ -20,6 +20,12 @@ describe("stripCaptionBleeps", () => {
     expect(stripCaptionBleeps("what a [ __ ] mess")).toBe("what a mess")
   })
 
+  it("removes a bleep marker containing literal HTML entities", () => {
+    expect(stripCaptionBleeps("what a [&nbsp;__&nbsp;] mess")).toBe(
+      "what a mess",
+    )
+  })
+
   it("handles markers with no padding and varying underscore counts", () => {
     expect(stripCaptionBleeps("oh [__] no")).toBe("oh no")
     expect(stripCaptionBleeps("oh [____] no")).toBe("oh no")
