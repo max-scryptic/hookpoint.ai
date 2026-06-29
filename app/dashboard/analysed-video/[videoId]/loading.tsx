@@ -1,32 +1,29 @@
 import { AppSidebar } from "@/components/app-sidebar"
-import { AnalysisProcessingGate } from "@/components/analysis-processing"
 import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbLink,
   BreadcrumbList,
-  BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { Separator } from "@/components/ui/separator"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 
-// Shown automatically while the analysed-video server component renders — i.e.
-// while we fetch the video's details + retention from YouTube and run the AI
-// analysis up front (see ./page.tsx). The shell mirrors that page so navigating
-// in doesn't flash an empty screen, and the centred popup reassures the user
-// that work is happening during what can be a slow request. Next swaps this for
-// the finished page once it's ready, so the user lands on their report with no
-// manual redirect.
+// Shown briefly while the analysed-video server component renders. By the time a
+// user reaches this route the analysis has already run (the Analyse Video form
+// awaits /api/analyze before navigating) or the video was analysed previously,
+// so this is a fast cache read — we just want a neutral skeleton that mirrors the
+// report layout, never an "analysing" state, so opening an already-analysed video
+// slides straight into the finished UI.
 //
 // Kept fully synchronous (no cookies/await) so Next can treat it as an instant
 // loading boundary — reading the sidebar cookie here would make the fallback
-// dynamic and delay it, which showed up as a blank screen before the report
-// swapped in. The sidebar just defaults to open for the brief loading state.
+// dynamic and delay it. The sidebar just defaults to open for the brief state.
 export default function Loading() {
   return (
     <SidebarProvider>
@@ -45,24 +42,21 @@ export default function Loading() {
                   <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator className="hidden md:block" />
-                <BreadcrumbItem className="hidden md:block">
+                <BreadcrumbItem>
                   <BreadcrumbLink href="/dashboard/analysed-videos">
                     Analysed Videos
                   </BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden md:block" />
-                <BreadcrumbItem>
-                  <BreadcrumbPage>Analysing…</BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
           </div>
         </header>
-        <div className="flex flex-1 flex-col gap-4 p-4 pt-0" />
+        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+          <Skeleton className="h-7 w-2/3 max-w-md" />
+          <Skeleton className="h-64 w-full" />
+          <Skeleton className="h-48 w-full" />
+        </div>
       </SidebarInset>
-      {/* Backdrop + centred popup, but only for a genuine fresh analysis
-          (?analysing=1) — opening an already-analysed video skips it. */}
-      <AnalysisProcessingGate />
     </SidebarProvider>
   )
 }
