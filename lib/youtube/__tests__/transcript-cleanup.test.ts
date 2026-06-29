@@ -22,6 +22,12 @@ describe("stripUnreadableBracketedText", () => {
     )
   })
 
+  it("removes a bleep marker containing literal HTML entities", () => {
+    expect(stripCaptionBleeps("what a [&nbsp;__&nbsp;] mess")).toBe(
+      "what a mess",
+    )
+  })
+
   it("handles markers with no padding and varying underscore counts", () => {
     expect(stripUnreadableBracketedText("oh [__] no")).toBe("oh no")
     expect(stripUnreadableBracketedText("oh [____] no")).toBe("oh no")

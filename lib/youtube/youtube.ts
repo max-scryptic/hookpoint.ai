@@ -623,15 +623,19 @@ export function parseWebVtt(vtt: string): TranscriptCue[] {
   return cleanTranscriptCues(cues)
 }
 
-// Removes unreadable bracketed caption artifacts such as "[ __ ]", "[...]",
-// or "[???]" wherever they occur in a cue. A bracketed segment is kept when it
-// contains at least one Unicode letter or number, preserving useful annotations
-// such as "[Music]", "[Noise]", "[inaudible]", and non-English equivalents.
-export function stripUnreadableBracketedText(text: string): string {
+// YouTube's auto-generated captions censor profanity with a bracketed bleep
+// marker — rendered as "[ __ ]", with non-breaking spaces (U+00A0) padding the
+// underscores. Some caption tracks leave those spaces encoded as the literal
+// text "&nbsp;". It carries no information, so we strip it out wherever it
+// appears in a cue and collapse the whitespace it leaves behind. Only brackets
+// containing nothing but underscores and whitespace are removed; genuine
+// caption annotations such as "[Music]" or "[Applause]" contain letters and so
+// are left untouched. `\s` matches the non-breaking space, which is why the
+// markers don't survive a normal whitespace collapse on their own.
+export function stripCaptionBleeps(text: string): string {
   return text
-    .replace(/\[[^\]]*\]/gu, (segment) =>
-      /[\p{L}\p{N}]/u.test(segment) ? segment : " ",
-    )
+    .replaceAll("[&nbsp;__&nbsp;]", " ")
+    .replace(/\[[\s_]*_[\s_]*\]/g, " ")
     .replace(/\s+/g, " ")
     .trim()
 }
