@@ -6,7 +6,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import {
-  dedupeTranscriptCues,
+  cleanTranscriptCues,
   type DropOff,
   type RetentionPoint,
   type TranscriptCue,
@@ -141,18 +141,19 @@ export async function listAnalysedVideoIds(
 }
 
 // Returns a cached transcript with the YouTube auto-caption rolling-window
-// duplication collapsed. Rows analysed before that cleanup was added still hold
-// the duplicated cues, so we heal them on read and persist the result back
-// (best-effort) — fixing legacy analyses permanently without re-spending the
-// YouTube quota a full re-analysis would cost. Only the transcript column is
-// touched, so `date_analysed` and list ordering stay put.
+// duplication collapsed and the profanity bleep markers ("[ __ ]") stripped.
+// Rows analysed before either cleanup was added still hold the raw cues, so we
+// heal them on read and persist the result back (best-effort) — fixing legacy
+// analyses permanently without re-spending the YouTube quota a full re-analysis
+// would cost. Only the transcript column is touched, so `date_analysed` and
+// list ordering stay put.
 export async function healCachedTranscript(
   supabase: SupabaseClient,
   userId: string,
   videoId: string,
   stored: TranscriptCue[] | null,
 ): Promise<TranscriptCue[]> {
-  const cleaned = dedupeTranscriptCues(stored ?? [])
+  const cleaned = cleanTranscriptCues(stored ?? [])
 
   const before = (stored ?? []).map((cue) => cue.text).join("\n")
   const after = cleaned.map((cue) => cue.text).join("\n")
