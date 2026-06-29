@@ -625,31 +625,34 @@ export function parseWebVtt(vtt: string): TranscriptCue[] {
 
 // YouTube's auto-generated captions censor profanity with a bracketed bleep
 // marker — rendered as "[ __ ]", with non-breaking spaces (U+00A0) padding the
-// underscores. It carries no information, so we strip it out wherever it
-// appears in a cue and collapse the whitespace it leaves behind. Only brackets
-// containing nothing but underscores and whitespace are removed; genuine
+// underscores. Replace it with four asterisks so the transcript still shows
+// that a word was spoken. Only brackets containing nothing but underscores and
+// whitespace are replaced; genuine
 // caption annotations such as "[Music]" or "[Applause]" contain letters and so
-// are left untouched. `\s` matches the non-breaking space, which is why the
-// markers don't survive a normal whitespace collapse on their own.
-export function stripCaptionBleeps(text: string): string {
+// are left untouched. `\s` matches the non-breaking space used in the marker.
+export function replaceCaptionBleeps(text: string): string {
   return text
-    .replace(/\[[\s_]*_[\s_]*\]/g, " ")
+    .replace(/\[[\s_]*_[\s_]*\]/g, "****")
     .replace(/\s+/g, " ")
     .trim()
 }
 
+// Retain the previous export for callers outside this module while its behavior
+// now matches the replacement policy above.
+export const stripCaptionBleeps = replaceCaptionBleeps
+
 // Canonical cleanup for a freshly parsed or previously cached transcript:
-// strips the auto-caption bleep markers from each cue (dropping any cue left
-// empty), then collapses the rolling-window duplication. Applied both at fetch
-// time and on read of cached rows, so legacy analyses are healed in place.
+// replaces auto-caption bleep markers with "****", then collapses the
+// rolling-window duplication. Applied both at fetch time and on read of cached
+// rows, so legacy analyses are healed in place.
 export function cleanTranscriptCues(cues: TranscriptCue[]): TranscriptCue[] {
-  const stripped: TranscriptCue[] = []
+  const cleaned: TranscriptCue[] = []
   for (const cue of cues) {
-    const text = stripCaptionBleeps(cue.text)
+    const text = replaceCaptionBleeps(cue.text)
     if (!text) continue
-    stripped.push({ ...cue, text })
+    cleaned.push({ ...cue, text })
   }
-  return dedupeTranscriptCues(stripped)
+  return dedupeTranscriptCues(cleaned)
 }
 
 // Normalises a word for overlap comparison: lower-cased and stripped of edge
