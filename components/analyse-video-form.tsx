@@ -22,10 +22,11 @@ export function AnalyseVideoForm() {
   const [alreadyAnalysed, setAlreadyAnalysed] =
     useState<AlreadyAnalysed | null>(null)
   const [isValidating, setIsValidating] = useState(false)
-  // Once we start a brand-new analysis we show a full-screen popup right away —
-  // it covers the validate request and the navigation, and hands off to the
-  // route's loading.tsx (same popup) so there's no blank gap before the report.
-  // Stays true through router.push; the form unmounts on navigation.
+  // Once we start a brand-new analysis we show a full-screen popup and keep it up
+  // while the analysis actually runs (the /api/analyze request). Only when that
+  // finishes do we navigate to the report — which now reads from the cache the
+  // analyse request just wrote, so it loads straight into the finished UI with no
+  // "analysing" state. Stays true through router.push; the form unmounts on nav.
   const [isAnalysing, setIsAnalysing] = useState(false)
 
   // The button only lights up once the input looks like a YouTube video URL or
@@ -40,7 +41,6 @@ export function AnalyseVideoForm() {
     setError(null)
     setAlreadyAnalysed(null)
     setIsValidating(true)
-    setIsAnalysing(true)
 
     try {
       const response = await fetch("/api/validate-video", {
@@ -64,7 +64,6 @@ export function AnalyseVideoForm() {
             : (data.error ?? "We couldn't validate that video."),
         )
         setIsValidating(false)
-        setIsAnalysing(false)
         return
       }
 
@@ -72,15 +71,37 @@ export function AnalyseVideoForm() {
       if (data.alreadyAnalysed) {
         setAlreadyAnalysed({ videoId: data.videoId, title: data.title })
         setIsValidating(false)
+        return
+      }
+
+      // Brand-new analysis: show the popup and keep the user here while the
+      // analysis runs. /api/analyze fetches everything and writes it to the
+      // cache; only once it resolves do we navigate to the report (now a fast
+      // cache read), so the user never lands on an empty "analysing" page.
+      setIsAnalysing(true)
+      const analyseResponse = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      })
+
+      if (!analyseResponse.ok) {
+        const analyseData = (await analyseResponse.json().catch(() => ({}))) as {
+          error?: string
+          message?: string
+        }
+        setError(
+          analyseData.error === "reconnect_required"
+            ? (analyseData.message ?? "Please reconnect your YouTube account.")
+            : (analyseData.error ?? "We couldn't analyse that video."),
+        )
+        setIsValidating(false)
         setIsAnalysing(false)
         return
       }
 
-      // Leave the popup up — it carries through the navigation and is replaced by
-      // the analysed-video route's matching loading.tsx popup. The `analysing=1`
-      // marker tells that route's loading boundary this is a genuine fresh
-      // analysis, so it shows the popup (the page strips the param once loaded).
-      router.push(`/dashboard/analysed-video/${data.videoId}?analysing=1`)
+      // Leave the popup up — it covers the navigation until the form unmounts.
+      router.push(`/dashboard/analysed-video/${data.videoId}`)
     } catch {
       setError("Something went wrong. Please try again.")
       setIsValidating(false)
