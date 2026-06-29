@@ -6,15 +6,14 @@ import { Loader2Icon } from "lucide-react"
 
 // The messages we cycle through while the analysis server render is in flight.
 // They loosely track the work the page does (see app/api/analyze/route.ts and
-// the analysed-video page): fetch details → retention → drop-offs → transcript
-// → AI insights. The wording is reassuring rather than a literal progress feed,
-// since we can't observe the server's exact stage from here.
+// the analysed-video page): fetch details → retention → drop-offs → transcript.
+// The wording is reassuring rather than a literal progress feed, since we can't
+// observe the server's exact stage from here.
 const STAGES = [
   "Fetching your video details…",
   "Pulling audience retention from YouTube…",
   "Mapping where viewers drop off…",
   "Reading through the transcript…",
-  "Generating AI insights…",
   "Putting your report together…",
 ] as const
 
