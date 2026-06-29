@@ -623,29 +623,27 @@ export function parseWebVtt(vtt: string): TranscriptCue[] {
   return cleanTranscriptCues(cues)
 }
 
-// YouTube's auto-generated captions censor profanity with a bracketed bleep
-// marker — rendered as "[ __ ]", with non-breaking spaces (U+00A0) padding the
-// underscores. It carries no information, so we strip it out wherever it
-// appears in a cue and collapse the whitespace it leaves behind. Only brackets
-// containing nothing but underscores and whitespace are removed; genuine
-// caption annotations such as "[Music]" or "[Applause]" contain letters and so
-// are left untouched. `\s` matches the non-breaking space, which is why the
-// markers don't survive a normal whitespace collapse on their own.
-export function stripCaptionBleeps(text: string): string {
+// Removes unreadable bracketed caption artifacts such as "[ __ ]", "[...]",
+// or "[???]" wherever they occur in a cue. A bracketed segment is kept when it
+// contains at least one Unicode letter or number, preserving useful annotations
+// such as "[Music]", "[Noise]", "[inaudible]", and non-English equivalents.
+export function stripUnreadableBracketedText(text: string): string {
   return text
-    .replace(/\[[\s_]*_[\s_]*\]/g, " ")
+    .replace(/\[[^\]]*\]/gu, (segment) =>
+      /[\p{L}\p{N}]/u.test(segment) ? segment : " ",
+    )
     .replace(/\s+/g, " ")
     .trim()
 }
 
 // Canonical cleanup for a freshly parsed or previously cached transcript:
-// strips the auto-caption bleep markers from each cue (dropping any cue left
+// strips unreadable bracketed artifacts from each cue (dropping any cue left
 // empty), then collapses the rolling-window duplication. Applied both at fetch
 // time and on read of cached rows, so legacy analyses are healed in place.
 export function cleanTranscriptCues(cues: TranscriptCue[]): TranscriptCue[] {
   const stripped: TranscriptCue[] = []
   for (const cue of cues) {
-    const text = stripCaptionBleeps(cue.text)
+    const text = stripUnreadableBracketedText(cue.text)
     if (!text) continue
     stripped.push({ ...cue, text })
   }
