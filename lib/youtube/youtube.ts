@@ -922,7 +922,8 @@ export const HOOK_COVERAGE_END_SECONDS = RETENTION_WINDOWS.reduce(
 
 // Performance summary for a single fixed retention window.
 export interface RetentionWindowStats extends RetentionWindowConfig {
-  // Absolute retention at the start of the window.
+  // Retention baseline used for this window. The opening starts at 100%, and
+  // each subsequent hook window starts where the preceding window ended.
   startWatchRatio: number
   // Absolute retention at the end of the window.
   endWatchRatio: number
@@ -1010,11 +1011,26 @@ export function computeRetentionWindows(
   durationSeconds: number,
   windows: RetentionWindowConfig[] = RETENTION_WINDOWS,
 ): RetentionWindowStats[] {
-  return windows
+  const computed = windows
     .map((config) =>
       computeRetentionWindowStats(points, config, durationSeconds),
     )
     .filter((stats): stats is RetentionWindowStats => stats !== null)
+
+  return computed.map((stats, index) => {
+    // Treat the hook cards as one continuous funnel: everybody starts the
+    // video, then each following window inherits the preceding card's ending
+    // retention. This avoids using a potentially sub-100% first analytics
+    // sample (or a separately interpolated boundary) as the loss baseline.
+    const startWatchRatio =
+      index === 0 ? 1 : computed[index - 1].endWatchRatio
+
+    return {
+      ...stats,
+      startWatchRatio,
+      drop: Math.max(0, startWatchRatio - stats.endWatchRatio),
+    }
+  })
 }
 
 // Extracts the YYYY-MM-DD portion of an ISO timestamp, which is the format the
