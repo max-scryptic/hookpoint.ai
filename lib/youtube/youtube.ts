@@ -741,7 +741,7 @@ export function transcriptForSegment(
 
 // Finds the segments where retention falls fastest. Walks consecutive points,
 // keeps drops larger than `minDrop` absolute watch-ratio, and returns the
-// steepest `limit` of them (largest drop first).
+// steepest `limit` of them, ordered from earliest to latest for display.
 export function detectDropOffs(
   points: RetentionPoint[],
   { minDrop = 0.03, limit = 5 }: { minDrop?: number; limit?: number } = {},
@@ -764,13 +764,14 @@ export function detectDropOffs(
   return drops
     .sort((a, b) => b.watchRatioDrop - a.watchRatioDrop)
     .slice(0, limit)
+    .sort((a, b) => a.fromTimestampSeconds - b.fromTimestampSeconds)
 }
 
 // The mirror image of detectDropOffs: finds the segments where retention rises
 // fastest. A rising curve means viewers re-watched or skipped back to a moment,
 // so these are the points that held or grew the audience. Walks consecutive
 // points, keeps gains larger than `minGain` absolute watch-ratio, and returns
-// the largest `limit` of them (biggest gain first).
+// the largest `limit` of them, ordered from earliest to latest for display.
 export function detectRetentionGains(
   points: RetentionPoint[],
   { minGain = 0.03, limit = 5 }: { minGain?: number; limit?: number } = {},
@@ -793,6 +794,7 @@ export function detectRetentionGains(
   return gains
     .sort((a, b) => b.watchRatioGain - a.watchRatioGain)
     .slice(0, limit)
+    .sort((a, b) => a.fromTimestampSeconds - b.fromTimestampSeconds)
 }
 
 // A drop-off that has been judged "significant" — i.e. steeper than the video's
@@ -828,7 +830,7 @@ function median(values: number[]): number {
 //   • viewers were underperforming similar videos there (relativePerformance
 //     below `underperformBelow`) while still losing a non-trivial share.
 // This is the gate that keeps the AI from inventing reasons for noise. Results
-// are sorted steepest-first and capped at `limit`.
+// are ranked by significance, capped at `limit`, then ordered earliest-first.
 export function detectSignificantDropOffs(
   points: RetentionPoint[],
   {
@@ -888,6 +890,7 @@ export function detectSignificantDropOffs(
   return drops
     .sort((a, b) => b.watchRatioDrop - a.watchRatioDrop)
     .slice(0, limit)
+    .sort((a, b) => a.fromTimestampSeconds - b.fromTimestampSeconds)
 }
 
 // A named, fixed stretch of the video's opening that we analyse for EVERY video,
@@ -924,7 +927,8 @@ export const HOOK_COVERAGE_END_SECONDS = RETENTION_WINDOWS.reduce(
 
 // Performance summary for a single fixed retention window.
 export interface RetentionWindowStats extends RetentionWindowConfig {
-  // Absolute retention at the start of the window.
+  // Retention baseline used for this window. The opening starts at 100%, and
+  // each subsequent hook window starts where the preceding window ended.
   startWatchRatio: number
   // Absolute retention at the end of the window.
   endWatchRatio: number
@@ -1012,11 +1016,26 @@ export function computeRetentionWindows(
   durationSeconds: number,
   windows: RetentionWindowConfig[] = RETENTION_WINDOWS,
 ): RetentionWindowStats[] {
-  return windows
+  const computed = windows
     .map((config) =>
       computeRetentionWindowStats(points, config, durationSeconds),
     )
     .filter((stats): stats is RetentionWindowStats => stats !== null)
+
+  return computed.map((stats, index) => {
+    // Treat the hook cards as one continuous funnel: everybody starts the
+    // video, then each following window inherits the preceding card's ending
+    // retention. This avoids using a potentially sub-100% first analytics
+    // sample (or a separately interpolated boundary) as the loss baseline.
+    const startWatchRatio =
+      index === 0 ? 1 : computed[index - 1].endWatchRatio
+
+    return {
+      ...stats,
+      startWatchRatio,
+      drop: Math.max(0, startWatchRatio - stats.endWatchRatio),
+    }
+  })
 }
 
 // Extracts the YYYY-MM-DD portion of an ISO timestamp, which is the format the

@@ -30,7 +30,25 @@ describe("getDashboardKpis", () => {
   it("counts analysed videos and tallies analysed + deeply analysed minutes", async () => {
     const supabase = makeFakeSupabase({
       analysed_videos: {
-        data: [{ duration: 600 }, { duration: 300 }, { duration: 120 }],
+        data: [
+          {
+            duration: 600,
+            drop_offs: [{}, {}],
+            retention: [
+              { watchRatio: 0.5, timestampSeconds: 0 },
+              { watchRatio: 0.55, timestampSeconds: 10 },
+            ],
+          },
+          {
+            duration: 300,
+            drop_offs: [{}],
+            retention: [
+              { watchRatio: 0.7, timestampSeconds: 0 },
+              { watchRatio: 0.6, timestampSeconds: 10 },
+            ],
+          },
+          { duration: 120, drop_offs: null, retention: null },
+        ],
         error: null,
       },
       source_files: {
@@ -48,6 +66,8 @@ describe("getDashboardKpis", () => {
       videosAnalysed: 3,
       secondsAnalysed: 1020,
       secondsDeeplyAnalysed: 900,
+      dropOffsDetected: 3,
+      retentionGainsDetected: 1,
     })
   })
 
@@ -69,6 +89,8 @@ describe("getDashboardKpis", () => {
       videosAnalysed: 3,
       secondsAnalysed: 200,
       secondsDeeplyAnalysed: 0,
+      dropOffsDetected: 0,
+      retentionGainsDetected: 0,
     })
   })
 
@@ -84,6 +106,8 @@ describe("getDashboardKpis", () => {
       videosAnalysed: 0,
       secondsAnalysed: 0,
       secondsDeeplyAnalysed: 0,
+      dropOffsDetected: 0,
+      retentionGainsDetected: 0,
     })
   })
 
@@ -115,6 +139,8 @@ describe("getDashboardKpis", () => {
       videosAnalysed: 2,
       secondsAnalysed: 900,
       secondsDeeplyAnalysed: 0,
+      dropOffsDetected: 0,
+      retentionGainsDetected: 0,
     })
     expect(consoleError).toHaveBeenCalledWith(
       "Failed to load deep-analysis KPIs",
