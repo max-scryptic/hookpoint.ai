@@ -76,7 +76,7 @@ export default async function Page() {
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
               Every video you&apos;ve analysed. Open one to revisit its
-              retention insights without re-spending API quota.
+              retention analysis without re-spending API quota.
             </p>
           </div>
 

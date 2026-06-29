@@ -4,9 +4,7 @@ import {
   getAnalysedVideo,
   healCachedTranscript,
   saveAnalysedVideo,
-  saveInsights,
 } from "@/lib/analysed-videos"
-import { generateVideoInsights, type VideoInsights } from "@/lib/ai/insights"
 import {
   getGoogleAccessToken,
   ReconsentRequiredError,
@@ -24,7 +22,7 @@ import {
 // POST /api/analyze  { url: string }
 // Resolves the pasted YouTube URL, confirms the signed-in user owns the video,
 // fetches its audience retention curve, and returns the curve plus the steepest
-// drop-off points. AI insight generation is layered on top of this response.
+// drop-off points.
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
   const {
@@ -65,7 +63,6 @@ export async function POST(request: NextRequest) {
           videoId,
           cached.transcript,
         ),
-        insights: cached.insights,
         cached: true,
       })
     }
@@ -118,26 +115,12 @@ export async function POST(request: NextRequest) {
       console.error("Failed to save analysed video", saveError)
     }
 
-    // Generate the AI insight layer up front so a first-time analysis comes back
-    // complete. Returns null when no OPENAI_API_KEY is set, so a key-less server
-    // is unchanged. Best-effort: an insight failure must not fail the analysis.
-    let insights: VideoInsights | null = null
-    try {
-      insights = await generateVideoInsights({ videoId, video, retention, transcript })
-      if (insights) {
-        await saveInsights(supabase, user.id, videoId, insights)
-      }
-    } catch (insightError) {
-      console.error("Failed to auto-generate insights", insightError)
-    }
-
     return NextResponse.json({
       video,
       retention,
       dropOffs,
       gains,
       transcript,
-      insights,
     })
   } catch (error) {
     if (error instanceof ReconsentRequiredError) {

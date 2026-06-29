@@ -1,19 +1,15 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo } from "react"
 import Image from "next/image"
 import {
   AreaChartIcon,
   GaugeIcon,
-  Loader2Icon,
-  SparklesIcon,
   TrendingDownIcon,
   TrendingUpIcon,
 } from "lucide-react"
 
-import { Button } from "@/components/ui/button"
 import { RetentionChart } from "@/components/retention-chart"
-import type { VideoInsights } from "@/lib/ai/insights"
 import {
   computeHookStats,
   detectRetentionGains,
@@ -34,25 +30,6 @@ function formatTimestamp(totalSeconds: number): string {
   return hrs > 0 ? `${hrs}:${mm}:${ss}` : `${mm}:${ss}`
 }
 
-// A low-res on-screen frame captured from the YouTube storyboard at a given
-// moment, shown next to what was said there. Frames are data: URLs persisted on
-// the insight, so they only appear once AI insights have been generated.
-function FrameThumb({ src, label }: { src: string; label: string }) {
-  return (
-    <div className="relative aspect-video w-full shrink-0 overflow-hidden rounded-lg border bg-muted sm:w-40">
-      {/* Data URL: skip the Next image optimizer and render the bytes as-is. */}
-      <Image
-        src={src}
-        alt={label}
-        fill
-        unoptimized
-        sizes="160px"
-        className="object-cover"
-      />
-    </div>
-  )
-}
-
 // ---------------------------------------------------------------------------
 // Hook performance card
 // ---------------------------------------------------------------------------
@@ -61,14 +38,10 @@ function HookCard({
   retention,
   durationSeconds,
   transcript,
-  hookInsight,
-  frame,
 }: {
   retention: RetentionPoint[]
   durationSeconds: number
   transcript: TranscriptCue[]
-  hookInsight: VideoInsights["hook"] | null
-  frame: string | null
 }) {
   const stats = useMemo(
     () => computeHookStats(retention, durationSeconds),
@@ -89,18 +62,6 @@ function HookCard({
 
       <div className="rounded-xl border bg-card p-4">
         <div className="flex flex-wrap items-start gap-x-8 gap-y-4">
-          {hookInsight && (
-            <div className="flex flex-col">
-              <span className="text-3xl font-semibold tabular-nums">
-                {hookInsight.score}
-                <span className="text-base font-normal text-muted-foreground">
-                  /100
-                </span>
-              </span>
-              <span className="text-xs text-muted-foreground">Hook score</span>
-            </div>
-          )}
-
           <Metric
             label="Viewers lost"
             value={`${(stats.drop * 100).toFixed(1)}%`}
@@ -117,31 +78,14 @@ function HookCard({
           )}
         </div>
 
-        {hookInsight && (
-          <div className="mt-4 border-t pt-4">
-            <p className="text-sm font-medium">{hookInsight.verdict}</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {hookInsight.analysis}
+        {said && (
+          <div className="mt-3">
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">
+                Opening line:{" "}
+              </span>
+              “{said.length > 240 ? `${said.slice(0, 240)}…` : said}”
             </p>
-          </div>
-        )}
-
-        {(said || frame) && (
-          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-start">
-            {frame && (
-              <FrameThumb
-                src={frame}
-                label={`On screen during the hook`}
-              />
-            )}
-            {said && (
-              <p className="flex-1 text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">
-                  Opening line:{" "}
-                </span>
-                “{said.length > 240 ? `${said.slice(0, 240)}…` : said}”
-              </p>
-            )}
           </div>
         )}
       </div>
@@ -159,30 +103,20 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// Drop-off list (significant drops, with inline AI hypotheses when present)
+// Drop-off list (significant drops)
 // ---------------------------------------------------------------------------
 
 function DropList({
   retention,
   transcript,
-  insights,
 }: {
   retention: RetentionPoint[]
   transcript: TranscriptCue[]
-  insights: VideoInsights | null
 }) {
   const drops = useMemo(
     () => detectSignificantDropOffs(retention),
     [retention],
   )
-
-  const insightByTime = useMemo(() => {
-    const map = new Map<number, VideoInsights["drops"][number]>()
-    for (const d of insights?.drops ?? []) {
-      map.set(Math.round(d.fromTimestampSeconds), d)
-    }
-    return map
-  }, [insights])
 
   if (drops.length === 0) {
     return (
@@ -201,7 +135,6 @@ function DropList({
           drop.fromTimestampSeconds,
           drop.toTimestampSeconds,
         )
-        const ai = insightByTime.get(Math.round(drop.fromTimestampSeconds))
         return (
           <li key={`${drop.fromTimestampSeconds}-${index}`} className="flex flex-col gap-2 p-4">
             <div className="flex items-center justify-between gap-4">
@@ -230,38 +163,8 @@ function DropList({
               )}
             </div>
 
-            {(said || ai?.frame || ai?.hypothesis) && (
-              <div className="flex flex-col gap-2 pl-10 sm:flex-row sm:gap-3">
-                {ai?.frame && (
-                  <FrameThumb
-                    src={ai.frame}
-                    label={`On screen at ${formatTimestamp(drop.fromTimestampSeconds)}`}
-                  />
-                )}
-                {(said || ai?.hypothesis) && (
-                  <div className="flex flex-1 flex-col gap-2">
-                    {said && (
-                      <p className="text-sm text-muted-foreground">“{said}”</p>
-                    )}
-                    {ai?.hypothesis && (
-                      <div className="rounded-lg border border-dashed bg-muted/30 p-3">
-                        <p className="text-sm">
-                          <span className="font-medium">Likely cause: </span>
-                          {ai.hypothesis}
-                        </p>
-                        {ai.suggestion && (
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            <span className="font-medium text-foreground">
-                              Try:{" "}
-                            </span>
-                            {ai.suggestion}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+            {said && (
+              <p className="pl-10 text-sm text-muted-foreground">“{said}”</p>
             )}
           </li>
         )
@@ -344,123 +247,6 @@ function GainList({
 }
 
 // ---------------------------------------------------------------------------
-// AI insights bar (summary + generate / regenerate control)
-// ---------------------------------------------------------------------------
-
-function InsightsBar({
-  videoId,
-  aiEnabled,
-  insights,
-  onInsights,
-}: {
-  videoId: string
-  aiEnabled: boolean
-  insights: VideoInsights | null
-  onInsights: (insights: VideoInsights) => void
-}) {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function generate() {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await fetch(`/api/insights/${videoId}`, { method: "POST" })
-      const data = (await res.json()) as {
-        insights?: VideoInsights
-        error?: string
-      }
-      if (!res.ok || !data.insights) {
-        setError(data.error ?? "Failed to generate insights.")
-        return
-      }
-      onInsights(data.insights)
-    } catch {
-      setError("Something went wrong. Please try again.")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  if (!insights) {
-    return (
-      <div className="flex flex-col gap-3 rounded-xl border bg-card p-5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-3">
-          <SparklesIcon className="mt-0.5 size-5 shrink-0 text-primary" />
-          <div>
-            <p className="text-sm font-medium">AI insights</p>
-            <p className="text-sm text-muted-foreground">
-              Score the hook and get a likely-cause hypothesis for each major
-              drop, grounded in what was said and shown on screen.
-            </p>
-          </div>
-        </div>
-        {aiEnabled ? (
-          <Button onClick={generate} disabled={loading} className="shrink-0">
-            {loading ? (
-              <>
-                <Loader2Icon className="size-4 animate-spin" />
-                Analysing…
-              </>
-            ) : (
-              <>
-                <SparklesIcon className="size-4" />
-                Generate AI insights
-              </>
-            )}
-          </Button>
-        ) : (
-          <p className="shrink-0 text-sm text-muted-foreground">
-            Set <code className="font-mono">OPENAI_API_KEY</code> to enable.
-          </p>
-        )}
-        {error && (
-          <p className="text-sm text-destructive sm:hidden">{error}</p>
-        )}
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex flex-col gap-3 rounded-xl border bg-card p-5">
-      <div className="flex items-start gap-3">
-        <SparklesIcon className="mt-0.5 size-5 shrink-0 text-primary" />
-        <div className="flex-1">
-          <p className="text-sm font-medium">AI summary</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {insights.summary}
-          </p>
-        </div>
-      </div>
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3 text-xs text-muted-foreground">
-        <span>
-          Generated {new Date(insights.generatedAt).toLocaleString()} ·{" "}
-          {insights.usedFrames
-            ? "analysed on-screen frames"
-            : "transcript only (no frames available)"}
-        </span>
-        {aiEnabled && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={generate}
-            disabled={loading}
-          >
-            {loading ? (
-              <Loader2Icon className="size-4 animate-spin" />
-            ) : (
-              <SparklesIcon className="size-4" />
-            )}
-            Regenerate
-          </Button>
-        )}
-      </div>
-      {error && <p className="text-sm text-destructive">{error}</p>}
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
 // Top-level detail
 // ---------------------------------------------------------------------------
 
@@ -468,17 +254,11 @@ export function AnalysedVideoDetail({
   video,
   retention,
   transcript = [],
-  initialInsights = null,
-  aiEnabled = false,
 }: {
   video: VideoDetails
   retention: RetentionPoint[]
   transcript?: TranscriptCue[]
-  initialInsights?: VideoInsights | null
-  aiEnabled?: boolean
 }) {
-  const [insights, setInsights] = useState<VideoInsights | null>(initialInsights)
-
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
@@ -499,17 +279,10 @@ export function AnalysedVideoDetail({
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Audience retention across this video, with the moments where you lost
-            and held the most viewers — and why.
+            and held the most viewers.
           </p>
         </div>
       </div>
-
-      <InsightsBar
-        videoId={video.id}
-        aiEnabled={aiEnabled}
-        insights={insights}
-        onInsights={setInsights}
-      />
 
       <section className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
@@ -526,8 +299,6 @@ export function AnalysedVideoDetail({
         retention={retention}
         durationSeconds={video.durationSeconds}
         transcript={transcript}
-        hookInsight={insights?.hook ?? null}
-        frame={insights?.hookFrame ?? null}
       />
 
       <section className="flex flex-col gap-3">
@@ -535,11 +306,7 @@ export function AnalysedVideoDetail({
           <TrendingDownIcon className="size-4 text-destructive" />
           <h2 className="text-sm font-medium">Biggest drop-offs</h2>
         </div>
-        <DropList
-          retention={retention}
-          transcript={transcript}
-          insights={insights}
-        />
+        <DropList retention={retention} transcript={transcript} />
       </section>
 
       <section className="flex flex-col gap-3">

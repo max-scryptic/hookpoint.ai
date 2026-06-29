@@ -8,7 +8,6 @@ import {
   getAnalysedVideo,
   healCachedTranscript,
   saveAnalysedVideo,
-  saveInsights,
 } from "@/lib/analysed-videos"
 import {
   getGoogleAccessToken,
@@ -24,7 +23,6 @@ import {
   type TranscriptCue,
   type VideoDetails,
 } from "@/lib/youtube/youtube"
-import { generateVideoInsights, type VideoInsights } from "@/lib/ai/insights"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -49,7 +47,6 @@ type AnalysisResult =
       retention: RetentionPoint[]
       dropOffs: DropOff[]
       transcript: TranscriptCue[]
-      insights: VideoInsights | null
     }
   | { status: "not_found" }
   | { status: "no_data" }
@@ -79,7 +76,6 @@ async function analyse(
           videoId,
           cached.transcript,
         ),
-        insights: cached.insights,
       }
     }
 
@@ -115,26 +111,7 @@ async function analyse(
       console.error("Failed to save analysed video", saveError)
     }
 
-    // Generate the AI insight layer up front so a first-time analysis arrives
-    // complete, instead of waiting for the user to click "Generate". Returns
-    // null when no OPENAI_API_KEY is set, so a key-less server is unchanged.
-    // Best-effort throughout: an insight failure must never break the analysis.
-    let insights: VideoInsights | null = null
-    try {
-      insights = await generateVideoInsights({
-        videoId,
-        video,
-        retention,
-        transcript,
-      })
-      if (insights) {
-        await saveInsights(supabase, userId, videoId, insights)
-      }
-    } catch (insightError) {
-      console.error("Failed to auto-generate insights", insightError)
-    }
-
-    return { status: "ok", video, retention, dropOffs, transcript, insights }
+    return { status: "ok", video, retention, dropOffs, transcript }
   } catch (error) {
     if (error instanceof ReconsentRequiredError) {
       return { status: "reconnect" }
@@ -197,8 +174,6 @@ export default async function Page({
               video={result.video}
               retention={result.retention}
               transcript={result.transcript}
-              initialInsights={result.insights}
-              aiEnabled={Boolean(process.env.OPENAI_API_KEY)}
             />
           )}
 
