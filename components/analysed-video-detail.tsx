@@ -64,6 +64,11 @@ function RetentionWindows({
             window.fromSeconds,
             window.toSeconds,
           )
+          const endPercentage = Math.round(window.endWatchRatio * 100)
+          const lostPercentage = Math.max(
+            0,
+            Math.round(window.startWatchRatio * 100) - endPercentage,
+          )
           return (
             <div key={window.id} className="rounded-xl border bg-card p-4">
               <div className="flex items-baseline justify-between gap-2">
@@ -83,11 +88,11 @@ function RetentionWindows({
                   <div className="mt-3 flex flex-wrap items-start gap-x-6 gap-y-4">
                     <Metric
                       label="Viewers lost"
-                      value={`${(window.drop * 100).toFixed(1)}%`}
+                      value={`${lostPercentage}%`}
                     />
                     <Metric
                       label="Still watching at end"
-                      value={`${Math.round(window.endWatchRatio * 100)}%`}
+                      value={`${endPercentage}%`}
                     />
                     {window.relativePerformance != null && (
                       <Metric
