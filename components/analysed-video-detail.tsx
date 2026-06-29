@@ -327,7 +327,7 @@ export function AnalysedVideoDetail({
         <section className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <TrendingUpIcon className="size-4 text-emerald-600 dark:text-emerald-400" />
-            <h2 className="text-sm font-medium">Held or grew the audience</h2>
+            <h2 className="text-sm font-medium">Biggest retention gains</h2>
           </div>
           <GainList gains={gains} transcript={transcript} />
         </section>
