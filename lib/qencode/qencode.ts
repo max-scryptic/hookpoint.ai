@@ -139,12 +139,14 @@ export class QencodeClient {
     return json.task_token
   }
 
-  // Starts the transcode for a task. `query` is serialised to JSON as the API
-  // expects a single `query` form field.
+  // Starts the transcode for a task. The API's `query` form field carries a JSON
+  // document that itself nests our parameters under a top-level `query` key
+  // (i.e. `{"query": {source, format, …}}`); sending the parameters un-nested
+  // makes Qencode report "query field is required".
   async startEncode(taskToken: string, query: QencodeQuery): Promise<void> {
     await this.post("start_encode2", {
       task_token: taskToken,
-      query: JSON.stringify(query),
+      query: JSON.stringify({ query }),
     })
   }
 
