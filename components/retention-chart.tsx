@@ -284,7 +284,7 @@ export function RetentionChart({
                 cy={y}
                 r={16}
                 fill="transparent"
-                className="cursor-pointer"
+                className="cursor-pointer outline-none"
                 role="button"
                 tabIndex={0}
                 aria-label={`${tone.name}: ${insight.label}, at ${formatTimestamp(midpoint)}`}
