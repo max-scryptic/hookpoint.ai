@@ -1,7 +1,13 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Loader2Icon } from "lucide-react"
+import { CircleCheckBigIcon, Loader2Icon } from "lucide-react"
+
+// "analysing" shows the spinner + rotating stages; "done" snaps the bar to 100%,
+// swaps in a checkmark and the completion copy. The form flips to "done" the
+// moment /api/analyze resolves so the user gets a beat of celebration (and
+// confetti) before we navigate to the report.
+export type AnalysisStatus = "analysing" | "done"
 
 // The messages we cycle through while the analysis server render is in flight.
 // They loosely track the work the page does (see app/api/analyze/route.ts and
@@ -30,30 +36,42 @@ const PROGRESS_INTERVAL_MS = 400
 // moment the user presses "Analyse Video" and kept up while the analysis runs,
 // so the user waits on a clear "analysing your video" spinner rather than an
 // empty page, and is taken to the report only once it's ready.
-export function AnalysisProcessingOverlay() {
+export function AnalysisProcessingOverlay({
+  status = "analysing",
+}: {
+  status?: AnalysisStatus
+}) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
-      <AnalysisProcessing />
+      <AnalysisProcessing status={status} />
     </div>
   )
 }
 
-export function AnalysisProcessing() {
+export function AnalysisProcessing({
+  status = "analysing",
+}: {
+  status?: AnalysisStatus
+}) {
+  const isDone = status === "done"
   const [stage, setStage] = useState(0)
   const [progress, setProgress] = useState(8)
 
   // Rotate the wording. We stop advancing once we reach the final message so it
-  // sits on "Putting your report together…" until the page is ready.
+  // sits on "Putting your report together…" until the page is ready. Frozen once
+  // we're done — the completion copy takes over.
   useEffect(() => {
+    if (isDone) return
     const id = setInterval(() => {
       setStage((current) => Math.min(current + 1, STAGES.length - 1))
     }, STAGE_INTERVAL_MS)
     return () => clearInterval(id)
-  }, [])
+  }, [isDone])
 
   // Advance the bar by a shrinking fraction of the remaining distance to the
   // ceiling, so it decelerates as it approaches and never quite arrives.
   useEffect(() => {
+    if (isDone) return
     const id = setInterval(() => {
       setProgress((current) => {
         if (current >= PROGRESS_CEILING) return current
@@ -61,7 +79,10 @@ export function AnalysisProcessing() {
       })
     }, PROGRESS_INTERVAL_MS)
     return () => clearInterval(id)
-  }, [])
+  }, [isDone])
+
+  // Snap the bar to 100% the instant the analysis lands, completing the climb.
+  const displayProgress = isDone ? 100 : progress
 
   return (
     <div
@@ -76,15 +97,19 @@ export function AnalysisProcessing() {
           Keep it within this fixed box so the popup doesn't jump.
           ──────────────────────────────────────────────────────────────── */}
       <div className="flex size-20 items-center justify-center">
-        <Loader2Icon className="size-10 animate-spin text-primary" />
+        {isDone ? (
+          <CircleCheckBigIcon className="size-12 text-emerald-600 dark:text-emerald-500" />
+        ) : (
+          <Loader2Icon className="size-10 animate-spin text-primary" />
+        )}
       </div>
 
       <div className="space-y-1.5">
         <p className="font-heading text-base font-medium">
-          Analysing your video
+          {isDone ? "Analysis complete!" : "Analysing your video"}
         </p>
         <p className="min-h-[1.25rem] text-sm text-muted-foreground transition-opacity">
-          {STAGES[stage]}
+          {isDone ? "Taking you to your report…" : STAGES[stage]}
         </p>
       </div>
 
@@ -94,17 +119,18 @@ export function AnalysisProcessing() {
           role="progressbar"
           aria-valuemin={0}
           aria-valuemax={100}
-          aria-valuenow={Math.round(progress)}
+          aria-valuenow={Math.round(displayProgress)}
           aria-label="Analysis progress"
         >
           <div
             className="h-full rounded-full bg-primary transition-[width] duration-300 ease-out"
-            style={{ width: `${progress}%` }}
+            style={{ width: `${displayProgress}%` }}
           />
         </div>
         <p className="text-xs text-muted-foreground">
-          This can take a moment — you&apos;ll be taken to your report
-          automatically.
+          {isDone
+            ? "All done — opening your report."
+            : "This can take a moment — you'll be taken to your report automatically."}
         </p>
       </div>
     </div>
