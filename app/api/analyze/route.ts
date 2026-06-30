@@ -6,6 +6,14 @@ import {
   saveAnalysedVideo,
 } from "@/lib/analysed-videos"
 import {
+  getPacingAnalysis,
+  savePacingAnalysis,
+} from "@/lib/pacing-analyses"
+import {
+  generatePacingAnalysis,
+  type PacingAnalysis,
+} from "@/lib/pacing-analysis"
+import {
   getGoogleAccessToken,
   ReconsentRequiredError,
 } from "@/lib/youtube/google-auth"
@@ -52,17 +60,43 @@ export async function POST(request: NextRequest) {
     // Replay a saved analysis when we have one — calling YouTube costs quota.
     const cached = await getAnalysedVideo(supabase, user.id, videoId)
     if (cached?.videoDetails && cached.retention) {
+      const transcript = await healCachedTranscript(
+        supabase,
+        user.id,
+        videoId,
+        cached.transcript,
+      )
+      let pacingAnalysis = await getPacingAnalysis(
+        supabase,
+        user.id,
+        cached.id,
+      )
+      if (!pacingAnalysis && transcript.length > 0) {
+        try {
+          pacingAnalysis = await generatePacingAnalysis(
+            cached.videoDetails,
+            transcript,
+          )
+          if (pacingAnalysis) {
+            await savePacingAnalysis(
+              supabase,
+              user.id,
+              cached.id,
+              pacingAnalysis,
+            )
+          }
+        } catch (pacingError) {
+          console.error("Failed to generate pacing analysis", pacingError)
+        }
+      }
+
       return NextResponse.json({
         video: cached.videoDetails,
         retention: cached.retention,
         dropOffs: cached.dropOffs ?? detectDropOffs(cached.retention),
         gains: detectRetentionGains(cached.retention),
-        transcript: await healCachedTranscript(
-          supabase,
-          user.id,
-          videoId,
-          cached.transcript,
-        ),
+        transcript,
+        pacingAnalysis,
         cached: true,
       })
     }
@@ -100,17 +134,39 @@ export async function POST(request: NextRequest) {
         return [] as TranscriptCue[]
       },
     )
+    let pacingAnalysis: PacingAnalysis | null = null
+    if (transcript.length > 0) {
+      try {
+        pacingAnalysis = await generatePacingAnalysis(video, transcript)
+      } catch (pacingError) {
+        // Pacing is additive: an OpenAI outage or a missing key must not hide
+        // the retention analysis the user can still use.
+        console.error("Failed to generate pacing analysis", pacingError)
+      }
+    }
 
     // Persist the analysis so subsequent requests are served from the cache
     // above. Best-effort: a DB failure shouldn't fail the analysis response.
     try {
-      await saveAnalysedVideo(supabase, {
+      const savedVideo = await saveAnalysedVideo(supabase, {
         userId: user.id,
         video,
         retention,
         dropOffs,
         transcript,
       })
+      if (savedVideo && pacingAnalysis) {
+        try {
+          await savePacingAnalysis(
+            supabase,
+            user.id,
+            savedVideo.id,
+            pacingAnalysis,
+          )
+        } catch (pacingSaveError) {
+          console.error("Failed to save pacing analysis", pacingSaveError)
+        }
+      }
     } catch (saveError) {
       console.error("Failed to save analysed video", saveError)
     }
@@ -121,6 +177,7 @@ export async function POST(request: NextRequest) {
       dropOffs,
       gains,
       transcript,
+      pacingAnalysis,
     })
   } catch (error) {
     if (error instanceof ReconsentRequiredError) {

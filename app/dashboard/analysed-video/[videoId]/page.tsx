@@ -7,6 +7,14 @@ import {
   healCachedTranscript,
   saveAnalysedVideo,
 } from "@/lib/analysed-videos"
+import {
+  getPacingAnalysis,
+  savePacingAnalysis,
+} from "@/lib/pacing-analyses"
+import {
+  generatePacingAnalysis,
+  type PacingAnalysis,
+} from "@/lib/pacing-analysis"
 import { getSourceFileForVideo } from "@/lib/source-files/source-files"
 import {
   getDurationToleranceSeconds,
@@ -50,6 +58,7 @@ type AnalysisResult =
       retention: RetentionPoint[]
       dropOffs: DropOff[]
       transcript: TranscriptCue[]
+      pacingAnalysis: PacingAnalysis | null
     }
   | { status: "not_found" }
   | { status: "no_data" }
@@ -68,17 +77,43 @@ async function analyse(
     // from the stored curve on the fly, so older rows render them too.
     const cached = await getAnalysedVideo(supabase, userId, videoId)
     if (cached?.videoDetails && cached.retention) {
+      const transcript = await healCachedTranscript(
+        supabase,
+        userId,
+        videoId,
+        cached.transcript,
+      )
+      let pacingAnalysis = await getPacingAnalysis(
+        supabase,
+        userId,
+        cached.id,
+      )
+      if (!pacingAnalysis && transcript.length > 0) {
+        try {
+          pacingAnalysis = await generatePacingAnalysis(
+            cached.videoDetails,
+            transcript,
+          )
+          if (pacingAnalysis) {
+            await savePacingAnalysis(
+              supabase,
+              userId,
+              cached.id,
+              pacingAnalysis,
+            )
+          }
+        } catch (pacingError) {
+          console.error("Failed to generate pacing analysis", pacingError)
+        }
+      }
+
       return {
         status: "ok",
         video: cached.videoDetails,
         retention: cached.retention,
         dropOffs: cached.dropOffs ?? detectDropOffs(cached.retention),
-        transcript: await healCachedTranscript(
-          supabase,
-          userId,
-          videoId,
-          cached.transcript,
-        ),
+        transcript,
+        pacingAnalysis,
       }
     }
 
@@ -99,22 +134,49 @@ async function analyse(
         return [] as TranscriptCue[]
       },
     )
+    let pacingAnalysis: PacingAnalysis | null = null
+    if (transcript.length > 0) {
+      try {
+        pacingAnalysis = await generatePacingAnalysis(video, transcript)
+      } catch (pacingError) {
+        console.error("Failed to generate pacing analysis", pacingError)
+      }
+    }
 
     // Persist everything we fetched so future visits hit the cache above.
     try {
-      await saveAnalysedVideo(supabase, {
+      const savedVideo = await saveAnalysedVideo(supabase, {
         userId,
         video,
         retention,
         dropOffs,
         transcript,
       })
+      if (savedVideo && pacingAnalysis) {
+        try {
+          await savePacingAnalysis(
+            supabase,
+            userId,
+            savedVideo.id,
+            pacingAnalysis,
+          )
+        } catch (pacingSaveError) {
+          console.error("Failed to save pacing analysis", pacingSaveError)
+        }
+      }
     } catch (saveError) {
       // Saving is best-effort — never block showing the analysis on a DB write.
       console.error("Failed to save analysed video", saveError)
     }
 
-    return { status: "ok", video, retention, dropOffs, transcript }
+    return {
+      status: "ok",
+      video,
+      retention,
+      dropOffs,
+      transcript,
+      pacingAnalysis,
+    }
   } catch (error) {
     if (error instanceof ReconsentRequiredError) {
       return { status: "reconnect" }
@@ -203,6 +265,7 @@ export default async function Page({
               video={result.video}
               retention={result.retention}
               transcript={result.transcript}
+              pacingAnalysis={result.pacingAnalysis}
             />
             <SourceFileUpload
               videoId={videoId}
