@@ -20,11 +20,13 @@ export function SourceVideoThumbnail({
   videoId,
   thumbnailUrl,
   title,
+  scrubTime,
   playbackWindow,
 }: {
   videoId: string
   thumbnailUrl: string
   title: string
+  scrubTime?: number | null
   playbackWindow?: {
     id: string
     fromSeconds: number
@@ -75,6 +77,7 @@ export function SourceVideoThumbnail({
     if (!video || !playbackUrl || !playbackWindow) return
 
     const playWindow = () => {
+      video.muted = false
       video.currentTime = Math.max(0, playbackWindow.fromSeconds)
       void video.play().catch(() => {
         // Native controls remain available if the browser declines the
@@ -90,6 +93,34 @@ export function SourceVideoThumbnail({
     video.addEventListener("loadedmetadata", playWindow, { once: true })
     return () => video.removeEventListener("loadedmetadata", playWindow)
   }, [playbackUrl, playbackWindow])
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video || !playbackUrl || playbackWindow) return
+
+    if (scrubTime == null) {
+      video.pause()
+      video.muted = false
+      return
+    }
+
+    const previewAtScrubTime = () => {
+      video.muted = true
+      if (Math.abs(video.currentTime - scrubTime) > 0.2) {
+        video.currentTime = Math.max(0, scrubTime)
+      }
+      void video.play().catch(() => undefined)
+    }
+
+    if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
+      previewAtScrubTime()
+      return
+    }
+
+    video.addEventListener("loadedmetadata", previewAtScrubTime, { once: true })
+    return () =>
+      video.removeEventListener("loadedmetadata", previewAtScrubTime)
+  }, [playbackUrl, playbackWindow, scrubTime])
 
   return (
     <div className="relative aspect-video w-full shrink-0 overflow-hidden rounded-xl bg-muted sm:w-64">

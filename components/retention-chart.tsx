@@ -42,11 +42,13 @@ export function RetentionChart({
   durationSeconds,
   insights = [],
   onScrubTimeChange,
+  onInsightSelect,
 }: {
   points: RetentionPoint[]
   durationSeconds: number
   insights?: RetentionChartInsight[]
   onScrubTimeChange?: (seconds: number | null) => void
+  onInsightSelect?: (insight: RetentionChartInsight | null) => void
 }) {
   const gradientId = useId()
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
