@@ -48,6 +48,7 @@ export function RetentionChart({
 }) {
   const gradientId = useId()
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
+  const [hoverX, setHoverX] = useState<number | null>(null)
   const [selectedInsightId, setSelectedInsightId] = useState<string | null>(null)
 
   const model = useMemo(() => {
@@ -160,6 +161,7 @@ export function RetentionChart({
     const fraction = (svgX - PAD.left) / PLOT_W
     if (model.sorted.length === 0) return
     const clamped = Math.min(1, Math.max(0, fraction))
+    setHoverX(PAD.left + clamped * PLOT_W)
 
     let nearest = 0
     let nearestDist = Infinity
@@ -189,7 +191,10 @@ export function RetentionChart({
         role="img"
         aria-label="Audience retention curve"
         onPointerMove={handleMove}
-        onPointerLeave={() => setHoverIndex(null)}
+        onPointerLeave={() => {
+          setHoverIndex(null)
+          setHoverX(null)
+        }}
         onClick={() => setSelectedInsightId(null)}
       >
         <defs>
@@ -275,7 +280,6 @@ export function RetentionChart({
           const x = model.xFor(fraction)
           const y = model.yAtFraction(fraction)
           const isActive = activeInsight?.id === insight.id
-          const isPinned = pinnedInsightId === insight.id
           const tone = insightTone[insight.kind]
 
           return (
@@ -289,8 +293,6 @@ export function RetentionChart({
                 role="button"
                 tabIndex={0}
                 aria-label={`${tone.name}: ${insight.label}, at ${formatTimestamp(midpoint)}`}
-                onPointerEnter={() => setHoveredInsightId(insight.id)}
-                onPointerLeave={() => setHoveredInsightId(null)}
                 onClick={(event) => {
                   event.stopPropagation()
                   setSelectedInsightId((current) =>
@@ -316,31 +318,28 @@ export function RetentionChart({
                 strokeWidth={isActive ? 3 : 2}
                 vectorEffect="non-scaling-stroke"
                 pointerEvents="none"
-              >
-                {isPinned && (
-                  <animate
-                    attributeName="r"
-                    values="7;9;7"
-                    dur="240ms"
-                    repeatCount="1"
-                  />
-                )}
-              </circle>
+                style={{
+                  transition:
+                    "r 220ms cubic-bezier(0.22, 1, 0.36, 1), stroke-width 220ms cubic-bezier(0.22, 1, 0.36, 1)",
+                }}
+              />
             </g>
           )
         })}
 
-        {/* Mouse-following crosshair at the nearest sample. */}
-        {hovered && (
+        {/* A subtle guide that follows the pointer across the plot. */}
+        {hoverX != null && (
           <line
-            x1={hovered.x}
+            x1={hoverX}
             y1={PAD.top}
-            x2={hovered.x}
+            x2={hoverX}
             y2={PAD.top + PLOT_H}
             stroke="var(--muted-foreground)"
             strokeWidth={1}
-            strokeDasharray="4 4"
+            strokeDasharray="3 5"
+            opacity={0.25}
             vectorEffect="non-scaling-stroke"
+            pointerEvents="none"
           />
         )}
       </svg>
