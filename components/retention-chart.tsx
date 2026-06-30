@@ -250,7 +250,7 @@ export function RetentionChart({
           )
         })}
 
-        {/* The retention area + curve. */}
+        {/* The retention area. */}
         <path d={model.areaPath} fill={`url(#${gradientId})`} />
         <path
           d={model.linePath}
@@ -275,6 +275,7 @@ export function RetentionChart({
           const x = model.xFor(fraction)
           const y = model.yAtFraction(fraction)
           const isActive = activeInsight?.id === insight.id
+          const isPinned = pinnedInsightId === insight.id
           const tone = insightTone[insight.kind]
 
           return (
@@ -316,33 +317,32 @@ export function RetentionChart({
                 strokeWidth={isActive ? 3 : 2}
                 vectorEffect="non-scaling-stroke"
                 pointerEvents="none"
-              />
+              >
+                {isPinned && (
+                  <animate
+                    attributeName="r"
+                    values="7;9;7"
+                    dur="240ms"
+                    repeatCount="1"
+                  />
+                )}
+              </circle>
             </g>
           )
         })}
 
-        {/* Hover indicator: crosshair line + dot at the nearest sample. */}
+        {/* Mouse-following crosshair at the nearest sample. */}
         {hovered && (
-          <g>
-            <line
-              x1={hovered.x}
-              y1={PAD.top}
-              x2={hovered.x}
-              y2={PAD.top + PLOT_H}
-              stroke="var(--muted-foreground)"
-              strokeWidth={1}
-              strokeDasharray="4 4"
-              vectorEffect="non-scaling-stroke"
-            />
-            <circle
-              cx={hovered.x}
-              cy={hovered.y}
-              r={4}
-              fill="var(--chart-1)"
-              stroke="var(--background)"
-              strokeWidth={2}
-            />
-          </g>
+          <line
+            x1={hovered.x}
+            y1={PAD.top}
+            x2={hovered.x}
+            y2={PAD.top + PLOT_H}
+            stroke="var(--muted-foreground)"
+            strokeWidth={1}
+            strokeDasharray="4 4"
+            vectorEffect="non-scaling-stroke"
+          />
         )}
       </svg>
 
