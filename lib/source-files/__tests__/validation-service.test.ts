@@ -1,48 +1,20 @@
-import { describe, expect, it, vi } from "vitest"
+import { describe, expect, it } from "vitest"
 
 import {
   computeValidationOutcome,
   type ValidationContext,
   type ValidationDeps,
 } from "@/lib/source-files/validation-service"
-import {
-  FfprobeReadError,
-  FfprobeUnavailableError,
-} from "@/lib/source-files/ffprobe"
-import type { StorageProvider } from "@/lib/storage"
-
-// A storage provider stub whose statObject / probe behaviour each test controls.
-function fakeStorage(
-  overrides: Partial<StorageProvider> & {
-    exists?: boolean
-  } = {},
-): StorageProvider {
-  return {
-    name: "fake",
-    createSignedUpload: vi.fn(),
-    statObject: vi.fn(async () => ({
-      exists: overrides.exists ?? true,
-      sizeBytes: 1234,
-      contentType: "video/mp4",
-    })),
-    createSignedReadUrl: vi.fn(async () => "https://signed.example/read"),
-    deleteObject: vi.fn(),
-    ...overrides,
-  } as StorageProvider
-}
 
 const baseCtx: ValidationContext = {
-  sourceFileId: "sf-1",
-  storagePath: "user/video/sf-1/clip.mp4",
   originalFilename: "how-to-bake-sourdough-bread.mp4",
   youtubeDurationSeconds: 600,
   videoTitle: "How To Bake Sourdough Bread",
+  uploadedDurationSeconds: 600,
 }
 
 function deps(overrides: Partial<ValidationDeps> = {}): ValidationDeps {
   return {
-    storage: fakeStorage(),
-    extractDuration: vi.fn(async () => 600),
     toleranceSeconds: 5,
     filenameThreshold: 0.3,
     ...overrides,
@@ -50,17 +22,18 @@ function deps(overrides: Partial<ValidationDeps> = {}): ValidationDeps {
 }
 
 describe("computeValidationOutcome", () => {
-  it("marks the file ready and passed when duration and filename both pass", async () => {
-    const outcome = await computeValidationOutcome(baseCtx, deps())
+  it("marks the file ready and passed when duration and filename both pass", () => {
+    const outcome = computeValidationOutcome(baseCtx, deps())
     expect(outcome.uploadStatus).toBe("ready")
     expect(outcome.validationStatus).toBe("passed")
     expect(outcome.durationValidationStatus).toBe("passed")
     expect(outcome.filenameValidationStatus).toBe("passed")
+    expect(outcome.uploadedDurationSeconds).toBe(600)
     expect(outcome.failureReason).toBeNull()
   })
 
-  it("returns a warning when duration passes but the filename doesn't match", async () => {
-    const outcome = await computeValidationOutcome(
+  it("returns a warning when duration passes but the filename doesn't match", () => {
+    const outcome = computeValidationOutcome(
       { ...baseCtx, originalFilename: "export_final_0007.mp4" },
       deps(),
     )
@@ -70,10 +43,10 @@ describe("computeValidationOutcome", () => {
     expect(outcome.filenameValidationStatus).toBe("warning")
   })
 
-  it("fails when the uploaded duration is outside tolerance", async () => {
-    const outcome = await computeValidationOutcome(
-      baseCtx,
-      deps({ extractDuration: vi.fn(async () => 630) }),
+  it("fails when the uploaded duration is outside tolerance", () => {
+    const outcome = computeValidationOutcome(
+      { ...baseCtx, uploadedDurationSeconds: 630 },
+      deps(),
     )
     expect(outcome.uploadStatus).toBe("failed")
     expect(outcome.validationStatus).toBe("failed")
@@ -82,39 +55,39 @@ describe("computeValidationOutcome", () => {
     expect(outcome.failureReason).toContain("duration")
   })
 
-  it("fails when the storage object is missing", async () => {
-    const outcome = await computeValidationOutcome(
-      baseCtx,
-      deps({ storage: fakeStorage({ exists: false }) }),
+  it("degrades to a warning (not a failure) when the browser couldn't measure the duration", () => {
+    const outcome = computeValidationOutcome(
+      { ...baseCtx, uploadedDurationSeconds: null },
+      deps(),
     )
-    expect(outcome.uploadStatus).toBe("failed")
-    expect(outcome.failureReason).toContain("missing")
-  })
-
-  it("fails gracefully when ffprobe is unavailable", async () => {
-    const outcome = await computeValidationOutcome(
-      baseCtx,
-      deps({
-        extractDuration: vi.fn(async () => {
-          throw new FfprobeUnavailableError()
-        }),
-      }),
-    )
-    expect(outcome.uploadStatus).toBe("failed")
+    expect(outcome.uploadStatus).toBe("ready")
+    expect(outcome.validationStatus).toBe("warning")
     expect(outcome.durationValidationStatus).toBeNull()
-    expect(outcome.failureReason).toContain("unavailable")
+    expect(outcome.uploadedDurationSeconds).toBeNull()
+    expect(outcome.failureReason).toBeNull()
   })
 
-  it("fails when ffprobe cannot read the file", async () => {
-    const outcome = await computeValidationOutcome(
-      baseCtx,
-      deps({
-        extractDuration: vi.fn(async () => {
-          throw new FfprobeReadError("corrupt")
-        }),
-      }),
+  it("treats a non-finite or non-positive duration as unmeasured", () => {
+    for (const value of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const outcome = computeValidationOutcome(
+        { ...baseCtx, uploadedDurationSeconds: value },
+        deps(),
+      )
+      expect(outcome.durationValidationStatus).toBeNull()
+      expect(outcome.uploadStatus).toBe("ready")
+      expect(outcome.validationStatus).toBe("warning")
+    }
+  })
+
+  it("can't check the duration when the YouTube duration is unknown", () => {
+    const outcome = computeValidationOutcome(
+      { ...baseCtx, youtubeDurationSeconds: 0 },
+      deps(),
     )
-    expect(outcome.uploadStatus).toBe("failed")
-    expect(outcome.failureReason).toContain("corrupt or in an unsupported format")
+    expect(outcome.durationValidationStatus).toBeNull()
+    expect(outcome.uploadStatus).toBe("ready")
+    expect(outcome.validationStatus).toBe("warning")
+    // The measured duration is still recorded for display.
+    expect(outcome.uploadedDurationSeconds).toBe(600)
   })
 })

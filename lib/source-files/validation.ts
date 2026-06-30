@@ -14,7 +14,7 @@ export interface DurationComparison {
   status: DurationValidationStatus
 }
 
-// Compares the ffprobe-extracted duration against the YouTube-reported duration.
+// Compares the uploaded file's duration against the YouTube-reported duration.
 // Within `toleranceSeconds` (inclusive) passes; anything further apart fails.
 export function compareDuration(
   uploadedDurationSeconds: number,
