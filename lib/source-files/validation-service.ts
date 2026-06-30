@@ -39,6 +39,11 @@ export interface ValidationContext {
   // Duration (seconds) the browser measured for the uploaded file, or null when
   // it couldn't be read — e.g. an .mkv, which most browsers can't decode.
   uploadedDurationSeconds: number | null
+  // Set only when the browser warned about a duration mismatch before upload
+  // and the user explicitly chose to continue. Duration matching is an identity
+  // aid rather than a security boundary, so a confirmed mismatch remains
+  // visible but does not make the uploaded object unusable.
+  durationMismatchConfirmed?: boolean
 }
 
 // Injected thresholds. Defaults wire to the configured values; tests pass fakes.
@@ -118,6 +123,19 @@ export function computeValidationOutcome(
   )
 
   if (duration.status === "failed") {
+    if (ctx.durationMismatchConfirmed) {
+      return {
+        uploadStatus: "ready",
+        validationStatus: "warning",
+        uploadedDurationSeconds: duration.uploadedDurationSeconds,
+        durationDifferenceSeconds: duration.differenceSeconds,
+        durationValidationStatus: "failed",
+        filenameValidationStatus,
+        filenameSimilarityScore,
+        failureReason: null,
+      }
+    }
+
     return {
       uploadStatus: "failed",
       validationStatus: "failed",

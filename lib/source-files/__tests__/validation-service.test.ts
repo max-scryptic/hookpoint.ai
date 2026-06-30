@@ -55,6 +55,22 @@ describe("computeValidationOutcome", () => {
     expect(outcome.failureReason).toContain("duration")
   })
 
+  it("keeps a user-confirmed duration mismatch as a visible warning", () => {
+    const outcome = computeValidationOutcome(
+      {
+        ...baseCtx,
+        uploadedDurationSeconds: 630,
+        durationMismatchConfirmed: true,
+      },
+      deps(),
+    )
+    expect(outcome.uploadStatus).toBe("ready")
+    expect(outcome.validationStatus).toBe("warning")
+    expect(outcome.durationValidationStatus).toBe("failed")
+    expect(outcome.durationDifferenceSeconds).toBe(30)
+    expect(outcome.failureReason).toBeNull()
+  })
+
   it("degrades to a warning (not a failure) when the browser couldn't measure the duration", () => {
     const outcome = computeValidationOutcome(
       { ...baseCtx, uploadedDurationSeconds: null },
