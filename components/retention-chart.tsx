@@ -41,11 +41,13 @@ export function RetentionChart({
   points,
   durationSeconds,
   insights = [],
+  onScrubTimeChange,
   onInsightSelect,
 }: {
   points: RetentionPoint[]
   durationSeconds: number
   insights?: RetentionChartInsight[]
+  onScrubTimeChange?: (seconds: number | null) => void
   onInsightSelect?: (insight: RetentionChartInsight | null) => void
 }) {
   const gradientId = useId()
