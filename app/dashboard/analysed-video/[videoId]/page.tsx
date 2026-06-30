@@ -9,6 +9,10 @@ import {
 } from "@/lib/analysed-videos"
 import { getSourceFileForVideo } from "@/lib/source-files/source-files"
 import {
+  getDurationToleranceSeconds,
+  getFilenameSimilarityThreshold,
+} from "@/lib/source-files/config"
+import {
   discardSourceFile,
   isStaleSourceFile,
 } from "@/lib/source-files/upload-service"
@@ -202,6 +206,10 @@ export default async function Page({
             />
             <SourceFileUpload
               videoId={videoId}
+              videoTitle={result.video.title}
+              youtubeDurationSeconds={result.video.durationSeconds}
+              durationToleranceSeconds={getDurationToleranceSeconds()}
+              filenameSimilarityThreshold={getFilenameSimilarityThreshold()}
               initialSourceFile={initialSourceFile}
             />
           </>
