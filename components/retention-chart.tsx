@@ -27,6 +27,12 @@ const PAD = { top: 16, right: 16, bottom: 32, left: 48 }
 const PLOT_W = WIDTH - PAD.left - PAD.right
 const PLOT_H = HEIGHT - PAD.top - PAD.bottom
 
+// Width of the vertical lines that mark the start/end of a selected insight
+// window. Drawn in user units (not a non-scaling stroke) so the stroke can be
+// kept fully inside the plot, letting an edge sitting on a boundary — such as
+// the hook's 0:00 start — line up with the axis instead of poking past it.
+const WINDOW_EDGE_WIDTH = 1.5
+
 function formatTimestamp(totalSeconds: number): string {
   const seconds = Math.max(0, Math.round(totalSeconds))
   const hrs = Math.floor(seconds / 3600)
@@ -326,19 +332,28 @@ export function RetentionChart({
                   fill={tone.band}
                   fillOpacity={0.12}
                 />
-                {[x1, x2].map((x, i) => (
-                  <line
-                    key={`window-edge-${i}`}
-                    x1={x}
-                    y1={PAD.top}
-                    x2={x}
-                    y2={PAD.top + PLOT_H}
-                    stroke={tone.band}
-                    strokeWidth={1.5}
-                    strokeOpacity={0.6}
-                    vectorEffect="non-scaling-stroke"
-                  />
-                ))}
+                {[x1, x2].map((x, i) => {
+                  // Keep the centred stroke fully within the plot so a boundary
+                  // edge (e.g. the hook's 0:00 start) renders flush with the
+                  // axis rather than half a stroke-width past it.
+                  const half = WINDOW_EDGE_WIDTH / 2
+                  const cx = Math.min(
+                    PAD.left + PLOT_W - half,
+                    Math.max(PAD.left + half, x),
+                  )
+                  return (
+                    <line
+                      key={`window-edge-${i}`}
+                      x1={cx}
+                      y1={PAD.top}
+                      x2={cx}
+                      y2={PAD.top + PLOT_H}
+                      stroke={tone.band}
+                      strokeWidth={WINDOW_EDGE_WIDTH}
+                      strokeOpacity={0.6}
+                    />
+                  )
+                })}
               </g>
             )
           })()}
