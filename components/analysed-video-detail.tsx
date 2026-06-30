@@ -365,6 +365,7 @@ export function AnalysedVideoDetail({
         <RetentionChart
           points={retention}
           durationSeconds={video.durationSeconds}
+          insights={chartInsights}
         />
       </section>
 

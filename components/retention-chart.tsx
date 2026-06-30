@@ -4,6 +4,18 @@ import { useId, useMemo, useState } from "react"
 
 import type { RetentionPoint } from "@/lib/youtube/youtube"
 
+export type RetentionChartInsight = {
+  id: string
+  kind: "hook" | "drop" | "gain"
+  label: string
+  fromSeconds: number
+  toSeconds: number
+  metric: string
+  metricLabel: string
+  details?: string[]
+  transcript?: string
+}
+
 // A self-contained SVG rendering of the audience-retention curve, styled to read
 // like the graph in YouTube Studio: an absolute-retention area chart that starts
 // at 100% and falls as viewers drop off, with a hover readout showing the exact
@@ -28,12 +40,16 @@ function formatTimestamp(totalSeconds: number): string {
 export function RetentionChart({
   points,
   durationSeconds,
+  insights = [],
 }: {
   points: RetentionPoint[]
   durationSeconds: number
+  insights?: RetentionChartInsight[]
 }) {
   const gradientId = useId()
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
+  const [hoveredInsightId, setHoveredInsightId] = useState<string | null>(null)
+  const [pinnedInsightId, setPinnedInsightId] = useState<string | null>(null)
 
   const model = useMemo(() => {
     const sorted = [...points].sort((a, b) => a.elapsedRatio - b.elapsedRatio)
@@ -79,6 +95,27 @@ export function RetentionChart({
 
   const hovered =
     hoverIndex != null ? model.coords[hoverIndex] ?? null : null
+  const activeInsight = insights.find(
+    (insight) => insight.id === (hoveredInsightId ?? pinnedInsightId),
+  )
+
+  const insightTone = {
+    hook: {
+      band: "var(--chart-2)",
+      badge: "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300",
+      name: "Hook window",
+    },
+    drop: {
+      band: "var(--destructive)",
+      badge: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300",
+      name: "Drop-off",
+    },
+    gain: {
+      band: "var(--chart-3)",
+      badge: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
+      name: "Retention gain",
+    },
+  } as const
 
   function handleMove(event: React.PointerEvent<SVGSVGElement>) {
     const rect = event.currentTarget.getBoundingClientRect()
@@ -189,6 +226,70 @@ export function RetentionChart({
           vectorEffect="non-scaling-stroke"
         />
 
+        {/* Timestamped insight windows. A generous minimum width keeps very
+            short analytics buckets discoverable with a pointer or touch. */}
+        {insights.map((insight) => {
+          const from = Math.max(
+            0,
+            Math.min(durationSeconds, insight.fromSeconds),
+          )
+          const to = Math.max(from, Math.min(durationSeconds, insight.toSeconds))
+          const naturalX = model.xFor(
+            durationSeconds > 0 ? from / durationSeconds : 0,
+          )
+          const naturalWidth =
+            model.xFor(durationSeconds > 0 ? to / durationSeconds : 0) - naturalX
+          const width = Math.max(8, naturalWidth)
+          const x = Math.min(naturalX, WIDTH - PAD.right - width)
+          const isActive = activeInsight?.id === insight.id
+          const tone = insightTone[insight.kind]
+
+          return (
+            <g key={insight.id}>
+              <rect
+                x={x}
+                y={PAD.top}
+                width={width}
+                height={PLOT_H}
+                fill={tone.band}
+                opacity={isActive ? 0.22 : 0.1}
+                className="cursor-pointer transition-opacity"
+                role="button"
+                tabIndex={0}
+                aria-label={`${tone.name}: ${insight.label}, ${formatTimestamp(insight.fromSeconds)} to ${formatTimestamp(insight.toSeconds)}`}
+                onPointerEnter={() => setHoveredInsightId(insight.id)}
+                onPointerLeave={() => setHoveredInsightId(null)}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  setPinnedInsightId((current) =>
+                    current === insight.id ? null : insight.id,
+                  )
+                }}
+                onFocus={() => setHoveredInsightId(insight.id)}
+                onBlur={() => setHoveredInsightId(null)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault()
+                    setPinnedInsightId((current) =>
+                      current === insight.id ? null : insight.id,
+                    )
+                  }
+                }}
+              />
+              <line
+                x1={naturalX}
+                y1={PAD.top}
+                x2={naturalX}
+                y2={PAD.top + PLOT_H}
+                stroke={tone.band}
+                strokeWidth={isActive ? 2 : 1}
+                vectorEffect="non-scaling-stroke"
+                pointerEvents="none"
+              />
+            </g>
+          )
+        })}
+
         {/* Hover indicator: crosshair line + dot at the nearest sample. */}
         {hovered && (
           <g>
@@ -233,6 +334,72 @@ export function RetentionChart({
           </span>
         )}
       </div>
+      {insights.length > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
+          <span>Highlighted windows:</span>
+          {(["hook", "drop", "gain"] as const).map((kind) =>
+            insights.some((insight) => insight.kind === kind) ? (
+              <span key={kind} className="flex items-center gap-1.5">
+                <span
+                  className="size-2 rounded-sm"
+                  style={{ backgroundColor: insightTone[kind].band }}
+                />
+                {insightTone[kind].name}
+              </span>
+            ) : null,
+          )}
+          <span className="ml-auto">Hover to preview · click to pin</span>
+        </div>
+      )}
+
+      {activeInsight && (
+        <div
+          className="mt-4 rounded-lg border bg-background p-4 shadow-sm"
+          aria-live="polite"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${insightTone[activeInsight.kind].badge}`}
+                >
+                  {insightTone[activeInsight.kind].name}
+                </span>
+                <span className="font-mono text-xs text-muted-foreground">
+                  {formatTimestamp(activeInsight.fromSeconds)} –{" "}
+                  {formatTimestamp(activeInsight.toSeconds)}
+                </span>
+              </div>
+              <h3 className="mt-2 font-medium">{activeInsight.label}</h3>
+            </div>
+            <div className="text-right">
+              <div className="text-xl font-semibold tabular-nums">
+                {activeInsight.metric}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {activeInsight.metricLabel}
+              </div>
+            </div>
+          </div>
+          {activeInsight.details && activeInsight.details.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {activeInsight.details.map((detail) => (
+                <span
+                  key={detail}
+                  className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground"
+                >
+                  {detail}
+                </span>
+              ))}
+            </div>
+          )}
+          {activeInsight.transcript && (
+            <p className="mt-3 text-sm text-muted-foreground">
+              “{activeInsight.transcript}”
+            </p>
+          )}
+        </div>
+      )}
     </div>
   )
 }
