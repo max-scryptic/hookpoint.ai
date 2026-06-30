@@ -46,7 +46,7 @@ const QUERY: QencodeQuery = {
 describe("QencodeClient.submitJob", () => {
   it("runs login -> create_task -> start_encode2 and returns the task token", async () => {
     const { impl, calls } = fakeFetch({
-      "access/login": { json: { error: 0, token: "access-1" } },
+      access_token: { json: { error: 0, token: "access-1" } },
       create_task: { json: { error: 0, task_token: "task-1" } },
       start_encode2: { json: { error: 0 } },
     })
@@ -55,7 +55,7 @@ describe("QencodeClient.submitJob", () => {
 
     expect(token).toBe("task-1")
     expect(calls.map((c) => c.url)).toEqual([
-      "https://api.test/v1/access/login",
+      "https://api.test/v1/access_token",
       "https://api.test/v1/create_task",
       "https://api.test/v1/start_encode2",
     ])
@@ -72,7 +72,7 @@ describe("QencodeClient.submitJob", () => {
 
   it("throws a QencodeError when a step reports a non-zero error", async () => {
     const { impl } = fakeFetch({
-      "access/login": { json: { error: 4, message: "bad key" } },
+      access_token: { json: { error: 4, message: "bad key" } },
     })
     await expect(client(impl).submitJob(QUERY)).rejects.toMatchObject({
       name: "QencodeError",
@@ -82,14 +82,14 @@ describe("QencodeClient.submitJob", () => {
 
   it("throws on a non-2xx HTTP response", async () => {
     const { impl } = fakeFetch({
-      "access/login": { ok: false, status: 502, json: {} },
+      access_token: { ok: false, status: 502, json: {} },
     })
     await expect(client(impl).login()).rejects.toBeInstanceOf(QencodeError)
   })
 
   it("throws when login succeeds but returns no token", async () => {
     const { impl } = fakeFetch({
-      "access/login": { json: { error: 0 } },
+      access_token: { json: { error: 0 } },
     })
     await expect(client(impl).login()).rejects.toMatchObject({
       message: expect.stringContaining("access token"),
