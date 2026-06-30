@@ -48,6 +48,7 @@ export function RetentionChart({
 }) {
   const gradientId = useId()
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
+  const [hoverX, setHoverX] = useState<number | null>(null)
   const [selectedInsightId, setSelectedInsightId] = useState<string | null>(null)
 
   const model = useMemo(() => {
@@ -160,6 +161,7 @@ export function RetentionChart({
     const fraction = (svgX - PAD.left) / PLOT_W
     if (model.sorted.length === 0) return
     const clamped = Math.min(1, Math.max(0, fraction))
+    setHoverX(PAD.left + clamped * PLOT_W)
 
     let nearest = 0
     let nearestDist = Infinity
@@ -189,7 +191,10 @@ export function RetentionChart({
         role="img"
         aria-label="Audience retention curve"
         onPointerMove={handleMove}
-        onPointerLeave={() => setHoverIndex(null)}
+        onPointerLeave={() => {
+          setHoverIndex(null)
+          setHoverX(null)
+        }}
         onClick={() => setSelectedInsightId(null)}
       >
         <defs>
