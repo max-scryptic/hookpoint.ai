@@ -22,6 +22,8 @@ interface CallCtx {
   table: string
   op: "select" | "insert" | "update" | "delete" | "upsert"
   terminal: "single" | "maybeSingle" | "await"
+  // The payload passed to insert/update/upsert, when relevant.
+  payload?: unknown
 }
 
 type Handler = (ctx: CallCtx) => { data: unknown; error: unknown }
@@ -29,14 +31,14 @@ type Handler = (ctx: CallCtx) => { data: unknown; error: unknown }
 function makeFakeSupabase(handler: Handler): SupabaseClient {
   return {
     from(table: string) {
-      const state: { table: string; op: CallCtx["op"] } = {
+      const state: { table: string; op: CallCtx["op"]; payload?: unknown } = {
         table,
         op: "select",
       }
       const builder: Record<string, unknown> = {
         select: () => builder,
-        insert: () => ((state.op = "insert"), builder),
-        update: () => ((state.op = "update"), builder),
+        insert: (payload: unknown) => ((state.op = "insert"), (state.payload = payload), builder),
+        update: (payload: unknown) => ((state.op = "update"), (state.payload = payload), builder),
         delete: () => ((state.op = "delete"), builder),
         upsert: () => ((state.op = "upsert"), builder),
         eq: () => builder,
@@ -166,6 +168,99 @@ describe("completeSourceFileUpload", () => {
       }),
     ).rejects.toMatchObject({ code: "not_found" })
   })
+
+  it("validates against the browser-measured duration and writes a terminal state", async () => {
+    let updatePayload: Record<string, unknown> | undefined
+    const supabase = makeFakeSupabase(({ table, op, payload }) => {
+      if (table === "source_files" && op === "select") {
+        return {
+          data: sourceFileRow({
+            original_filename: "my-great-video.mp4",
+            youtube_duration_seconds: 600,
+          }),
+          error: null,
+        }
+      }
+      if (table === "analysed_videos" && op === "select") {
+        return {
+          data: {
+            id: "av-1",
+            user_id: "user-1",
+            video_id: "vid-1",
+            video_title: "My Great Video",
+            video_details: { durationSeconds: 600 },
+          },
+          error: null,
+        }
+      }
+      if (table === "source_files" && op === "update") {
+        updatePayload = payload as Record<string, unknown>
+        return {
+          data: sourceFileRow({
+            upload_status: "ready",
+            validation_status: "passed",
+            duration_validation_status: "passed",
+            uploaded_duration_seconds: 600,
+          }),
+          error: null,
+        }
+      }
+      return { data: null, error: null }
+    })
+
+    const result = await completeSourceFileUpload(supabase, fakeStorage(true), {
+      userId: "user-1",
+      sourceFileId: "sf-1",
+      clientDurationSeconds: 600,
+    })
+
+    expect(result.uploadStatus).toBe("ready")
+    // The validation outcome must be persisted in the single completing write.
+    expect(updatePayload).toMatchObject({
+      upload_status: "ready",
+      validation_status: "passed",
+      duration_validation_status: "passed",
+      uploaded_duration_seconds: 600,
+      file_size_bytes: 1000,
+    })
+  })
+
+  it("degrades to a warning when the browser couldn't measure the duration", async () => {
+    let updatePayload: Record<string, unknown> | undefined
+    const supabase = makeFakeSupabase(({ table, op, payload }) => {
+      if (table === "source_files" && op === "select") {
+        return { data: sourceFileRow({ youtube_duration_seconds: 600 }), error: null }
+      }
+      if (table === "analysed_videos" && op === "select") {
+        return {
+          data: { video_title: "Clip", video_details: { durationSeconds: 600 } },
+          error: null,
+        }
+      }
+      if (table === "source_files" && op === "update") {
+        updatePayload = payload as Record<string, unknown>
+        return {
+          data: sourceFileRow({ upload_status: "ready", validation_status: "warning" }),
+          error: null,
+        }
+      }
+      return { data: null, error: null }
+    })
+
+    const result = await completeSourceFileUpload(supabase, fakeStorage(true), {
+      userId: "user-1",
+      sourceFileId: "sf-1",
+      clientDurationSeconds: null,
+    })
+
+    expect(result.uploadStatus).toBe("ready")
+    expect(updatePayload).toMatchObject({
+      upload_status: "ready",
+      validation_status: "warning",
+      duration_validation_status: null,
+      uploaded_duration_seconds: null,
+    })
+  })
 })
 
 // Maps the loosely-typed test row to a domain SourceFile for functions that take
@@ -177,14 +272,18 @@ function asSourceFile(overrides: Record<string, unknown> = {}) {
 }
 
 describe("isStaleSourceFile", () => {
-  it("treats an abandoned 'uploading' record as stale", () => {
-    expect(isStaleSourceFile(asSourceFile({ upload_status: "uploading" }))).toBe(
-      true,
-    )
+  it("treats non-terminal in-flight states as stale", () => {
+    // "uploading" = abandoned transfer; "uploaded"/"processing" = rows stranded
+    // by the old inline-ffprobe flow that those states are no longer written by.
+    for (const status of ["uploading", "uploaded", "processing"]) {
+      expect(isStaleSourceFile(asSourceFile({ upload_status: status }))).toBe(
+        true,
+      )
+    }
   })
 
-  it("does not treat settled or server-side states as stale", () => {
-    for (const status of ["pending", "uploaded", "processing", "ready", "failed"]) {
+  it("does not treat pending or terminal states as stale", () => {
+    for (const status of ["pending", "ready", "failed"]) {
       expect(isStaleSourceFile(asSourceFile({ upload_status: status }))).toBe(
         false,
       )

@@ -20,6 +20,10 @@ import {
   updateSourceFile,
   type SourceFile,
 } from "@/lib/source-files/source-files"
+import {
+  computeValidationOutcome,
+  defaultValidationDeps,
+} from "@/lib/source-files/validation-service"
 import type { SignedUpload, StorageProvider } from "@/lib/storage"
 import { buildSourceFileObjectPath } from "@/lib/storage/provider"
 
@@ -167,12 +171,18 @@ export async function initiateSourceFileUpload(
 export interface CompleteUploadParams {
   userId: string
   sourceFileId: string
+  // Duration (seconds) the browser measured for the file, or null when it
+  // couldn't be read (e.g. .mkv, which most browsers can't decode). Drives the
+  // duration-match check; null degrades that check to a soft "couldn't verify".
+  clientDurationSeconds?: number | null
 }
 
 // Confirms a direct upload actually landed: verifies the object exists, reads its
 // authoritative size/type from storage (never trusting the client), enforces the
-// size cap, marks the record "uploaded", then runs validation. Returns the
-// post-validation source file.
+// size cap, then validates and persists a terminal state in a single write.
+// Validation is a fast, pure computation over the browser-measured duration, so
+// the record never lingers in a non-terminal "uploaded"/"processing" state.
+// Returns the post-validation source file.
 export async function completeSourceFileUpload(
   supabase: SupabaseClient,
   storage: StorageProvider,
@@ -222,40 +232,71 @@ export async function completeSourceFileUpload(
     )
   }
 
-  await updateSourceFile(supabase, params.userId, sourceFile.id, {
-    fileSizeBytes: info.sizeBytes,
-    mimeType: info.contentType ?? sourceFile.mimeType,
-    uploadStatus: "uploaded",
-  })
-
-  // Run validation inline for the MVP. The validation service owns its own
-  // (service-role) client and is structured so it can later be dispatched to a
-  // background worker instead of awaited here. Imported lazily so the ffprobe /
-  // child_process dependency only loads on this completion path, never in the
-  // upload-initiation route.
-  const { validateSourceFile } = await import(
-    "@/lib/source-files/validation-service"
-  )
-  await validateSourceFile(sourceFile.id)
-
-  const finalState = await getSourceFileById(
+  // Validate against the browser-measured duration and the YouTube title. This
+  // is pure and instant, so we compute the verdict and write the final state in
+  // one update — the row goes straight from "uploading" to a terminal state with
+  // no probing step in between that could time out and strand it.
+  const analysed = await getAnalysedVideo(
     supabase,
     params.userId,
-    sourceFile.id,
+    sourceFile.youtubeVideoId,
   )
-  // Should always exist; fall back to the pre-validation row defensively.
-  return finalState ?? sourceFile
+  const outcome = computeValidationOutcome(
+    {
+      originalFilename: sourceFile.originalFilename,
+      youtubeDurationSeconds:
+        sourceFile.youtubeDurationSeconds ??
+        analysed?.videoDetails?.durationSeconds ??
+        0,
+      videoTitle: analysed?.videoTitle ?? "",
+      uploadedDurationSeconds: normaliseClientDuration(
+        params.clientDurationSeconds,
+      ),
+    },
+    defaultValidationDeps(),
+  )
+
+  return updateSourceFile(supabase, params.userId, sourceFile.id, {
+    fileSizeBytes: info.sizeBytes,
+    mimeType: info.contentType ?? sourceFile.mimeType,
+    uploadStatus: outcome.uploadStatus,
+    validationStatus: outcome.validationStatus,
+    uploadedDurationSeconds: outcome.uploadedDurationSeconds,
+    durationDifferenceSeconds: outcome.durationDifferenceSeconds,
+    durationValidationStatus: outcome.durationValidationStatus,
+    filenameValidationStatus: outcome.filenameValidationStatus,
+    filenameSimilarityScore: outcome.filenameSimilarityScore,
+    failureReason: outcome.failureReason,
+  })
 }
 
-// True when a record represents an upload that was abandoned mid-flight. The
-// byte transfer is driven entirely by the browser, so once the page that started
-// it is gone the "uploading" state can never advance on its own — there is no
-// client left to call complete-upload. A freshly server-rendered page that finds
-// a record in this state is therefore looking at a stranded upload. (The later
-// "uploaded"/"processing" states run inside the awaited complete-upload request
-// and settle to a terminal state server-side, so they are deliberately excluded.)
+// Coerces the client-supplied duration into a usable positive number, or null
+// when it's missing/garbage (NaN, Infinity, non-positive). Never trust the raw
+// value: it comes straight from the browser.
+function normaliseClientDuration(value: number | null | undefined): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return null
+  }
+  return value
+}
+
+// True when a record is stuck in a non-terminal state it can never leave on its
+// own. Completing an upload now writes a terminal state ("ready"/"failed") in a
+// single update, so a persisted row is only ever legitimately "pending" or
+// terminal. Any of the in-flight states therefore means a stranded record:
+//   - "uploading": the browser-driven byte transfer was abandoned (the page that
+//     would call complete-upload is gone), so it can never advance.
+//   - "uploaded"/"processing": a row left behind by the old inline-ffprobe flow,
+//     whose validation request was killed before it could settle. These states
+//     are no longer written, so finding one means it's stranded.
+// A freshly server-rendered page that finds any of these wipes the row so the
+// user gets a clean upload CTA instead of a perpetual "Validating…" spinner.
 export function isStaleSourceFile(sourceFile: SourceFile): boolean {
-  return sourceFile.uploadStatus === "uploading"
+  return (
+    sourceFile.uploadStatus === "uploading" ||
+    sourceFile.uploadStatus === "uploaded" ||
+    sourceFile.uploadStatus === "processing"
+  )
 }
 
 // Discards an abandoned upload so the UI can fall back to a fresh upload CTA:
