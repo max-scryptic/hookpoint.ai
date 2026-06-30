@@ -10,6 +10,7 @@ import {
 } from "lucide-react"
 
 import { RetentionChart } from "@/components/retention-chart"
+import type { PacingAnalysis } from "@/lib/pacing-analysis"
 import {
   computeRetentionWindows,
   detectRetentionGains,
@@ -122,6 +123,143 @@ function Metric({ label, value }: { label: string; value: string }) {
     <div className="flex flex-col">
       <span className="text-2xl font-semibold tabular-nums">{value}</span>
       <span className="text-xs text-muted-foreground">{label}</span>
+    </div>
+  )
+}
+
+function humanise(value: string): string {
+  return value.replaceAll("_", " ")
+}
+
+function PacingAnalysisSection({
+  analysis,
+  hasTranscript,
+}: {
+  analysis: PacingAnalysis | null
+  hasTranscript: boolean
+}) {
+  return (
+    <section className="flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <GaugeIcon className="size-4 text-violet-600 dark:text-violet-400" />
+        <h2 className="text-sm font-medium">Pacing analysis</h2>
+      </div>
+
+      {!analysis ? (
+        <div className="rounded-xl border bg-muted/30 p-6 text-sm text-muted-foreground">
+          {hasTranscript
+            ? "Pacing analysis could not be generated right now. It will be retried the next time this report is opened."
+            : "Pacing analysis is unavailable because this video has no timestamped transcript."}
+        </div>
+      ) : (
+        <>
+          <div className="rounded-xl border bg-card p-4">
+            <p className="text-sm leading-6">{analysis.overallPacing}</p>
+            {analysis.videoWidePatterns.length > 0 && (
+              <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                {analysis.videoWidePatterns.map((pattern, index) => (
+                  <li key={index}>{pattern}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            {analysis.windows.map((window) => (
+              <article key={window.id} className="rounded-xl border bg-card p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-sm font-medium">{window.label}</h3>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {window.role}
+                    </p>
+                  </div>
+                  <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                    {formatTimestamp(window.startSeconds)} –{" "}
+                    {formatTimestamp(window.endSeconds)}
+                  </span>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
+                  <PacingMetric
+                    label="Speaking rate"
+                    value={`${window.wordsPerMinute} WPM`}
+                  />
+                  <PacingMetric label="Pace" value={humanise(window.pace)} />
+                  <PacingMetric
+                    label="Information"
+                    value={humanise(window.informationDensity)}
+                  />
+                  <PacingMetric
+                    label="Progression"
+                    value={humanise(window.progression)}
+                  />
+                  <PacingMetric
+                    label="Trend"
+                    value={humanise(window.pacingChange)}
+                  />
+                </div>
+
+                {window.evidence.length > 0 && (
+                  <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                    {window.evidence.map((evidence, index) => (
+                      <li key={index}>{evidence}</li>
+                    ))}
+                  </ul>
+                )}
+
+                {window.possibleIssue && (
+                  <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
+                    {window.possibleIssue}
+                  </p>
+                )}
+              </article>
+            ))}
+          </div>
+
+          {analysis.slowOrRepetitiveStretches.length > 0 && (
+            <div className="rounded-xl border bg-card p-4">
+              <h3 className="text-sm font-medium">Stretches to review</h3>
+              <ul className="mt-3 space-y-2">
+                {analysis.slowOrRepetitiveStretches.map((stretch, index) => (
+                  <li key={index} className="flex gap-3 text-sm">
+                    <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                      {formatTimestamp(stretch.startSeconds)} –{" "}
+                      {formatTimestamp(stretch.endSeconds)}
+                    </span>
+                    <span>{stretch.reason}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {analysis.notableTransitions.length > 0 && (
+            <div className="rounded-xl border bg-card p-4">
+              <h3 className="text-sm font-medium">Notable pace changes</h3>
+              <ul className="mt-3 space-y-2">
+                {analysis.notableTransitions.map((transition, index) => (
+                  <li key={index} className="flex gap-3 text-sm">
+                    <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                      {formatTimestamp(transition.atSeconds)}
+                    </span>
+                    <span>{transition.description}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  )
+}
+
+function PacingMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-sm font-medium capitalize">{value}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
     </div>
   )
 }
@@ -271,10 +409,12 @@ export function AnalysedVideoDetail({
   video,
   retention,
   transcript = [],
+  pacingAnalysis = null,
 }: {
   video: VideoDetails
   retention: RetentionPoint[]
   transcript?: TranscriptCue[]
+  pacingAnalysis?: PacingAnalysis | null
 }) {
   const gains = useMemo(() => detectRetentionGains(retention), [retention])
 
@@ -318,6 +458,11 @@ export function AnalysedVideoDetail({
         retention={retention}
         durationSeconds={video.durationSeconds}
         transcript={transcript}
+      />
+
+      <PacingAnalysisSection
+        analysis={pacingAnalysis}
+        hasTranscript={transcript.length > 0}
       />
 
       <section className="flex flex-col gap-3">
