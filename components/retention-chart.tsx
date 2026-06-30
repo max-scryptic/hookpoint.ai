@@ -41,12 +41,12 @@ export function RetentionChart({
   points,
   durationSeconds,
   insights = [],
-  onScrubTimeChange,
+  onInsightSelect,
 }: {
   points: RetentionPoint[]
   durationSeconds: number
   insights?: RetentionChartInsight[]
-  onScrubTimeChange?: (seconds: number | null) => void
+  onInsightSelect?: (insight: RetentionChartInsight | null) => void
 }) {
   const gradientId = useId()
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
@@ -175,7 +175,6 @@ export function RetentionChart({
       }
     }
     setHoverIndex(nearest)
-    onScrubTimeChange?.(clamped * durationSeconds)
   }
 
   function clearSelectedInsight() {
@@ -208,7 +207,6 @@ export function RetentionChart({
         onPointerLeave={() => {
           setHoverIndex(null)
           setHoverX(null)
-          onScrubTimeChange?.(null)
         }}
         onClick={clearSelectedInsight}
       >

@@ -339,11 +339,14 @@ export function AnalysedVideoDetail({
   const [previewTime, setPreviewTime] = useState<number | null>(null)
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null)
 
-  const handleScrubTimeChange = useCallback(
-    (seconds: number | null) => {
-      setPreviewTime(seconds)
+  const handleInsightSelect = useCallback(
+    (insight: RetentionChartInsight | null) => {
+      const insightTime = insight
+        ? insight.fromSeconds + (insight.toSeconds - insight.fromSeconds) / 2
+        : null
+      setPreviewTime(insightTime)
       if (
-        seconds == null ||
+        insightTime == null ||
         playbackUrl ||
         playbackRequestPendingRef.current ||
         Date.now() < nextPlaybackAttemptAtRef.current
@@ -361,7 +364,7 @@ export function AnalysedVideoDetail({
         })
         .catch(() => {
           // The source file is optional and may still be uploading. Retry after
-          // a short cooldown if the user scrubs again later.
+          // a short cooldown if the user selects an insight again later.
           nextPlaybackAttemptAtRef.current = Date.now() + 5_000
         })
         .finally(() => {
@@ -529,7 +532,7 @@ export function AnalysedVideoDetail({
           points={retention}
           durationSeconds={video.durationSeconds}
           insights={chartInsights}
-          onScrubTimeChange={handleScrubTimeChange}
+          onInsightSelect={handleInsightSelect}
         />
       </section>
 
