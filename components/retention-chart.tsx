@@ -299,6 +299,50 @@ export function RetentionChart({
           />
         )}
 
+        {/* When an insight is selected, shade the whole window it refers to in a
+            light wash of its colour, bounded by vertical lines at the start and
+            end of the window, so the reader can see exactly which slice of the
+            video the insight describes. */}
+        {activeInsight &&
+          (() => {
+            const from = Math.max(
+              0,
+              Math.min(durationSeconds, activeInsight.fromSeconds),
+            )
+            const to = Math.max(
+              from,
+              Math.min(durationSeconds, activeInsight.toSeconds),
+            )
+            const x1 = model.xFor(durationSeconds > 0 ? from / durationSeconds : 0)
+            const x2 = model.xFor(durationSeconds > 0 ? to / durationSeconds : 0)
+            const tone = insightTone[activeInsight.kind]
+            return (
+              <g pointerEvents="none">
+                <rect
+                  x={x1}
+                  y={PAD.top}
+                  width={Math.max(0, x2 - x1)}
+                  height={PLOT_H}
+                  fill={tone.band}
+                  fillOpacity={0.12}
+                />
+                {[x1, x2].map((x, i) => (
+                  <line
+                    key={`window-edge-${i}`}
+                    x1={x}
+                    y1={PAD.top}
+                    x2={x}
+                    y2={PAD.top + PLOT_H}
+                    stroke={tone.band}
+                    strokeWidth={1.5}
+                    strokeOpacity={0.6}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                ))}
+              </g>
+            )
+          })()}
+
         {/* Each insight is represented by one clickable marker at the midpoint
             of its source window, positioned directly on the retention curve. */}
         {insights.map((insight) => {
