@@ -88,7 +88,11 @@ export function getNormalisationCallbackUrl(): string | null {
 // is independently overridable for buckets/hosts that differ.
 
 interface DestinationConfig {
-  host: string
+  // Authority Qencode writes through: the host plus any sub-path the S3 API is
+  // mounted under. For Supabase this is `<project>.storage.supabase.co/storage/v1/s3`
+  // — the `/storage/v1/s3` prefix is mandatory; drop it and the PUT misses the
+  // S3 route and Qencode reports "failed to save output".
+  endpoint: string
   bucket: string
   key: string
   secret: string
@@ -99,17 +103,25 @@ function getDestinationConfig(): DestinationConfig | null {
   const key = process.env.QENCODE_DEST_S3_KEY || s3?.accessKeyId
   const secret = process.env.QENCODE_DEST_S3_SECRET || s3?.secretAccessKey
   const bucket = process.env.QENCODE_DEST_S3_BUCKET || getSourceFileBucket()
-  const host = process.env.QENCODE_DEST_S3_HOST || hostFromEndpoint(s3?.endpoint)
-  if (!key || !secret || !bucket || !host) return null
-  return { host, bucket, key, secret }
+  // QENCODE_DEST_S3_HOST may itself carry a sub-path (e.g. ".../storage/v1/s3").
+  const endpoint =
+    process.env.QENCODE_DEST_S3_HOST || endpointAuthority(s3?.endpoint)
+  if (!key || !secret || !bucket || !endpoint) return null
+  return { endpoint, bucket, key, secret }
 }
 
-// Extracts the bare host (no scheme, no path) from an S3 endpoint URL, used as
-// the default Qencode destination host. Returns null when it can't be parsed.
-function hostFromEndpoint(endpoint?: string): string | null {
+// Derives the Qencode destination authority from an S3 endpoint URL: the host
+// plus any sub-path (e.g. Supabase's `/storage/v1/s3`), with the scheme and any
+// trailing slash stripped. Qencode addresses generic S3 buckets path-style as
+// `s3://<authority>/<bucket>/<key>` → `https://<authority>/<bucket>/<key>`, so
+// the sub-path has to ride along here or the write lands off the S3 route.
+// Returns null when the endpoint can't be parsed.
+function endpointAuthority(endpoint?: string): string | null {
   if (!endpoint) return null
   try {
-    return new URL(endpoint).host
+    const url = new URL(endpoint)
+    const path = url.pathname.replace(/\/+$/, "")
+    return path ? `${url.host}${path}` : url.host
   } catch {
     return null
   }
@@ -126,7 +138,7 @@ export function buildQencodeDestination(
     throw new Error("Qencode destination S3 config is incomplete")
   }
   return {
-    url: `s3://${config.host}/${config.bucket}/${objectPath}`,
+    url: `s3://${config.endpoint}/${config.bucket}/${objectPath}`,
     key: config.key,
     secret: config.secret,
     permissions: "private",
