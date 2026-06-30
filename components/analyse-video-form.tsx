@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { CircleCheckIcon } from "lucide-react"
 
 import { AnalysisProcessingOverlay } from "@/components/analysis-processing"
+import { ConfettiBurst } from "@/components/confetti-burst"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { parseVideoId } from "@/lib/youtube/youtube"
@@ -23,11 +24,14 @@ export function AnalyseVideoForm() {
     useState<AlreadyAnalysed | null>(null)
   const [isValidating, setIsValidating] = useState(false)
   // Once we start a brand-new analysis we show a full-screen popup and keep it up
-  // while the analysis actually runs (the /api/analyze request). Only when that
-  // finishes do we navigate to the report — which now reads from the cache the
-  // analyse request just wrote, so it loads straight into the finished UI with no
-  // "analysing" state. Stays true through router.push; the form unmounts on nav.
-  const [isAnalysing, setIsAnalysing] = useState(false)
+  // while the analysis actually runs (the /api/analyze request). When that
+  // finishes we flip the popup to its "done" state, throw some confetti, and
+  // hold for a celebratory beat before navigating to the report — which now
+  // reads from the cache the analyse request just wrote, so it loads straight
+  // into the finished UI. The phase stays set through router.push; the form
+  // unmounts on nav. "idle" hides the popup entirely.
+  const [analysisPhase, setAnalysisPhase] =
+    useState<"idle" | "running" | "done">("idle")
 
   // The button only lights up once the input looks like a YouTube video URL or
   // ID. Ownership of the video is confirmed server-side on submit.
@@ -78,7 +82,7 @@ export function AnalyseVideoForm() {
       // analysis runs. /api/analyze fetches everything and writes it to the
       // cache; only once it resolves do we navigate to the report (now a fast
       // cache read), so the user never lands on an empty "analysing" page.
-      setIsAnalysing(true)
+      setAnalysisPhase("running")
       const analyseResponse = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -96,22 +100,32 @@ export function AnalyseVideoForm() {
             : (analyseData.error ?? "We couldn't analyse that video."),
         )
         setIsValidating(false)
-        setIsAnalysing(false)
+        setAnalysisPhase("idle")
         return
       }
 
-      // Leave the popup up — it covers the navigation until the form unmounts.
-      router.push(`/dashboard/analysed-video/${data.videoId}`)
+      // Done: flip the popup to its celebratory "done" state and fire confetti,
+      // then hold briefly so the user registers the win before we navigate. The
+      // popup stays up and covers the navigation until the form unmounts.
+      setAnalysisPhase("done")
+      window.setTimeout(() => {
+        router.push(`/dashboard/analysed-video/${data.videoId}`)
+      }, 1800)
     } catch {
       setError("Something went wrong. Please try again.")
       setIsValidating(false)
-      setIsAnalysing(false)
+      setAnalysisPhase("idle")
     }
   }
 
   return (
     <>
-      {isAnalysing && <AnalysisProcessingOverlay />}
+      {analysisPhase !== "idle" && (
+        <AnalysisProcessingOverlay
+          status={analysisPhase === "done" ? "done" : "analysing"}
+        />
+      )}
+      {analysisPhase === "done" && <ConfettiBurst />}
       <form onSubmit={handleSubmit} className="flex flex-col gap-2">
       <div className="flex items-start gap-2">
         <Input
