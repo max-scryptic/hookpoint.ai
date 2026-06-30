@@ -367,13 +367,12 @@ export function SourceFileUpload({
       return
     }
 
-    await uploadFile(file, durationSeconds, false)
+    await uploadFile(file, durationSeconds)
   }
 
   async function uploadFile(
     file: File,
     durationSeconds: number | null,
-    durationMismatchConfirmed: boolean,
   ) {
     // Lock the UI before the initiate-upload round-trip so a second upload
     // cannot be started in the gap before transfer progress appears.
@@ -462,11 +461,10 @@ export function SourceFileUpload({
             multipart
               ? {
                   durationSeconds,
-                  durationMismatchConfirmed,
                   uploadId: multipart.uploadId,
                   parts: multipartParts,
                 }
-              : { durationSeconds, durationMismatchConfirmed },
+              : { durationSeconds },
           ),
         },
       )
@@ -507,11 +505,10 @@ export function SourceFileUpload({
 
   function proceedAfterWarning() {
     if (client.phase !== "warning") return
-    void uploadFile(
-      client.file,
-      client.durationSeconds,
-      client.durationMismatch,
-    )
+    // A measured duration mismatch is blocking; only soft warnings (filename
+    // similarity or an unreadable duration) can be explicitly overridden.
+    if (client.durationMismatch) return
+    void uploadFile(client.file, client.durationSeconds)
   }
 
   function chooseAnotherFile() {
@@ -635,14 +632,17 @@ function Body({
           )}
         </ul>
         <p className="text-sm text-muted-foreground">
-          No video data has been uploaded yet. Continue only if this is the correct
-          source file.
+          {client.durationMismatch
+            ? "The duration must match the YouTube video before this source file can be uploaded."
+            : "No video data has been uploaded yet. Continue only if this is the correct source file."}
         </p>
         <div className="flex flex-wrap gap-2">
-          <Button onClick={onProceed}>
-            <UploadIcon className="size-4" />
-            Upload anyway
-          </Button>
+          {!client.durationMismatch && (
+            <Button onClick={onProceed}>
+              <UploadIcon className="size-4" />
+              Upload anyway
+            </Button>
+          )}
           <Button variant="outline" onClick={onChooseAnother}>
             Choose another file
           </Button>

@@ -7,8 +7,8 @@ import { errorResponse, serialiseSourceFile } from "@/lib/source-files/http"
 import type { CompletedPart } from "@/lib/storage"
 
 // POST /api/source-files/:sourceFileId/complete-upload
-// Body: { durationSeconds?: number, durationMismatchConfirmed?: boolean,
-//         uploadId?: string, parts?: { partNumber, etag }[] }
+// Body: { durationSeconds?: number, uploadId?: string,
+//         parts?: { partNumber, etag }[] }
 // Called by the browser once the direct upload finishes. For a multipart upload
 // it first assembles the parts into the final object; then (either path) it
 // verifies the object exists in storage, records its real size, validates against
@@ -45,8 +45,6 @@ export async function POST(
 
   // The single-PUT path sends no part list; only multipart uploads post one.
   const multipart = parseMultipartBody(body)
-  const durationMismatchConfirmed =
-    (body as { durationMismatchConfirmed?: unknown })?.durationMismatchConfirmed === true
 
   try {
     const sourceFile = await completeSourceFileUpload(
@@ -56,7 +54,6 @@ export async function POST(
         userId: user.id,
         sourceFileId,
         clientDurationSeconds,
-        durationMismatchConfirmed,
         multipart,
       },
     )

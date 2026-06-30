@@ -55,20 +55,21 @@ describe("computeValidationOutcome", () => {
     expect(outcome.failureReason).toContain("duration")
   })
 
-  it("keeps a user-confirmed duration mismatch as a visible warning", () => {
+  it("does not allow a user-confirmed duration mismatch to bypass failure", () => {
     const outcome = computeValidationOutcome(
       {
         ...baseCtx,
         uploadedDurationSeconds: 630,
+        // Simulate a stale or forged client still sending the former override.
         durationMismatchConfirmed: true,
-      },
+      } as ValidationContext & { durationMismatchConfirmed: boolean },
       deps(),
     )
-    expect(outcome.uploadStatus).toBe("ready")
-    expect(outcome.validationStatus).toBe("warning")
+    expect(outcome.uploadStatus).toBe("failed")
+    expect(outcome.validationStatus).toBe("failed")
     expect(outcome.durationValidationStatus).toBe("failed")
     expect(outcome.durationDifferenceSeconds).toBe(30)
-    expect(outcome.failureReason).toBeNull()
+    expect(outcome.failureReason).toContain("duration")
   })
 
   it("degrades to a warning (not a failure) when the browser couldn't measure the duration", () => {
