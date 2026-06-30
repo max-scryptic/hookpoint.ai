@@ -178,6 +178,17 @@ export function RetentionChart({
     onScrubTimeChange?.(clamped * durationSeconds)
   }
 
+  function clearSelectedInsight() {
+    setSelectedInsightId(null)
+    onInsightSelect?.(null)
+  }
+
+  function toggleInsight(insight: RetentionChartInsight) {
+    const next = selectedInsightId === insight.id ? null : insight
+    setSelectedInsightId(next?.id ?? null)
+    onInsightSelect?.(next)
+  }
+
   if (model.sorted.length === 0) {
     return (
       <div className="rounded-xl border bg-muted/30 p-8 text-sm text-muted-foreground">
@@ -199,7 +210,7 @@ export function RetentionChart({
           setHoverX(null)
           onScrubTimeChange?.(null)
         }}
-        onClick={() => setSelectedInsightId(null)}
+        onClick={clearSelectedInsight}
       >
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
@@ -299,17 +310,13 @@ export function RetentionChart({
                 aria-label={`${tone.name}: ${insight.label}, at ${formatTimestamp(midpoint)}`}
                 onClick={(event) => {
                   event.stopPropagation()
-                  setSelectedInsightId((current) =>
-                    current === insight.id ? null : insight.id,
-                  )
+                  toggleInsight(insight)
                 }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault()
                     event.stopPropagation()
-                    setSelectedInsightId((current) =>
-                      current === insight.id ? null : insight.id,
-                    )
+                    toggleInsight(insight)
                   }
                 }}
               />

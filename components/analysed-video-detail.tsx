@@ -13,6 +13,7 @@ import {
   RetentionChart,
   type RetentionChartInsight,
 } from "@/components/retention-chart"
+import { SourceVideoThumbnail } from "@/components/source-video-thumbnail"
 import type { PacingAnalysis } from "@/lib/pacing-analysis"
 import type { RetentionWindow } from "@/lib/retention-windows"
 import {

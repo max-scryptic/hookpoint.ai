@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { notifySourceFileReady } from "@/components/source-video-thumbnail"
 import { ACCEPTED_EXTENSIONS, isAcceptedExtension } from "@/lib/source-files/config"
 import type { SerialisedSourceFile } from "@/lib/source-files/serialise"
 import {
@@ -483,6 +484,7 @@ export function SourceFileUpload({
 
       setSourceFile(completeData.sourceFile)
       setClient({ phase: "idle" })
+      notifySourceFileReady(videoId)
     } catch (error) {
       setClient({
         phase: "error",
