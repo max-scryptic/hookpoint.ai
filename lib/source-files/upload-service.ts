@@ -202,9 +202,6 @@ export interface CompleteUploadParams {
   // couldn't be read (e.g. .mkv, which most browsers can't decode). Drives the
   // duration-match check; null degrades that check to a soft "couldn't verify".
   clientDurationSeconds?: number | null
-  // True only after the pre-upload warning was shown and explicitly accepted.
-  // The server still recomputes and records the mismatch.
-  durationMismatchConfirmed?: boolean
   // Present only for multipart uploads: the storage-side upload id plus the
   // per-part ETags the browser collected. Used to assemble the final object
   // before we verify it exists.
@@ -312,7 +309,6 @@ export async function completeSourceFileUpload(
       uploadedDurationSeconds: normaliseClientDuration(
         params.clientDurationSeconds,
       ),
-      durationMismatchConfirmed: params.durationMismatchConfirmed === true,
     },
     defaultValidationDeps(),
   )
