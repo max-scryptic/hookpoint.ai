@@ -744,47 +744,15 @@ function Body({
     )
   }
 
-  // Ready — fully passed, or passed with a soft warning (duration couldn't be
-  // checked, or the filename doesn't look like the title).
-  const isWarning = sourceFile.validationStatus === "warning"
-  // A null duration status means we couldn't verify the duration (e.g. the
-  // browser can't decode this container) rather than that it failed.
-  const durationUnchecked = sourceFile.durationValidationStatus === null
+  // Ready. Validation now happens before the upload begins, so a stored file is
+  // simply shown as ready — no post-upload warning messages on the card.
   return (
     <div className="flex flex-col gap-3">
       <StatusRow
-        icon={
-          isWarning ? (
-            <AlertTriangleIcon className="size-4 text-amber-500" />
-          ) : (
-            <CheckCircle2Icon className="size-4 text-emerald-600 dark:text-emerald-500" />
-          )
-        }
-        title={isWarning ? "Uploaded — please double-check" : "Source file ready"}
+        icon={<CheckCircle2Icon className="size-4 text-emerald-600 dark:text-emerald-500" />}
+        title="Source file ready"
         subtitle={sourceFile.originalFilename}
       />
-
-      {isWarning && (
-        <ul className="list-disc space-y-1 rounded-lg bg-amber-50 px-7 py-2 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
-          {sourceFile.durationValidationStatus === "failed" && (
-            <li>
-              You chose to continue even though this file’s duration differs from
-              the YouTube video.
-            </li>
-          )}
-          {durationUnchecked && (
-            <li>
-              We couldn’t automatically verify this file’s duration in your browser.
-            </li>
-          )}
-          {sourceFile.filenameValidationStatus === "warning" && (
-            <li>The filename does not look similar to the YouTube title.</li>
-          )}
-          {sourceFile.filenameValidationStatus === "unknown" && (
-            <li>We couldn’t compare the filename with the YouTube title.</li>
-          )}
-        </ul>
-      )}
 
       <Meta sourceFile={sourceFile} />
 
