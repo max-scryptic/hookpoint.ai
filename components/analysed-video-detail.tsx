@@ -131,7 +131,7 @@ function PacingAnalysisSection({
     <section className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
         <GaugeIcon className="size-4 text-violet-600 dark:text-violet-400" />
-        <h2 className="text-sm font-medium">Stretches to review</h2>
+        <h2 className="text-sm font-medium">Pacing analysis</h2>
       </div>
 
       {!analysis ? (
@@ -147,7 +147,9 @@ function PacingAnalysisSection({
         </div>
       ) : (
         <ul className="divide-y rounded-xl border bg-card">
-          {analysis.slowOrRepetitiveStretches.map((stretch, index) => (
+          {[...analysis.slowOrRepetitiveStretches]
+            .sort((a, b) => a.startSeconds - b.startSeconds)
+            .map((stretch, index) => (
             <li
               key={index}
               className="flex flex-col gap-2 p-4"
