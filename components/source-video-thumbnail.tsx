@@ -37,6 +37,12 @@ export function SourceVideoThumbnail({
   const [isLoading, setIsLoading] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
 
+  // The player is only "engaged" while the user has an insight selected (a
+  // playback window) or is scrubbing the chart. When neither is true we fall
+  // back to the static thumbnail rather than leaving the video paused on its
+  // last frame.
+  const isEngaged = Boolean(playbackWindow) || scrubTime != null
+
   const loadSourceVideo = useCallback(async () => {
     try {
       const response = await fetch(`/api/videos/${videoId}/source-file`, {
@@ -130,7 +136,7 @@ export function SourceVideoThumbnail({
         fill
         sizes="256px"
         className={`object-cover transition-[filter,opacity] duration-300 ${
-          playbackUrl && isLoading ? "scale-105 blur-md opacity-75" : ""
+          isEngaged && isLoading ? "scale-105 blur-md opacity-75" : ""
         }`}
       />
 
@@ -144,7 +150,9 @@ export function SourceVideoThumbnail({
           playsInline
           preload="metadata"
           className={`absolute inset-0 size-full object-cover transition-opacity duration-300 ${
-            isLoading ? "opacity-0" : "opacity-100"
+            isEngaged && !isLoading
+              ? "opacity-100"
+              : "pointer-events-none opacity-0"
           }`}
           onLoadStart={() => setIsLoading(true)}
           onLoadedData={() => setIsLoading(false)}
@@ -168,7 +176,7 @@ export function SourceVideoThumbnail({
         />
       )}
 
-      {playbackUrl && isLoading && (
+      {isEngaged && isLoading && (
         <div
           className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/15"
           role="status"
