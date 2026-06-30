@@ -10,6 +10,10 @@ import {
   savePacingAnalysis,
 } from "@/lib/pacing-analyses"
 import {
+  buildRetentionWindows,
+  saveRetentionWindows,
+} from "@/lib/retention-windows"
+import {
   generatePacingAnalysis,
   type PacingAnalysis,
 } from "@/lib/pacing-analysis"
@@ -93,7 +97,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         video: cached.videoDetails,
         retention: cached.retention,
-        dropOffs: cached.dropOffs ?? detectDropOffs(cached.retention),
+        dropOffs: detectDropOffs(cached.retention),
         gains: detectRetentionGains(cached.retention),
         transcript,
         pacingAnalysis,
@@ -152,19 +156,33 @@ export async function POST(request: NextRequest) {
         userId: user.id,
         video,
         retention,
-        dropOffs,
         transcript,
       })
-      if (savedVideo && pacingAnalysis) {
+      if (savedVideo) {
         try {
-          await savePacingAnalysis(
+          await saveRetentionWindows(
             supabase,
             user.id,
             savedVideo.id,
-            pacingAnalysis,
+            buildRetentionWindows(retention, video.durationSeconds),
           )
-        } catch (pacingSaveError) {
-          console.error("Failed to save pacing analysis", pacingSaveError)
+        } catch (retentionSaveError) {
+          console.error(
+            "Failed to save retention windows",
+            retentionSaveError,
+          )
+        }
+        if (pacingAnalysis) {
+          try {
+            await savePacingAnalysis(
+              supabase,
+              user.id,
+              savedVideo.id,
+              pacingAnalysis,
+            )
+          } catch (pacingSaveError) {
+            console.error("Failed to save pacing analysis", pacingSaveError)
+          }
         }
       }
     } catch (saveError) {

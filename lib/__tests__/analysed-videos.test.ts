@@ -30,7 +30,6 @@ describe("saveAnalysedVideo", () => {
         thumbnailUrl: null,
       },
       retention: [],
-      dropOffs: [],
       transcript: [
         {
           startSeconds: 0,

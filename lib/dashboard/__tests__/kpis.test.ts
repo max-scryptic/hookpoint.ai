@@ -30,24 +30,19 @@ describe("getDashboardKpis", () => {
   it("counts analysed videos and tallies analysed + deeply analysed minutes", async () => {
     const supabase = makeFakeSupabase({
       analysed_videos: {
+        data: [{ duration: 600 }, { duration: 300 }, { duration: 120 }],
+        error: null,
+      },
+      retention_windows: {
+        // Three drop-offs and one gain across the user's videos; hook windows
+        // are stored too but are not counted by either total.
         data: [
-          {
-            duration: 600,
-            drop_offs: [{}, {}],
-            retention: [
-              { watchRatio: 0.5, timestampSeconds: 0 },
-              { watchRatio: 0.55, timestampSeconds: 10 },
-            ],
-          },
-          {
-            duration: 300,
-            drop_offs: [{}],
-            retention: [
-              { watchRatio: 0.7, timestampSeconds: 0 },
-              { watchRatio: 0.6, timestampSeconds: 10 },
-            ],
-          },
-          { duration: 120, drop_offs: null, retention: null },
+          { kind: "hook" },
+          { kind: "hook" },
+          { kind: "drop_off" },
+          { kind: "drop_off" },
+          { kind: "drop_off" },
+          { kind: "gain" },
         ],
         error: null,
       },
@@ -144,6 +139,36 @@ describe("getDashboardKpis", () => {
     })
     expect(consoleError).toHaveBeenCalledWith(
       "Failed to load deep-analysis KPIs",
+      expect.objectContaining({ code: "42P01" }),
+    )
+    consoleError.mockRestore()
+  })
+
+  it("keeps core KPIs when the optional retention-window query fails", async () => {
+    const supabase = makeFakeSupabase({
+      analysed_videos: {
+        data: [{ duration: 600 }, { duration: 300 }],
+        error: null,
+      },
+      retention_windows: {
+        data: null,
+        error: { code: "42P01", message: "relation does not exist" },
+      },
+      source_files: { data: [], error: null },
+    })
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    const kpis = await getDashboardKpis(supabase, "user-1")
+
+    expect(kpis).toEqual({
+      videosAnalysed: 2,
+      secondsAnalysed: 900,
+      secondsDeeplyAnalysed: 0,
+      dropOffsDetected: 0,
+      retentionGainsDetected: 0,
+    })
+    expect(consoleError).toHaveBeenCalledWith(
+      "Failed to load retention-window KPIs",
       expect.objectContaining({ code: "42P01" }),
     )
     consoleError.mockRestore()
