@@ -13,6 +13,7 @@ import {
   PlayIcon,
 } from "lucide-react"
 
+import { useAnalysisLauncher } from "@/components/analysis-launcher"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -123,6 +124,12 @@ function VideoActions({
   video: RecentVideo
   isAnalysed: boolean
 }) {
+  // On the Analyse Video page the launcher drives the "analysing your video"
+  // popup and the redirect once it's done. Already-analysed videos (and any
+  // render outside the launcher) just link straight to the cached report.
+  const launcher = useAnalysisLauncher()
+  const useLauncher = !isAnalysed && launcher !== null
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -141,22 +148,35 @@ function VideoActions({
           trigger, so labels like "Analyse video" stay on one line. */}
       <DropdownMenuContent align="end" className="w-auto">
         {/* Already-analysed videos can only be viewed — re-analysing would spend
-            API quota to reproduce results we've already cached. */}
-        <DropdownMenuItem
-          render={<Link href={`/dashboard/analysed-video/${video.id}`} />}
-        >
-          {isAnalysed ? (
-            <>
-              <BarChart3Icon className="size-4" />
-              View analysis
-            </>
-          ) : (
-            <>
-              <EyeIcon className="size-4" />
-              Analyse video
-            </>
-          )}
-        </DropdownMenuItem>
+            API quota to reproduce results we've already cached. A brand-new
+            analysis hands off to the launcher so the user gets the spinner popup
+            and is redirected to the report once it's ready, rather than landing
+            on an empty page that analyses in the background. */}
+        {useLauncher ? (
+          <DropdownMenuItem
+            onClick={() => launcher?.startAnalysis(video.id)}
+            disabled={launcher?.isLaunching}
+          >
+            <EyeIcon className="size-4" />
+            Analyse video
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem
+            render={<Link href={`/dashboard/analysed-video/${video.id}`} />}
+          >
+            {isAnalysed ? (
+              <>
+                <BarChart3Icon className="size-4" />
+                View analysis
+              </>
+            ) : (
+              <>
+                <EyeIcon className="size-4" />
+                Analyse video
+              </>
+            )}
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )
