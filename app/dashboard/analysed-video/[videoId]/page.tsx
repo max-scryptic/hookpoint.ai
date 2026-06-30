@@ -1,5 +1,4 @@
 import { AnalysedVideoDetail } from "@/components/analysed-video-detail"
-import { SourceFilePrompt } from "@/components/source-file-prompt"
 import { SourceFileUpload } from "@/components/source-file-upload"
 import { requireAuthenticatedUser } from "@/lib/auth"
 import { createClient } from "@/lib/supabase/server"
@@ -308,7 +307,6 @@ export default async function Page({
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         {result.status === "ok" && (
           <>
-            {!initialSourceFile && <SourceFilePrompt />}
             <AnalysedVideoDetail
               video={result.video}
               retention={result.retention}
