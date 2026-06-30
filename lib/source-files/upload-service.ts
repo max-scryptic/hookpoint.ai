@@ -25,6 +25,7 @@ import {
   computeValidationOutcome,
   defaultValidationDeps,
 } from "@/lib/source-files/validation-service"
+import { startNormalisation } from "@/lib/source-files/normalisation-service"
 import type {
   CompletedPart,
   MultipartUpload,
@@ -131,21 +132,24 @@ export async function initiateSourceFileUpload(
 
   // Replace any prior upload for this video with a fresh pending record. The old
   // storage object (if any) is cleaned up below so it doesn't linger.
-  const { sourceFile, previousStoragePath } = await replaceSourceFile(supabase, {
-    userId: params.userId,
-    analysedVideoId: analysed.id,
-    youtubeVideoId: params.youtubeVideoId,
-    originalFilename: filename,
-    mimeType: params.mimeType ?? null,
-    storageProvider: storage.name,
-    youtubeDurationSeconds,
-  })
+  const { sourceFile, previousStoragePath, previousProxyStoragePath } =
+    await replaceSourceFile(supabase, {
+      userId: params.userId,
+      analysedVideoId: analysed.id,
+      youtubeVideoId: params.youtubeVideoId,
+      originalFilename: filename,
+      mimeType: params.mimeType ?? null,
+      storageProvider: storage.name,
+      youtubeDurationSeconds,
+    })
 
-  if (previousStoragePath) {
+  // Best-effort cleanup of the replaced upload's objects (original + any proxy)
+  // — never block a new upload on a stale-object delete.
+  for (const stalePath of [previousStoragePath, previousProxyStoragePath]) {
+    if (!stalePath) continue
     try {
-      await storage.deleteObject(previousStoragePath)
+      await storage.deleteObject(stalePath)
     } catch (error) {
-      // Best-effort cleanup — never block a new upload on a stale-object delete.
       console.error("Failed to delete previous source-file object", error)
     }
   }
@@ -313,7 +317,7 @@ export async function completeSourceFileUpload(
     defaultValidationDeps(),
   )
 
-  return updateSourceFile(supabase, params.userId, sourceFile.id, {
+  const updated = await updateSourceFile(supabase, params.userId, sourceFile.id, {
     fileSizeBytes: info.sizeBytes,
     mimeType: info.contentType ?? sourceFile.mimeType,
     uploadStatus: outcome.uploadStatus,
@@ -325,6 +329,16 @@ export async function completeSourceFileUpload(
     filenameSimilarityScore: outcome.filenameSimilarityScore,
     failureReason: outcome.failureReason,
   })
+
+  // Once the upload is good, hand the original off to be normalised into a 1080p
+  // proxy (after which the original is deleted). Best-effort and gated: when
+  // normalisation is disabled this returns the row unchanged, so the original
+  // simply remains the served file.
+  if (updated.uploadStatus === "ready") {
+    return startNormalisation(supabase, storage, updated)
+  }
+
+  return updated
 }
 
 // Coerces the client-supplied duration into a usable positive number, or null
@@ -372,9 +386,10 @@ export async function discardSourceFile(
   userId: string,
   sourceFile: SourceFile,
 ): Promise<void> {
-  if (sourceFile.storagePath) {
+  for (const path of [sourceFile.storagePath, sourceFile.proxyStoragePath]) {
+    if (!path) continue
     try {
-      await storage.deleteObject(sourceFile.storagePath)
+      await storage.deleteObject(path)
     } catch (error) {
       console.error("Failed to delete stale source-file object", error)
     }

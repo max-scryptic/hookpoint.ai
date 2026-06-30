@@ -25,6 +25,14 @@ export interface SerialisedSourceFile {
     | "processing"
     | "ready"
     | "failed"
+  // Transcode (1080p proxy) lifecycle, so the UI can show "Optimising…" while a
+  // job runs. The raw proxy/original storage paths are never exposed.
+  normalisationStatus:
+    | "pending"
+    | "processing"
+    | "ready"
+    | "failed"
+    | "skipped"
   failureReason: string | null
   createdAt: string
   updatedAt: string
@@ -45,6 +53,7 @@ export function serialiseSourceFile(sourceFile: SourceFile): SerialisedSourceFil
     filenameSimilarityScore: sourceFile.filenameSimilarityScore,
     validationStatus: sourceFile.validationStatus,
     uploadStatus: sourceFile.uploadStatus,
+    normalisationStatus: sourceFile.normalisationStatus,
     failureReason: sourceFile.failureReason,
     createdAt: sourceFile.createdAt,
     updatedAt: sourceFile.updatedAt,

@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server"
 
-import { getSourceFileForVideo } from "@/lib/source-files/source-files"
+import {
+  getSourceFileForVideo,
+  resolvePlaybackStoragePath,
+} from "@/lib/source-files/source-files"
 import { createClient } from "@/lib/supabase/server"
 import { getStorageProvider } from "@/lib/storage/provider"
 
@@ -21,9 +24,12 @@ export async function GET(
   }
 
   const sourceFile = await getSourceFileForVideo(supabase, user.id, videoId)
+  const playbackPath = sourceFile
+    ? resolvePlaybackStoragePath(sourceFile)
+    : null
   if (
-    !sourceFile?.storagePath ||
-    sourceFile.uploadStatus !== "ready" ||
+    !playbackPath ||
+    sourceFile?.uploadStatus !== "ready" ||
     sourceFile.validationStatus === "failed"
   ) {
     return NextResponse.json(
@@ -34,7 +40,7 @@ export async function GET(
 
   try {
     const playbackUrl = await getStorageProvider().createSignedReadUrl(
-      sourceFile.storagePath,
+      playbackPath,
       60 * 60,
     )
     return NextResponse.json(
