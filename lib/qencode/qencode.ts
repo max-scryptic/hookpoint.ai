@@ -5,7 +5,7 @@
 // touches the video bytes.
 //
 // The job lifecycle is three calls:
-//   1. access/login   - exchange the long-lived API key for a short-lived token
+//   1. access_token   - exchange the long-lived API key for a short-lived token
 //   2. create_task    - mint a task_token (the job id) under that access token
 //   3. start_encode2  - hand the task_token a `query` describing the transcode
 //
@@ -118,7 +118,7 @@ export class QencodeClient {
   // Exchanges the API key for a short-lived access token used to create tasks.
   async login(): Promise<string> {
     const json = await this.post<QencodeBaseResponse & { token?: string }>(
-      "access/login",
+      "access_token",
       { api_key: this.apiKey },
     )
     if (!json.token) {
