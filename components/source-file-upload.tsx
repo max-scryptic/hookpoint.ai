@@ -537,7 +537,11 @@ export function SourceFileUpload({
   }
 
   return (
-    <section className="flex flex-col gap-3">
+    <section
+      id="source-file-upload"
+      tabIndex={-1}
+      className="flex scroll-mt-4 flex-col gap-3 outline-none"
+    >
       <div className="flex items-center gap-2">
         <FileVideoIcon className="size-4 text-muted-foreground" />
         <h2 className="text-sm font-medium">Raw source file</h2>
