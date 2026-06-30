@@ -275,7 +275,6 @@ export function RetentionChart({
           const x = model.xFor(fraction)
           const y = model.yAtFraction(fraction)
           const isActive = activeInsight?.id === insight.id
-          const isPinned = pinnedInsightId === insight.id
           const tone = insightTone[insight.kind]
 
           return (
@@ -285,12 +284,10 @@ export function RetentionChart({
                 cy={y}
                 r={16}
                 fill="transparent"
-                className="cursor-pointer"
+                className="cursor-pointer outline-none"
                 role="button"
                 tabIndex={0}
                 aria-label={`${tone.name}: ${insight.label}, at ${formatTimestamp(midpoint)}`}
-                onPointerEnter={() => setHoveredInsightId(insight.id)}
-                onPointerLeave={() => setHoveredInsightId(null)}
                 onClick={(event) => {
                   event.stopPropagation()
                   setSelectedInsightId((current) =>
@@ -310,22 +307,17 @@ export function RetentionChart({
               <circle
                 cx={x}
                 cy={y}
-                r={isActive ? 7 : 6}
                 fill={tone.band}
                 stroke="var(--background)"
-                strokeWidth={isActive ? 3 : 2}
                 vectorEffect="non-scaling-stroke"
                 pointerEvents="none"
-              >
-                {isPinned && (
-                  <animate
-                    attributeName="r"
-                    values="7;9;7"
-                    dur="240ms"
-                    repeatCount="1"
-                  />
-                )}
-              </circle>
+                style={{
+                  r: isActive ? 8 : 6,
+                  strokeWidth: isActive ? 3 : 2,
+                  transition:
+                    "r 220ms cubic-bezier(0.34, 1.56, 0.64, 1), stroke-width 180ms ease-out",
+                }}
+              />
             </g>
           )
         })}
