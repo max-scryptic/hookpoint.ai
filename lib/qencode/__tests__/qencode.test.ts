@@ -62,11 +62,14 @@ describe("QencodeClient.submitJob", () => {
     // The access token flows from login into create_task.
     expect(calls[0].body.api_key).toBe("api-key")
     expect(calls[1].body.token).toBe("access-1")
-    // start_encode2 carries the task token + the serialised query.
+    // start_encode2 carries the task token + the serialised query, which nests
+    // our parameters under a top-level `query` key as the API requires.
     expect(calls[2].body.task_token).toBe("task-1")
     expect(JSON.parse(calls[2].body.query)).toMatchObject({
-      source: QUERY.source,
-      callback_url: QUERY.callback_url,
+      query: {
+        source: QUERY.source,
+        callback_url: QUERY.callback_url,
+      },
     })
   })
 
