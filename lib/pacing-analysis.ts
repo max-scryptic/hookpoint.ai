@@ -39,6 +39,7 @@ export interface PacingAnalysis {
     startSeconds: number
     endSeconds: number
     reason: string
+    suggestion: string
   }>
   windows: PacingWindow[]
   model: string
@@ -79,6 +80,7 @@ interface ModelOutput {
     startSeconds: number
     endSeconds: number
     reason: string
+    suggestion: string
   }>
   windows: ModelWindow[]
 }
@@ -113,11 +115,12 @@ const PACING_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["startSeconds", "endSeconds", "reason"],
+        required: ["startSeconds", "endSeconds", "reason", "suggestion"],
         properties: {
           startSeconds: { type: "number" },
           endSeconds: { type: "number" },
           reason: { type: "string" },
+          suggestion: { type: "string" },
         },
       },
     },
@@ -302,6 +305,9 @@ export async function generatePacingAnalysis(
                 "The first 30-second window is the hook. Every later window is 60 seconds except a shorter final window.",
                 "Return exactly one windows entry for every supplied window, using its zero-based windowIndex.",
                 "Keep evidence specific and concise. Set possibleIssue to null when there is no meaningful issue.",
+                "For slowOrRepetitiveStretches, pick the 3 to 5 areas most worth reviewing: where pacing drags or runs much slower than this video's own rhythm, wording or ideas repeat, or a stretch is low in novelty and risks feeling boring.",
+                "Each stretch needs a concise reason describing the specific problem and a suggestion giving one concrete, actionable way to tighten or improve that stretch. Both must reference what is actually said in that window.",
+                "Order stretches from most to least worth reviewing. Return fewer than 3 only when the video genuinely has no such areas, and never more than 5.",
               ].join(" "),
             },
           ],

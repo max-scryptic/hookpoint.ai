@@ -138,7 +138,7 @@ function PacingAnalysisSection({
     <section className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
         <GaugeIcon className="size-4 text-violet-600 dark:text-violet-400" />
-        <h2 className="text-sm font-medium">Pacing analysis</h2>
+        <h2 className="text-sm font-medium">Stretches to review</h2>
       </div>
 
       {!analysis ? (
@@ -147,36 +147,37 @@ function PacingAnalysisSection({
             ? "Pacing analysis could not be generated right now. It will be retried the next time this report is opened."
             : "Pacing analysis is unavailable because this video has no timestamped transcript."}
         </div>
+      ) : analysis.slowOrRepetitiveStretches.length === 0 ? (
+        <div className="rounded-xl border bg-muted/30 p-6 text-sm text-muted-foreground">
+          No slow or repetitive stretches stood out — the pacing holds up across
+          this video.
+        </div>
       ) : (
-        <>
-          <div className="rounded-xl border bg-card p-4">
-            <p className="text-sm leading-6">{analysis.overallPacing}</p>
-            {analysis.videoWidePatterns.length > 0 && (
-              <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-                {analysis.videoWidePatterns.map((pattern, index) => (
-                  <li key={index}>{pattern}</li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          {analysis.slowOrRepetitiveStretches.length > 0 && (
-            <div className="rounded-xl border bg-card p-4">
-              <h3 className="text-sm font-medium">Stretches to review</h3>
-              <ul className="mt-3 space-y-2">
-                {analysis.slowOrRepetitiveStretches.map((stretch, index) => (
-                  <li key={index} className="flex gap-3 text-sm">
-                    <span className="shrink-0 font-mono text-xs text-muted-foreground">
-                      {formatTimestamp(stretch.startSeconds)} –{" "}
-                      {formatTimestamp(stretch.endSeconds)}
-                    </span>
-                    <span>{stretch.reason}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </>
+        <ul className="divide-y rounded-xl border bg-card">
+          {analysis.slowOrRepetitiveStretches.map((stretch, index) => (
+            <li
+              key={index}
+              className="flex flex-col gap-2 p-4"
+            >
+              <div className="flex items-center gap-3">
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                  {index + 1}
+                </span>
+                <span className="font-mono text-sm">
+                  {formatTimestamp(stretch.startSeconds)} –{" "}
+                  {formatTimestamp(stretch.endSeconds)}
+                </span>
+              </div>
+              <p className="pl-10 text-sm">{stretch.reason}</p>
+              {stretch.suggestion && (
+                <p className="pl-10 text-sm text-muted-foreground">
+                  <span className="font-medium text-foreground">Try: </span>
+                  {stretch.suggestion}
+                </p>
+              )}
+            </li>
+          ))}
+        </ul>
       )}
     </section>
   )
@@ -378,11 +379,6 @@ export function AnalysedVideoDetail({
         transcript={transcript}
       />
 
-      <PacingAnalysisSection
-        analysis={pacingAnalysis}
-        hasTranscript={transcript.length > 0}
-      />
-
       <section className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
           <TrendingDownIcon className="size-4 text-destructive" />
@@ -400,6 +396,11 @@ export function AnalysedVideoDetail({
           <GainList gains={gains} transcript={transcript} />
         </section>
       )}
+
+      <PacingAnalysisSection
+        analysis={pacingAnalysis}
+        hasTranscript={transcript.length > 0}
+      />
     </div>
   )
 }
