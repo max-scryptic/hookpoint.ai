@@ -146,7 +146,7 @@ export function RetentionChart({
       name: "Retention gain",
     },
     pacing: {
-      band: "var(--chart-4)",
+      band: "#3b82f6",
       badge: "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300",
       name: "Pacing",
     },
@@ -287,8 +287,7 @@ export function RetentionChart({
                 className="cursor-pointer"
                 role="button"
                 tabIndex={0}
-                aria-pressed={isActive}
-                aria-label={`${tone.name}: ${insight.label}, ${formatTimestamp(from)} to ${formatTimestamp(to)}`}
+                aria-label={`${tone.name}: ${insight.label}, at ${formatTimestamp(midpoint)}`}
                 onClick={(event) => {
                   event.stopPropagation()
                   setSelectedInsightId((current) =>
@@ -311,16 +310,7 @@ export function RetentionChart({
                 r={isActive ? 10 : 6}
                 fill={tone.band}
                 pointerEvents="none"
-              >
-                {isActive && (
-                  <animate
-                    attributeName="r"
-                    values="6;11;10"
-                    dur="220ms"
-                    repeatCount="1"
-                  />
-                )}
-              </circle>
+              />
             </g>
           )
         })}
