@@ -54,6 +54,7 @@ export function RetentionChart({
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
   const [hoverX, setHoverX] = useState<number | null>(null)
   const [selectedInsightId, setSelectedInsightId] = useState<string | null>(null)
+  const [hoveredInsightId, setHoveredInsightId] = useState<string | null>(null)
 
   const model = useMemo(() => {
     const sorted = [...points].sort((a, b) => a.elapsedRatio - b.elapsedRatio)
@@ -282,6 +283,22 @@ export function RetentionChart({
           vectorEffect="non-scaling-stroke"
         />
 
+        {/* A subtle dotted guide that tracks the pointer along the timeline. */}
+        {hoverX != null && (
+          <line
+            x1={hoverX}
+            y1={PAD.top}
+            x2={hoverX}
+            y2={PAD.top + PLOT_H}
+            stroke="var(--muted-foreground)"
+            strokeWidth={1}
+            strokeDasharray="3 4"
+            strokeOpacity={0.25}
+            vectorEffect="non-scaling-stroke"
+            pointerEvents="none"
+          />
+        )}
+
         {/* Each insight is represented by one clickable marker at the midpoint
             of its source window, positioned directly on the retention curve. */}
         {insights.map((insight) => {
@@ -295,38 +312,80 @@ export function RetentionChart({
           const x = model.xFor(fraction)
           const y = model.yAtFraction(fraction)
           const isActive = activeInsight?.id === insight.id
+          const isHovered = hoveredInsightId === insight.id
           const tone = insightTone[insight.kind]
+          // Scale up smoothly on hover, and further when selected. A gentle
+          // overshoot easing gives the growth a little life rather than a snap.
+          const scale = isActive ? 1.6 : isHovered ? 1.3 : 1
+          const haloScale = isActive ? 3 : isHovered ? 2.5 : 1.6
+          const haloOpacity = isActive ? 0.28 : isHovered ? 0.18 : 0
+          const grow = "cubic-bezier(0.34, 1.56, 0.64, 1)"
+          const transformOrigin = `${x}px ${y}px`
 
           return (
-            <g key={insight.id}>
-              <circle
-                cx={x}
-                cy={y}
-                r={16}
-                fill="transparent"
-                className="cursor-pointer outline-none"
-                role="button"
-                tabIndex={0}
-                aria-label={`${tone.name}: ${insight.label}, at ${formatTimestamp(midpoint)}`}
-                onClick={(event) => {
+            <g
+              key={insight.id}
+              className="cursor-pointer outline-none"
+              role="button"
+              tabIndex={0}
+              aria-label={`${tone.name}: ${insight.label}, at ${formatTimestamp(midpoint)}`}
+              onPointerEnter={() => setHoveredInsightId(insight.id)}
+              onPointerLeave={() =>
+                setHoveredInsightId((current) =>
+                  current === insight.id ? null : current,
+                )
+              }
+              onClick={(event) => {
+                event.stopPropagation()
+                toggleInsight(insight)
+              }}
+              onFocus={() => setHoveredInsightId(insight.id)}
+              onBlur={() =>
+                setHoveredInsightId((current) =>
+                  current === insight.id ? null : current,
+                )
+              }
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault()
                   event.stopPropagation()
                   toggleInsight(insight)
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault()
-                    event.stopPropagation()
-                    toggleInsight(insight)
-                  }
-                }}
-              />
+                }
+              }}
+            >
+              {/* Soft halo that fades and expands on hover / selection. */}
               <circle
                 cx={x}
                 cy={y}
-                r={isActive ? 10 : 6}
+                r={6}
                 fill={tone.band}
                 pointerEvents="none"
+                style={{
+                  transformOrigin,
+                  transform: `scale(${haloScale})`,
+                  opacity: haloOpacity,
+                  transition: `transform 220ms ${grow}, opacity 220ms ease-out`,
+                }}
               />
+              {/* The marker itself, with a ring matched to the card background so
+                  it reads as a distinct dot sitting on the curve. */}
+              <circle
+                cx={x}
+                cy={y}
+                r={6}
+                fill={tone.band}
+                stroke="var(--card)"
+                strokeWidth={2}
+                pointerEvents="none"
+                vectorEffect="non-scaling-stroke"
+                style={{
+                  transformOrigin,
+                  transform: `scale(${scale})`,
+                  transition: `transform 220ms ${grow}`,
+                }}
+              />
+              {/* Generous invisible hit target so the marker is easy to grab. */}
+              <circle cx={x} cy={y} r={18} fill="transparent" />
             </g>
           )
         })}
