@@ -8,9 +8,10 @@
 // pure, synchronous computation that runs inline in the complete-upload request:
 // there is no long-running step that can overrun the function's time budget and
 // strand the record in a non-terminal "processing" state (the bug this replaces).
-// The duration check is a soft "did you upload the right file?" guard for the
-// user's own content, not a security boundary, so a client-measured value is
-// sufficient.
+// A measured duration mismatch is a hard validation failure. The measurement
+// is still client-provided because the browser already has the local file, but
+// the server independently applies the configured tolerance and never accepts
+// a client-side override for a mismatch.
 
 import {
   getDurationToleranceSeconds,
@@ -39,11 +40,6 @@ export interface ValidationContext {
   // Duration (seconds) the browser measured for the uploaded file, or null when
   // it couldn't be read — e.g. an .mkv, which most browsers can't decode.
   uploadedDurationSeconds: number | null
-  // Set only when the browser warned about a duration mismatch before upload
-  // and the user explicitly chose to continue. Duration matching is an identity
-  // aid rather than a security boundary, so a confirmed mismatch remains
-  // visible but does not make the uploaded object unusable.
-  durationMismatchConfirmed?: boolean
 }
 
 // Injected thresholds. Defaults wire to the configured values; tests pass fakes.
@@ -123,19 +119,6 @@ export function computeValidationOutcome(
   )
 
   if (duration.status === "failed") {
-    if (ctx.durationMismatchConfirmed) {
-      return {
-        uploadStatus: "ready",
-        validationStatus: "warning",
-        uploadedDurationSeconds: duration.uploadedDurationSeconds,
-        durationDifferenceSeconds: duration.differenceSeconds,
-        durationValidationStatus: "failed",
-        filenameValidationStatus,
-        filenameSimilarityScore,
-        failureReason: null,
-      }
-    }
-
     return {
       uploadStatus: "failed",
       validationStatus: "failed",
