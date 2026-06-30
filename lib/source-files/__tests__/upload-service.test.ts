@@ -4,8 +4,11 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   UploadError,
   completeSourceFileUpload,
+  discardSourceFile,
   initiateSourceFileUpload,
+  isStaleSourceFile,
 } from "@/lib/source-files/upload-service"
+import { mapSourceFileRow } from "@/lib/source-files/source-files"
 import type { StorageProvider } from "@/lib/storage"
 
 // ---------------------------------------------------------------------------
@@ -162,5 +165,72 @@ describe("completeSourceFileUpload", () => {
         sourceFileId: "missing",
       }),
     ).rejects.toMatchObject({ code: "not_found" })
+  })
+})
+
+// Maps the loosely-typed test row to a domain SourceFile for functions that take
+// the camelCase shape directly.
+function asSourceFile(overrides: Record<string, unknown> = {}) {
+  return mapSourceFileRow(
+    sourceFileRow(overrides) as Parameters<typeof mapSourceFileRow>[0],
+  )
+}
+
+describe("isStaleSourceFile", () => {
+  it("treats an abandoned 'uploading' record as stale", () => {
+    expect(isStaleSourceFile(asSourceFile({ upload_status: "uploading" }))).toBe(
+      true,
+    )
+  })
+
+  it("does not treat settled or server-side states as stale", () => {
+    for (const status of ["pending", "uploaded", "processing", "ready", "failed"]) {
+      expect(isStaleSourceFile(asSourceFile({ upload_status: status }))).toBe(
+        false,
+      )
+    }
+  })
+})
+
+describe("discardSourceFile", () => {
+  it("removes the storage object and deletes the row", async () => {
+    const deleted: string[] = []
+    const supabase = makeFakeSupabase(({ table, op }) => {
+      if (table === "source_files" && op === "delete") {
+        deleted.push("row")
+        return { data: { storage_path: "user-1/vid-1/sf-1/clip.mp4" }, error: null }
+      }
+      return { data: null, error: null }
+    })
+    const storage = fakeStorage(true)
+    const sourceFile = asSourceFile({ upload_status: "uploading" })
+
+    await discardSourceFile(supabase, storage, "user-1", sourceFile)
+
+    expect(storage.deleteObject).toHaveBeenCalledWith(
+      "user-1/vid-1/sf-1/clip.mp4",
+    )
+    expect(deleted).toEqual(["row"])
+  })
+
+  it("still deletes the row when the object delete fails", async () => {
+    const deleted: string[] = []
+    const supabase = makeFakeSupabase(({ table, op }) => {
+      if (table === "source_files" && op === "delete") {
+        deleted.push("row")
+        return { data: { storage_path: null }, error: null }
+      }
+      return { data: null, error: null }
+    })
+    const storage = fakeStorage(true)
+    storage.deleteObject = vi.fn(async () => {
+      throw new Error("storage boom")
+    })
+    const sourceFile = asSourceFile({ upload_status: "uploading" })
+
+    await expect(
+      discardSourceFile(supabase, storage, "user-1", sourceFile),
+    ).resolves.toBeUndefined()
+    expect(deleted).toEqual(["row"])
   })
 })
