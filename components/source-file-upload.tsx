@@ -20,6 +20,7 @@ const ACCEPT_ATTR = ACCEPTED_EXTENSIONS.map((ext) => `.${ext}`).join(",")
 
 type ClientState =
   | { phase: "idle" }
+  | { phase: "preparing"; filename: string }
   | { phase: "uploading"; progress: number; filename: string }
   | { phase: "processing"; filename: string }
   | { phase: "error"; message: string }
@@ -106,7 +107,9 @@ export function SourceFileUpload({
 
   // Whether a stored record is in a settled (non-in-flight) state.
   const isBusy =
-    client.phase === "uploading" || client.phase === "processing"
+    client.phase === "preparing" ||
+    client.phase === "uploading" ||
+    client.phase === "processing"
 
   // While an upload is in flight, warn the user before they unload the page
   // (reload, tab close, or navigating to another site). Leaving would abort the
@@ -126,7 +129,10 @@ export function SourceFileUpload({
   }, [isBusy])
 
   async function startUpload(file: File) {
-    setClient({ phase: "error", message: "" })
+    // Lock the UI the instant a file is chosen. There's a noticeable gap before
+    // the progress bar appears (the initiate-upload round-trip), and without
+    // this the user could click the button again and start a second upload.
+    setClient({ phase: "preparing", filename: file.name })
 
     // Client-side format check for fast feedback. The server enforces it again.
     if (!isAcceptedExtension(file.name)) {
@@ -281,6 +287,16 @@ function Body({
   onDelete: () => void
 }) {
   // In-flight states take precedence over the stored record's state.
+  if (client.phase === "preparing") {
+    return (
+      <StatusRow
+        icon={<Loader2Icon className="size-4 animate-spin text-muted-foreground" />}
+        title="Preparing upload…"
+        subtitle={client.filename}
+      />
+    )
+  }
+
   if (client.phase === "uploading") {
     const pct = Math.round(client.progress * 100)
     return (
