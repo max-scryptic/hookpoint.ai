@@ -1,7 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server"
 
 import { createClient } from "@/lib/supabase/server"
-import { getSourceFileForVideo } from "@/lib/source-files/source-files"
+import {
+  getSourceFileForVideo,
+  resolvePlaybackStoragePath,
+} from "@/lib/source-files/source-files"
 import { errorResponse, serialiseSourceFile } from "@/lib/source-files/http"
 import { getStorageProvider } from "@/lib/storage/provider"
 
@@ -24,16 +27,17 @@ export async function GET(
 
   try {
     const sourceFile = await getSourceFileForVideo(supabase, user.id, videoId)
+    const playbackPath = sourceFile
+      ? resolvePlaybackStoragePath(sourceFile)
+      : null
     let playbackUrl: string | null = null
     if (
-      sourceFile?.storagePath &&
-      sourceFile.uploadStatus === "ready" &&
+      playbackPath &&
+      sourceFile?.uploadStatus === "ready" &&
       (sourceFile.validationStatus === "passed" ||
         sourceFile.validationStatus === "warning")
     ) {
-      playbackUrl = await getStorageProvider().createSignedReadUrl(
-        sourceFile.storagePath,
-      )
+      playbackUrl = await getStorageProvider().createSignedReadUrl(playbackPath)
     }
 
     return NextResponse.json({
