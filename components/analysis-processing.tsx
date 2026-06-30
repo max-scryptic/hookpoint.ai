@@ -13,6 +13,7 @@ const STAGES = [
   "Pulling audience retention from YouTube…",
   "Mapping where viewers drop off…",
   "Reading through the transcript…",
+  "Analysing narrative pacing…",
   "Putting your report together…",
 ] as const
 
