@@ -134,12 +134,12 @@ export function RetentionChart({
     hook: {
       band: "#ec4899",
       badge: "bg-pink-100 text-pink-700 dark:bg-pink-500/15 dark:text-pink-300",
-      name: "Hook window",
+      name: "Hook",
     },
     drop: {
       band: "#ef4444",
       badge: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300",
-      name: "Drop-off",
+      name: "Retention drop-off",
     },
     gain: {
       band: "#22c55e",
@@ -147,9 +147,9 @@ export function RetentionChart({
       name: "Retention gain",
     },
     pacing: {
-      band: "var(--chart-4)",
+      band: "#3b82f6",
       badge: "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300",
-      name: "Pacing window",
+      name: "Pacing",
     },
   } as const
 
@@ -289,7 +289,7 @@ export function RetentionChart({
                 cy={y}
                 r={16}
                 fill="transparent"
-                className="cursor-pointer"
+                className="cursor-pointer outline-none"
                 role="button"
                 tabIndex={0}
                 aria-label={`${tone.name}: ${insight.label}, at ${formatTimestamp(midpoint)}`}
@@ -312,36 +312,13 @@ export function RetentionChart({
               <circle
                 cx={x}
                 cy={y}
-                r={isActive ? 7 : 6}
+                r={isActive ? 10 : 6}
                 fill={tone.band}
-                stroke="var(--background)"
-                strokeWidth={isActive ? 3 : 2}
-                vectorEffect="non-scaling-stroke"
                 pointerEvents="none"
-                style={{
-                  transition:
-                    "r 220ms cubic-bezier(0.22, 1, 0.36, 1), stroke-width 220ms cubic-bezier(0.22, 1, 0.36, 1)",
-                }}
               />
             </g>
           )
         })}
-
-        {/* A subtle guide that follows the pointer across the plot. */}
-        {hoverX != null && (
-          <line
-            x1={hoverX}
-            y1={PAD.top}
-            x2={hoverX}
-            y2={PAD.top + PLOT_H}
-            stroke="var(--muted-foreground)"
-            strokeWidth={1}
-            strokeDasharray="3 5"
-            opacity={0.25}
-            vectorEffect="non-scaling-stroke"
-            pointerEvents="none"
-          />
-        )}
       </svg>
 
       {/* Readout below the chart so it never clips at the SVG edges. */}
@@ -395,10 +372,8 @@ export function RetentionChart({
                   {insightTone[activeInsight.kind].name}
                 </span>
                 <span className="font-mono text-xs text-muted-foreground">
-                  {formatTimestamp(
-                    activeInsight.fromSeconds +
-                      (activeInsight.toSeconds - activeInsight.fromSeconds) / 2,
-                  )}
+                  {formatTimestamp(activeInsight.fromSeconds)}–
+                  {formatTimestamp(activeInsight.toSeconds)}
                 </span>
               </div>
               <h3 className="mt-2 font-medium">{activeInsight.label}</h3>
