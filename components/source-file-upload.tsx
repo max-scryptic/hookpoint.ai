@@ -745,9 +745,10 @@ function Body({
   }
 
   // Ready. Validation now happens before the upload begins, so a stored file is
-  // simply shown as ready — no post-upload warning messages on the card.
+  // shown as a single compact row: name on the left, size/duration in the
+  // middle, and the actions on the right.
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
       <StatusRow
         icon={<CheckCircle2Icon className="size-4 text-emerald-600 dark:text-emerald-500" />}
         title="Source file ready"
@@ -756,7 +757,7 @@ function Body({
 
       <Meta sourceFile={sourceFile} />
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 sm:ml-auto">
         <Button variant="outline" onClick={onPick} disabled={isBusy}>
           <UploadIcon className="size-4" />
           Replace
@@ -805,28 +806,6 @@ function Meta({ sourceFile }: { sourceFile: SerialisedSourceFile }) {
       <Field
         label="Duration"
         value={formatDuration(sourceFile.uploadedDurationSeconds)}
-      />
-      <Field
-        label="Duration check"
-        value={
-          sourceFile.durationValidationStatus === "passed"
-            ? "Matches YouTube"
-            : sourceFile.durationValidationStatus === "failed"
-              ? `Off by ${sourceFile.durationDifferenceSeconds?.toFixed(1) ?? "?"}s`
-              : "Not verified"
-        }
-      />
-      <Field
-        label="Filename check"
-        value={
-          sourceFile.filenameValidationStatus === "passed"
-            ? "Looks like the title"
-            : sourceFile.filenameValidationStatus === "warning"
-              ? "Doesn’t match title"
-              : sourceFile.filenameValidationStatus === "unknown"
-                ? "Couldn’t compare"
-                : "—"
-        }
       />
     </dl>
   )
