@@ -36,7 +36,7 @@ export async function POST(
   }
 
   try {
-    const { sourceFile, upload } = await initiateSourceFileUpload(
+    const { sourceFile, upload, multipartUpload } = await initiateSourceFileUpload(
       supabase,
       getStorageProvider(),
       {
@@ -51,14 +51,29 @@ export async function POST(
 
     return NextResponse.json({
       sourceFile: serialiseSourceFile(sourceFile),
-      upload: {
-        provider: upload.provider,
-        bucket: upload.bucket,
-        path: upload.path,
-        token: upload.token,
-        signedUrl: upload.signedUrl,
-        expiresAt: upload.expiresAt,
-      },
+      // Single-PUT target (Supabase Storage path).
+      upload: upload
+        ? {
+            provider: upload.provider,
+            bucket: upload.bucket,
+            path: upload.path,
+            token: upload.token,
+            signedUrl: upload.signedUrl,
+            expiresAt: upload.expiresAt,
+          }
+        : undefined,
+      // Parallel multipart target (S3-compatible path). Never exposes the storage
+      // path beyond the signed part URLs the browser needs.
+      multipartUpload: multipartUpload
+        ? {
+            provider: multipartUpload.provider,
+            uploadId: multipartUpload.uploadId,
+            partSizeBytes: multipartUpload.partSizeBytes,
+            totalParts: multipartUpload.totalParts,
+            parts: multipartUpload.parts,
+            expiresAt: multipartUpload.expiresAt,
+          }
+        : undefined,
     })
   } catch (error) {
     return errorResponse(error)

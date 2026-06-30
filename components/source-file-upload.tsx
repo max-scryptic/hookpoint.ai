@@ -49,9 +49,28 @@ function formatDuration(seconds: number | null): string {
   return hrs > 0 ? `${hrs}:${mm}:${ss}` : `${mm}:${ss}`
 }
 
+// One finished part the browser reports back to the completion endpoint. Defined
+// locally (not imported from @/lib/storage) so the server-only storage barrel —
+// and the AWS SDK it pulls in — never reaches the browser bundle.
+interface CompletedPart {
+  partNumber: number
+  etag: string
+}
+
+interface MultipartTarget {
+  provider: string
+  uploadId: string
+  partSizeBytes: number
+  totalParts: number
+  parts: { partNumber: number; signedUrl: string }[]
+  expiresAt?: string
+}
+
 interface UploadInitResponse {
   sourceFile: SerialisedSourceFile
-  upload: {
+  // The single-PUT path returns `upload`; the parallel path returns
+  // `multipartUpload`. Exactly one is present.
+  upload?: {
     provider: string
     bucket: string
     path: string
@@ -59,6 +78,123 @@ interface UploadInitResponse {
     signedUrl?: string
     expiresAt?: string
   }
+  multipartUpload?: MultipartTarget
+}
+
+// How many parts upload at once. Several concurrent streams are what overcome a
+// single TCP stream's bandwidth-delay-product ceiling and let the upload reach
+// the user's actual uplink. Kept modest so we don't thrash memory slicing the
+// file or trip provider per-connection limits.
+const MULTIPART_CONCURRENCY = 4
+// Per-part retry budget. Parts are independent, so a transient blip on one part
+// retries just that part instead of restarting the whole multi-GB upload.
+const PART_MAX_ATTEMPTS = 3
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+// PUTs a single part's bytes to its signed URL and resolves with the storage
+// ETag, which completion needs to assemble the object. Reports bytes-so-far for
+// this part via onProgress.
+function uploadPart(
+  signedUrl: string,
+  body: Blob,
+  onProgress: (loaded: number) => void,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open("PUT", signedUrl)
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress(event.loaded)
+    }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        const etag =
+          xhr.getResponseHeader("ETag") ?? xhr.getResponseHeader("etag")
+        if (!etag) {
+          // The bucket's S3 CORS must expose the ETag header, or we can't
+          // complete the upload. Surface this clearly rather than silently hang.
+          reject(
+            new Error(
+              "Upload response was missing its ETag. The storage bucket's CORS config must expose the ETag header.",
+            ),
+          )
+          return
+        }
+        resolve(etag)
+      } else {
+        reject(new Error(`Part upload failed (${xhr.status})`))
+      }
+    }
+    xhr.onerror = () => reject(new Error("A part upload was interrupted."))
+    xhr.onabort = () => reject(new Error("Upload was cancelled."))
+    xhr.send(body)
+  })
+}
+
+// Uploads `file` in parallel as a multipart upload: slices it into the planned
+// parts and PUTs up to MULTIPART_CONCURRENCY of them at once, retrying any part
+// that fails. Reports aggregate progress (0..1) across all parts and resolves
+// with the per-part ETags. Rejects if any part exhausts its retries.
+async function uploadFileMultipart(
+  file: File,
+  target: MultipartTarget,
+  onProgress: (fraction: number) => void,
+): Promise<CompletedPart[]> {
+  const total = file.size
+  const loaded = new Array<number>(target.parts.length).fill(0)
+  const completed = new Array<CompletedPart | undefined>(target.parts.length)
+
+  const reportProgress = () => {
+    const sum = loaded.reduce((a, b) => a + b, 0)
+    onProgress(total > 0 ? Math.min(sum / total, 1) : 1)
+  }
+
+  // Index-based work queue. Incrementing is atomic in JS's single-threaded model,
+  // so the workers never grab the same part.
+  let nextIndex = 0
+  const worker = async (): Promise<void> => {
+    for (;;) {
+      const index = nextIndex++
+      if (index >= target.parts.length) return
+
+      const part = target.parts[index]
+      const start = index * target.partSizeBytes
+      const end = Math.min(start + target.partSizeBytes, total)
+      const blob = file.slice(start, end)
+      const partBytes = end - start
+
+      let lastError: unknown
+      for (let attempt = 1; attempt <= PART_MAX_ATTEMPTS; attempt++) {
+        try {
+          loaded[index] = 0
+          const etag = await uploadPart(part.signedUrl, blob, (partLoaded) => {
+            loaded[index] = Math.min(partLoaded, partBytes)
+            reportProgress()
+          })
+          loaded[index] = partBytes
+          reportProgress()
+          completed[index] = { partNumber: part.partNumber, etag }
+          break
+        } catch (error) {
+          lastError = error
+          if (attempt < PART_MAX_ATTEMPTS) await delay(attempt * 1000)
+        }
+      }
+
+      if (!completed[index]) {
+        throw lastError instanceof Error
+          ? lastError
+          : new Error("A part failed to upload.")
+      }
+    }
+  }
+
+  const workerCount = Math.min(MULTIPART_CONCURRENCY, target.parts.length)
+  await Promise.all(Array.from({ length: workerCount }, () => worker()))
+
+  return completed.filter((p): p is CompletedPart => p != null)
 }
 
 // Reads a video file's duration in the browser by loading just its metadata via
@@ -197,7 +333,9 @@ export function SourceFileUpload({
         | UploadInitResponse
         | { error?: string; message?: string }
 
-      if (!initRes.ok || !("upload" in initData)) {
+      const hasTarget =
+        "upload" in initData || "multipartUpload" in initData
+      if (!initRes.ok || !hasTarget) {
         setClient({
           phase: "error",
           message:
@@ -207,24 +345,50 @@ export function SourceFileUpload({
         return
       }
 
-      const { sourceFile: created, upload } = initData
+      const created = (initData as UploadInitResponse).sourceFile
       setSourceFile(created)
 
-      const target = upload.signedUrl
-      if (!target) {
+      // 2. Upload the bytes straight to storage with a progress bar. Large files
+      // go via a parallel multipart upload; smaller ones (or the Supabase
+      // single-PUT provider) use one signed PUT. The completion body differs:
+      // multipart must report its part ETags, single-PUT sends nothing.
+      setClient({ phase: "uploading", progress: 0, filename: file.name })
+
+      const onUploadProgress = (fraction: number) =>
+        setClient({ phase: "uploading", progress: fraction, filename: file.name })
+
+      const multipart = (initData as UploadInitResponse).multipartUpload
+      const single = (initData as UploadInitResponse).upload
+
+      let multipartParts: CompletedPart[] | undefined
+      if (multipart) {
+        try {
+          multipartParts = await uploadFileMultipart(
+            file,
+            multipart,
+            onUploadProgress,
+          )
+        } catch (error) {
+          // Best-effort: tell the server to discard the orphaned parts so they
+          // don't linger until the bucket lifecycle rule reaps them.
+          void fetch(`/api/source-files/${created.id}/abort-upload`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ uploadId: multipart.uploadId }),
+          }).catch(() => {})
+          throw error
+        }
+      } else if (single?.signedUrl) {
+        await uploadToSignedUrl(single.signedUrl, file, onUploadProgress)
+      } else {
         setClient({ phase: "error", message: "No upload URL was provided." })
         return
       }
 
-      // 2. Upload the bytes straight to storage with a progress bar.
-      setClient({ phase: "uploading", progress: 0, filename: file.name })
-      await uploadToSignedUrl(target, file, (fraction) =>
-        setClient({ phase: "uploading", progress: fraction, filename: file.name }),
-      )
-
       // 3. Tell the backend the upload finished; it verifies + validates. We
       // measure the file's duration in the browser and hand it over so the
-      // server can do the duration-match check without probing the bytes.
+      // server can do the duration-match check without probing the bytes. For a
+      // multipart upload we also send the part list so the server can assemble it.
       setClient({ phase: "processing", filename: file.name })
       const durationSeconds = await readVideoDuration(file)
       const completeRes = await fetch(
@@ -232,7 +396,15 @@ export function SourceFileUpload({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ durationSeconds }),
+          body: JSON.stringify(
+            multipart
+              ? {
+                  durationSeconds,
+                  uploadId: multipart.uploadId,
+                  parts: multipartParts,
+                }
+              : { durationSeconds },
+          ),
         },
       )
       const completeData = (await completeRes.json()) as

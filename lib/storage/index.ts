@@ -30,6 +30,37 @@ export interface StorageObjectInfo {
   contentType: string | null
 }
 
+// One part of a multipart upload, as handed to the browser: the 1-based part
+// number plus the signed URL the browser PUTs that slice of the file to.
+export interface MultipartPartTarget {
+  partNumber: number
+  signedUrl: string
+}
+
+// A planned multipart upload. The browser slices the file into `totalParts`
+// chunks of `partSizeBytes` (the final part is the remainder) and PUTs each to
+// its matching `parts[]` URL, in parallel, then reports the per-part ETags back
+// so the server can assemble the object.
+export interface MultipartUpload {
+  provider: string
+  bucket: string
+  path: string
+  // Opaque storage-side id tying the parts together until completion/abort.
+  uploadId: string
+  partSizeBytes: number
+  totalParts: number
+  parts: MultipartPartTarget[]
+  // When the signed part URLs stop being valid (best-effort, ISO string).
+  expiresAt?: string
+}
+
+// A finished part the browser reports back: its number and the ETag storage
+// returned for it. Both are required to complete the upload.
+export interface CompletedPart {
+  partNumber: number
+  etag: string
+}
+
 export interface StorageProvider {
   // Stable identifier persisted on the DB row (storage_provider column).
   readonly name: string
@@ -48,7 +79,35 @@ export interface StorageProvider {
 
   // Deletes an object. Idempotent: deleting a missing object is not an error.
   deleteObject(path: string): Promise<void>
+
+  // --- Optional: parallel multipart uploads ---
+  // Providers that can split a large upload into independently-PUT parts
+  // implement the three methods below. The upload service feature-detects them
+  // (`typeof storage.createMultipartUpload === "function"`) and falls back to the
+  // single-PUT `createSignedUpload` path when they're absent. This is the lever
+  // that lets the browser saturate its uplink on multi-GB files instead of being
+  // capped by a single TCP stream's bandwidth-delay product.
+
+  // Begins a multipart upload for `path` and returns every part's signed PUT URL
+  // up front, sized for a file of `totalSizeBytes`.
+  createMultipartUpload?(
+    path: string,
+    opts: { totalSizeBytes: number; contentType?: string | null },
+  ): Promise<MultipartUpload>
+
+  // Assembles the uploaded parts into the final object. `parts` must list every
+  // part with the ETag storage returned for it.
+  completeMultipartUpload?(
+    path: string,
+    uploadId: string,
+    parts: CompletedPart[],
+  ): Promise<void>
+
+  // Cancels an in-progress multipart upload, discarding any uploaded parts.
+  // Idempotent: aborting an already-gone upload is not an error.
+  abortMultipartUpload?(path: string, uploadId: string): Promise<void>
 }
 
 export { SupabaseStorageProvider } from "@/lib/storage/supabase-storage"
+export { S3StorageProvider } from "@/lib/storage/s3-storage"
 export { getStorageProvider } from "@/lib/storage/provider"

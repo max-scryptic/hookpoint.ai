@@ -32,6 +32,58 @@ export function getMaxUploadBytes(): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 30 * 1024 * 1024 * 1024
 }
 
+// Target size of each multipart chunk, in bytes. Default 64 MiB — big enough to
+// keep the part count modest for a 30 GB file (~480 parts) while small enough
+// that several upload in parallel without each one being a huge retry unit. The
+// provider may grow this to stay under S3's 10,000-part ceiling.
+export function getMultipartPartSizeBytes(): number {
+  const raw = process.env.SOURCE_FILE_MULTIPART_PART_SIZE_BYTES
+  const parsed = raw != null ? Number(raw) : NaN
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 64 * 1024 * 1024
+}
+
+// File size at or above which we use a parallel multipart upload instead of a
+// single PUT. Below it the multipart overhead isn't worth it. Defaults to the
+// part size, so any file that would span more than one part goes multipart.
+export function getMultipartThresholdBytes(): number {
+  const raw = process.env.SOURCE_FILE_MULTIPART_THRESHOLD_BYTES
+  const parsed = raw != null ? Number(raw) : NaN
+  return Number.isFinite(parsed) && parsed > 0
+    ? parsed
+    : getMultipartPartSizeBytes()
+}
+
+// How long signed upload targets (single PUT or each multipart part URL) stay
+// valid. Default 6 hours, generous enough to cover a slow multi-GB upload over a
+// modest uplink without the URLs expiring mid-flight.
+export function getSignedUploadExpirySeconds(): number {
+  const raw = process.env.SOURCE_FILE_SIGNED_UPLOAD_EXPIRY_SECONDS
+  const parsed = raw != null ? Number(raw) : NaN
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 6 * 60 * 60
+}
+
+// S3-compatible storage connection. When all four values are present we use the
+// S3 provider (which supports parallel multipart uploads); otherwise we fall
+// back to the single-PUT Supabase Storage client. Supabase exposes these under
+// Project Settings → Storage → S3 connection.
+export interface S3Config {
+  endpoint: string
+  region: string
+  accessKeyId: string
+  secretAccessKey: string
+}
+
+export function getS3Config(): S3Config | null {
+  const endpoint = process.env.SOURCE_FILE_S3_ENDPOINT
+  const region = process.env.SOURCE_FILE_S3_REGION
+  const accessKeyId = process.env.SOURCE_FILE_S3_ACCESS_KEY_ID
+  const secretAccessKey = process.env.SOURCE_FILE_S3_SECRET_ACCESS_KEY
+  if (!endpoint || !region || !accessKeyId || !secretAccessKey) {
+    return null
+  }
+  return { endpoint, region, accessKeyId, secretAccessKey }
+}
+
 // The video container formats we accept, as (extension -> mime type). Enforced
 // client-side for UX and again server-side on upload initiation.
 export const ACCEPTED_VIDEO_TYPES: Record<string, string> = {
