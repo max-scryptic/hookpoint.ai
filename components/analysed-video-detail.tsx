@@ -8,7 +8,10 @@ import {
   TrendingUpIcon,
 } from "lucide-react"
 
-import { RetentionChart } from "@/components/retention-chart"
+import {
+  RetentionChart,
+  type RetentionChartInsight,
+} from "@/components/retention-chart"
 import type { PacingAnalysis } from "@/lib/pacing-analysis"
 import type { RetentionWindow } from "@/lib/retention-windows"
 import {
@@ -331,6 +334,68 @@ export function AnalysedVideoDetail({
   const hookWindows = retentionWindows.filter((w) => w.kind === "hook")
   const drops = retentionWindows.filter((w) => w.kind === "drop_off")
   const gains = retentionWindows.filter((w) => w.kind === "gain")
+  const chartInsights: RetentionChartInsight[] = [
+    ...hookWindows
+      .filter((window) => !window.outOfRange)
+      .map((window) => ({
+        id: `hook-${window.windowKey ?? window.windowIndex}`,
+        kind: "hook" as const,
+        label: window.label,
+        fromSeconds: window.fromSeconds,
+        toSeconds: window.toSeconds,
+        metric: `${Math.max(0, Math.round(((window.startWatchRatio ?? 0) - (window.endWatchRatio ?? 0)) * 100))}%`,
+        metricLabel: "viewers lost",
+        transcript: transcriptForSegment(
+          transcript,
+          window.fromSeconds,
+          window.toSeconds,
+        ),
+      })),
+    ...drops.map((drop, index) => ({
+      id: `drop-${drop.windowKey ?? index}`,
+      kind: "drop" as const,
+      label: drop.label,
+      fromSeconds: drop.fromSeconds,
+      toSeconds: drop.toSeconds,
+      metric: `−${(Math.abs(drop.delta) * 100).toFixed(1)}%`,
+      metricLabel: "retention drop",
+      details: drop.isAbnormallySteep
+        ? [`${(drop.steepness ?? 0).toFixed(1)}× steeper than normal`]
+        : undefined,
+      transcript: transcriptForSegment(
+        transcript,
+        drop.fromSeconds,
+        drop.toSeconds,
+      ),
+    })),
+    ...gains.map((gain, index) => ({
+      id: `gain-${gain.windowKey ?? index}`,
+      kind: "gain" as const,
+      label: gain.label,
+      fromSeconds: gain.fromSeconds,
+      toSeconds: gain.toSeconds,
+      metric: `+${(gain.delta * 100).toFixed(1)}%`,
+      metricLabel: "retention gain",
+      transcript: transcriptForSegment(
+        transcript,
+        gain.fromSeconds,
+        gain.toSeconds,
+      ),
+    })),
+    ...(pacingAnalysis?.slowOrRepetitiveStretches ?? []).map(
+      (stretch, index) => ({
+        id: `pacing-${index}-${stretch.startSeconds}`,
+        kind: "pacing" as const,
+        label: "Pacing opportunity",
+        fromSeconds: stretch.startSeconds,
+        toSeconds: stretch.endSeconds,
+        metric: formatTimestamp(stretch.endSeconds - stretch.startSeconds),
+        metricLabel: "stretch length",
+        details: stretch.suggestion ? [stretch.suggestion] : undefined,
+        transcript: stretch.reason,
+      }),
+    ),
+  ]
 
   return (
     <div className="flex flex-col gap-6">
