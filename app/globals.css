@@ -16,9 +16,9 @@
   --accent: oklch(0.95 0.03 292);
   --background: oklch(1 0 0);
   --foreground: oklch(0.18 0.02 274);
-  --card: oklch(1 0 0);
+  --card: oklch(0.975 0.008 285);
   --card-foreground: oklch(0.18 0.02 274);
-  --popover: oklch(1 0 0);
+  --popover: oklch(0.975 0.008 285);
   --popover-foreground: oklch(0.18 0.02 274);
   --primary: oklch(0.54 0.2 264);
   --primary-foreground: oklch(0.985 0 0);
