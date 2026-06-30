@@ -10,8 +10,8 @@ export type RetentionChartInsight = {
   label: string
   fromSeconds: number
   toSeconds: number
-  metric: string
-  metricLabel: string
+  metric?: string
+  metricLabel?: string
   details?: string[]
   transcript?: string
 }
@@ -61,6 +61,26 @@ export function RetentionChart({
     const yFor = (watchRatio: number) =>
       PAD.top + (1 - watchRatio / yMax) * PLOT_H
 
+    const yAtFraction = (fraction: number) => {
+      if (sorted.length === 0) return PAD.top + PLOT_H
+      if (fraction <= sorted[0].elapsedRatio) return yFor(sorted[0].watchRatio)
+
+      for (let i = 1; i < sorted.length; i++) {
+        const previous = sorted[i - 1]
+        const current = sorted[i]
+        if (fraction <= current.elapsedRatio) {
+          const span = current.elapsedRatio - previous.elapsedRatio
+          const progress = span > 0 ? (fraction - previous.elapsedRatio) / span : 0
+          return yFor(
+            previous.watchRatio +
+              (current.watchRatio - previous.watchRatio) * progress,
+          )
+        }
+      }
+
+      return yFor(sorted[sorted.length - 1].watchRatio)
+    }
+
     const coords = sorted.map((p) => ({
       x: xFor(p.elapsedRatio),
       y: yFor(p.watchRatio),
@@ -89,7 +109,18 @@ export function RetentionChart({
       seconds: f * durationSeconds,
     }))
 
-    return { sorted, coords, linePath, areaPath, yMax, yFor, xFor, yTicks, xTicks }
+    return {
+      sorted,
+      coords,
+      linePath,
+      areaPath,
+      yMax,
+      yFor,
+      yAtFraction,
+      xFor,
+      yTicks,
+      xTicks,
+    }
   }, [points, durationSeconds])
 
   const hovered =
@@ -115,9 +146,9 @@ export function RetentionChart({
       name: "Retention gain",
     },
     pacing: {
-      band: "#3b82f6",
+      band: "var(--chart-4)",
       badge: "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300",
-      name: "Pacing",
+      name: "Pacing window",
     },
   } as const
 
@@ -219,7 +250,7 @@ export function RetentionChart({
           )
         })}
 
-        {/* The retention area + curve. */}
+        {/* The retention area. */}
         <path d={model.areaPath} fill={`url(#${gradientId})`} />
         <path
           d={model.linePath}
@@ -231,37 +262,35 @@ export function RetentionChart({
           vectorEffect="non-scaling-stroke"
         />
 
-        {/* Timestamped insight windows. A generous minimum width keeps very
-            short analytics buckets discoverable with a pointer or touch. */}
+        {/* Each insight is represented by one clickable marker at the midpoint
+            of its source window, positioned directly on the retention curve. */}
         {insights.map((insight) => {
           const from = Math.max(
             0,
             Math.min(durationSeconds, insight.fromSeconds),
           )
           const to = Math.max(from, Math.min(durationSeconds, insight.toSeconds))
-          const naturalX = model.xFor(
-            durationSeconds > 0 ? from / durationSeconds : 0,
-          )
-          const naturalWidth =
-            model.xFor(durationSeconds > 0 ? to / durationSeconds : 0) - naturalX
-          const width = Math.max(8, naturalWidth)
-          const x = Math.min(naturalX, WIDTH - PAD.right - width)
+          const midpoint = from + (to - from) / 2
+          const fraction = durationSeconds > 0 ? midpoint / durationSeconds : 0
+          const x = model.xFor(fraction)
+          const y = model.yAtFraction(fraction)
           const isActive = activeInsight?.id === insight.id
+          const isPinned = pinnedInsightId === insight.id
           const tone = insightTone[insight.kind]
 
           return (
             <g key={insight.id}>
-              <rect
-                x={x}
-                y={PAD.top}
-                width={width}
-                height={PLOT_H}
-                fill={tone.band}
-                opacity={isActive ? 0.22 : 0.1}
-                className="cursor-pointer transition-opacity"
+              <circle
+                cx={x}
+                cy={y}
+                r={16}
+                fill="transparent"
+                className="cursor-pointer"
                 role="button"
                 tabIndex={0}
-                aria-label={`${tone.name}: ${insight.label}, ${formatTimestamp(insight.fromSeconds)} to ${formatTimestamp(insight.toSeconds)}`}
+                aria-label={`${tone.name}: ${insight.label}, at ${formatTimestamp(midpoint)}`}
+                onPointerEnter={() => setHoveredInsightId(insight.id)}
+                onPointerLeave={() => setHoveredInsightId(null)}
                 onClick={(event) => {
                   event.stopPropagation()
                   setSelectedInsightId((current) =>
@@ -278,42 +307,41 @@ export function RetentionChart({
                   }
                 }}
               />
-              <line
-                x1={naturalX}
-                y1={PAD.top}
-                x2={naturalX}
-                y2={PAD.top + PLOT_H}
-                stroke={tone.band}
-                strokeWidth={isActive ? 2 : 1}
+              <circle
+                cx={x}
+                cy={y}
+                r={isActive ? 7 : 6}
+                fill={tone.band}
+                stroke="var(--background)"
+                strokeWidth={isActive ? 3 : 2}
                 vectorEffect="non-scaling-stroke"
                 pointerEvents="none"
-              />
+              >
+                {isPinned && (
+                  <animate
+                    attributeName="r"
+                    values="7;9;7"
+                    dur="240ms"
+                    repeatCount="1"
+                  />
+                )}
+              </circle>
             </g>
           )
         })}
 
-        {/* Hover indicator: crosshair line + dot at the nearest sample. */}
+        {/* Mouse-following crosshair at the nearest sample. */}
         {hovered && (
-          <g>
-            <line
-              x1={hovered.x}
-              y1={PAD.top}
-              x2={hovered.x}
-              y2={PAD.top + PLOT_H}
-              stroke="var(--muted-foreground)"
-              strokeWidth={1}
-              strokeDasharray="4 4"
-              vectorEffect="non-scaling-stroke"
-            />
-            <circle
-              cx={hovered.x}
-              cy={hovered.y}
-              r={4}
-              fill="var(--chart-1)"
-              stroke="var(--background)"
-              strokeWidth={2}
-            />
-          </g>
+          <line
+            x1={hovered.x}
+            y1={PAD.top}
+            x2={hovered.x}
+            y2={PAD.top + PLOT_H}
+            stroke="var(--muted-foreground)"
+            strokeWidth={1}
+            strokeDasharray="4 4"
+            vectorEffect="non-scaling-stroke"
+          />
         )}
       </svg>
 
@@ -368,20 +396,26 @@ export function RetentionChart({
                   {insightTone[activeInsight.kind].name}
                 </span>
                 <span className="font-mono text-xs text-muted-foreground">
-                  {formatTimestamp(activeInsight.fromSeconds)} –{" "}
-                  {formatTimestamp(activeInsight.toSeconds)}
+                  {formatTimestamp(
+                    activeInsight.fromSeconds +
+                      (activeInsight.toSeconds - activeInsight.fromSeconds) / 2,
+                  )}
                 </span>
               </div>
               <h3 className="mt-2 font-medium">{activeInsight.label}</h3>
             </div>
-            <div className="text-right">
-              <div className="text-xl font-semibold tabular-nums">
-                {activeInsight.metric}
+            {activeInsight.metric && (
+              <div className="text-right">
+                <div className="text-xl font-semibold tabular-nums">
+                  {activeInsight.metric}
+                </div>
+                {activeInsight.metricLabel && (
+                  <div className="text-xs text-muted-foreground">
+                    {activeInsight.metricLabel}
+                  </div>
+                )}
               </div>
-              <div className="text-xs text-muted-foreground">
-                {activeInsight.metricLabel}
-              </div>
-            </div>
+            )}
           </div>
           {activeInsight.details && activeInsight.details.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-2">

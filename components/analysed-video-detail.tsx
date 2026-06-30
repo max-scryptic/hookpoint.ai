@@ -337,61 +337,91 @@ export function AnalysedVideoDetail({
   const chartInsights: RetentionChartInsight[] = [
     ...hookWindows
       .filter((window) => !window.outOfRange)
-      .map((window) => ({
-        id: `hook-${window.windowKey ?? window.windowIndex}`,
-        kind: "hook" as const,
-        label: window.label,
-        fromSeconds: window.fromSeconds,
-        toSeconds: window.toSeconds,
-        metric: `${Math.max(0, Math.round(((window.startWatchRatio ?? 0) - (window.endWatchRatio ?? 0)) * 100))}%`,
-        metricLabel: "viewers lost",
-        transcript: transcriptForSegment(
+      .map((window) => {
+        const endPercentage = Math.round((window.endWatchRatio ?? 0) * 100)
+        const lostPercentage = Math.max(
+          0,
+          Math.round((window.startWatchRatio ?? 0) * 100) - endPercentage,
+        )
+        const said = transcriptForSegment(
           transcript,
           window.fromSeconds,
           window.toSeconds,
-        ),
-      })),
-    ...drops.map((drop, index) => ({
-      id: `drop-${drop.windowKey ?? index}`,
-      kind: "drop" as const,
-      label: drop.label,
-      fromSeconds: drop.fromSeconds,
-      toSeconds: drop.toSeconds,
-      metric: `−${(Math.abs(drop.delta) * 100).toFixed(1)}%`,
-      metricLabel: "retention drop",
-      details: drop.isAbnormallySteep
-        ? [`${(drop.steepness ?? 0).toFixed(1)}× steeper than normal`]
-        : undefined,
-      transcript: transcriptForSegment(
+        )
+
+        return {
+          id: `hook-${window.windowKey ?? window.windowIndex}`,
+          kind: "hook" as const,
+          label: window.label ?? `Hook window ${window.windowIndex + 1}`,
+          fromSeconds: window.fromSeconds,
+          toSeconds: Math.min(window.toSeconds, video.durationSeconds),
+          metric: `${lostPercentage}%`,
+          metricLabel: "viewers lost",
+          details: [
+            `${endPercentage}% still watching at end`,
+            ...(window.relativePerformance != null
+              ? [`${Math.round(window.relativePerformance * 100)}% vs. similar videos`]
+              : []),
+          ],
+          transcript: said
+            ? said.length > 240
+              ? `${said.slice(0, 240)}…`
+              : said
+            : undefined,
+        }
+      }),
+    ...drops.map((window) => {
+      const said = transcriptForSegment(
         transcript,
-        drop.fromSeconds,
-        drop.toSeconds,
-      ),
-    })),
-    ...gains.map((gain, index) => ({
-      id: `gain-${gain.windowKey ?? index}`,
-      kind: "gain" as const,
-      label: gain.label,
-      fromSeconds: gain.fromSeconds,
-      toSeconds: gain.toSeconds,
-      metric: `+${(gain.delta * 100).toFixed(1)}%`,
-      metricLabel: "retention gain",
-      transcript: transcriptForSegment(
+        window.fromSeconds,
+        window.toSeconds,
+      )
+
+      return {
+        id: `drop-${window.windowIndex}`,
+        kind: "drop" as const,
+        label: `Significant drop-off ${window.windowIndex + 1}`,
+        fromSeconds: window.fromSeconds,
+        toSeconds: window.toSeconds,
+        metric: `−${(Math.abs(window.delta) * 100).toFixed(1)}%`,
+        metricLabel: "audience retention",
+        details: [
+          ...(window.isAbnormallySteep
+            ? [`${(window.steepness ?? 0).toFixed(1)}× steeper than normal`]
+            : []),
+          ...(window.relativePerformance != null
+            ? [`${Math.round(window.relativePerformance * 100)}% vs. similar videos`]
+            : []),
+        ],
+        transcript: said || undefined,
+      }
+    }),
+    ...gains.map((window) => {
+      const said = transcriptForSegment(
         transcript,
-        gain.fromSeconds,
-        gain.toSeconds,
-      ),
-    })),
+        window.fromSeconds,
+        window.toSeconds,
+      )
+
+      return {
+        id: `gain-${window.windowIndex}`,
+        kind: "gain" as const,
+        label: `Retention gain ${window.windowIndex + 1}`,
+        fromSeconds: window.fromSeconds,
+        toSeconds: window.toSeconds,
+        metric: `+${(window.delta * 100).toFixed(1)}%`,
+        metricLabel: "audience retention",
+        transcript: said || undefined,
+      }
+    }),
     ...(pacingAnalysis?.slowOrRepetitiveStretches ?? []).map(
       (stretch, index) => ({
-        id: `pacing-${index}-${stretch.startSeconds}`,
+        id: `pacing-${stretch.startSeconds}-${index}`,
         kind: "pacing" as const,
-        label: "Pacing opportunity",
+        label: `Pacing opportunity ${index + 1}`,
         fromSeconds: stretch.startSeconds,
         toSeconds: stretch.endSeconds,
-        metric: formatTimestamp(stretch.endSeconds - stretch.startSeconds),
-        metricLabel: "stretch length",
-        details: stretch.suggestion ? [stretch.suggestion] : undefined,
+        details: stretch.suggestion ? [`Try: ${stretch.suggestion}`] : undefined,
         transcript: stretch.reason,
       }),
     ),
