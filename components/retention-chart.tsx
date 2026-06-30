@@ -6,12 +6,12 @@ import type { RetentionPoint } from "@/lib/youtube/youtube"
 
 export type RetentionChartInsight = {
   id: string
-  kind: "hook" | "drop" | "gain"
+  kind: "hook" | "drop" | "gain" | "pacing"
   label: string
   fromSeconds: number
   toSeconds: number
-  metric: string
-  metricLabel: string
+  metric?: string
+  metricLabel?: string
   details?: string[]
   transcript?: string
 }
@@ -113,6 +113,7 @@ export function RetentionChart({
     return {
       sorted,
       coords,
+      linePath,
       areaPath,
       yMax,
       yFor,
@@ -144,6 +145,11 @@ export function RetentionChart({
       band: "var(--chart-3)",
       badge: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
       name: "Retention gain",
+    },
+    pacing: {
+      band: "var(--chart-4)",
+      badge: "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300",
+      name: "Pacing window",
     },
   } as const
 
@@ -246,8 +252,18 @@ export function RetentionChart({
 
         {/* The retention area. */}
         <path d={model.areaPath} fill={`url(#${gradientId})`} />
+        <path
+          d={model.linePath}
+          fill="none"
+          stroke="var(--chart-1)"
+          strokeWidth={2}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"
+        />
 
-        {/* Clickable insight markers positioned on the retention area. */}
+        {/* Each insight is represented by one clickable marker at the midpoint
+            of its source window, positioned directly on the retention curve. */}
         {insights.map((insight) => {
           const from = Math.max(
             0,
@@ -351,8 +367,8 @@ export function RetentionChart({
       </div>
       {insights.length > 0 && (
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
-          <span>Insight markers:</span>
-          {(["hook", "drop", "gain"] as const).map((kind) =>
+          <span>Highlighted windows:</span>
+          {(["hook", "drop", "gain", "pacing"] as const).map((kind) =>
             insights.some((insight) => insight.kind === kind) ? (
               <span key={kind} className="flex items-center gap-1.5">
                 <span
@@ -381,20 +397,26 @@ export function RetentionChart({
                   {insightTone[activeInsight.kind].name}
                 </span>
                 <span className="font-mono text-xs text-muted-foreground">
-                  {formatTimestamp(activeInsight.fromSeconds)} –{" "}
-                  {formatTimestamp(activeInsight.toSeconds)}
+                  {formatTimestamp(
+                    activeInsight.fromSeconds +
+                      (activeInsight.toSeconds - activeInsight.fromSeconds) / 2,
+                  )}
                 </span>
               </div>
               <h3 className="mt-2 font-medium">{activeInsight.label}</h3>
             </div>
-            <div className="text-right">
-              <div className="text-xl font-semibold tabular-nums">
-                {activeInsight.metric}
+            {activeInsight.metric && (
+              <div className="text-right">
+                <div className="text-xl font-semibold tabular-nums">
+                  {activeInsight.metric}
+                </div>
+                {activeInsight.metricLabel && (
+                  <div className="text-xs text-muted-foreground">
+                    {activeInsight.metricLabel}
+                  </div>
+                )}
               </div>
-              <div className="text-xs text-muted-foreground">
-                {activeInsight.metricLabel}
-              </div>
-            </div>
+            )}
           </div>
           {activeInsight.details && activeInsight.details.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-2">
