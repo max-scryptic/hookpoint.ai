@@ -7,7 +7,25 @@ import {
   healCachedTranscript,
   saveAnalysedVideo,
 } from "@/lib/analysed-videos"
+import {
+  getPacingAnalysis,
+  savePacingAnalysis,
+} from "@/lib/pacing-analyses"
+import {
+  buildRetentionWindows,
+  getRetentionWindows,
+  saveRetentionWindows,
+  type RetentionWindow,
+} from "@/lib/retention-windows"
+import {
+  generatePacingAnalysis,
+  type PacingAnalysis,
+} from "@/lib/pacing-analysis"
 import { getSourceFileForVideo } from "@/lib/source-files/source-files"
+import {
+  getDurationToleranceSeconds,
+  getFilenameSimilarityThreshold,
+} from "@/lib/source-files/config"
 import {
   discardSourceFile,
   isStaleSourceFile,
@@ -19,11 +37,9 @@ import {
   ReconsentRequiredError,
 } from "@/lib/youtube/google-auth"
 import {
-  detectDropOffs,
   getAudienceRetention,
   getVideoDetails,
   getVideoTranscript,
-  type DropOff,
   type RetentionPoint,
   type TranscriptCue,
   type VideoDetails,
@@ -44,8 +60,9 @@ type AnalysisResult =
       status: "ok"
       video: VideoDetails
       retention: RetentionPoint[]
-      dropOffs: DropOff[]
+      retentionWindows: RetentionWindow[]
       transcript: TranscriptCue[]
+      pacingAnalysis: PacingAnalysis | null
     }
   | { status: "not_found" }
   | { status: "no_data" }
@@ -60,21 +77,72 @@ async function analyse(
     const supabase = await createClient()
 
     // Serve a previously-saved analysis when we have one, so we don't re-spend
-    // YouTube API quota on a video we've already looked at. Gains are derived
-    // from the stored curve on the fly, so older rows render them too.
+    // YouTube API quota on a video we've already looked at.
     const cached = await getAnalysedVideo(supabase, userId, videoId)
     if (cached?.videoDetails && cached.retention) {
+      const transcript = await healCachedTranscript(
+        supabase,
+        userId,
+        videoId,
+        cached.transcript,
+      )
+      // Retention windows are derived from the stored curve. Backfill any
+      // analysis saved before they were persisted so older rows render too.
+      let retentionWindows = await getRetentionWindows(
+        supabase,
+        userId,
+        cached.id,
+      )
+      if (retentionWindows.length === 0) {
+        retentionWindows = buildRetentionWindows(
+          cached.retention,
+          cached.videoDetails.durationSeconds,
+        )
+        try {
+          await saveRetentionWindows(
+            supabase,
+            userId,
+            cached.id,
+            retentionWindows,
+          )
+        } catch (retentionSaveError) {
+          console.error(
+            "Failed to backfill retention windows",
+            retentionSaveError,
+          )
+        }
+      }
+      let pacingAnalysis = await getPacingAnalysis(
+        supabase,
+        userId,
+        cached.id,
+      )
+      if (!pacingAnalysis && transcript.length > 0) {
+        try {
+          pacingAnalysis = await generatePacingAnalysis(
+            cached.videoDetails,
+            transcript,
+          )
+          if (pacingAnalysis) {
+            await savePacingAnalysis(
+              supabase,
+              userId,
+              cached.id,
+              pacingAnalysis,
+            )
+          }
+        } catch (pacingError) {
+          console.error("Failed to generate pacing analysis", pacingError)
+        }
+      }
+
       return {
         status: "ok",
         video: cached.videoDetails,
         retention: cached.retention,
-        dropOffs: cached.dropOffs ?? detectDropOffs(cached.retention),
-        transcript: await healCachedTranscript(
-          supabase,
-          userId,
-          videoId,
-          cached.transcript,
-        ),
+        retentionWindows,
+        transcript,
+        pacingAnalysis,
       }
     }
 
@@ -86,7 +154,10 @@ async function analyse(
     const retention = await getAudienceRetention(accessToken, video)
     if (retention.length === 0) return { status: "no_data" }
 
-    const dropOffs = detectDropOffs(retention)
+    const retentionWindows = buildRetentionWindows(
+      retention,
+      video.durationSeconds,
+    )
     // Best-effort: a missing or caption-less transcript must not fail the
     // analysis, so swallow errors and fall back to an empty transcript.
     const transcript = await getVideoTranscript(accessToken, videoId).catch(
@@ -95,22 +166,63 @@ async function analyse(
         return [] as TranscriptCue[]
       },
     )
+    let pacingAnalysis: PacingAnalysis | null = null
+    if (transcript.length > 0) {
+      try {
+        pacingAnalysis = await generatePacingAnalysis(video, transcript)
+      } catch (pacingError) {
+        console.error("Failed to generate pacing analysis", pacingError)
+      }
+    }
 
     // Persist everything we fetched so future visits hit the cache above.
     try {
-      await saveAnalysedVideo(supabase, {
+      const savedVideo = await saveAnalysedVideo(supabase, {
         userId,
         video,
         retention,
-        dropOffs,
         transcript,
       })
+      if (savedVideo) {
+        try {
+          await saveRetentionWindows(
+            supabase,
+            userId,
+            savedVideo.id,
+            retentionWindows,
+          )
+        } catch (retentionSaveError) {
+          console.error(
+            "Failed to save retention windows",
+            retentionSaveError,
+          )
+        }
+        if (pacingAnalysis) {
+          try {
+            await savePacingAnalysis(
+              supabase,
+              userId,
+              savedVideo.id,
+              pacingAnalysis,
+            )
+          } catch (pacingSaveError) {
+            console.error("Failed to save pacing analysis", pacingSaveError)
+          }
+        }
+      }
     } catch (saveError) {
       // Saving is best-effort — never block showing the analysis on a DB write.
       console.error("Failed to save analysed video", saveError)
     }
 
-    return { status: "ok", video, retention, dropOffs, transcript }
+    return {
+      status: "ok",
+      video,
+      retention,
+      retentionWindows,
+      transcript,
+      pacingAnalysis,
+    }
   } catch (error) {
     if (error instanceof ReconsentRequiredError) {
       return { status: "reconnect" }
@@ -198,10 +310,16 @@ export default async function Page({
             <AnalysedVideoDetail
               video={result.video}
               retention={result.retention}
+              retentionWindows={result.retentionWindows}
               transcript={result.transcript}
+              pacingAnalysis={result.pacingAnalysis}
             />
             <SourceFileUpload
               videoId={videoId}
+              videoTitle={result.video.title}
+              youtubeDurationSeconds={result.video.durationSeconds}
+              durationToleranceSeconds={getDurationToleranceSeconds()}
+              filenameSimilarityThreshold={getFilenameSimilarityThreshold()}
               initialSourceFile={initialSourceFile}
             />
           </>

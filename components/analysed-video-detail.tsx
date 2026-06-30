@@ -1,6 +1,5 @@
 "use client"
 
-import { useMemo } from "react"
 import Image from "next/image"
 import {
   AreaChartIcon,
@@ -9,16 +8,11 @@ import {
   TrendingUpIcon,
 } from "lucide-react"
 
+import { RetentionChart } from "@/components/retention-chart"
+import type { PacingAnalysis } from "@/lib/pacing-analysis"
+import type { RetentionWindow } from "@/lib/retention-windows"
 import {
-  RetentionChart,
-  type RetentionChartInsight,
-} from "@/components/retention-chart"
-import {
-  computeRetentionWindows,
-  detectRetentionGains,
-  detectSignificantDropOffs,
   transcriptForSegment,
-  type RetentionGain,
   type RetentionPoint,
   type TranscriptCue,
   type VideoDetails,
@@ -42,7 +36,7 @@ function RetentionWindows({
   windows,
   transcript,
 }: {
-  windows: ReturnType<typeof computeRetentionWindows>
+  windows: RetentionWindow[]
   transcript: TranscriptCue[]
 }) {
   if (windows.length === 0) return null
@@ -61,13 +55,16 @@ function RetentionWindows({
             window.fromSeconds,
             window.toSeconds,
           )
-          const endPercentage = Math.round(window.endWatchRatio * 100)
+          const endPercentage = Math.round((window.endWatchRatio ?? 0) * 100)
           const lostPercentage = Math.max(
             0,
-            Math.round(window.startWatchRatio * 100) - endPercentage,
+            Math.round((window.startWatchRatio ?? 0) * 100) - endPercentage,
           )
           return (
-            <div key={window.id} className="rounded-xl border bg-card p-4">
+            <div
+              key={window.windowKey ?? window.windowIndex}
+              className="rounded-xl border bg-card p-4"
+            >
               <div className="flex items-baseline justify-between gap-2">
                 <h3 className="text-sm font-medium">{window.label}</h3>
                 <span className="font-mono text-xs text-muted-foreground">
@@ -123,6 +120,64 @@ function Metric({ label, value }: { label: string; value: string }) {
   )
 }
 
+function PacingAnalysisSection({
+  analysis,
+  hasTranscript,
+}: {
+  analysis: PacingAnalysis | null
+  hasTranscript: boolean
+}) {
+  return (
+    <section className="flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <GaugeIcon className="size-4 text-violet-600 dark:text-violet-400" />
+        <h2 className="text-sm font-medium">Pacing analysis</h2>
+      </div>
+
+      {!analysis ? (
+        <div className="rounded-xl border bg-muted/30 p-6 text-sm text-muted-foreground">
+          {hasTranscript
+            ? "Pacing analysis could not be generated right now. It will be retried the next time this report is opened."
+            : "Pacing analysis is unavailable because this video has no timestamped transcript."}
+        </div>
+      ) : analysis.slowOrRepetitiveStretches.length === 0 ? (
+        <div className="rounded-xl border bg-muted/30 p-6 text-sm text-muted-foreground">
+          No slow or repetitive stretches stood out — the pacing holds up across
+          this video.
+        </div>
+      ) : (
+        <ul className="divide-y rounded-xl border bg-card">
+          {[...analysis.slowOrRepetitiveStretches]
+            .sort((a, b) => a.startSeconds - b.startSeconds)
+            .map((stretch, index) => (
+            <li
+              key={index}
+              className="flex flex-col gap-2 p-4"
+            >
+              <div className="flex items-center gap-3">
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                  {index + 1}
+                </span>
+                <span className="font-mono text-sm">
+                  {formatTimestamp(stretch.startSeconds)} –{" "}
+                  {formatTimestamp(stretch.endSeconds)}
+                </span>
+              </div>
+              <p className="pl-10 text-sm">{stretch.reason}</p>
+              {stretch.suggestion && (
+                <p className="pl-10 text-sm text-muted-foreground">
+                  <span className="font-medium text-foreground">Try: </span>
+                  {stretch.suggestion}
+                </p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Drop-off list (significant drops)
 // ---------------------------------------------------------------------------
@@ -131,7 +186,9 @@ function DropList({
   drops,
   transcript,
 }: {
-  drops: ReturnType<typeof detectSignificantDropOffs>
+  // The significant *mid-video* drop-offs (kind = 'drop_off'). The Hook section
+  // above already covers the opening, so these never overlap it.
+  drops: RetentionWindow[]
   transcript: TranscriptCue[]
 }) {
   if (drops.length === 0) {
@@ -148,29 +205,31 @@ function DropList({
       {drops.map((drop, index) => {
         const said = transcriptForSegment(
           transcript,
-          drop.fromTimestampSeconds,
-          drop.toTimestampSeconds,
+          drop.fromSeconds,
+          drop.toSeconds,
         )
         return (
-          <li key={`${drop.fromTimestampSeconds}-${index}`} className="flex flex-col gap-2 p-4">
+          <li key={`${drop.fromSeconds}-${index}`} className="flex flex-col gap-2 p-4">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
                   {index + 1}
                 </span>
                 <span className="font-mono text-sm">
-                  {formatTimestamp(drop.fromTimestampSeconds)} –{" "}
-                  {formatTimestamp(drop.toTimestampSeconds)}
+                  {formatTimestamp(drop.fromSeconds)} –{" "}
+                  {formatTimestamp(drop.toSeconds)}
                 </span>
               </div>
               <span className="text-sm font-medium text-destructive">
-                −{(drop.watchRatioDrop * 100).toFixed(1)}%
+                −{(Math.abs(drop.delta) * 100).toFixed(1)}%
               </span>
             </div>
 
             <div className="flex flex-wrap gap-2 pl-10">
               {drop.isAbnormallySteep && (
-                <Badge>{drop.steepness.toFixed(1)}× steeper than normal</Badge>
+                <Badge>
+                  {(drop.steepness ?? 0).toFixed(1)}× steeper than normal
+                </Badge>
               )}
               {drop.relativePerformance != null && (
                 <Badge tone={drop.relativePerformance < 0.5 ? "warn" : "muted"}>
@@ -215,7 +274,7 @@ function GainList({
   gains,
   transcript,
 }: {
-  gains: RetentionGain[]
+  gains: RetentionWindow[]
   transcript: TranscriptCue[]
 }) {
   return (
@@ -223,23 +282,23 @@ function GainList({
       {gains.map((gain, index) => {
         const said = transcriptForSegment(
           transcript,
-          gain.fromTimestampSeconds,
-          gain.toTimestampSeconds,
+          gain.fromSeconds,
+          gain.toSeconds,
         )
         return (
-          <li key={`${gain.fromTimestampSeconds}-${index}`} className="flex flex-col gap-2 p-4">
+          <li key={`${gain.fromSeconds}-${index}`} className="flex flex-col gap-2 p-4">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
                   {index + 1}
                 </span>
                 <span className="font-mono text-sm">
-                  {formatTimestamp(gain.fromTimestampSeconds)} –{" "}
-                  {formatTimestamp(gain.toTimestampSeconds)}
+                  {formatTimestamp(gain.fromSeconds)} –{" "}
+                  {formatTimestamp(gain.toSeconds)}
                 </span>
               </div>
               <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
-                +{(gain.watchRatioGain * 100).toFixed(1)}%
+                +{(gain.delta * 100).toFixed(1)}%
               </span>
             </div>
             {said && (
@@ -259,100 +318,19 @@ function GainList({
 export function AnalysedVideoDetail({
   video,
   retention,
+  retentionWindows,
   transcript = [],
+  pacingAnalysis = null,
 }: {
   video: VideoDetails
   retention: RetentionPoint[]
+  retentionWindows: RetentionWindow[]
   transcript?: TranscriptCue[]
+  pacingAnalysis?: PacingAnalysis | null
 }) {
-  const windows = useMemo(
-    () => computeRetentionWindows(retention, video.durationSeconds),
-    [retention, video.durationSeconds],
-  )
-  const drops = useMemo(
-    () => detectSignificantDropOffs(retention, { limit: 4 }),
-    [retention],
-  )
-  const gains = useMemo(() => detectRetentionGains(retention), [retention])
-  const chartInsights = useMemo<RetentionChartInsight[]>(() => {
-    const truncateTranscript = (text: string) =>
-      text.length > 240 ? `${text.slice(0, 240)}…` : text
-
-    return [
-      ...windows
-        .filter((window) => !window.outOfRange)
-        .map((window) => {
-          const endPercentage = Math.round(window.endWatchRatio * 100)
-          const lostPercentage = Math.max(
-            0,
-            Math.round(window.startWatchRatio * 100) - endPercentage,
-          )
-          const said = transcriptForSegment(
-            transcript,
-            window.fromSeconds,
-            window.toSeconds,
-          )
-          return {
-            id: `hook-${window.id}`,
-            kind: "hook" as const,
-            label: window.label,
-            fromSeconds: window.fromSeconds,
-            toSeconds: Math.min(window.toSeconds, video.durationSeconds),
-            metric: `${lostPercentage}%`,
-            metricLabel: "viewers lost",
-            details: [
-              `${endPercentage}% still watching at end`,
-              ...(window.relativePerformance != null
-                ? [`${Math.round(window.relativePerformance * 100)}% vs. similar videos`]
-                : []),
-            ],
-            transcript: said ? truncateTranscript(said) : undefined,
-          }
-        }),
-      ...drops.map((drop, index) => {
-        const said = transcriptForSegment(
-          transcript,
-          drop.fromTimestampSeconds,
-          drop.toTimestampSeconds,
-        )
-        return {
-          id: `drop-${drop.fromTimestampSeconds}-${index}`,
-          kind: "drop" as const,
-          label: `Significant drop-off ${index + 1}`,
-          fromSeconds: drop.fromTimestampSeconds,
-          toSeconds: drop.toTimestampSeconds,
-          metric: `−${(drop.watchRatioDrop * 100).toFixed(1)}%`,
-          metricLabel: "audience retention",
-          details: [
-            ...(drop.isAbnormallySteep
-              ? [`${drop.steepness.toFixed(1)}× steeper than normal`]
-              : []),
-            ...(drop.relativePerformance != null
-              ? [`${Math.round(drop.relativePerformance * 100)}% vs. similar videos`]
-              : []),
-          ],
-          transcript: said ? truncateTranscript(said) : undefined,
-        }
-      }),
-      ...gains.map((gain, index) => {
-        const said = transcriptForSegment(
-          transcript,
-          gain.fromTimestampSeconds,
-          gain.toTimestampSeconds,
-        )
-        return {
-          id: `gain-${gain.fromTimestampSeconds}-${index}`,
-          kind: "gain" as const,
-          label: `Retention gain ${index + 1}`,
-          fromSeconds: gain.fromTimestampSeconds,
-          toSeconds: gain.toTimestampSeconds,
-          metric: `+${(gain.watchRatioGain * 100).toFixed(1)}%`,
-          metricLabel: "audience retention",
-          transcript: said ? truncateTranscript(said) : undefined,
-        }
-      }),
-    ]
-  }, [drops, gains, transcript, video.durationSeconds, windows])
+  const hookWindows = retentionWindows.filter((w) => w.kind === "hook")
+  const drops = retentionWindows.filter((w) => w.kind === "drop_off")
+  const gains = retentionWindows.filter((w) => w.kind === "gain")
 
   return (
     <div className="flex flex-col gap-6">
@@ -391,10 +369,7 @@ export function AnalysedVideoDetail({
         />
       </section>
 
-      <RetentionWindows
-        windows={windows}
-        transcript={transcript}
-      />
+      <RetentionWindows windows={hookWindows} transcript={transcript} />
 
       <section className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
@@ -413,6 +388,11 @@ export function AnalysedVideoDetail({
           <GainList gains={gains} transcript={transcript} />
         </section>
       )}
+
+      <PacingAnalysisSection
+        analysis={pacingAnalysis}
+        hasTranscript={transcript.length > 0}
+      />
     </div>
   )
 }

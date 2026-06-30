@@ -846,9 +846,10 @@ export function detectSignificantDropOffs(
     steepnessFactor?: number
     underperformBelow?: number
     limit?: number
-    // Drop-offs landing at or before this mark are skipped. Defaults to the end
-    // of the fixed "The Hook" windows, which already break out the opening, so
-    // this list only surfaces drops the hook section doesn't already cover.
+    // Drop-offs whose window starts before this mark are skipped. Defaults to
+    // the end of the fixed "The Hook" windows, which already break out the
+    // opening, so this list only surfaces drops that begin at or after the hook
+    // section and never overlap it.
     ignoreBeforeSeconds?: number
   } = {},
 ): SignificantDropOff[] {
@@ -866,8 +867,12 @@ export function detectSignificantDropOffs(
   for (let i = 1; i < points.length; i++) {
     const prev = points[i - 1]
     const curr = points[i]
-    // Skip anything inside the opening already covered by The Hook windows.
-    if (curr.timestampSeconds <= ignoreBeforeSeconds) continue
+    // Skip any window that begins inside the opening already covered by The
+    // Hook windows. We gate on the window's start (`prev`) rather than its end
+    // (`curr`): a step that straddles the boundary (e.g. 25s -> 35s) would
+    // otherwise be kept and stored as a drop-off starting at 25s, overlapping
+    // the hook section.
+    if (prev.timestampSeconds < ignoreBeforeSeconds) continue
     const delta = prev.watchRatio - curr.watchRatio
     if (delta < minDrop) continue
 

@@ -2,10 +2,9 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { CircleCheckIcon } from "lucide-react"
 
-import { AnalysisProcessingOverlay } from "@/components/analysis-processing"
+import { useAnalysisLauncher } from "@/components/analysis-launcher"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { parseVideoId } from "@/lib/youtube/youtube"
@@ -16,18 +15,15 @@ interface AlreadyAnalysed {
 }
 
 export function AnalyseVideoForm() {
-  const router = useRouter()
+  // The launcher owns the "analysing your video" popup and the redirect to the
+  // report once /api/analyze resolves (see AnalysisLauncherProvider). The form
+  // just validates the URL, then hands the video off to it.
+  const launcher = useAnalysisLauncher()
   const [url, setUrl] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [alreadyAnalysed, setAlreadyAnalysed] =
     useState<AlreadyAnalysed | null>(null)
   const [isValidating, setIsValidating] = useState(false)
-  // Once we start a brand-new analysis we show a full-screen popup and keep it up
-  // while the analysis actually runs (the /api/analyze request). Only when that
-  // finishes do we navigate to the report — which now reads from the cache the
-  // analyse request just wrote, so it loads straight into the finished UI with no
-  // "analysing" state. Stays true through router.push; the form unmounts on nav.
-  const [isAnalysing, setIsAnalysing] = useState(false)
 
   // The button only lights up once the input looks like a YouTube video URL or
   // ID. Ownership of the video is confirmed server-side on submit.
@@ -74,45 +70,19 @@ export function AnalyseVideoForm() {
         return
       }
 
-      // Brand-new analysis: show the popup and keep the user here while the
-      // analysis runs. /api/analyze fetches everything and writes it to the
-      // cache; only once it resolves do we navigate to the report (now a fast
-      // cache read), so the user never lands on an empty "analysing" page.
-      setIsAnalysing(true)
-      const analyseResponse = await fetch("/api/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
-      })
-
-      if (!analyseResponse.ok) {
-        const analyseData = (await analyseResponse.json().catch(() => ({}))) as {
-          error?: string
-          message?: string
-        }
-        setError(
-          analyseData.error === "reconnect_required"
-            ? (analyseData.message ?? "Please reconnect your YouTube account.")
-            : (analyseData.error ?? "We couldn't analyse that video."),
-        )
-        setIsValidating(false)
-        setIsAnalysing(false)
-        return
-      }
-
-      // Leave the popup up — it covers the navigation until the form unmounts.
-      router.push(`/dashboard/analysed-video/${data.videoId}`)
+      // Brand-new analysis: hand off to the launcher, which shows the popup,
+      // runs /api/analyze, and redirects to the report once it resolves — so the
+      // user never lands on an empty "analysing" page.
+      setIsValidating(false)
+      launcher?.startAnalysis(data.videoId)
     } catch {
       setError("Something went wrong. Please try again.")
       setIsValidating(false)
-      setIsAnalysing(false)
     }
   }
 
   return (
-    <>
-      {isAnalysing && <AnalysisProcessingOverlay />}
-      <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-2">
       <div className="flex items-start gap-2">
         <Input
           type="url"
@@ -149,6 +119,5 @@ export function AnalyseVideoForm() {
         </div>
       )}
     </form>
-    </>
   )
 }

@@ -7,7 +7,6 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import {
   cleanTranscriptCues,
-  type DropOff,
   type RetentionPoint,
   type TranscriptCue,
   type VideoDetails,
@@ -23,7 +22,6 @@ export interface AnalysedVideo {
   dateAnalysed: string
   videoDetails: VideoDetails | null
   retention: RetentionPoint[] | null
-  dropOffs: DropOff[] | null
   transcript: TranscriptCue[] | null
   rawAnalytics: Record<string, unknown> | null
 }
@@ -37,13 +35,12 @@ interface AnalysedVideoRow {
   date_analysed: string
   video_details: VideoDetails | null
   retention: RetentionPoint[] | null
-  drop_offs: DropOff[] | null
   transcript: TranscriptCue[] | null
   raw_analytics: Record<string, unknown> | null
 }
 
 const COLUMNS =
-  "id, user_id, video_id, video_title, date_analysed, video_details, retention, drop_offs, transcript, raw_analytics"
+  "id, user_id, video_id, video_title, date_analysed, video_details, retention, transcript, raw_analytics"
 
 function mapRow(row: AnalysedVideoRow): AnalysedVideo {
   return {
@@ -54,7 +51,6 @@ function mapRow(row: AnalysedVideoRow): AnalysedVideo {
     dateAnalysed: row.date_analysed,
     videoDetails: row.video_details,
     retention: row.retention,
-    dropOffs: row.drop_offs,
     transcript: row.transcript,
     rawAnalytics: row.raw_analytics,
   }
@@ -64,7 +60,6 @@ export interface SaveAnalysedVideoInput {
   userId: string
   video: VideoDetails
   retention: RetentionPoint[]
-  dropOffs: DropOff[]
   // Timestamped caption cues; omitted when the video has no captions.
   transcript?: TranscriptCue[]
   // Anything else we fetched that doesn't yet have a dedicated column.
@@ -87,7 +82,6 @@ export async function saveAnalysedVideo(
         date_analysed: new Date().toISOString(),
         video_details: input.video,
         retention: input.retention,
-        drop_offs: input.dropOffs,
         // Keep the persistence boundary canonical even if a transcript comes
         // from a source that did not pass through the WebVTT parser.
         transcript: input.transcript

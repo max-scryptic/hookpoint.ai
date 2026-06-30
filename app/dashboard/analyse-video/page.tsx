@@ -1,4 +1,5 @@
 import { AnalyseVideoForm } from "@/components/analyse-video-form"
+import { AnalysisLauncherProvider } from "@/components/analysis-launcher"
 import { ConnectYouTubeButton } from "@/components/connect-youtube-button"
 import { VideoBrowser } from "@/components/video-browser"
 import { requireAuthenticatedUser } from "@/lib/auth"
@@ -95,7 +96,9 @@ export default async function Page() {
         </div>
 
         {result.status === "ok" && (
-          <>
+          // The launcher provides the shared "analysing your video" popup +
+          // redirect for both the URL form and the recent-uploads list below.
+          <AnalysisLauncherProvider>
             <AnalyseVideoForm />
             <div className="mt-4 flex flex-col gap-3">
               <h2 className="text-sm font-medium text-muted-foreground">
@@ -106,7 +109,7 @@ export default async function Page() {
                 analysedVideoIds={analysedVideoIds}
               />
             </div>
-          </>
+          </AnalysisLauncherProvider>
         )}
 
         {result.status === "reconnect" && (

@@ -14,6 +14,12 @@ import {
 import { Button } from "@/components/ui/button"
 import { ACCEPTED_EXTENSIONS, isAcceptedExtension } from "@/lib/source-files/config"
 import type { SerialisedSourceFile } from "@/lib/source-files/serialise"
+import {
+  compareDuration,
+  computeFilenameSimilarity,
+  filenameStatusFromScore,
+  type FilenameValidationStatus,
+} from "@/lib/source-files/validation"
 
 // The accept attribute / human hint for the file picker.
 const ACCEPT_ATTR = ACCEPTED_EXTENSIONS.map((ext) => `.${ext}`).join(",")
@@ -21,6 +27,14 @@ const ACCEPT_ATTR = ACCEPTED_EXTENSIONS.map((ext) => `.${ext}`).join(",")
 type ClientState =
   | { phase: "idle" }
   | { phase: "preparing"; filename: string }
+  | {
+      phase: "warning"
+      file: File
+      durationSeconds: number | null
+      durationDifferenceSeconds: number | null
+      durationMismatch: boolean
+      filenameStatus: FilenameValidationStatus
+    }
   | { phase: "uploading"; progress: number; filename: string }
   | { phase: "processing"; filename: string }
   | { phase: "error"; message: string }
@@ -266,9 +280,17 @@ function uploadToSignedUrl(
 
 export function SourceFileUpload({
   videoId,
+  videoTitle,
+  youtubeDurationSeconds,
+  durationToleranceSeconds,
+  filenameSimilarityThreshold,
   initialSourceFile,
 }: {
   videoId: string
+  videoTitle: string
+  youtubeDurationSeconds: number
+  durationToleranceSeconds: number
+  filenameSimilarityThreshold: number
   initialSourceFile: SerialisedSourceFile | null
 }) {
   const [sourceFile, setSourceFile] = useState<SerialisedSourceFile | null>(
@@ -300,10 +322,8 @@ export function SourceFileUpload({
     return () => window.removeEventListener("beforeunload", handleBeforeUnload)
   }, [isBusy])
 
-  async function startUpload(file: File) {
-    // Lock the UI the instant a file is chosen. There's a noticeable gap before
-    // the progress bar appears (the initiate-upload round-trip), and without
-    // this the user could click the button again and start a second upload.
+  async function preflightFile(file: File) {
+    // Inspect the local file before creating an upload or transferring bytes.
     setClient({ phase: "preparing", filename: file.name })
 
     // Client-side format check for fast feedback. The server enforces it again.
@@ -314,6 +334,49 @@ export function SourceFileUpload({
       })
       return
     }
+
+    const durationSeconds = await readVideoDuration(file)
+    const filenameStatus = filenameStatusFromScore(
+      computeFilenameSimilarity(file.name, videoTitle),
+      filenameSimilarityThreshold,
+    )
+    const durationComparison =
+      durationSeconds != null && youtubeDurationSeconds > 0
+        ? compareDuration(
+            durationSeconds,
+            youtubeDurationSeconds,
+            durationToleranceSeconds,
+          )
+        : null
+    const durationMismatch = durationComparison?.status === "failed"
+
+    if (
+      durationMismatch ||
+      durationComparison == null ||
+      filenameStatus !== "passed"
+    ) {
+      setClient({
+        phase: "warning",
+        file,
+        durationSeconds,
+        durationDifferenceSeconds: durationComparison?.differenceSeconds ?? null,
+        durationMismatch,
+        filenameStatus,
+      })
+      return
+    }
+
+    await uploadFile(file, durationSeconds, false)
+  }
+
+  async function uploadFile(
+    file: File,
+    durationSeconds: number | null,
+    durationMismatchConfirmed: boolean,
+  ) {
+    // Lock the UI before the initiate-upload round-trip so a second upload
+    // cannot be started in the gap before transfer progress appears.
+    setClient({ phase: "preparing", filename: file.name })
 
     try {
       // 1. Ask the backend to create the record + a signed upload target.
@@ -385,12 +448,10 @@ export function SourceFileUpload({
         return
       }
 
-      // 3. Tell the backend the upload finished; it verifies + validates. We
-      // measure the file's duration in the browser and hand it over so the
-      // server can do the duration-match check without probing the bytes. For a
-      // multipart upload we also send the part list so the server can assemble it.
+      // 3. Tell the backend the upload finished; it verifies the object and
+      // recomputes validation from the preflight duration. For a multipart
+      // upload we also send the part list so the server can assemble it.
       setClient({ phase: "processing", filename: file.name })
-      const durationSeconds = await readVideoDuration(file)
       const completeRes = await fetch(
         `/api/source-files/${created.id}/complete-upload`,
         {
@@ -400,10 +461,11 @@ export function SourceFileUpload({
             multipart
               ? {
                   durationSeconds,
+                  durationMismatchConfirmed,
                   uploadId: multipart.uploadId,
                   parts: multipartParts,
                 }
-              : { durationSeconds },
+              : { durationSeconds, durationMismatchConfirmed },
           ),
         },
       )
@@ -438,7 +500,21 @@ export function SourceFileUpload({
     const file = event.target.files?.[0]
     // Reset so picking the same file again re-triggers onChange.
     event.target.value = ""
-    if (file) void startUpload(file)
+    if (file) void preflightFile(file)
+  }
+
+  function proceedAfterWarning() {
+    if (client.phase !== "warning") return
+    void uploadFile(
+      client.file,
+      client.durationSeconds,
+      client.durationMismatch,
+    )
+  }
+
+  function chooseAnotherFile() {
+    setClient({ phase: "idle" })
+    inputRef.current?.click()
   }
 
   async function onDelete() {
@@ -482,6 +558,10 @@ export function SourceFileUpload({
           isBusy={isBusy}
           onPick={triggerPicker}
           onDelete={onDelete}
+          onProceed={proceedAfterWarning}
+          onChooseAnother={chooseAnotherFile}
+          videoTitle={videoTitle}
+          youtubeDurationSeconds={youtubeDurationSeconds}
         />
       </div>
     </section>
@@ -494,12 +574,20 @@ function Body({
   isBusy,
   onPick,
   onDelete,
+  onProceed,
+  onChooseAnother,
+  videoTitle,
+  youtubeDurationSeconds,
 }: {
   sourceFile: SerialisedSourceFile | null
   client: ClientState
   isBusy: boolean
   onPick: () => void
   onDelete: () => void
+  onProceed: () => void
+  onChooseAnother: () => void
+  videoTitle: string
+  youtubeDurationSeconds: number
 }) {
   // In-flight states take precedence over the stored record's state.
   if (client.phase === "preparing") {
@@ -509,6 +597,51 @@ function Body({
         title="Preparing upload…"
         subtitle={client.filename}
       />
+    )
+  }
+
+  if (client.phase === "warning") {
+    return (
+      <div className="flex flex-col gap-3">
+        <StatusRow
+          icon={<AlertTriangleIcon className="size-4 text-amber-500" />}
+          title="Please check this file before uploading"
+          subtitle={client.file.name}
+        />
+        <ul className="list-disc space-y-1 pl-5 text-sm text-amber-800 dark:text-amber-300">
+          {client.durationMismatch && (
+            <li>
+              Its duration is {formatDuration(client.durationSeconds)}, while the
+              YouTube video is {formatDuration(youtubeDurationSeconds)} — a difference
+              of {client.durationDifferenceSeconds?.toFixed(1) ?? "?"} seconds.
+            </li>
+          )}
+          {client.durationSeconds == null && (
+            <li>The browser couldn’t read this file’s duration.</li>
+          )}
+          {client.filenameStatus === "warning" && (
+            <li>
+              The filename doesn’t look similar to the YouTube title “{videoTitle}”.
+            </li>
+          )}
+          {client.filenameStatus === "unknown" && (
+            <li>The filename couldn’t be compared with the YouTube title.</li>
+          )}
+        </ul>
+        <p className="text-sm text-muted-foreground">
+          No video data has been uploaded yet. Continue only if this is the correct
+          source file.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={onProceed}>
+            <UploadIcon className="size-4" />
+            Upload anyway
+          </Button>
+          <Button variant="outline" onClick={onChooseAnother}>
+            Choose another file
+          </Button>
+        </div>
+      </div>
     )
   }
 
@@ -626,11 +759,25 @@ function Body({
       />
 
       {isWarning && (
-        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
-          {durationUnchecked
-            ? "We couldn’t automatically verify this file’s duration in your browser (this video format doesn’t support it). You can continue if this is the correct source file."
-            : "The duration matches, but the uploaded filename does not look very similar to the YouTube title. You can continue if this is the correct source file."}
-        </p>
+        <ul className="list-disc space-y-1 rounded-lg bg-amber-50 px-7 py-2 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
+          {sourceFile.durationValidationStatus === "failed" && (
+            <li>
+              You chose to continue even though this file’s duration differs from
+              the YouTube video.
+            </li>
+          )}
+          {durationUnchecked && (
+            <li>
+              We couldn’t automatically verify this file’s duration in your browser.
+            </li>
+          )}
+          {sourceFile.filenameValidationStatus === "warning" && (
+            <li>The filename does not look similar to the YouTube title.</li>
+          )}
+          {sourceFile.filenameValidationStatus === "unknown" && (
+            <li>We couldn’t compare the filename with the YouTube title.</li>
+          )}
+        </ul>
       )}
 
       <Meta sourceFile={sourceFile} />
