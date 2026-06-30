@@ -197,6 +197,42 @@ async function uploadFileMultipart(
   return completed.filter((p): p is CompletedPart => p != null)
 }
 
+// Reads a video file's duration in the browser by loading just its metadata via
+// an off-screen <video> element. The browser already holds the picked file, so
+// this is essentially free and avoids any server-side probing. Resolves to null
+// when the browser can't decode the container (notably most .mkv files) or the
+// metadata can't be read within a short grace period — the server treats null as
+// "couldn't verify" rather than a failure.
+function readVideoDuration(file: File): Promise<number | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file)
+    const video = document.createElement("video")
+    let settled = false
+
+    const finish = (value: number | null) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      URL.revokeObjectURL(url)
+      video.removeAttribute("src")
+      video.load()
+      resolve(value)
+    }
+
+    // Some formats never fire loadedmetadata or error; cap the wait so a stuck
+    // probe can't hold up completing the upload.
+    const timer = setTimeout(() => finish(null), 15_000)
+
+    video.preload = "metadata"
+    video.onloadedmetadata = () => {
+      const duration = video.duration
+      finish(Number.isFinite(duration) && duration > 0 ? duration : null)
+    }
+    video.onerror = () => finish(null)
+    video.src = url
+  })
+}
+
 // Drives a direct-to-storage PUT of `file` to the Supabase signed upload URL,
 // reporting progress. Uses XHR (not fetch) because only XHR exposes upload
 // progress events, which power the progress bar for these large files.
@@ -321,14 +357,17 @@ export function SourceFileUpload({
       const onUploadProgress = (fraction: number) =>
         setClient({ phase: "uploading", progress: fraction, filename: file.name })
 
-      let completeBody: string | undefined
       const multipart = (initData as UploadInitResponse).multipartUpload
       const single = (initData as UploadInitResponse).upload
 
+      let multipartParts: CompletedPart[] | undefined
       if (multipart) {
-        let parts: CompletedPart[]
         try {
-          parts = await uploadFileMultipart(file, multipart, onUploadProgress)
+          multipartParts = await uploadFileMultipart(
+            file,
+            multipart,
+            onUploadProgress,
+          )
         } catch (error) {
           // Best-effort: tell the server to discard the orphaned parts so they
           // don't linger until the bucket lifecycle rule reaps them.
@@ -339,7 +378,6 @@ export function SourceFileUpload({
           }).catch(() => {})
           throw error
         }
-        completeBody = JSON.stringify({ uploadId: multipart.uploadId, parts })
       } else if (single?.signedUrl) {
         await uploadToSignedUrl(single.signedUrl, file, onUploadProgress)
       } else {
@@ -347,14 +385,26 @@ export function SourceFileUpload({
         return
       }
 
-      // 3. Tell the backend the upload finished; it verifies + validates.
+      // 3. Tell the backend the upload finished; it verifies + validates. We
+      // measure the file's duration in the browser and hand it over so the
+      // server can do the duration-match check without probing the bytes. For a
+      // multipart upload we also send the part list so the server can assemble it.
       setClient({ phase: "processing", filename: file.name })
+      const durationSeconds = await readVideoDuration(file)
       const completeRes = await fetch(
         `/api/source-files/${created.id}/complete-upload`,
         {
           method: "POST",
-          headers: completeBody ? { "Content-Type": "application/json" } : undefined,
-          body: completeBody,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            multipart
+              ? {
+                  durationSeconds,
+                  uploadId: multipart.uploadId,
+                  parts: multipartParts,
+                }
+              : { durationSeconds },
+          ),
         },
       )
       const completeData = (await completeRes.json()) as
@@ -555,8 +605,12 @@ function Body({
     )
   }
 
-  // Ready — either fully passed or passed-with-filename-warning.
+  // Ready — fully passed, or passed with a soft warning (duration couldn't be
+  // checked, or the filename doesn't look like the title).
   const isWarning = sourceFile.validationStatus === "warning"
+  // A null duration status means we couldn't verify the duration (e.g. the
+  // browser can't decode this container) rather than that it failed.
+  const durationUnchecked = sourceFile.durationValidationStatus === null
   return (
     <div className="flex flex-col gap-3">
       <StatusRow
@@ -573,9 +627,9 @@ function Body({
 
       {isWarning && (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
-          The duration matches, but the uploaded filename does not look very
-          similar to the YouTube title. You can continue if this is the correct
-          source file.
+          {durationUnchecked
+            ? "We couldn’t automatically verify this file’s duration in your browser (this video format doesn’t support it). You can continue if this is the correct source file."
+            : "The duration matches, but the uploaded filename does not look very similar to the YouTube title. You can continue if this is the correct source file."}
         </p>
       )}
 
@@ -638,7 +692,7 @@ function Meta({ sourceFile }: { sourceFile: SerialisedSourceFile }) {
             ? "Matches YouTube"
             : sourceFile.durationValidationStatus === "failed"
               ? `Off by ${sourceFile.durationDifferenceSeconds?.toFixed(1) ?? "?"}s`
-              : "—"
+              : "Not verified"
         }
       />
       <Field

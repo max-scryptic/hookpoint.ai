@@ -25,7 +25,7 @@ create table public.source_files (
   file_size_bytes bigint,
   mime_type text,
 
-  -- Duration validation (ffprobe-extracted vs. YouTube-reported).
+  -- Duration validation (browser-measured vs. YouTube-reported).
   uploaded_duration_seconds double precision,
   youtube_duration_seconds double precision,
   duration_difference_seconds double precision,

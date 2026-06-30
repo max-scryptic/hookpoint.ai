@@ -7,11 +7,11 @@ import { errorResponse, serialiseSourceFile } from "@/lib/source-files/http"
 import type { CompletedPart } from "@/lib/storage"
 
 // POST /api/source-files/:sourceFileId/complete-upload
-// Body (multipart uploads only): { uploadId: string, parts: { partNumber, etag }[] }
+// Body: { durationSeconds?: number, uploadId?: string, parts?: { partNumber, etag }[] }
 // Called by the browser once the direct upload finishes. For a multipart upload
-// it first assembles the parts into the final object; then it verifies the object
-// exists in storage, records its real size, runs validation and returns the
-// resulting source-file state.
+// it first assembles the parts into the final object; then (either path) it
+// verifies the object exists in storage, records its real size, validates against
+// the browser-measured duration and returns the resulting source-file state.
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ sourceFileId: string }> },
@@ -26,14 +26,30 @@ export async function POST(
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
   }
 
-  // The single-PUT path sends no body; only multipart uploads post the part list.
-  const multipart = await parseMultipartBody(request)
+  // The body can only be read once, and it carries both the (optional) measured
+  // duration and, for multipart uploads, the part list — so parse it once here.
+  let body: unknown
+  try {
+    body = await request.json()
+  } catch {
+    body = null
+  }
+
+  // The browser-measured duration is optional: missing/invalid just means we
+  // couldn't read it (the service degrades to a "couldn't verify" warning).
+  let clientDurationSeconds: number | null = null
+  if (typeof (body as { durationSeconds?: unknown })?.durationSeconds === "number") {
+    clientDurationSeconds = (body as { durationSeconds: number }).durationSeconds
+  }
+
+  // The single-PUT path sends no part list; only multipart uploads post one.
+  const multipart = parseMultipartBody(body)
 
   try {
     const sourceFile = await completeSourceFileUpload(
       supabase,
       getStorageProvider(),
-      { userId: user.id, sourceFileId, multipart },
+      { userId: user.id, sourceFileId, clientDurationSeconds, multipart },
     )
     return NextResponse.json({ sourceFile: serialiseSourceFile(sourceFile) })
   } catch (error) {
@@ -41,19 +57,13 @@ export async function POST(
   }
 }
 
-// Pulls a well-formed { uploadId, parts } out of the request body, or returns
-// undefined for the single-PUT path (no/empty body). Malformed part lists are
-// ignored rather than failing the request, since completion then surfaces a
+// Pulls a well-formed { uploadId, parts } out of the already-parsed body, or
+// returns undefined for the single-PUT path (no part list). Malformed part lists
+// are ignored rather than failing the request, since completion then surfaces a
 // clear object_missing error from the storage layer.
-async function parseMultipartBody(
-  request: NextRequest,
-): Promise<{ uploadId: string; parts: CompletedPart[] } | undefined> {
-  let body: unknown
-  try {
-    body = await request.json()
-  } catch {
-    return undefined
-  }
+function parseMultipartBody(
+  body: unknown,
+): { uploadId: string; parts: CompletedPart[] } | undefined {
   if (typeof body !== "object" || body === null) return undefined
 
   const { uploadId, parts } = body as {
