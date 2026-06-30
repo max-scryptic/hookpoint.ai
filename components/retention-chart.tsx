@@ -133,12 +133,12 @@ export function RetentionChart({
     hook: {
       band: "#ec4899",
       badge: "bg-pink-100 text-pink-700 dark:bg-pink-500/15 dark:text-pink-300",
-      name: "Hook window",
+      name: "Hook",
     },
     drop: {
       band: "#ef4444",
       badge: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300",
-      name: "Drop-off",
+      name: "Retention drop-off",
     },
     gain: {
       band: "#22c55e",
@@ -148,7 +148,7 @@ export function RetentionChart({
     pacing: {
       band: "var(--chart-4)",
       badge: "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300",
-      name: "Pacing window",
+      name: "Pacing",
     },
   } as const
 
@@ -275,7 +275,6 @@ export function RetentionChart({
           const x = model.xFor(fraction)
           const y = model.yAtFraction(fraction)
           const isActive = activeInsight?.id === insight.id
-          const isPinned = pinnedInsightId === insight.id
           const tone = insightTone[insight.kind]
 
           return (
@@ -288,9 +287,8 @@ export function RetentionChart({
                 className="cursor-pointer"
                 role="button"
                 tabIndex={0}
-                aria-label={`${tone.name}: ${insight.label}, at ${formatTimestamp(midpoint)}`}
-                onPointerEnter={() => setHoveredInsightId(insight.id)}
-                onPointerLeave={() => setHoveredInsightId(null)}
+                aria-pressed={isActive}
+                aria-label={`${tone.name}: ${insight.label}, ${formatTimestamp(from)} to ${formatTimestamp(to)}`}
                 onClick={(event) => {
                   event.stopPropagation()
                   setSelectedInsightId((current) =>
@@ -310,18 +308,15 @@ export function RetentionChart({
               <circle
                 cx={x}
                 cy={y}
-                r={isActive ? 7 : 6}
+                r={isActive ? 10 : 6}
                 fill={tone.band}
-                stroke="var(--background)"
-                strokeWidth={isActive ? 3 : 2}
-                vectorEffect="non-scaling-stroke"
                 pointerEvents="none"
               >
-                {isPinned && (
+                {isActive && (
                   <animate
                     attributeName="r"
-                    values="7;9;7"
-                    dur="240ms"
+                    values="6;11;10"
+                    dur="220ms"
                     repeatCount="1"
                   />
                 )}
@@ -329,20 +324,6 @@ export function RetentionChart({
             </g>
           )
         })}
-
-        {/* Mouse-following crosshair at the nearest sample. */}
-        {hovered && (
-          <line
-            x1={hovered.x}
-            y1={PAD.top}
-            x2={hovered.x}
-            y2={PAD.top + PLOT_H}
-            stroke="var(--muted-foreground)"
-            strokeWidth={1}
-            strokeDasharray="4 4"
-            vectorEffect="non-scaling-stroke"
-          />
-        )}
       </svg>
 
       {/* Readout below the chart so it never clips at the SVG edges. */}
@@ -396,10 +377,8 @@ export function RetentionChart({
                   {insightTone[activeInsight.kind].name}
                 </span>
                 <span className="font-mono text-xs text-muted-foreground">
-                  {formatTimestamp(
-                    activeInsight.fromSeconds +
-                      (activeInsight.toSeconds - activeInsight.fromSeconds) / 2,
-                  )}
+                  {formatTimestamp(activeInsight.fromSeconds)}–
+                  {formatTimestamp(activeInsight.toSeconds)}
                 </span>
               </div>
               <h3 className="mt-2 font-medium">{activeInsight.label}</h3>
