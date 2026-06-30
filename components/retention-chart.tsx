@@ -41,10 +41,12 @@ export function RetentionChart({
   points,
   durationSeconds,
   insights = [],
+  onScrubTimeChange,
 }: {
   points: RetentionPoint[]
   durationSeconds: number
   insights?: RetentionChartInsight[]
+  onScrubTimeChange?: (seconds: number | null) => void
 }) {
   const gradientId = useId()
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
@@ -173,6 +175,7 @@ export function RetentionChart({
       }
     }
     setHoverIndex(nearest)
+    onScrubTimeChange?.(clamped * durationSeconds)
   }
 
   if (model.sorted.length === 0) {
@@ -194,6 +197,7 @@ export function RetentionChart({
         onPointerLeave={() => {
           setHoverIndex(null)
           setHoverX(null)
+          onScrubTimeChange?.(null)
         }}
         onClick={() => setSelectedInsightId(null)}
       >

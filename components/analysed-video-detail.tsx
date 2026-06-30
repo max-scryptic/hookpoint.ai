@@ -1,6 +1,7 @@
 "use client"
 
 import Image from "next/image"
+import { useCallback, useEffect, useRef, useState } from "react"
 import {
   AreaChartIcon,
   GaugeIcon,
@@ -331,6 +332,54 @@ export function AnalysedVideoDetail({
   transcript?: TranscriptCue[]
   pacingAnalysis?: PacingAnalysis | null
 }) {
+  const videoPreviewRef = useRef<HTMLVideoElement>(null)
+  const playbackRequestPendingRef = useRef(false)
+  const nextPlaybackAttemptAtRef = useRef(0)
+  const [previewTime, setPreviewTime] = useState<number | null>(null)
+  const [playbackUrl, setPlaybackUrl] = useState<string | null>(null)
+
+  const handleScrubTimeChange = useCallback(
+    (seconds: number | null) => {
+      setPreviewTime(seconds)
+      if (
+        seconds == null ||
+        playbackUrl ||
+        playbackRequestPendingRef.current ||
+        Date.now() < nextPlaybackAttemptAtRef.current
+      ) {
+        return
+      }
+
+      playbackRequestPendingRef.current = true
+      fetch(`/api/videos/${encodeURIComponent(video.id)}/source-file/playback`)
+        .then(async (response) => {
+          if (!response.ok) throw new Error("Source video is not available")
+          const payload = (await response.json()) as { playbackUrl?: string }
+          if (!payload.playbackUrl) throw new Error("Missing playback URL")
+          setPlaybackUrl(payload.playbackUrl)
+        })
+        .catch(() => {
+          // The source file is optional and may still be uploading. Retry after
+          // a short cooldown if the user scrubs again later.
+          nextPlaybackAttemptAtRef.current = Date.now() + 5_000
+        })
+        .finally(() => {
+          playbackRequestPendingRef.current = false
+        })
+    },
+    [playbackUrl, video.id],
+  )
+
+  useEffect(() => {
+    const preview = videoPreviewRef.current
+    if (!preview || previewTime == null || preview.readyState < 1) return
+
+    if (Math.abs(preview.currentTime - previewTime) > 0.2) {
+      preview.currentTime = previewTime
+    }
+    if (preview.paused) void preview.play().catch(() => undefined)
+  }, [playbackUrl, previewTime])
+
   const hookWindows = retentionWindows.filter((w) => w.kind === "hook")
   const drops = retentionWindows.filter((w) => w.kind === "drop_off")
   const gains = retentionWindows.filter((w) => w.kind === "gain")
@@ -432,13 +481,31 @@ export function AnalysedVideoDetail({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
         {video.thumbnailUrl && (
           <div className="relative aspect-video w-full shrink-0 overflow-hidden rounded-xl bg-muted sm:w-64">
-            <Image
-              src={video.thumbnailUrl}
-              alt={video.title}
-              fill
-              sizes="256px"
-              className="object-cover"
-            />
+            {previewTime != null && playbackUrl ? (
+              <video
+                ref={videoPreviewRef}
+                src={playbackUrl}
+                muted
+                playsInline
+                preload="auto"
+                aria-label={`Preview of ${video.title}`}
+                className="size-full object-cover"
+                onLoadedMetadata={(event) => {
+                  if (previewTime != null) {
+                    event.currentTarget.currentTime = previewTime
+                    void event.currentTarget.play().catch(() => undefined)
+                  }
+                }}
+              />
+            ) : (
+              <Image
+                src={video.thumbnailUrl}
+                alt={video.title}
+                fill
+                sizes="256px"
+                className="object-cover"
+              />
+            )}
           </div>
         )}
         <div>
@@ -461,6 +528,7 @@ export function AnalysedVideoDetail({
           points={retention}
           durationSeconds={video.durationSeconds}
           insights={chartInsights}
+          onScrubTimeChange={handleScrubTimeChange}
         />
       </section>
 
