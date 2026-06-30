@@ -22,6 +22,13 @@ describe("replaceCaptionBleeps", () => {
     )
   })
 
+  it("replaces a marker padded with literal &nbsp; entities", () => {
+    expect(replaceCaptionBleeps("what a [&nbsp;__&nbsp;] mess")).toBe(
+      "what a **** mess",
+    )
+    expect(replaceCaptionBleeps("[&nbsp;__&nbsp;]")).toBe("****")
+  })
+
   it("handles markers with no padding and varying underscore counts", () => {
     expect(replaceCaptionBleeps("oh [__] no")).toBe("oh **** no")
     expect(replaceCaptionBleeps("oh [____] no")).toBe("oh **** no")
