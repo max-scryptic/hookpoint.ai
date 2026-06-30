@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   AlertTriangleIcon,
   CheckCircle2Icon,
@@ -107,6 +107,23 @@ export function SourceFileUpload({
   // Whether a stored record is in a settled (non-in-flight) state.
   const isBusy =
     client.phase === "uploading" || client.phase === "processing"
+
+  // While an upload is in flight, warn the user before they unload the page
+  // (reload, tab close, or navigating to another site). Leaving would abort the
+  // direct-to-storage transfer and strand the record mid-upload. The listener is
+  // only attached while busy so it never blocks navigation at rest. Note: this
+  // covers hard navigations only — the browser's native prompt can't be invoked
+  // from client-side (in-app) route changes.
+  useEffect(() => {
+    if (!isBusy) return
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      // Legacy browsers require returnValue to be set for the prompt to show.
+      event.returnValue = ""
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload)
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload)
+  }, [isBusy])
 
   async function startUpload(file: File) {
     setClient({ phase: "error", message: "" })
