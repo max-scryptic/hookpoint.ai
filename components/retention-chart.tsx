@@ -62,6 +62,26 @@ export function RetentionChart({
     const yFor = (watchRatio: number) =>
       PAD.top + (1 - watchRatio / yMax) * PLOT_H
 
+    const yAtFraction = (fraction: number) => {
+      if (sorted.length === 0) return PAD.top + PLOT_H
+      if (fraction <= sorted[0].elapsedRatio) return yFor(sorted[0].watchRatio)
+
+      for (let i = 1; i < sorted.length; i++) {
+        const previous = sorted[i - 1]
+        const current = sorted[i]
+        if (fraction <= current.elapsedRatio) {
+          const span = current.elapsedRatio - previous.elapsedRatio
+          const progress = span > 0 ? (fraction - previous.elapsedRatio) / span : 0
+          return yFor(
+            previous.watchRatio +
+              (current.watchRatio - previous.watchRatio) * progress,
+          )
+        }
+      }
+
+      return yFor(sorted[sorted.length - 1].watchRatio)
+    }
+
     const coords = sorted.map((p) => ({
       x: xFor(p.elapsedRatio),
       y: yFor(p.watchRatio),
@@ -90,7 +110,18 @@ export function RetentionChart({
       seconds: f * durationSeconds,
     }))
 
-    return { sorted, coords, linePath, areaPath, yMax, yFor, xFor, yTicks, xTicks }
+    return {
+      sorted,
+      coords,
+      linePath,
+      areaPath,
+      yMax,
+      yFor,
+      yAtFraction,
+      xFor,
+      yTicks,
+      xTicks,
+    }
   }, [points, durationSeconds])
 
   const hovered =
@@ -226,37 +257,32 @@ export function RetentionChart({
           vectorEffect="non-scaling-stroke"
         />
 
-        {/* Timestamped insight windows. A generous minimum width keeps very
-            short analytics buckets discoverable with a pointer or touch. */}
+        {/* Each insight is represented by one clickable marker at the midpoint
+            of its source window, positioned directly on the retention curve. */}
         {insights.map((insight) => {
           const from = Math.max(
             0,
             Math.min(durationSeconds, insight.fromSeconds),
           )
           const to = Math.max(from, Math.min(durationSeconds, insight.toSeconds))
-          const naturalX = model.xFor(
-            durationSeconds > 0 ? from / durationSeconds : 0,
-          )
-          const naturalWidth =
-            model.xFor(durationSeconds > 0 ? to / durationSeconds : 0) - naturalX
-          const width = Math.max(8, naturalWidth)
-          const x = Math.min(naturalX, WIDTH - PAD.right - width)
+          const midpoint = from + (to - from) / 2
+          const fraction = durationSeconds > 0 ? midpoint / durationSeconds : 0
+          const x = model.xFor(fraction)
+          const y = model.yAtFraction(fraction)
           const isActive = activeInsight?.id === insight.id
           const tone = insightTone[insight.kind]
 
           return (
             <g key={insight.id}>
-              <rect
-                x={x}
-                y={PAD.top}
-                width={width}
-                height={PLOT_H}
-                fill={tone.band}
-                opacity={isActive ? 0.22 : 0.1}
-                className="cursor-pointer transition-opacity"
+              <circle
+                cx={x}
+                cy={y}
+                r={16}
+                fill="transparent"
+                className="cursor-pointer"
                 role="button"
                 tabIndex={0}
-                aria-label={`${tone.name}: ${insight.label}, ${formatTimestamp(insight.fromSeconds)} to ${formatTimestamp(insight.toSeconds)}`}
+                aria-label={`${tone.name}: ${insight.label}, at ${formatTimestamp(midpoint)}`}
                 onPointerEnter={() => setHoveredInsightId(insight.id)}
                 onPointerLeave={() => setHoveredInsightId(null)}
                 onClick={(event) => {
@@ -276,13 +302,13 @@ export function RetentionChart({
                   }
                 }}
               />
-              <line
-                x1={naturalX}
-                y1={PAD.top}
-                x2={naturalX}
-                y2={PAD.top + PLOT_H}
-                stroke={tone.band}
-                strokeWidth={isActive ? 2 : 1}
+              <circle
+                cx={x}
+                cy={y}
+                r={isActive ? 7 : 6}
+                fill={tone.band}
+                stroke="var(--background)"
+                strokeWidth={isActive ? 3 : 2}
                 vectorEffect="non-scaling-stroke"
                 pointerEvents="none"
               />
@@ -336,7 +362,7 @@ export function RetentionChart({
       </div>
       {insights.length > 0 && (
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
-          <span>Highlighted windows:</span>
+          <span>Insight markers:</span>
           {(["hook", "drop", "gain"] as const).map((kind) =>
             insights.some((insight) => insight.kind === kind) ? (
               <span key={kind} className="flex items-center gap-1.5">
@@ -366,8 +392,10 @@ export function RetentionChart({
                   {insightTone[activeInsight.kind].name}
                 </span>
                 <span className="font-mono text-xs text-muted-foreground">
-                  {formatTimestamp(activeInsight.fromSeconds)} –{" "}
-                  {formatTimestamp(activeInsight.toSeconds)}
+                  {formatTimestamp(
+                    activeInsight.fromSeconds +
+                      (activeInsight.toSeconds - activeInsight.fromSeconds) / 2,
+                  )}
                 </span>
               </div>
               <h3 className="mt-2 font-medium">{activeInsight.label}</h3>
