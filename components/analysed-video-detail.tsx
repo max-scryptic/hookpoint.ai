@@ -1,6 +1,6 @@
 "use client"
 
-import Image from "next/image"
+import { useState } from "react"
 import {
   AreaChartIcon,
   GaugeIcon,
@@ -12,6 +12,7 @@ import {
   RetentionChart,
   type RetentionChartInsight,
 } from "@/components/retention-chart"
+import { SourceVideoThumbnail } from "@/components/source-video-thumbnail"
 import type { PacingAnalysis } from "@/lib/pacing-analysis"
 import type { RetentionWindow } from "@/lib/retention-windows"
 import {
@@ -331,6 +332,11 @@ export function AnalysedVideoDetail({
   transcript?: TranscriptCue[]
   pacingAnalysis?: PacingAnalysis | null
 }) {
+  const [playbackWindow, setPlaybackWindow] = useState<{
+    id: string
+    fromSeconds: number
+    toSeconds: number
+  } | null>(null)
   const hookWindows = retentionWindows.filter((w) => w.kind === "hook")
   const drops = retentionWindows.filter((w) => w.kind === "drop_off")
   const gains = retentionWindows.filter((w) => w.kind === "gain")
@@ -431,15 +437,12 @@ export function AnalysedVideoDetail({
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
         {video.thumbnailUrl && (
-          <div className="relative aspect-video w-full shrink-0 overflow-hidden rounded-xl bg-muted sm:w-64">
-            <Image
-              src={video.thumbnailUrl}
-              alt={video.title}
-              fill
-              sizes="256px"
-              className="object-cover"
-            />
-          </div>
+          <SourceVideoThumbnail
+            videoId={video.id}
+            thumbnailUrl={video.thumbnailUrl}
+            title={video.title}
+            playbackWindow={playbackWindow}
+          />
         )}
         <div>
           <h1 className="text-2xl font-semibold tracking-normal">
@@ -461,6 +464,17 @@ export function AnalysedVideoDetail({
           points={retention}
           durationSeconds={video.durationSeconds}
           insights={chartInsights}
+          onInsightSelect={(insight) =>
+            setPlaybackWindow(
+              insight
+                ? {
+                    id: insight.id,
+                    fromSeconds: insight.fromSeconds,
+                    toSeconds: insight.toSeconds,
+                  }
+                : null,
+            )
+          }
         />
       </section>
 

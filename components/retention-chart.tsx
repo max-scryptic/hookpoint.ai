@@ -41,10 +41,12 @@ export function RetentionChart({
   points,
   durationSeconds,
   insights = [],
+  onInsightSelect,
 }: {
   points: RetentionPoint[]
   durationSeconds: number
   insights?: RetentionChartInsight[]
+  onInsightSelect?: (insight: RetentionChartInsight | null) => void
 }) {
   const gradientId = useId()
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
@@ -175,6 +177,17 @@ export function RetentionChart({
     setHoverIndex(nearest)
   }
 
+  function clearSelectedInsight() {
+    setSelectedInsightId(null)
+    onInsightSelect?.(null)
+  }
+
+  function toggleInsight(insight: RetentionChartInsight) {
+    const next = selectedInsightId === insight.id ? null : insight
+    setSelectedInsightId(next?.id ?? null)
+    onInsightSelect?.(next)
+  }
+
   if (model.sorted.length === 0) {
     return (
       <div className="rounded-xl border bg-muted/30 p-8 text-sm text-muted-foreground">
@@ -195,7 +208,7 @@ export function RetentionChart({
           setHoverIndex(null)
           setHoverX(null)
         }}
-        onClick={() => setSelectedInsightId(null)}
+        onClick={clearSelectedInsight}
       >
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
@@ -295,17 +308,13 @@ export function RetentionChart({
                 aria-label={`${tone.name}: ${insight.label}, at ${formatTimestamp(midpoint)}`}
                 onClick={(event) => {
                   event.stopPropagation()
-                  setSelectedInsightId((current) =>
-                    current === insight.id ? null : insight.id,
-                  )
+                  toggleInsight(insight)
                 }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault()
                     event.stopPropagation()
-                    setSelectedInsightId((current) =>
-                      current === insight.id ? null : insight.id,
-                    )
+                    toggleInsight(insight)
                   }
                 }}
               />
