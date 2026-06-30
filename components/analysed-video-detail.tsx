@@ -1,6 +1,5 @@
 "use client"
 
-import { useMemo } from "react"
 import Image from "next/image"
 import {
   AreaChartIcon,
@@ -11,12 +10,9 @@ import {
 
 import { RetentionChart } from "@/components/retention-chart"
 import type { PacingAnalysis } from "@/lib/pacing-analysis"
+import type { RetentionWindow } from "@/lib/retention-windows"
 import {
-  computeRetentionWindows,
-  detectRetentionGains,
-  detectSignificantDropOffs,
   transcriptForSegment,
-  type RetentionGain,
   type RetentionPoint,
   type TranscriptCue,
   type VideoDetails,
@@ -37,18 +33,12 @@ function formatTimestamp(totalSeconds: number): string {
 // ---------------------------------------------------------------------------
 
 function RetentionWindows({
-  retention,
-  durationSeconds,
+  windows,
   transcript,
 }: {
-  retention: RetentionPoint[]
-  durationSeconds: number
+  windows: RetentionWindow[]
   transcript: TranscriptCue[]
 }) {
-  const windows = useMemo(
-    () => computeRetentionWindows(retention, durationSeconds),
-    [retention, durationSeconds],
-  )
   if (windows.length === 0) return null
 
   return (
@@ -65,13 +55,16 @@ function RetentionWindows({
             window.fromSeconds,
             window.toSeconds,
           )
-          const endPercentage = Math.round(window.endWatchRatio * 100)
+          const endPercentage = Math.round((window.endWatchRatio ?? 0) * 100)
           const lostPercentage = Math.max(
             0,
-            Math.round(window.startWatchRatio * 100) - endPercentage,
+            Math.round((window.startWatchRatio ?? 0) * 100) - endPercentage,
           )
           return (
-            <div key={window.id} className="rounded-xl border bg-card p-4">
+            <div
+              key={window.windowKey ?? window.windowIndex}
+              className="rounded-xl border bg-card p-4"
+            >
               <div className="flex items-baseline justify-between gap-2">
                 <h3 className="text-sm font-medium">{window.label}</h3>
                 <span className="font-mono text-xs text-muted-foreground">
@@ -188,20 +181,14 @@ function PacingAnalysisSection({
 // ---------------------------------------------------------------------------
 
 function DropList({
-  retention,
+  drops,
   transcript,
 }: {
-  retention: RetentionPoint[]
+  // The significant *mid-video* drop-offs (kind = 'drop_off'). The Hook section
+  // above already covers the opening, so these never overlap it.
+  drops: RetentionWindow[]
   transcript: TranscriptCue[]
 }) {
-  // The Hook section above already covers the opening (first 30s), so here we
-  // surface a handful (3–4) of the most significant *other* sudden drop-offs in
-  // the curve. detectSignificantDropOffs ignores the hook period by default.
-  const drops = useMemo(
-    () => detectSignificantDropOffs(retention, { limit: 4 }),
-    [retention],
-  )
-
   if (drops.length === 0) {
     return (
       <div className="rounded-xl border bg-muted/30 p-6 text-sm text-muted-foreground">
@@ -216,29 +203,31 @@ function DropList({
       {drops.map((drop, index) => {
         const said = transcriptForSegment(
           transcript,
-          drop.fromTimestampSeconds,
-          drop.toTimestampSeconds,
+          drop.fromSeconds,
+          drop.toSeconds,
         )
         return (
-          <li key={`${drop.fromTimestampSeconds}-${index}`} className="flex flex-col gap-2 p-4">
+          <li key={`${drop.fromSeconds}-${index}`} className="flex flex-col gap-2 p-4">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
                   {index + 1}
                 </span>
                 <span className="font-mono text-sm">
-                  {formatTimestamp(drop.fromTimestampSeconds)} –{" "}
-                  {formatTimestamp(drop.toTimestampSeconds)}
+                  {formatTimestamp(drop.fromSeconds)} –{" "}
+                  {formatTimestamp(drop.toSeconds)}
                 </span>
               </div>
               <span className="text-sm font-medium text-destructive">
-                −{(drop.watchRatioDrop * 100).toFixed(1)}%
+                −{(Math.abs(drop.delta) * 100).toFixed(1)}%
               </span>
             </div>
 
             <div className="flex flex-wrap gap-2 pl-10">
               {drop.isAbnormallySteep && (
-                <Badge>{drop.steepness.toFixed(1)}× steeper than normal</Badge>
+                <Badge>
+                  {(drop.steepness ?? 0).toFixed(1)}× steeper than normal
+                </Badge>
               )}
               {drop.relativePerformance != null && (
                 <Badge tone={drop.relativePerformance < 0.5 ? "warn" : "muted"}>
@@ -283,7 +272,7 @@ function GainList({
   gains,
   transcript,
 }: {
-  gains: RetentionGain[]
+  gains: RetentionWindow[]
   transcript: TranscriptCue[]
 }) {
   return (
@@ -291,23 +280,23 @@ function GainList({
       {gains.map((gain, index) => {
         const said = transcriptForSegment(
           transcript,
-          gain.fromTimestampSeconds,
-          gain.toTimestampSeconds,
+          gain.fromSeconds,
+          gain.toSeconds,
         )
         return (
-          <li key={`${gain.fromTimestampSeconds}-${index}`} className="flex flex-col gap-2 p-4">
+          <li key={`${gain.fromSeconds}-${index}`} className="flex flex-col gap-2 p-4">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
                   {index + 1}
                 </span>
                 <span className="font-mono text-sm">
-                  {formatTimestamp(gain.fromTimestampSeconds)} –{" "}
-                  {formatTimestamp(gain.toTimestampSeconds)}
+                  {formatTimestamp(gain.fromSeconds)} –{" "}
+                  {formatTimestamp(gain.toSeconds)}
                 </span>
               </div>
               <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
-                +{(gain.watchRatioGain * 100).toFixed(1)}%
+                +{(gain.delta * 100).toFixed(1)}%
               </span>
             </div>
             {said && (
@@ -327,15 +316,19 @@ function GainList({
 export function AnalysedVideoDetail({
   video,
   retention,
+  retentionWindows,
   transcript = [],
   pacingAnalysis = null,
 }: {
   video: VideoDetails
   retention: RetentionPoint[]
+  retentionWindows: RetentionWindow[]
   transcript?: TranscriptCue[]
   pacingAnalysis?: PacingAnalysis | null
 }) {
-  const gains = useMemo(() => detectRetentionGains(retention), [retention])
+  const hookWindows = retentionWindows.filter((w) => w.kind === "hook")
+  const drops = retentionWindows.filter((w) => w.kind === "drop_off")
+  const gains = retentionWindows.filter((w) => w.kind === "gain")
 
   return (
     <div className="flex flex-col gap-6">
@@ -373,18 +366,14 @@ export function AnalysedVideoDetail({
         />
       </section>
 
-      <RetentionWindows
-        retention={retention}
-        durationSeconds={video.durationSeconds}
-        transcript={transcript}
-      />
+      <RetentionWindows windows={hookWindows} transcript={transcript} />
 
       <section className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
           <TrendingDownIcon className="size-4 text-destructive" />
           <h2 className="text-sm font-medium">Biggest drop-offs</h2>
         </div>
-        <DropList retention={retention} transcript={transcript} />
+        <DropList drops={drops} transcript={transcript} />
       </section>
 
       {gains.length > 0 && (

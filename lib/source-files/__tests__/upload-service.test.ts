@@ -125,7 +125,6 @@ function makeInitiateSupabase(): SupabaseClient {
           date_analysed: "2026-06-29T00:00:00Z",
           video_details: { durationSeconds: 600 },
           retention: null,
-          drop_offs: null,
           transcript: null,
           raw_analytics: null,
         },

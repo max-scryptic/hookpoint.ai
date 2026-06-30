@@ -4,11 +4,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import {
-  detectRetentionGains,
-  type DropOff,
-  type RetentionPoint,
-} from "@/lib/youtube/youtube"
+import type { RetentionWindowKind } from "@/lib/retention-windows"
 
 export interface DashboardKpis {
   // How many videos the user has analysed (rows in `analysed_videos`).
@@ -43,13 +39,15 @@ export async function getDashboardKpis(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<DashboardKpis> {
-  // Pull the duration and retention insight payloads used by the headline
-  // totals. Deep-analysis length is recorded separately against source files.
-  const [analysed, deep] = await Promise.all([
+  // Pull the per-video durations alongside the normalised retention windows
+  // that back the drop-off / gain totals. Deep-analysis length is recorded
+  // separately against source files.
+  const [analysed, windows, deep] = await Promise.all([
     supabase
       .from("analysed_videos")
-      .select("duration:video_details->durationSeconds, drop_offs, retention")
+      .select("duration:video_details->durationSeconds")
       .eq("user_id", userId),
+    supabase.from("retention_windows").select("kind").eq("user_id", userId),
     supabase
       .from("source_files")
       .select("youtube_duration_seconds")
@@ -62,22 +60,31 @@ export async function getDashboardKpis(
       `Failed to load analysed-video KPIs: ${analysed.error.message}`,
     )
   }
-  // Deep analysis is an optional enhancement. In particular, deployments can
-  // briefly have analysed-video data before the source-files migration has
-  // been applied. Do not hide the core KPIs in that case; report zero for the
-  // deep-analysis duration and keep the full error visible in server logs.
+  // The retention-window totals are an enhancement: deployments can briefly
+  // have analysed-video data before the retention_windows migration has been
+  // applied. Don't hide the core KPIs in that case; report zero for the
+  // drop-off / gain counts and keep the full error visible in server logs.
+  if (windows.error) {
+    console.error("Failed to load retention-window KPIs", windows.error)
+  }
+  // Deep analysis is an optional enhancement too, with the same migration-lag
+  // consideration against the source-files table.
   if (deep.error) {
     console.error("Failed to load deep-analysis KPIs", deep.error)
   }
 
   const analysedRows = (analysed.data ?? []) as {
     duration: number | null
-    drop_offs: DropOff[] | null
-    retention: RetentionPoint[] | null
+  }[]
+  const windowRows = (windows.error ? [] : (windows.data ?? [])) as {
+    kind: RetentionWindowKind
   }[]
   const deepRows = (deep.error ? [] : (deep.data ?? [])) as {
     youtube_duration_seconds: number | null
   }[]
+
+  const countKind = (kind: RetentionWindowKind): number =>
+    windowRows.reduce((sum, row) => sum + (row.kind === kind ? 1 : 0), 0)
 
   return {
     videosAnalysed: analysedRows.length,
@@ -89,17 +96,7 @@ export async function getDashboardKpis(
       (sum, row) => sum + toSeconds(row.youtube_duration_seconds),
       0,
     ),
-    dropOffsDetected: analysedRows.reduce(
-      (sum, row) => sum + (Array.isArray(row.drop_offs) ? row.drop_offs.length : 0),
-      0,
-    ),
-    retentionGainsDetected: analysedRows.reduce(
-      (sum, row) =>
-        sum +
-        (Array.isArray(row.retention)
-          ? detectRetentionGains(row.retention).length
-          : 0),
-      0,
-    ),
+    dropOffsDetected: countKind("drop_off"),
+    retentionGainsDetected: countKind("gain"),
   }
 }
