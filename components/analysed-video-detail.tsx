@@ -9,7 +9,10 @@ import {
   TrendingUpIcon,
 } from "lucide-react"
 
-import { RetentionChart } from "@/components/retention-chart"
+import {
+  RetentionChart,
+  type RetentionChartInsight,
+} from "@/components/retention-chart"
 import {
   computeRetentionWindows,
   detectRetentionGains,
@@ -36,18 +39,12 @@ function formatTimestamp(totalSeconds: number): string {
 // ---------------------------------------------------------------------------
 
 function RetentionWindows({
-  retention,
-  durationSeconds,
+  windows,
   transcript,
 }: {
-  retention: RetentionPoint[]
-  durationSeconds: number
+  windows: ReturnType<typeof computeRetentionWindows>
   transcript: TranscriptCue[]
 }) {
-  const windows = useMemo(
-    () => computeRetentionWindows(retention, durationSeconds),
-    [retention, durationSeconds],
-  )
   if (windows.length === 0) return null
 
   return (
@@ -131,20 +128,12 @@ function Metric({ label, value }: { label: string; value: string }) {
 // ---------------------------------------------------------------------------
 
 function DropList({
-  retention,
+  drops,
   transcript,
 }: {
-  retention: RetentionPoint[]
+  drops: ReturnType<typeof detectSignificantDropOffs>
   transcript: TranscriptCue[]
 }) {
-  // The Hook section above already covers the opening (first 30s), so here we
-  // surface a handful (3–4) of the most significant *other* sudden drop-offs in
-  // the curve. detectSignificantDropOffs ignores the hook period by default.
-  const drops = useMemo(
-    () => detectSignificantDropOffs(retention, { limit: 4 }),
-    [retention],
-  )
-
   if (drops.length === 0) {
     return (
       <div className="rounded-xl border bg-muted/30 p-6 text-sm text-muted-foreground">
@@ -276,7 +265,94 @@ export function AnalysedVideoDetail({
   retention: RetentionPoint[]
   transcript?: TranscriptCue[]
 }) {
+  const windows = useMemo(
+    () => computeRetentionWindows(retention, video.durationSeconds),
+    [retention, video.durationSeconds],
+  )
+  const drops = useMemo(
+    () => detectSignificantDropOffs(retention, { limit: 4 }),
+    [retention],
+  )
   const gains = useMemo(() => detectRetentionGains(retention), [retention])
+  const chartInsights = useMemo<RetentionChartInsight[]>(() => {
+    const truncateTranscript = (text: string) =>
+      text.length > 240 ? `${text.slice(0, 240)}…` : text
+
+    return [
+      ...windows
+        .filter((window) => !window.outOfRange)
+        .map((window) => {
+          const endPercentage = Math.round(window.endWatchRatio * 100)
+          const lostPercentage = Math.max(
+            0,
+            Math.round(window.startWatchRatio * 100) - endPercentage,
+          )
+          const said = transcriptForSegment(
+            transcript,
+            window.fromSeconds,
+            window.toSeconds,
+          )
+          return {
+            id: `hook-${window.id}`,
+            kind: "hook" as const,
+            label: window.label,
+            fromSeconds: window.fromSeconds,
+            toSeconds: Math.min(window.toSeconds, video.durationSeconds),
+            metric: `${lostPercentage}%`,
+            metricLabel: "viewers lost",
+            details: [
+              `${endPercentage}% still watching at end`,
+              ...(window.relativePerformance != null
+                ? [`${Math.round(window.relativePerformance * 100)}% vs. similar videos`]
+                : []),
+            ],
+            transcript: said ? truncateTranscript(said) : undefined,
+          }
+        }),
+      ...drops.map((drop, index) => {
+        const said = transcriptForSegment(
+          transcript,
+          drop.fromTimestampSeconds,
+          drop.toTimestampSeconds,
+        )
+        return {
+          id: `drop-${drop.fromTimestampSeconds}-${index}`,
+          kind: "drop" as const,
+          label: `Significant drop-off ${index + 1}`,
+          fromSeconds: drop.fromTimestampSeconds,
+          toSeconds: drop.toTimestampSeconds,
+          metric: `−${(drop.watchRatioDrop * 100).toFixed(1)}%`,
+          metricLabel: "audience retention",
+          details: [
+            ...(drop.isAbnormallySteep
+              ? [`${drop.steepness.toFixed(1)}× steeper than normal`]
+              : []),
+            ...(drop.relativePerformance != null
+              ? [`${Math.round(drop.relativePerformance * 100)}% vs. similar videos`]
+              : []),
+          ],
+          transcript: said ? truncateTranscript(said) : undefined,
+        }
+      }),
+      ...gains.map((gain, index) => {
+        const said = transcriptForSegment(
+          transcript,
+          gain.fromTimestampSeconds,
+          gain.toTimestampSeconds,
+        )
+        return {
+          id: `gain-${gain.fromTimestampSeconds}-${index}`,
+          kind: "gain" as const,
+          label: `Retention gain ${index + 1}`,
+          fromSeconds: gain.fromTimestampSeconds,
+          toSeconds: gain.toTimestampSeconds,
+          metric: `+${(gain.watchRatioGain * 100).toFixed(1)}%`,
+          metricLabel: "audience retention",
+          transcript: said ? truncateTranscript(said) : undefined,
+        }
+      }),
+    ]
+  }, [drops, gains, transcript, video.durationSeconds, windows])
 
   return (
     <div className="flex flex-col gap-6">
@@ -311,12 +387,12 @@ export function AnalysedVideoDetail({
         <RetentionChart
           points={retention}
           durationSeconds={video.durationSeconds}
+          insights={chartInsights}
         />
       </section>
 
       <RetentionWindows
-        retention={retention}
-        durationSeconds={video.durationSeconds}
+        windows={windows}
         transcript={transcript}
       />
 
@@ -325,7 +401,7 @@ export function AnalysedVideoDetail({
           <TrendingDownIcon className="size-4 text-destructive" />
           <h2 className="text-sm font-medium">Biggest drop-offs</h2>
         </div>
-        <DropList retention={retention} transcript={transcript} />
+        <DropList drops={drops} transcript={transcript} />
       </section>
 
       {gains.length > 0 && (
