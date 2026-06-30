@@ -8,7 +8,10 @@ import {
   TrendingUpIcon,
 } from "lucide-react"
 
-import { RetentionChart } from "@/components/retention-chart"
+import {
+  RetentionChart,
+  type RetentionChartInsight,
+} from "@/components/retention-chart"
 import type { PacingAnalysis } from "@/lib/pacing-analysis"
 import type { RetentionWindow } from "@/lib/retention-windows"
 import {
@@ -331,6 +334,98 @@ export function AnalysedVideoDetail({
   const hookWindows = retentionWindows.filter((w) => w.kind === "hook")
   const drops = retentionWindows.filter((w) => w.kind === "drop_off")
   const gains = retentionWindows.filter((w) => w.kind === "gain")
+  const chartInsights: RetentionChartInsight[] = [
+    ...hookWindows
+      .filter((window) => !window.outOfRange)
+      .map((window) => {
+        const endPercentage = Math.round((window.endWatchRatio ?? 0) * 100)
+        const lostPercentage = Math.max(
+          0,
+          Math.round((window.startWatchRatio ?? 0) * 100) - endPercentage,
+        )
+        const said = transcriptForSegment(
+          transcript,
+          window.fromSeconds,
+          window.toSeconds,
+        )
+
+        return {
+          id: `hook-${window.windowKey ?? window.windowIndex}`,
+          kind: "hook" as const,
+          label: window.label ?? `Hook window ${window.windowIndex + 1}`,
+          fromSeconds: window.fromSeconds,
+          toSeconds: Math.min(window.toSeconds, video.durationSeconds),
+          metric: `${lostPercentage}%`,
+          metricLabel: "viewers lost",
+          details: [
+            `${endPercentage}% still watching at end`,
+            ...(window.relativePerformance != null
+              ? [`${Math.round(window.relativePerformance * 100)}% vs. similar videos`]
+              : []),
+          ],
+          transcript: said
+            ? said.length > 240
+              ? `${said.slice(0, 240)}…`
+              : said
+            : undefined,
+        }
+      }),
+    ...drops.map((window) => {
+      const said = transcriptForSegment(
+        transcript,
+        window.fromSeconds,
+        window.toSeconds,
+      )
+
+      return {
+        id: `drop-${window.windowIndex}`,
+        kind: "drop" as const,
+        label: `Significant drop-off ${window.windowIndex + 1}`,
+        fromSeconds: window.fromSeconds,
+        toSeconds: window.toSeconds,
+        metric: `−${(Math.abs(window.delta) * 100).toFixed(1)}%`,
+        metricLabel: "audience retention",
+        details: [
+          ...(window.isAbnormallySteep
+            ? [`${(window.steepness ?? 0).toFixed(1)}× steeper than normal`]
+            : []),
+          ...(window.relativePerformance != null
+            ? [`${Math.round(window.relativePerformance * 100)}% vs. similar videos`]
+            : []),
+        ],
+        transcript: said || undefined,
+      }
+    }),
+    ...gains.map((window) => {
+      const said = transcriptForSegment(
+        transcript,
+        window.fromSeconds,
+        window.toSeconds,
+      )
+
+      return {
+        id: `gain-${window.windowIndex}`,
+        kind: "gain" as const,
+        label: `Retention gain ${window.windowIndex + 1}`,
+        fromSeconds: window.fromSeconds,
+        toSeconds: window.toSeconds,
+        metric: `+${(window.delta * 100).toFixed(1)}%`,
+        metricLabel: "audience retention",
+        transcript: said || undefined,
+      }
+    }),
+    ...(pacingAnalysis?.slowOrRepetitiveStretches ?? []).map(
+      (stretch, index) => ({
+        id: `pacing-${stretch.startSeconds}-${index}`,
+        kind: "pacing" as const,
+        label: `Pacing opportunity ${index + 1}`,
+        fromSeconds: stretch.startSeconds,
+        toSeconds: stretch.endSeconds,
+        details: stretch.suggestion ? [`Try: ${stretch.suggestion}`] : undefined,
+        transcript: stretch.reason,
+      }),
+    ),
+  ]
 
   return (
     <div className="flex flex-col gap-6">
