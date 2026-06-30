@@ -1,13 +1,20 @@
-// Resolves the storage provider the app is configured to use. Today this is
-// always Supabase Storage; the indirection keeps a single switch-point for when
-// we add an S3/R2 or resumable-TUS backend.
+// Resolves the storage provider the app is configured to use. When S3-compatible
+// credentials are present we use the S3 provider (parallel multipart uploads);
+// otherwise we fall back to the single-PUT Supabase Storage client. Either way
+// the rest of the app only sees the StorageProvider interface.
 
-import { getSourceFileBucket } from "@/lib/source-files/config"
+import { getS3Config, getSourceFileBucket } from "@/lib/source-files/config"
 import type { StorageProvider } from "@/lib/storage"
+import { S3StorageProvider } from "@/lib/storage/s3-storage"
 import { SupabaseStorageProvider } from "@/lib/storage/supabase-storage"
 
 export function getStorageProvider(): StorageProvider {
-  return new SupabaseStorageProvider(getSourceFileBucket())
+  const bucket = getSourceFileBucket()
+  const s3 = getS3Config()
+  if (s3) {
+    return new S3StorageProvider(bucket, s3)
+  }
+  return new SupabaseStorageProvider(bucket)
 }
 
 // Builds the object key for a user's upload. The path is deliberately scoped by

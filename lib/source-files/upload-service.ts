@@ -11,6 +11,7 @@ import { getAnalysedVideo } from "@/lib/analysed-videos"
 import {
   ACCEPTED_MIME_TYPES,
   getMaxUploadBytes,
+  getMultipartThresholdBytes,
   isAcceptedExtension,
 } from "@/lib/source-files/config"
 import {
@@ -20,7 +21,12 @@ import {
   updateSourceFile,
   type SourceFile,
 } from "@/lib/source-files/source-files"
-import type { SignedUpload, StorageProvider } from "@/lib/storage"
+import type {
+  CompletedPart,
+  MultipartUpload,
+  SignedUpload,
+  StorageProvider,
+} from "@/lib/storage"
 import { buildSourceFileObjectPath } from "@/lib/storage/provider"
 
 // A tagged error so route handlers can map service failures to the right HTTP
@@ -53,7 +59,11 @@ export interface InitiateUploadParams {
 
 export interface InitiateUploadResult {
   sourceFile: SourceFile
-  upload: SignedUpload
+  // Exactly one of these is set: `upload` for the single-PUT path, or
+  // `multipartUpload` when the provider supports parallel parts and the file is
+  // large enough to be worth splitting.
+  upload?: SignedUpload
+  multipartUpload?: MultipartUpload
 }
 
 // Creates (or replaces) the pending source-file record for a YouTube video the
@@ -143,9 +153,26 @@ export async function initiateSourceFileUpload(
     originalFilename: filename,
   })
 
-  let upload: SignedUpload
+  // Use a parallel multipart upload when the provider supports it and the file
+  // is large enough to benefit; otherwise mint a single signed PUT. Multipart is
+  // what lets the browser open several streams and actually fill the uplink on a
+  // multi-GB file instead of being capped by one TCP stream.
+  const useMultipart =
+    typeof storage.createMultipartUpload === "function" &&
+    params.declaredSizeBytes != null &&
+    params.declaredSizeBytes >= getMultipartThresholdBytes()
+
+  let upload: SignedUpload | undefined
+  let multipartUpload: MultipartUpload | undefined
   try {
-    upload = await storage.createSignedUpload(path)
+    if (useMultipart) {
+      multipartUpload = await storage.createMultipartUpload!(path, {
+        totalSizeBytes: params.declaredSizeBytes!,
+        contentType: params.mimeType ?? null,
+      })
+    } else {
+      upload = await storage.createSignedUpload(path)
+    }
   } catch (error) {
     // Record the failure on the row so the UI can show a retry CTA.
     await updateSourceFile(supabase, params.userId, sourceFile.id, {
@@ -161,12 +188,19 @@ export async function initiateSourceFileUpload(
     uploadStatus: "uploading",
   })
 
-  return { sourceFile: updated, upload }
+  return { sourceFile: updated, upload, multipartUpload }
 }
 
 export interface CompleteUploadParams {
   userId: string
   sourceFileId: string
+  // Present only for multipart uploads: the storage-side upload id plus the
+  // per-part ETags the browser collected. Used to assemble the final object
+  // before we verify it exists.
+  multipart?: {
+    uploadId: string
+    parts: CompletedPart[]
+  }
 }
 
 // Confirms a direct upload actually landed: verifies the object exists, reads its
@@ -192,6 +226,29 @@ export async function completeSourceFileUpload(
       "object_missing",
       "No upload target was recorded for this file. Please re-upload.",
     )
+  }
+
+  // For a multipart upload the object doesn't exist until we assemble the parts.
+  // Do that first, so the statObject check below sees the finished object.
+  if (params.multipart && typeof storage.completeMultipartUpload === "function") {
+    try {
+      await storage.completeMultipartUpload(
+        sourceFile.storagePath,
+        params.multipart.uploadId,
+        params.multipart.parts,
+      )
+    } catch (error) {
+      console.error("Failed to complete multipart upload", error)
+      await updateSourceFile(supabase, params.userId, sourceFile.id, {
+        uploadStatus: "failed",
+        validationStatus: "failed",
+        failureReason: "The upload could not be finalised. Please re-upload.",
+      })
+      throw new UploadError(
+        "object_missing",
+        "The upload could not be finalised. Please re-upload.",
+      )
+    }
   }
 
   const info = await storage.statObject(sourceFile.storagePath)
@@ -261,6 +318,13 @@ export function isStaleSourceFile(sourceFile: SourceFile): boolean {
 // Discards an abandoned upload so the UI can fall back to a fresh upload CTA:
 // removes the (possibly partial) storage object — best-effort, the same as the
 // delete route — then deletes the DB row, which is the source of truth.
+//
+// Note for multipart uploads abandoned via a tab-close: there is no completed
+// object to delete here (the parts are only assembled at completion), and we
+// don't have the upload id at this point, so the orphaned parts are left for the
+// bucket's "abort incomplete multipart uploads" lifecycle rule to reap. The
+// graceful client-error path calls abortSourceFileUpload instead, which does have
+// the id and cleans the parts up immediately.
 export async function discardSourceFile(
   supabase: SupabaseClient,
   storage: StorageProvider,
@@ -275,6 +339,45 @@ export async function discardSourceFile(
     }
   }
   await deleteSourceFileRow(supabase, userId, sourceFile.id)
+}
+
+export interface AbortUploadParams {
+  userId: string
+  sourceFileId: string
+  // Set when aborting a multipart upload, so the uploaded parts can be discarded
+  // immediately rather than waiting for the bucket lifecycle rule.
+  uploadId?: string
+}
+
+// Cancels an in-flight upload the browser gave up on (a part failed, the user
+// cancelled). Aborts the multipart upload to free its parts when we have the id,
+// then discards the row + any object so the slot is clean for a retry. All
+// best-effort: a failure to abort must never stop the row being cleared.
+export async function abortSourceFileUpload(
+  supabase: SupabaseClient,
+  storage: StorageProvider,
+  params: AbortUploadParams,
+): Promise<void> {
+  const sourceFile = await getSourceFileById(
+    supabase,
+    params.userId,
+    params.sourceFileId,
+  )
+  if (!sourceFile) return
+
+  if (
+    params.uploadId &&
+    sourceFile.storagePath &&
+    typeof storage.abortMultipartUpload === "function"
+  ) {
+    try {
+      await storage.abortMultipartUpload(sourceFile.storagePath, params.uploadId)
+    } catch (error) {
+      console.error("Failed to abort multipart upload", error)
+    }
+  }
+
+  await discardSourceFile(supabase, storage, params.userId, sourceFile)
 }
 
 function formatGb(bytes: number): string {
