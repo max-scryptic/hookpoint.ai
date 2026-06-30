@@ -8,6 +8,11 @@ import {
   saveAnalysedVideo,
 } from "@/lib/analysed-videos"
 import { getSourceFileForVideo } from "@/lib/source-files/source-files"
+import {
+  discardSourceFile,
+  isStaleSourceFile,
+} from "@/lib/source-files/upload-service"
+import { getStorageProvider } from "@/lib/storage/provider"
 import { serialiseSourceFile } from "@/lib/source-files/serialise"
 import {
   getGoogleAccessToken,
@@ -133,7 +138,24 @@ export default async function Page({
   if (result.status === "ok") {
     try {
       const supabase = await createClient()
-      const sourceFile = await getSourceFileForVideo(supabase, user.id, videoId)
+      let sourceFile = await getSourceFileForVideo(supabase, user.id, videoId)
+      // If a previous upload was abandoned mid-flight (the user navigated away
+      // while it was uploading), the record is stranded in the "uploading" state
+      // and would otherwise render a spinner stuck on "Validating your file…".
+      // Wipe it so the section starts fresh and the user can upload again.
+      if (sourceFile && isStaleSourceFile(sourceFile)) {
+        try {
+          await discardSourceFile(
+            supabase,
+            getStorageProvider(),
+            user.id,
+            sourceFile,
+          )
+        } catch (error) {
+          console.error("Failed to discard stale source file", error)
+        }
+        sourceFile = null
+      }
       initialSourceFile = sourceFile ? serialiseSourceFile(sourceFile) : null
     } catch (error) {
       console.error("Failed to load source file", error)

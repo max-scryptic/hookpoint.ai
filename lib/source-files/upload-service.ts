@@ -14,6 +14,7 @@ import {
   isAcceptedExtension,
 } from "@/lib/source-files/config"
 import {
+  deleteSourceFileRow,
   getSourceFileById,
   replaceSourceFile,
   updateSourceFile,
@@ -244,6 +245,36 @@ export async function completeSourceFileUpload(
   )
   // Should always exist; fall back to the pre-validation row defensively.
   return finalState ?? sourceFile
+}
+
+// True when a record represents an upload that was abandoned mid-flight. The
+// byte transfer is driven entirely by the browser, so once the page that started
+// it is gone the "uploading" state can never advance on its own — there is no
+// client left to call complete-upload. A freshly server-rendered page that finds
+// a record in this state is therefore looking at a stranded upload. (The later
+// "uploaded"/"processing" states run inside the awaited complete-upload request
+// and settle to a terminal state server-side, so they are deliberately excluded.)
+export function isStaleSourceFile(sourceFile: SourceFile): boolean {
+  return sourceFile.uploadStatus === "uploading"
+}
+
+// Discards an abandoned upload so the UI can fall back to a fresh upload CTA:
+// removes the (possibly partial) storage object — best-effort, the same as the
+// delete route — then deletes the DB row, which is the source of truth.
+export async function discardSourceFile(
+  supabase: SupabaseClient,
+  storage: StorageProvider,
+  userId: string,
+  sourceFile: SourceFile,
+): Promise<void> {
+  if (sourceFile.storagePath) {
+    try {
+      await storage.deleteObject(sourceFile.storagePath)
+    } catch (error) {
+      console.error("Failed to delete stale source-file object", error)
+    }
+  }
+  await deleteSourceFileRow(supabase, userId, sourceFile.id)
 }
 
 function formatGb(bytes: number): string {
