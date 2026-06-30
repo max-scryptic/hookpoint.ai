@@ -177,7 +177,6 @@ export function RetentionChart({
       }
     }
     setHoverIndex(nearest)
-    onScrubTimeChange?.(clamped * durationSeconds)
   }
 
   function clearSelectedInsight() {
@@ -210,7 +209,6 @@ export function RetentionChart({
         onPointerLeave={() => {
           setHoverIndex(null)
           setHoverX(null)
-          onScrubTimeChange?.(null)
         }}
         onClick={clearSelectedInsight}
       >
