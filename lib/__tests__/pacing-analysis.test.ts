@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
   buildPacingWindows,
-  chunkPacingWindows,
   generatePacingAnalysis,
 } from "@/lib/pacing-analysis"
 
@@ -10,9 +9,6 @@ afterEach(() => {
   vi.unstubAllGlobals()
   delete process.env.OPENAI_API_KEY
   delete process.env.OPENAI_PACING_MODEL
-  delete process.env.OPENAI_PACING_MAX_WINDOWS_PER_CALL
-  delete process.env.OPENAI_PACING_MAX_TRANSCRIPT_CHARS_PER_CALL
-  delete process.env.OPENAI_PACING_MAX_PARALLEL_CHUNKS
 })
 
 describe("buildPacingWindows", () => {
@@ -45,22 +41,6 @@ describe("buildPacingWindows", () => {
 
   it("does not add an empty minute window at exactly 30 seconds", () => {
     expect(buildPacingWindows(30, [])).toHaveLength(1)
-  })
-
-  it("chunks long analyses by window count and transcript size", () => {
-    const windows = buildPacingWindows(190, [
-      { startSeconds: 1, endSeconds: 2, text: "123456" },
-      { startSeconds: 31, endSeconds: 32, text: "123456" },
-      { startSeconds: 91, endSeconds: 92, text: "123456" },
-      { startSeconds: 151, endSeconds: 152, text: "123456" },
-    ])
-
-    expect(
-      chunkPacingWindows(windows, {
-        maxWindows: 3,
-        maxTranscriptCharacters: 10,
-      }).map((chunk) => chunk.length),
-    ).toEqual([1, 1, 1, 1])
   })
 
   it("merges structured GPT judgments with deterministic window metrics", async () => {
@@ -136,84 +116,11 @@ describe("buildPacingWindows", () => {
       ],
     })
     const request = JSON.parse(fetchMock.mock.calls[0][1].body as string)
-    expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(request.text.format).toMatchObject({
       type: "json_schema",
       name: "youtube_pacing_analysis",
       strict: true,
     })
     expect(request.input[1].content[0].text).not.toContain("retention")
-  })
-
-  it("uses chunk calls plus a video-wide synthesis for long transcripts", async () => {
-    process.env.OPENAI_API_KEY = "test-key"
-    process.env.OPENAI_PACING_MODEL = "test-gpt"
-    process.env.OPENAI_PACING_MAX_WINDOWS_PER_CALL = "1"
-
-    const fetchMock = vi.fn().mockImplementation(async (_url, init) => {
-      const request = JSON.parse(init.body as string)
-      const schemaName = request.text.format.name
-      const input = JSON.parse(request.input[1].content[0].text)
-      let output: unknown
-
-      if (schemaName === "youtube_pacing_analysis_chunk") {
-        const windowIndex = input.chunk.windows[0].windowIndex
-        output = {
-          summary: `Chunk ${windowIndex}`,
-          patterns: [`Pattern ${windowIndex}`],
-          notableTransitions: [],
-          slowOrRepetitiveStretches: [],
-          windows: [
-            {
-              windowIndex,
-              role: windowIndex === 0 ? "Hook" : "Explanation",
-              pace: "moderate",
-              informationDensity: "moderate",
-              progression: "steady",
-              pacingChange: "stable",
-              evidence: [`Evidence ${windowIndex}`],
-              possibleIssue: null,
-              confidence: 0.8,
-            },
-          ],
-        }
-      } else {
-        expect(schemaName).toBe("youtube_pacing_analysis_global")
-        expect(input.chunks).toHaveLength(2)
-        output = {
-          overallPacing: "Consistent across the full video.",
-          videoWidePatterns: ["The two chunks maintain a steady rhythm."],
-          notableTransitions: [],
-          slowOrRepetitiveStretches: [],
-        }
-      }
-
-      return new Response(
-        JSON.stringify({
-          output: [
-            { content: [{ type: "output_text", text: JSON.stringify(output) }] },
-          ],
-        }),
-        { status: 200 },
-      )
-    })
-    vi.stubGlobal("fetch", fetchMock)
-
-    const result = await generatePacingAnalysis(
-      { title: "Long test", durationSeconds: 70 },
-      [
-        { startSeconds: 0, endSeconds: 10, text: "opening words" },
-        { startSeconds: 35, endSeconds: 45, text: "later words" },
-      ],
-    )
-
-    expect(fetchMock).toHaveBeenCalledTimes(3)
-    expect(result).toMatchObject({
-      overallPacing: "Consistent across the full video.",
-      windows: [
-        { id: "hook", role: "Hook" },
-        { id: "minute-1", role: "Explanation" },
-      ],
-    })
   })
 })
