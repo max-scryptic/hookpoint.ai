@@ -48,8 +48,7 @@ export function RetentionChart({
 }) {
   const gradientId = useId()
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
-  const [hoveredInsightId, setHoveredInsightId] = useState<string | null>(null)
-  const [pinnedInsightId, setPinnedInsightId] = useState<string | null>(null)
+  const [selectedInsightId, setSelectedInsightId] = useState<string | null>(null)
 
   const model = useMemo(() => {
     const sorted = [...points].sort((a, b) => a.elapsedRatio - b.elapsedRatio)
@@ -127,22 +126,22 @@ export function RetentionChart({
   const hovered =
     hoverIndex != null ? model.coords[hoverIndex] ?? null : null
   const activeInsight = insights.find(
-    (insight) => insight.id === (hoveredInsightId ?? pinnedInsightId),
+    (insight) => insight.id === selectedInsightId,
   )
 
   const insightTone = {
     hook: {
-      band: "var(--chart-2)",
-      badge: "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300",
+      band: "#ec4899",
+      badge: "bg-pink-100 text-pink-700 dark:bg-pink-500/15 dark:text-pink-300",
       name: "Hook window",
     },
     drop: {
-      band: "var(--destructive)",
+      band: "#ef4444",
       badge: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300",
       name: "Drop-off",
     },
     gain: {
-      band: "var(--chart-3)",
+      band: "#22c55e",
       badge: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
       name: "Retention gain",
     },
@@ -191,6 +190,7 @@ export function RetentionChart({
         aria-label="Audience retention curve"
         onPointerMove={handleMove}
         onPointerLeave={() => setHoverIndex(null)}
+        onClick={() => setSelectedInsightId(null)}
       >
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
@@ -293,16 +293,15 @@ export function RetentionChart({
                 onPointerLeave={() => setHoveredInsightId(null)}
                 onClick={(event) => {
                   event.stopPropagation()
-                  setPinnedInsightId((current) =>
+                  setSelectedInsightId((current) =>
                     current === insight.id ? null : insight.id,
                   )
                 }}
-                onFocus={() => setHoveredInsightId(insight.id)}
-                onBlur={() => setHoveredInsightId(null)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault()
-                    setPinnedInsightId((current) =>
+                    event.stopPropagation()
+                    setSelectedInsightId((current) =>
                       current === insight.id ? null : insight.id,
                     )
                   }
@@ -372,14 +371,14 @@ export function RetentionChart({
             insights.some((insight) => insight.kind === kind) ? (
               <span key={kind} className="flex items-center gap-1.5">
                 <span
-                  className="size-2 rounded-sm"
+                  className="size-2 rounded-full"
                   style={{ backgroundColor: insightTone[kind].band }}
                 />
                 {insightTone[kind].name}
               </span>
             ) : null,
           )}
-          <span className="ml-auto">Hover to preview · click to pin</span>
+          <span className="ml-auto">Click a highlight to view its insight</span>
         </div>
       )}
 
