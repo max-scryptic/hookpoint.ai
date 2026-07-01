@@ -1,17 +1,19 @@
 // Configuration for the source-file normalisation step (4K/original → 1080p
 // proxy via Qencode). Everything here is env-driven and the whole feature is
-// gated by `isNormalisationEnabled()`: with no Qencode key / destination
+// gated by `isNormalisationEnabled()`: with no Qencode key / S3 connection
 // configured the upload flow behaves exactly as before (the original is kept and
 // served), so this can ship dark and be switched on by setting env vars.
+//
+// Qencode is not handed a destination to write to directly: a prior version of
+// this feature had it PUT the proxy straight into our S3 bucket, but that write
+// silently landed as a 0-byte object against Supabase's S3-compatible endpoint
+// (Qencode's dashboard reported success regardless). Instead Qencode holds the
+// finished proxy on its own temporary storage for 24h and hands back a download
+// URL in the completion callback; we pull it into our bucket ourselves with the
+// same S3 client already used for uploads.
 
-import {
-  getS3Config,
-  getSourceFileBucket,
-} from "@/lib/source-files/config"
-import type {
-  QencodeDestination,
-  QencodeFormat,
-} from "@/lib/qencode/qencode"
+import { getS3Config } from "@/lib/source-files/config"
+import type { QencodeFormat } from "@/lib/qencode/qencode"
 
 export function getQencodeApiKey(): string | null {
   return process.env.QENCODE_API_KEY || null
@@ -82,76 +84,13 @@ export function getNormalisationCallbackUrl(): string | null {
   return url.toString()
 }
 
-// --- Destination (where Qencode writes the proxy: our own S3 bucket) ---
-// Defaults derive from the same S3 connection the parallel-multipart upload
-// path uses, so a single set of Supabase S3 credentials covers both. Each part
-// is independently overridable for buckets/hosts that differ.
-
-interface DestinationConfig {
-  // Authority Qencode writes through: the host plus any sub-path the S3 API is
-  // mounted under. For Supabase this is `<project>.storage.supabase.co/storage/v1/s3`
-  // — the `/storage/v1/s3` prefix is mandatory; drop it and the PUT misses the
-  // S3 route and Qencode reports "failed to save output".
-  endpoint: string
-  bucket: string
-  key: string
-  secret: string
-}
-
-function getDestinationConfig(): DestinationConfig | null {
-  const s3 = getS3Config()
-  const key = process.env.QENCODE_DEST_S3_KEY || s3?.accessKeyId
-  const secret = process.env.QENCODE_DEST_S3_SECRET || s3?.secretAccessKey
-  const bucket = process.env.QENCODE_DEST_S3_BUCKET || getSourceFileBucket()
-  // QENCODE_DEST_S3_HOST may itself carry a sub-path (e.g. ".../storage/v1/s3").
-  const endpoint =
-    process.env.QENCODE_DEST_S3_HOST || endpointAuthority(s3?.endpoint)
-  if (!key || !secret || !bucket || !endpoint) return null
-  return { endpoint, bucket, key, secret }
-}
-
-// Derives the Qencode destination authority from an S3 endpoint URL: the host
-// plus any sub-path (e.g. Supabase's `/storage/v1/s3`), with the scheme and any
-// trailing slash stripped. Qencode addresses generic S3 buckets path-style as
-// `s3://<authority>/<bucket>/<key>` → `https://<authority>/<bucket>/<key>`, so
-// the sub-path has to ride along here or the write lands off the S3 route.
-// Returns null when the endpoint can't be parsed.
-function endpointAuthority(endpoint?: string): string | null {
-  if (!endpoint) return null
-  try {
-    const url = new URL(endpoint)
-    const path = url.pathname.replace(/\/+$/, "")
-    return path ? `${url.host}${path}` : url.host
-  } catch {
-    return null
-  }
-}
-
-// Builds the Qencode destination object that writes `objectPath` into our bucket.
-// Throws if the destination isn't configured — callers gate on
-// isNormalisationEnabled() first, so this is a programming-error guard.
-export function buildQencodeDestination(
-  objectPath: string,
-): QencodeDestination {
-  const config = getDestinationConfig()
-  if (!config) {
-    throw new Error("Qencode destination S3 config is incomplete")
-  }
-  return {
-    url: `s3://${config.endpoint}/${config.bucket}/${objectPath}`,
-    key: config.key,
-    secret: config.secret,
-    permissions: "private",
-  }
-}
-
 // True only when every piece needed to run a normalisation job is present: the
-// Qencode API key, a reachable callback URL, and S3 destination credentials.
-// When false the upload flow skips normalisation entirely.
+// Qencode API key, a reachable callback URL, and an S3 connection to pull the
+// finished proxy into. When false the upload flow skips normalisation entirely.
 export function isNormalisationEnabled(): boolean {
   return (
     getQencodeApiKey() != null &&
     getNormalisationCallbackUrl() != null &&
-    getDestinationConfig() != null
+    getS3Config() != null
   )
 }

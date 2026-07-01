@@ -106,6 +106,17 @@ export interface StorageProvider {
   // Cancels an in-progress multipart upload, discarding any uploaded parts.
   // Idempotent: aborting an already-gone upload is not an error.
   abortMultipartUpload?(path: string, uploadId: string): Promise<void>
+
+  // --- Optional: pulling an object from a URL we don't control ---
+  // Streams `sourceUrl`'s response body directly into `path`, without buffering
+  // the whole object in memory. Used to pull a transcoder's temporary output
+  // into our own bucket when the transcoder can't be trusted to write to our
+  // storage directly (see the Qencode normalisation callback).
+  putObjectFromUrl?(
+    path: string,
+    sourceUrl: string,
+    opts?: { contentType?: string | null },
+  ): Promise<void>
 }
 
 export { SupabaseStorageProvider } from "@/lib/storage/supabase-storage"

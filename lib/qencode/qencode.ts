@@ -1,8 +1,12 @@
 // Thin, typed client for the Qencode transcoding API. We use Qencode purely as
 // a "transcode-as-a-service" worker: it reads our original via a signed URL,
-// produces a 1080p H.264 proxy, writes that proxy straight back into our own S3
-// bucket, and POSTs a status callback when it's done. The app server never
-// touches the video bytes.
+// produces a 1080p H.264 proxy, holds it on its own temporary storage, and
+// POSTs a status callback with a download URL when it's done. Our own callback
+// handler pulls the finished proxy into our S3 bucket (see
+// lib/source-files/normalisation-service.ts) rather than handing Qencode a
+// destination to write to directly — its generic S3 destination writer was
+// observed silently producing 0-byte objects against Supabase's S3-compatible
+// endpoint.
 //
 // The job lifecycle is three calls:
 //   1. access_token   - exchange the long-lived API key for a short-lived token
