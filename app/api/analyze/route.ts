@@ -14,6 +14,7 @@ import {
   saveRetentionWindows,
 } from "@/lib/retention-windows"
 import { createPendingRetentionWindowMedia } from "@/lib/retention-window-media"
+import { saveRetentionWindowTranscripts } from "@/lib/retention-window-transcripts"
 import { triggerRetentionWindowMediaExtraction } from "@/lib/retention-window-media-trigger"
 import { getSourceFileForVideo } from "@/lib/source-files/source-files"
 import {
@@ -178,6 +179,13 @@ export async function POST(request: NextRequest) {
             user.id,
             savedVideo.id,
             savedWindows,
+          )
+          await saveRetentionWindowTranscripts(
+            supabase,
+            user.id,
+            savedVideo.id,
+            savedWindows,
+            transcript,
           )
           // The source video may already be uploaded and normalised (this
           // analyze call can come after the upload) — if so, kick off
