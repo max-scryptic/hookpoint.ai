@@ -77,11 +77,13 @@ function countByStatus(
 }
 
 // Analysis only ever runs on a row once extraction has succeeded
-// (status = 'ready') — see getRetentionWindowSnapshotsPendingAnalysis/
-// getRetentionWindowAudioPendingAnalysis. So a row whose extraction is still
+// (status = 'ready') — see claimRetentionWindowSnapshotsPendingAnalysis/
+// claimRetentionWindowAudioPendingAnalysis. So a row whose extraction is still
 // pending counts as analysis-pending too (nothing to analyse yet), and a row
 // whose extraction failed counts as analysis-failed (it never will have
 // anything to analyse), rather than leaving either stuck 'pending' forever.
+// 'processing' (a claim held while an LLM call is in flight) counts the same
+// as 'pending' here — it's still unsettled, not a real outcome.
 function countByAnalysisStatus(
   rows: { status: string; analysis_status: string }[],
 ): { total: number; pending: number; failed: number } {
@@ -89,8 +91,13 @@ function countByAnalysisStatus(
   let failed = 0
   for (const row of rows) {
     if (row.status === "failed") failed++
-    else if (row.status !== "ready" || row.analysis_status === "pending") pending++
-    else if (row.analysis_status === "failed") failed++
+    else if (
+      row.status !== "ready" ||
+      row.analysis_status === "pending" ||
+      row.analysis_status === "processing"
+    ) {
+      pending++
+    } else if (row.analysis_status === "failed") failed++
   }
   return { total: rows.length, pending, failed }
 }

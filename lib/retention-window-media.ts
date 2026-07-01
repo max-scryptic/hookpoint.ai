@@ -18,6 +18,11 @@ export const CHUNK_STEP_SECONDS = 5
 
 export type RetentionWindowMediaStatus = "pending" | "ready" | "failed"
 
+// 'processing' only ever applies to analysisStatus: it's a claim a caller
+// holds while it's mid-LLM-call for a row, not a real extraction/analysis
+// outcome. See claimRetentionWindowSnapshotsPendingAnalysis below.
+export type RetentionWindowAnalysisStatus = RetentionWindowMediaStatus | "processing"
+
 export interface RetentionWindowSnapshot {
   id: string
   retentionWindowId: string
@@ -26,7 +31,7 @@ export interface RetentionWindowSnapshot {
   storagePath: string | null
   status: RetentionWindowMediaStatus
   error: string | null
-  analysisStatus: RetentionWindowMediaStatus
+  analysisStatus: RetentionWindowAnalysisStatus
   analysis: unknown
   analysisError: string | null
 }
@@ -39,7 +44,7 @@ export interface RetentionWindowAudioClip {
   storagePath: string | null
   status: RetentionWindowMediaStatus
   error: string | null
-  analysisStatus: RetentionWindowMediaStatus
+  analysisStatus: RetentionWindowAnalysisStatus
   analysis: unknown
   analysisError: string | null
 }
@@ -52,7 +57,7 @@ interface SnapshotRow {
   storage_path: string | null
   status: RetentionWindowMediaStatus
   error: string | null
-  analysis_status: RetentionWindowMediaStatus
+  analysis_status: RetentionWindowAnalysisStatus
   analysis: unknown
   analysis_error: string | null
 }
@@ -65,7 +70,7 @@ interface AudioRow {
   storage_path: string | null
   status: RetentionWindowMediaStatus
   error: string | null
-  analysis_status: RetentionWindowMediaStatus
+  analysis_status: RetentionWindowAnalysisStatus
   analysis: unknown
   analysis_error: string | null
 }
@@ -377,50 +382,70 @@ export async function updateRetentionWindowAudioStatus(
   }
 }
 
-// Loads every successfully-extracted snapshot still waiting on analysis,
-// ordered so a batch call can group consecutive rows by window.
-export async function getRetentionWindowSnapshotsPendingAnalysis(
+// A claim older than this is treated as abandoned (the caller was almost
+// certainly killed by a function timeout mid-call) and can be reclaimed by
+// the next trigger, rather than blocking analysis forever.
+const ANALYSIS_CLAIM_STALE_MS = 10 * 60 * 1000
+
+// Atomically claims every successfully-extracted snapshot still waiting on
+// analysis by flipping analysis_status pending -> processing in one UPDATE,
+// so two triggers running at once can't both pick up the same row and call
+// the LLM twice for it: the UPDATE's WHERE clause only matches a row once,
+// whichever caller's statement commits first. Returns just the rows this
+// call actually claimed, ordered so a batch call can group consecutive rows
+// by window.
+export async function claimRetentionWindowSnapshotsPendingAnalysis(
   supabase: SupabaseClient,
   userId: string,
   analysedVideoId: string,
 ): Promise<RetentionWindowSnapshot[]> {
+  const staleBefore = new Date(Date.now() - ANALYSIS_CLAIM_STALE_MS).toISOString()
+
   const { data, error } = await supabase
     .from("retention_window_snapshots")
-    .select(SNAPSHOT_COLUMNS)
+    .update({ analysis_status: "processing" })
     .eq("user_id", userId)
     .eq("analysed_video_id", analysedVideoId)
     .eq("status", "ready")
-    .eq("analysis_status", "pending")
+    .or(
+      `analysis_status.eq.pending,and(analysis_status.eq.processing,updated_at.lt.${staleBefore})`,
+    )
+    .select(SNAPSHOT_COLUMNS)
     .order("retention_window_id", { ascending: true })
     .order("chunk_index", { ascending: true })
 
   if (error) {
     throw new Error(
-      `Failed to load retention window snapshots pending analysis: ${error.message}`,
+      `Failed to claim retention window snapshots for analysis: ${error.message}`,
     )
   }
 
   return ((data ?? []) as SnapshotRow[]).map(mapSnapshotRow)
 }
 
-// Loads every successfully-extracted audio clip still waiting on analysis.
-export async function getRetentionWindowAudioPendingAnalysis(
+// Same claim as above, for audio clips.
+export async function claimRetentionWindowAudioPendingAnalysis(
   supabase: SupabaseClient,
   userId: string,
   analysedVideoId: string,
 ): Promise<RetentionWindowAudioClip[]> {
+  const staleBefore = new Date(Date.now() - ANALYSIS_CLAIM_STALE_MS).toISOString()
+
   const { data, error } = await supabase
     .from("retention_window_audio")
-    .select(AUDIO_COLUMNS)
+    .update({ analysis_status: "processing" })
     .eq("user_id", userId)
     .eq("analysed_video_id", analysedVideoId)
     .eq("status", "ready")
-    .eq("analysis_status", "pending")
+    .or(
+      `analysis_status.eq.pending,and(analysis_status.eq.processing,updated_at.lt.${staleBefore})`,
+    )
+    .select(AUDIO_COLUMNS)
     .order("retention_window_id", { ascending: true })
 
   if (error) {
     throw new Error(
-      `Failed to load retention window audio pending analysis: ${error.message}`,
+      `Failed to claim retention window audio for analysis: ${error.message}`,
     )
   }
 

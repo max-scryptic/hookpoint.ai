@@ -85,9 +85,15 @@ function fakeAnalyzer(
 }
 
 // A fake Supabase client that serves canned rows per table for the reads this
-// module issues (snapshots/audio pending analysis, transcripts) and records
-// every update payload, the same pattern
+// module issues (claiming snapshots/audio pending analysis, transcripts) and
+// records every update payload, the same pattern
 // retention-window-media-extraction.test.ts uses for the extraction side.
+//
+// Claiming does an update().select(), which this fake treats as "claimed
+// every canned row for that table" (it doesn't model the real WHERE clause) —
+// good enough since these tests care about what analyzeRetentionWindowMedia
+// does with claimed rows, not the claim's own row-locking semantics (that's
+// exercised for real by Postgres, not this fake).
 function makeFakeSupabase(tables: Record<string, Record<string, unknown>[]>) {
   const updates: {
     table: string
@@ -98,8 +104,12 @@ function makeFakeSupabase(tables: Record<string, Record<string, unknown>[]>) {
   const supabase = {
     from(table: string) {
       let pendingId: string | undefined
+      let selectCalled = false
       const builder: Record<string, unknown> = {
-        select: () => builder,
+        select: () => {
+          selectCalled = true
+          return builder
+        },
         update: (payload: Record<string, unknown>) => {
           builder._payload = payload
           return builder
@@ -108,6 +118,7 @@ function makeFakeSupabase(tables: Record<string, Record<string, unknown>[]>) {
           if (column === "id") pendingId = value
           return builder
         },
+        or: () => builder,
         order: () => builder,
         then: (resolve: (v: unknown) => unknown) => {
           if (builder._payload) {
@@ -116,7 +127,14 @@ function makeFakeSupabase(tables: Record<string, Record<string, unknown>[]>) {
               id: pendingId as string,
               payload: builder._payload as Record<string, unknown>,
             })
-            return Promise.resolve({ error: null }).then(resolve)
+            // A claim (update followed by select()) returns the canned rows
+            // as the claimed set; a terminal status write (update with no
+            // select()) just resolves with no data, as it does for real.
+            return Promise.resolve(
+              selectCalled
+                ? { data: tables[table] ?? [], error: null }
+                : { error: null },
+            ).then(resolve)
           }
           return Promise.resolve({ data: tables[table] ?? [], error: null }).then(
             resolve,

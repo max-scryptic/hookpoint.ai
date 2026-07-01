@@ -19,8 +19,8 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { measureAudioClipStats } from "@/lib/media/video-extraction"
 import {
-  getRetentionWindowAudioPendingAnalysis,
-  getRetentionWindowSnapshotsPendingAnalysis,
+  claimRetentionWindowAudioPendingAnalysis,
+  claimRetentionWindowSnapshotsPendingAnalysis,
   updateRetentionWindowAudioAnalysis,
   updateRetentionWindowSnapshotAnalysis,
   type RetentionWindowAudioClip,
@@ -132,6 +132,12 @@ function groupByWindow(
 // but not yet analysis. Best-effort per window/row — a bad OpenAI call fails
 // just that window's snapshots (or that one audio row) and the run continues,
 // the same failure-isolation extraction already uses.
+//
+// Rows are claimed (analysis_status flipped pending -> processing) before any
+// LLM call goes out, not just read, so a second trigger racing this one (this
+// function can be kicked off from several places for the same video — see
+// lib/retention-window-media-trigger.ts) can't also pick up the same row and
+// pay for the same analysis twice.
 export async function analyzeRetentionWindowMedia(
   admin: SupabaseClient,
   userId: string,
@@ -139,8 +145,8 @@ export async function analyzeRetentionWindowMedia(
   deps: RetentionWindowMediaAnalysisDeps = defaultRetentionWindowMediaAnalysisDeps(),
 ): Promise<void> {
   const [pendingSnapshots, pendingAudio] = await Promise.all([
-    getRetentionWindowSnapshotsPendingAnalysis(admin, userId, analysedVideoId),
-    getRetentionWindowAudioPendingAnalysis(admin, userId, analysedVideoId),
+    claimRetentionWindowSnapshotsPendingAnalysis(admin, userId, analysedVideoId),
+    claimRetentionWindowAudioPendingAnalysis(admin, userId, analysedVideoId),
   ])
 
   if (pendingSnapshots.length === 0 && pendingAudio.length === 0) return

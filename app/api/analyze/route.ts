@@ -5,10 +5,7 @@ import {
   healCachedTranscript,
   saveAnalysedVideo,
 } from "@/lib/analysed-videos"
-import {
-  getPacingAnalysis,
-  savePacingAnalysis,
-} from "@/lib/pacing-analyses"
+import { getOrGeneratePacingAnalysis } from "@/lib/pacing-analyses"
 import {
   buildRetentionWindows,
   saveRetentionWindows,
@@ -78,28 +75,17 @@ export async function POST(request: NextRequest) {
         videoId,
         cached.transcript,
       )
-      let pacingAnalysis = await getPacingAnalysis(
-        supabase,
-        user.id,
-        cached.id,
-      )
-      if (!pacingAnalysis && transcript.length > 0) {
-        try {
-          pacingAnalysis = await generatePacingAnalysis(
-            cached.videoDetails,
-            transcript,
-          )
-          if (pacingAnalysis) {
-            await savePacingAnalysis(
-              supabase,
-              user.id,
-              cached.id,
-              pacingAnalysis,
-            )
-          }
-        } catch (pacingError) {
-          console.error("Failed to generate pacing analysis", pacingError)
-        }
+      let pacingAnalysis: PacingAnalysis | null = null
+      try {
+        pacingAnalysis = await getOrGeneratePacingAnalysis(
+          supabase,
+          user.id,
+          cached.id,
+          cached.videoDetails,
+          transcript,
+        )
+      } catch (pacingError) {
+        console.error("Failed to generate pacing analysis", pacingError)
       }
 
       return NextResponse.json({
@@ -146,19 +132,11 @@ export async function POST(request: NextRequest) {
         return [] as TranscriptCue[]
       },
     )
-    let pacingAnalysis: PacingAnalysis | null = null
-    if (transcript.length > 0) {
-      try {
-        pacingAnalysis = await generatePacingAnalysis(video, transcript)
-      } catch (pacingError) {
-        // Pacing is additive: an OpenAI outage or a missing key must not hide
-        // the retention analysis the user can still use.
-        console.error("Failed to generate pacing analysis", pacingError)
-      }
-    }
-
     // Persist the analysis so subsequent requests are served from the cache
-    // above. Best-effort: a DB failure shouldn't fail the analysis response.
+    // above, and so pacing analysis below has a video row to claim against.
+    // Best-effort: a DB failure shouldn't fail the analysis response.
+    let pacingAnalysis: PacingAnalysis | null = null
+    let videoPersisted = false
     try {
       const savedVideo = await saveAnalysedVideo(supabase, {
         userId: user.id,
@@ -167,6 +145,7 @@ export async function POST(request: NextRequest) {
         transcript,
       })
       if (savedVideo) {
+        videoPersisted = true
         try {
           const savedWindows = await saveRetentionWindows(
             supabase,
@@ -202,21 +181,34 @@ export async function POST(request: NextRequest) {
             retentionSaveError,
           )
         }
-        if (pacingAnalysis) {
+        if (transcript.length > 0) {
           try {
-            await savePacingAnalysis(
+            pacingAnalysis = await getOrGeneratePacingAnalysis(
               supabase,
               user.id,
               savedVideo.id,
-              pacingAnalysis,
+              video,
+              transcript,
             )
-          } catch (pacingSaveError) {
-            console.error("Failed to save pacing analysis", pacingSaveError)
+          } catch (pacingError) {
+            // Pacing is additive: an OpenAI outage or a missing key must not
+            // hide the retention analysis the user can still use.
+            console.error("Failed to generate pacing analysis", pacingError)
           }
         }
       }
     } catch (saveError) {
       console.error("Failed to save analysed video", saveError)
+    }
+
+    // The video row failed to save, so there's nothing to claim/save a pacing
+    // analysis against — fall back to generating one just for this response.
+    if (!videoPersisted && transcript.length > 0) {
+      try {
+        pacingAnalysis = await generatePacingAnalysis(video, transcript)
+      } catch (pacingError) {
+        console.error("Failed to generate pacing analysis", pacingError)
+      }
     }
 
     return NextResponse.json({
