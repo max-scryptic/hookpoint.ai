@@ -1,4 +1,5 @@
-// Best-effort kickoff for retention-window media extraction. Called from
+// Best-effort kickoff for retention-window media extraction, immediately
+// followed by AI analysis of whatever extraction just finished. Called from
 // whichever of the two independent async processes finishes second for a
 // given video:
 //   • /api/analyze, right after the retention windows (and their pending
@@ -11,12 +12,16 @@
 //
 // Runs via Next's after() so it happens once the response has been sent,
 // never adding extraction latency to the request/webhook it's triggered from.
-// extractPendingRetentionWindowMedia itself never throws (each row's own
-// failure is caught and recorded), but this is still wrapped defensively since
-// after() callbacks that throw are logged as unhandled by the runtime.
+// Neither extractPendingRetentionWindowMedia nor analyzeRetentionWindowMedia
+// throws on its own (each row's own failure is caught and recorded), but this
+// is still wrapped defensively since after() callbacks that throw are logged
+// as unhandled by the runtime. Analysis runs after extraction, in the same
+// callback, so newly-extracted media gets analysed without waiting for a
+// second trigger.
 
 import { after } from "next/server"
 
+import { analyzeRetentionWindowMedia } from "@/lib/retention-window-media-analysis"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getStorageProvider } from "@/lib/storage/provider"
 import {
@@ -31,14 +36,26 @@ export function triggerRetentionWindowMediaExtraction(
   if (!isSourceFileReady(sourceFile)) return
 
   after(async () => {
+    const admin = createAdminClient()
+
     try {
       await extractPendingRetentionWindowMedia(
-        createAdminClient(),
+        admin,
         getStorageProvider(),
         sourceFile as SourceFile,
       )
     } catch (error) {
       console.error("Failed to run retention window media extraction", error)
+    }
+
+    try {
+      await analyzeRetentionWindowMedia(
+        admin,
+        (sourceFile as SourceFile).userId,
+        (sourceFile as SourceFile).analysedVideoId,
+      )
+    } catch (error) {
+      console.error("Failed to run retention window media analysis", error)
     }
   })
 }

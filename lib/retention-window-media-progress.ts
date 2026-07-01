@@ -1,10 +1,11 @@
 // Aggregates a video's "deep analysis" pipeline — transcoding the raw upload,
-// then harvesting per-window snapshots/audio from it — into a small set of
-// stage statuses the source-file card can poll and render as a checklist.
-// Transcript clipping isn't included as real progress: it runs synchronously
-// off the YouTube captions API while retention windows are saved (see
-// lib/retention-window-transcripts.ts), so by the time a source file even
-// exists to poll about, it has already settled.
+// harvesting per-window snapshots/audio from it, then running AI analysis
+// over the harvested media (lib/retention-window-media-analysis.ts) — into a
+// small set of stage statuses the source-file card can poll and render as a
+// checklist. Transcript clipping isn't included as real progress: it runs
+// synchronously off the YouTube captions API while retention windows are
+// saved (see lib/retention-window-transcripts.ts), so by the time a source
+// file even exists to poll about, it has already settled.
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
@@ -15,7 +16,9 @@ export type DeepAnalysisStageStatus = "pending" | "in_progress" | "ready" | "fai
 export interface DeepAnalysisStages {
   transcoding: DeepAnalysisStageStatus
   snapshots: DeepAnalysisStageStatus
+  snapshotAnalysis: DeepAnalysisStageStatus
   audio: DeepAnalysisStageStatus
+  audioAnalysis: DeepAnalysisStageStatus
   transcript: DeepAnalysisStageStatus
 }
 
@@ -73,6 +76,25 @@ function countByStatus(
   return { total: rows.length, pending, failed }
 }
 
+// Analysis only ever runs on a row once extraction has succeeded
+// (status = 'ready') — see getRetentionWindowSnapshotsPendingAnalysis/
+// getRetentionWindowAudioPendingAnalysis. So a row whose extraction is still
+// pending counts as analysis-pending too (nothing to analyse yet), and a row
+// whose extraction failed counts as analysis-failed (it never will have
+// anything to analyse), rather than leaving either stuck 'pending' forever.
+function countByAnalysisStatus(
+  rows: { status: string; analysis_status: string }[],
+): { total: number; pending: number; failed: number } {
+  let pending = 0
+  let failed = 0
+  for (const row of rows) {
+    if (row.status === "failed") failed++
+    else if (row.status !== "ready" || row.analysis_status === "pending") pending++
+    else if (row.analysis_status === "failed") failed++
+  }
+  return { total: rows.length, pending, failed }
+}
+
 function isStageSettled(status: DeepAnalysisStageStatus): boolean {
   return status === "ready" || status === "failed"
 }
@@ -89,12 +111,12 @@ export async function getDeepAnalysisProgress(
   const [snapshotsResult, audioResult] = await Promise.all([
     supabase
       .from("retention_window_snapshots")
-      .select("status")
+      .select("status, analysis_status")
       .eq("user_id", userId)
       .eq("analysed_video_id", analysedVideoId),
     supabase
       .from("retention_window_audio")
-      .select("status")
+      .select("status, analysis_status")
       .eq("user_id", userId)
       .eq("analysed_video_id", analysedVideoId),
   ])
@@ -110,10 +132,19 @@ export async function getDeepAnalysisProgress(
     )
   }
 
-  const snapshotCounts = countByStatus(
-    (snapshotsResult.data ?? []) as { status: string }[],
-  )
-  const audioCounts = countByStatus((audioResult.data ?? []) as { status: string }[])
+  const snapshotRows = (snapshotsResult.data ?? []) as {
+    status: string
+    analysis_status: string
+  }[]
+  const audioRows = (audioResult.data ?? []) as {
+    status: string
+    analysis_status: string
+  }[]
+
+  const snapshotCounts = countByStatus(snapshotRows)
+  const audioCounts = countByStatus(audioRows)
+  const snapshotAnalysisCounts = countByAnalysisStatus(snapshotRows)
+  const audioAnalysisCounts = countByAnalysisStatus(audioRows)
 
   const stages: DeepAnalysisStages = {
     transcoding: normalisationToStageStatus(sourceFile.normalisationStatus),
@@ -122,10 +153,20 @@ export async function getDeepAnalysisProgress(
       snapshotCounts.pending,
       snapshotCounts.failed,
     ),
+    snapshotAnalysis: deriveMediaStageStatus(
+      snapshotAnalysisCounts.total,
+      snapshotAnalysisCounts.pending,
+      snapshotAnalysisCounts.failed,
+    ),
     audio: deriveMediaStageStatus(
       audioCounts.total,
       audioCounts.pending,
       audioCounts.failed,
+    ),
+    audioAnalysis: deriveMediaStageStatus(
+      audioAnalysisCounts.total,
+      audioAnalysisCounts.pending,
+      audioAnalysisCounts.failed,
     ),
     transcript: "ready",
   }
