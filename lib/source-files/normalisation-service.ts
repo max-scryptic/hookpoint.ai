@@ -3,14 +3,20 @@
 //
 // Two halves, mirroring the upload service:
 //   • startNormalisation   - runs in the complete-upload request once the file
-//     validates. Hands Qencode a signed read URL of the original + an S3
-//     destination in our bucket, and records the job token. Best-effort: a
-//     Qencode hiccup never fails the upload — the original stays as the
-//     fallback and the row is marked 'failed' for a later retry.
-//   • handleNormalisationCallback - runs in the (unauthenticated) Qencode status
-//     webhook. On success it verifies the proxy landed, flips the row to
-//     'ready', and deletes the original master. On error it records the failure
-//     and keeps the original.
+//     validates. Hands Qencode a signed read URL of the original and records
+//     the job token. Best-effort: a Qencode hiccup never fails the upload —
+//     the original stays as the fallback and the row is marked 'failed' for a
+//     later retry.
+//   • applyNormalisationCallback - runs in the (unauthenticated) Qencode status
+//     webhook. On success it pulls the finished proxy from the URL Qencode
+//     hands back into our own bucket, flips the row to 'ready', and deletes the
+//     original master. On error it records the failure and keeps the original.
+//
+// Qencode is deliberately not given a destination to write the proxy to
+// directly: that was tried first, and Qencode's generic S3 destination writer
+// silently produced 0-byte objects against Supabase's S3-compatible endpoint
+// while still reporting the job as completed. Pulling the file ourselves, with
+// the same S3 client already used for uploads, avoids that failure mode.
 //
 // The feature is fully gated by isNormalisationEnabled(): when Qencode/S3 aren't
 // configured, startNormalisation is a no-op and the flow is unchanged.
@@ -19,7 +25,6 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { QencodeClient, type QencodeQuery } from "@/lib/qencode/qencode"
 import {
-  buildQencodeDestination,
   getNormalisationCallbackUrl,
   getNormalisationSourceExpirySeconds,
   getProxyFormatOverrides,
@@ -97,7 +102,6 @@ export async function startNormalisation(
           video_codec: "libx264",
           height: targetHeight,
           ...getProxyFormatOverrides(),
-          destination: buildQencodeDestination(proxyPath),
         },
       ],
       callback_url: getNormalisationCallbackUrl() ?? undefined,
@@ -129,31 +133,42 @@ export async function startNormalisation(
 // The minimal, provider-agnostic view of a transcoder status callback.
 export interface NormalisationCallback {
   taskToken: string
-  // 'completed' = proxy saved; 'error' = transcode failed; 'progress' = an
-  // interim event we acknowledge but don't act on.
+  // 'completed' = a finished video is ready to pull; 'error' = transcode
+  // failed; 'progress' = an interim event we acknowledge but don't act on.
   outcome: "completed" | "error" | "progress"
   errorMessage?: string
+  // Temporary download URL for the finished proxy (Qencode holds it on its own
+  // storage for 24h since no destination was configured). Only set when
+  // outcome === "completed".
+  videoUrl?: string
 }
 
-// Parses a raw Qencode callback body into our normalised shape, or null when it
-// doesn't carry a task token we can act on. Tolerant of field-name variation
-// across Qencode events (task_token, event/status, error/message).
+// Qencode POSTs callbacks as application/x-www-form-urlencoded fields, not
+// JSON: `task_token`, `event` (e.g. "saved"), and a `status` field holding a
+// JSON-encoded string with `error` (0/1) and, on success, a `videos` array
+// carrying each output's download `url`. The route hands us the decoded form
+// fields as plain strings; this stays tolerant of the alternate field names
+// seen in Qencode's docs (task_id, top-level error/message) in case a given
+// event doesn't follow the documented shape.
 export function parseQencodeCallback(
-  body: unknown,
+  fields: Record<string, string>,
 ): NormalisationCallback | null {
-  if (typeof body !== "object" || body === null) return null
-  const b = body as Record<string, unknown>
-
-  const taskToken =
-    typeof b.task_token === "string"
-      ? b.task_token
-      : typeof b.task_id === "string"
-        ? b.task_id
-        : null
+  const taskToken = fields.task_token || fields.task_id || null
   if (!taskToken) return null
 
-  const event = String(b.event ?? b.status ?? "").toLowerCase()
-  const errorField = Number(b.error ?? 0)
+  const event = (fields.event ?? "").toLowerCase()
+
+  let status: Record<string, unknown> = {}
+  if (fields.status) {
+    try {
+      const parsed = JSON.parse(fields.status)
+      if (parsed && typeof parsed === "object") status = parsed
+    } catch {
+      // Not JSON — fall through with an empty status object.
+    }
+  }
+
+  const errorField = Number(status.error ?? fields.error ?? 0)
 
   let outcome: NormalisationCallback["outcome"] = "progress"
   if (event === "error" || errorField !== 0) {
@@ -163,17 +178,22 @@ export function parseQencodeCallback(
   }
 
   const errorMessage =
-    typeof b.message === "string"
-      ? b.message
-      : typeof b.error_description === "string"
-        ? b.error_description
+    typeof status.message === "string"
+      ? status.message
+      : typeof fields.message === "string"
+        ? fields.message
         : undefined
 
-  return { taskToken, outcome, errorMessage }
+  const videos = Array.isArray(status.videos) ? status.videos : []
+  const firstVideo = videos[0] as Record<string, unknown> | undefined
+  const videoUrl = typeof firstVideo?.url === "string" ? firstVideo.url : undefined
+
+  return { taskToken, outcome, errorMessage, videoUrl }
 }
 
-// Applies a parsed callback to the matching source file. On completion it
-// verifies the proxy object exists, marks the row 'ready', then deletes the
+// Applies a parsed callback to the matching source file. On completion it pulls
+// the finished proxy from Qencode's temporary storage into our own bucket,
+// verifies it landed with real content, marks the row 'ready', then deletes the
 // original master (best-effort). On error it records 'failed' and keeps the
 // original. Idempotent: a duplicate completion for an already-ready row no-ops.
 // Uses the service-role admin client (the callback is unauthenticated).
@@ -195,28 +215,49 @@ export async function applyNormalisationCallback(
     return
   }
 
-  // outcome === "completed": confirm the proxy actually landed before we commit
-  // to deleting the original. A missing proxy is treated as a failure.
+  // outcome === "completed": we need somewhere to write the proxy and a URL to
+  // pull it from before we can commit to deleting the original.
   const proxyPath = sourceFile.proxyStoragePath
-  if (!proxyPath) {
+  if (!proxyPath || !callback.videoUrl) {
     await updateSourceFile(admin, sourceFile.userId, sourceFile.id, {
       normalisationStatus: "failed",
-      normalisationError: "Completed callback had no proxy path on record",
+      normalisationError: "Completed callback had no output to pull",
     })
     return
   }
 
-  // A zero-byte object counts as missing: we've seen the transcoder report
-  // success and the destination write land as an empty file (e.g. a botched
-  // multipart upload to the S3 destination), which existence alone wouldn't
-  // catch.
+  if (!storage.putObjectFromUrl) {
+    await updateSourceFile(admin, sourceFile.userId, sourceFile.id, {
+      normalisationStatus: "failed",
+      normalisationError: "Storage provider can't pull the transcoder output",
+    })
+    return
+  }
+
+  try {
+    await storage.putObjectFromUrl(proxyPath, callback.videoUrl, {
+      contentType: "video/mp4",
+    })
+  } catch (error) {
+    await updateSourceFile(admin, sourceFile.userId, sourceFile.id, {
+      normalisationStatus: "failed",
+      normalisationError:
+        error instanceof Error
+          ? error.message
+          : "Failed to pull transcoder output",
+    })
+    return
+  }
+
+  // A zero-byte object counts as missing: guards against a partial/broken pull
+  // landing an empty file the same way Qencode's own direct writer once did.
   const info = await storage.statObject(proxyPath)
   if (!info.exists || !info.sizeBytes) {
     await updateSourceFile(admin, sourceFile.userId, sourceFile.id, {
       normalisationStatus: "failed",
       normalisationError: info.exists
-        ? "Transcoder reported success but the proxy landed empty (0 bytes)"
-        : "Transcoder reported success but no proxy was found",
+        ? "Pulled proxy landed empty (0 bytes)"
+        : "Pulled proxy is missing after upload",
     })
     return
   }

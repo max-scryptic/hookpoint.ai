@@ -28,14 +28,30 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  let body: unknown
+  // Qencode POSTs callbacks as application/x-www-form-urlencoded, not JSON
+  // (task_token/event as plain fields, a JSON-encoded `status` field for the
+  // rest). formData() parses both url-encoded and multipart bodies; fall back
+  // to a JSON body in case that ever changes.
+  let fields: Record<string, string> = {}
   try {
-    body = await request.json()
+    const form = await request.formData()
+    for (const [key, value] of form.entries()) {
+      if (typeof value === "string") fields[key] = value
+    }
   } catch {
-    body = null
+    try {
+      const json = await request.json()
+      if (json && typeof json === "object") {
+        for (const [key, value] of Object.entries(json)) {
+          fields[key] = typeof value === "string" ? value : JSON.stringify(value)
+        }
+      }
+    } catch {
+      fields = {}
+    }
   }
 
-  const callback = parseQencodeCallback(body)
+  const callback = parseQencodeCallback(fields)
   if (!callback) {
     // Nothing actionable (no task token) — acknowledge so it isn't retried.
     return NextResponse.json({ ok: true })

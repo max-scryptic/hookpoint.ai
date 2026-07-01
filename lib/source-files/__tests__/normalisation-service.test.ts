@@ -124,6 +124,7 @@ function fakeStorage(
     })),
     createSignedReadUrl: vi.fn(async () => "https://signed.example/read"),
     deleteObject: vi.fn(async () => {}),
+    putObjectFromUrl: vi.fn(async () => {}),
   } as unknown as StorageProvider
 }
 
@@ -252,35 +253,78 @@ describe("startNormalisation", () => {
 })
 
 describe("parseQencodeCallback", () => {
-  it("maps a completed event", () => {
+  // Qencode POSTs application/x-www-form-urlencoded fields, with the bulk of
+  // the payload nested in a JSON-encoded `status` string — not a JSON body.
+  it("maps a completed event and extracts the output URL", () => {
     expect(
-      parseQencodeCallback({ task_token: "t", event: "completed" }),
-    ).toEqual({ taskToken: "t", outcome: "completed", errorMessage: undefined })
+      parseQencodeCallback({
+        task_token: "t",
+        event: "saved",
+        status: JSON.stringify({
+          error: 0,
+          videos: [{ url: "https://storage.qencode.com/out.mp4" }],
+        }),
+      }),
+    ).toEqual({
+      taskToken: "t",
+      outcome: "completed",
+      errorMessage: undefined,
+      videoUrl: "https://storage.qencode.com/out.mp4",
+    })
+  })
+
+  it("also treats a 'completed' event as completed", () => {
+    expect(
+      parseQencodeCallback({
+        task_token: "t",
+        event: "completed",
+        status: JSON.stringify({ error: 0 }),
+      }),
+    ).toMatchObject({ outcome: "completed" })
   })
 
   it("maps an error event and its message", () => {
     expect(
-      parseQencodeCallback({ task_token: "t", event: "error", message: "boom" }),
+      parseQencodeCallback({
+        task_token: "t",
+        event: "error",
+        status: JSON.stringify({ error: 1, message: "boom" }),
+      }),
     ).toMatchObject({ taskToken: "t", outcome: "error", errorMessage: "boom" })
   })
 
-  it("treats a non-zero error field as a failure", () => {
-    expect(parseQencodeCallback({ task_token: "t", error: 5 })).toMatchObject({
-      outcome: "error",
-    })
+  it("treats a non-zero error field in status as a failure", () => {
+    expect(
+      parseQencodeCallback({
+        task_token: "t",
+        status: JSON.stringify({ error: 5 }),
+      }),
+    ).toMatchObject({ outcome: "error" })
+  })
+
+  it("tolerates a missing or malformed status field", () => {
+    expect(
+      parseQencodeCallback({ task_token: "t", event: "progress" }),
+    ).toMatchObject({ outcome: "progress" })
+    expect(
+      parseQencodeCallback({ task_token: "t", status: "not json" }),
+    ).toMatchObject({ outcome: "progress" })
   })
 
   it("returns null without a task token", () => {
     expect(parseQencodeCallback({ event: "completed" })).toBeNull()
-    expect(parseQencodeCallback(null)).toBeNull()
+    expect(parseQencodeCallback({})).toBeNull()
   })
 })
 
 describe("applyNormalisationCallback", () => {
-  it("on completion: marks ready, records proxy size, and deletes the original", async () => {
+  const proxyPath = "user-1/vid-1/sf-1/proxy-1080p.mp4"
+  const videoUrl = "https://storage.qencode.com/e207/out.mp4"
+
+  it("on completion: pulls the output, marks ready, and deletes the original", async () => {
     const sf = makeSourceFile({
       normalisationStatus: "processing",
-      proxyStoragePath: "user-1/vid-1/sf-1/proxy-1080p.mp4",
+      proxyStoragePath: proxyPath,
     })
     const { supabase, updates } = makeUpdateSupabase(sf)
     const storage = fakeStorage(true)
@@ -288,8 +332,12 @@ describe("applyNormalisationCallback", () => {
     await applyNormalisationCallback(supabase, storage, sf, {
       taskToken: "task-1",
       outcome: "completed",
+      videoUrl,
     })
 
+    expect(storage.putObjectFromUrl).toHaveBeenCalledWith(proxyPath, videoUrl, {
+      contentType: "video/mp4",
+    })
     expect(updates[0]).toMatchObject({
       normalisation_status: "ready",
       proxy_size_bytes: 2048,
@@ -301,10 +349,77 @@ describe("applyNormalisationCallback", () => {
     )
   })
 
-  it("fails (and keeps the original) when the proxy is missing despite success", async () => {
+  it("fails (and keeps the original) when a completed callback has no output URL", async () => {
     const sf = makeSourceFile({
       normalisationStatus: "processing",
-      proxyStoragePath: "user-1/vid-1/sf-1/proxy-1080p.mp4",
+      proxyStoragePath: proxyPath,
+    })
+    const { supabase, updates } = makeUpdateSupabase(sf)
+    const storage = fakeStorage(true)
+
+    await applyNormalisationCallback(supabase, storage, sf, {
+      taskToken: "task-1",
+      outcome: "completed",
+    })
+
+    expect(storage.putObjectFromUrl).not.toHaveBeenCalled()
+    expect(updates[0]).toMatchObject({
+      normalisation_status: "failed",
+      normalisation_error: "Completed callback had no output to pull",
+    })
+    expect(storage.deleteObject).not.toHaveBeenCalled()
+  })
+
+  it("fails (and keeps the original) when the storage provider can't pull a URL", async () => {
+    const sf = makeSourceFile({
+      normalisationStatus: "processing",
+      proxyStoragePath: proxyPath,
+    })
+    const { supabase, updates } = makeUpdateSupabase(sf)
+    const storage = fakeStorage(true)
+    delete (storage as { putObjectFromUrl?: unknown }).putObjectFromUrl
+
+    await applyNormalisationCallback(supabase, storage, sf, {
+      taskToken: "task-1",
+      outcome: "completed",
+      videoUrl,
+    })
+
+    expect(updates[0]).toMatchObject({
+      normalisation_status: "failed",
+      normalisation_error: "Storage provider can't pull the transcoder output",
+    })
+    expect(storage.deleteObject).not.toHaveBeenCalled()
+  })
+
+  it("fails (and keeps the original) when pulling the output throws", async () => {
+    const sf = makeSourceFile({
+      normalisationStatus: "processing",
+      proxyStoragePath: proxyPath,
+    })
+    const { supabase, updates } = makeUpdateSupabase(sf)
+    const storage = fakeStorage(true)
+    storage.putObjectFromUrl = vi.fn(async () => {
+      throw new Error("fetch failed")
+    })
+
+    await applyNormalisationCallback(supabase, storage, sf, {
+      taskToken: "task-1",
+      outcome: "completed",
+      videoUrl,
+    })
+
+    expect(updates[0]).toMatchObject({
+      normalisation_status: "failed",
+      normalisation_error: "fetch failed",
+    })
+    expect(storage.deleteObject).not.toHaveBeenCalled()
+  })
+
+  it("fails (and keeps the original) when the pulled proxy is missing", async () => {
+    const sf = makeSourceFile({
+      normalisationStatus: "processing",
+      proxyStoragePath: proxyPath,
     })
     const { supabase, updates } = makeUpdateSupabase(sf)
     const storage = fakeStorage(false)
@@ -312,16 +427,17 @@ describe("applyNormalisationCallback", () => {
     await applyNormalisationCallback(supabase, storage, sf, {
       taskToken: "task-1",
       outcome: "completed",
+      videoUrl,
     })
 
     expect(updates[0]).toMatchObject({ normalisation_status: "failed" })
     expect(storage.deleteObject).not.toHaveBeenCalled()
   })
 
-  it("fails (and keeps the original) when the proxy exists but is 0 bytes", async () => {
+  it("fails (and keeps the original) when the pulled proxy is 0 bytes", async () => {
     const sf = makeSourceFile({
       normalisationStatus: "processing",
-      proxyStoragePath: "user-1/vid-1/sf-1/proxy-1080p.mp4",
+      proxyStoragePath: proxyPath,
     })
     const { supabase, updates } = makeUpdateSupabase(sf)
     const storage = fakeStorage(true, 0)
@@ -329,12 +445,12 @@ describe("applyNormalisationCallback", () => {
     await applyNormalisationCallback(supabase, storage, sf, {
       taskToken: "task-1",
       outcome: "completed",
+      videoUrl,
     })
 
     expect(updates[0]).toMatchObject({
       normalisation_status: "failed",
-      normalisation_error:
-        "Transcoder reported success but the proxy landed empty (0 bytes)",
+      normalisation_error: "Pulled proxy landed empty (0 bytes)",
     })
     expect(storage.deleteObject).not.toHaveBeenCalled()
   })

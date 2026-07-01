@@ -20,6 +20,9 @@ import {
   UploadPartCommand,
 } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
+import { Upload } from "@aws-sdk/lib-storage"
+import { Readable } from "node:stream"
+import type { ReadableStream as NodeWebReadableStream } from "node:stream/web"
 
 import {
   getMultipartPartSizeBytes,
@@ -200,6 +203,35 @@ export class S3StorageProvider implements StorageProvider {
     await this.client.send(
       new DeleteObjectCommand({ Bucket: this.bucket, Key: path }),
     )
+  }
+
+  // Streams a remote URL's response body straight into `path` via the AWS SDK's
+  // Upload helper, which picks single-PUT vs. multipart automatically and never
+  // buffers the whole object in memory. Used to pull a Qencode transcode output
+  // into our bucket ourselves, rather than trusting Qencode's own S3 writer.
+  async putObjectFromUrl(
+    path: string,
+    sourceUrl: string,
+    opts: { contentType?: string | null } = {},
+  ): Promise<void> {
+    const response = await fetch(sourceUrl)
+    if (!response.ok || !response.body) {
+      throw new Error(
+        `Failed to fetch object to pull: HTTP ${response.status}`,
+      )
+    }
+
+    const upload = new Upload({
+      client: this.client,
+      params: {
+        Bucket: this.bucket,
+        Key: path,
+        Body: Readable.fromWeb(response.body as NodeWebReadableStream),
+        ContentType:
+          opts.contentType ?? response.headers.get("content-type") ?? undefined,
+      },
+    })
+    await upload.done()
   }
 }
 
