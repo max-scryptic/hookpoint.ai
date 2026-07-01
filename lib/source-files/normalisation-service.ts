@@ -206,11 +206,17 @@ export async function applyNormalisationCallback(
     return
   }
 
+  // A zero-byte object counts as missing: we've seen the transcoder report
+  // success and the destination write land as an empty file (e.g. a botched
+  // multipart upload to the S3 destination), which existence alone wouldn't
+  // catch.
   const info = await storage.statObject(proxyPath)
-  if (!info.exists) {
+  if (!info.exists || !info.sizeBytes) {
     await updateSourceFile(admin, sourceFile.userId, sourceFile.id, {
       normalisationStatus: "failed",
-      normalisationError: "Transcoder reported success but no proxy was found",
+      normalisationError: info.exists
+        ? "Transcoder reported success but the proxy landed empty (0 bytes)"
+        : "Transcoder reported success but no proxy was found",
     })
     return
   }

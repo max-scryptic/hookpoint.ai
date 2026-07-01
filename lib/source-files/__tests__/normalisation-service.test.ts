@@ -110,13 +110,16 @@ function rowFor(base: SourceFile, payload: Record<string, unknown> = {}) {
   }
 }
 
-function fakeStorage(proxyExists = true): StorageProvider {
+function fakeStorage(
+  proxyExists: boolean = true,
+  sizeBytes: number | null = proxyExists ? 2048 : null,
+): StorageProvider {
   return {
     name: "fake",
     createSignedUpload: vi.fn(),
     statObject: vi.fn(async () => ({
       exists: proxyExists,
-      sizeBytes: proxyExists ? 2048 : null,
+      sizeBytes,
       contentType: proxyExists ? "video/mp4" : null,
     })),
     createSignedReadUrl: vi.fn(async () => "https://signed.example/read"),
@@ -312,6 +315,27 @@ describe("applyNormalisationCallback", () => {
     })
 
     expect(updates[0]).toMatchObject({ normalisation_status: "failed" })
+    expect(storage.deleteObject).not.toHaveBeenCalled()
+  })
+
+  it("fails (and keeps the original) when the proxy exists but is 0 bytes", async () => {
+    const sf = makeSourceFile({
+      normalisationStatus: "processing",
+      proxyStoragePath: "user-1/vid-1/sf-1/proxy-1080p.mp4",
+    })
+    const { supabase, updates } = makeUpdateSupabase(sf)
+    const storage = fakeStorage(true, 0)
+
+    await applyNormalisationCallback(supabase, storage, sf, {
+      taskToken: "task-1",
+      outcome: "completed",
+    })
+
+    expect(updates[0]).toMatchObject({
+      normalisation_status: "failed",
+      normalisation_error:
+        "Transcoder reported success but the proxy landed empty (0 bytes)",
+    })
     expect(storage.deleteObject).not.toHaveBeenCalled()
   })
 
