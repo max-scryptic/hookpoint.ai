@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { DeepAnalysisProgress } from "@/components/deep-analysis-progress"
 import { notifySourceFileReady } from "@/components/source-video-thumbnail"
 import { ACCEPTED_EXTENSIONS, isAcceptedExtension } from "@/lib/source-files/config"
 import type { SerialisedSourceFile } from "@/lib/source-files/serialise"
@@ -556,6 +557,7 @@ export function SourceFileUpload({
 
       <div className="rounded-xl border bg-card p-4">
         <Body
+          videoId={videoId}
           sourceFile={sourceFile}
           client={client}
           isBusy={isBusy}
@@ -572,6 +574,7 @@ export function SourceFileUpload({
 }
 
 function Body({
+  videoId,
   sourceFile,
   client,
   isBusy,
@@ -582,6 +585,7 @@ function Body({
   videoTitle,
   youtubeDurationSeconds,
 }: {
+  videoId: string
   sourceFile: SerialisedSourceFile | null
   client: ClientState
   isBusy: boolean
@@ -748,25 +752,29 @@ function Body({
   // shown as a single compact row: name on the left, size/duration in the
   // middle, and the actions on the right.
   return (
-    <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
-      <StatusRow
-        icon={<CheckCircle2Icon className="size-4 text-emerald-600 dark:text-emerald-500" />}
-        title="Source file ready"
-        subtitle={sourceFile.originalFilename}
-      />
+    <div className="flex flex-col">
+      <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
+        <StatusRow
+          icon={<CheckCircle2Icon className="size-4 text-emerald-600 dark:text-emerald-500" />}
+          title="Source file ready"
+          subtitle={sourceFile.originalFilename}
+        />
 
-      <Meta sourceFile={sourceFile} />
+        <Meta sourceFile={sourceFile} />
 
-      <div className="flex gap-2 sm:ml-auto">
-        <Button variant="outline" onClick={onPick} disabled={isBusy}>
-          <UploadIcon className="size-4" />
-          Replace
-        </Button>
-        <Button variant="outline" onClick={onDelete} disabled={isBusy}>
-          <TrashIcon className="size-4" />
-          Remove
-        </Button>
+        <div className="flex gap-2 sm:ml-auto">
+          <Button variant="outline" onClick={onPick} disabled={isBusy}>
+            <UploadIcon className="size-4" />
+            Replace
+          </Button>
+          <Button variant="outline" onClick={onDelete} disabled={isBusy}>
+            <TrashIcon className="size-4" />
+            Remove
+          </Button>
+        </div>
       </div>
+
+      <DeepAnalysisProgress videoId={videoId} />
     </div>
   )
 }
