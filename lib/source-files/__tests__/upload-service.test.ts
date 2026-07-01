@@ -75,6 +75,7 @@ function fakeStorage(exists: boolean): StorageProvider {
     })),
     createSignedReadUrl: vi.fn(async () => "https://signed.example/read"),
     deleteObject: vi.fn(async () => {}),
+    putObject: vi.fn(async () => {}),
   } as StorageProvider
 }
 

@@ -3,11 +3,19 @@ import { NextResponse, type NextRequest } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getStorageProvider } from "@/lib/storage/provider"
 import { getNormalisationCallbackSecret } from "@/lib/source-files/normalisation-config"
-import { getSourceFileByNormalisationTaskToken } from "@/lib/source-files/source-files"
+import {
+  getSourceFileById,
+  getSourceFileByNormalisationTaskToken,
+} from "@/lib/source-files/source-files"
 import {
   applyNormalisationCallback,
   parseQencodeCallback,
 } from "@/lib/source-files/normalisation-service"
+import { triggerRetentionWindowMediaExtraction } from "@/lib/retention-window-media-trigger"
+
+// Extraction runs in the background via after() once the response is sent, but
+// still within this invocation's time budget — give it room beyond the default.
+export const maxDuration = 300
 
 // POST /api/source-files/normalisation-callback?secret=...
 // Server-to-server status webhook called by Qencode when a transcode job
@@ -74,6 +82,19 @@ export async function POST(request: NextRequest) {
       sourceFile,
       callback,
     )
+
+    // The retention analysis may already have run for this video (this
+    // callback can land after /api/analyze) — if so, kick off extraction now
+    // instead of waiting on a future analyze call.
+    if (callback.outcome === "completed") {
+      const updated = await getSourceFileById(
+        admin,
+        sourceFile.userId,
+        sourceFile.id,
+      )
+      triggerRetentionWindowMediaExtraction(updated)
+    }
+
     return NextResponse.json({ ok: true })
   } catch (error) {
     console.error("Failed to process normalisation callback", error)

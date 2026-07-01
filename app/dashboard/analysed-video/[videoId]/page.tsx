@@ -17,6 +17,8 @@ import {
   saveRetentionWindows,
   type RetentionWindow,
 } from "@/lib/retention-windows"
+import { createPendingRetentionWindowMedia } from "@/lib/retention-window-media"
+import { triggerRetentionWindowMediaExtraction } from "@/lib/retention-window-media-trigger"
 import {
   generatePacingAnalysis,
   type PacingAnalysis,
@@ -88,22 +90,32 @@ async function analyse(
       )
       // Retention windows are derived from the stored curve. Backfill any
       // analysis saved before they were persisted so older rows render too.
-      let retentionWindows = await getRetentionWindows(
+      let retentionWindows: RetentionWindow[] = await getRetentionWindows(
         supabase,
         userId,
         cached.id,
       )
       if (retentionWindows.length === 0) {
-        retentionWindows = buildRetentionWindows(
+        const built = buildRetentionWindows(
           cached.retention,
           cached.videoDetails.durationSeconds,
         )
+        retentionWindows = built
         try {
-          await saveRetentionWindows(
+          const savedWindows = await saveRetentionWindows(
             supabase,
             userId,
             cached.id,
-            retentionWindows,
+            built,
+          )
+          await createPendingRetentionWindowMedia(
+            supabase,
+            userId,
+            cached.id,
+            savedWindows,
+          )
+          triggerRetentionWindowMediaExtraction(
+            await getSourceFileForVideo(supabase, userId, videoId),
           )
         } catch (retentionSaveError) {
           console.error(
@@ -185,11 +197,20 @@ async function analyse(
       })
       if (savedVideo) {
         try {
-          await saveRetentionWindows(
+          const savedWindows = await saveRetentionWindows(
             supabase,
             userId,
             savedVideo.id,
             retentionWindows,
+          )
+          await createPendingRetentionWindowMedia(
+            supabase,
+            userId,
+            savedVideo.id,
+            savedWindows,
+          )
+          triggerRetentionWindowMediaExtraction(
+            await getSourceFileForVideo(supabase, userId, videoId),
           )
         } catch (retentionSaveError) {
           console.error(

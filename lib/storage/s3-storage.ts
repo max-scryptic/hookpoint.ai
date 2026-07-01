@@ -205,6 +205,21 @@ export class S3StorageProvider implements StorageProvider {
     )
   }
 
+  async putObject(
+    path: string,
+    data: Buffer,
+    opts: { contentType?: string | null } = {},
+  ): Promise<void> {
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: path,
+        Body: data,
+        ContentType: opts.contentType ?? undefined,
+      }),
+    )
+  }
+
   // Streams a remote URL's response body straight into `path` via the AWS SDK's
   // Upload helper, which picks single-PUT vs. multipart automatically and never
   // buffers the whole object in memory. Used to pull a Qencode transcode output
