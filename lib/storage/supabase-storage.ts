@@ -111,4 +111,19 @@ export class SupabaseStorageProvider implements StorageProvider {
       throw new Error(`Failed to delete storage object: ${error.message}`)
     }
   }
+
+  async putObject(
+    path: string,
+    data: Buffer,
+    opts: { contentType?: string | null } = {},
+  ): Promise<void> {
+    const { error } = await this.client.storage.from(this.bucket).upload(
+      path,
+      data,
+      { contentType: opts.contentType ?? undefined, upsert: true },
+    )
+    if (error) {
+      throw new Error(`Failed to upload storage object: ${error.message}`)
+    }
+  }
 }

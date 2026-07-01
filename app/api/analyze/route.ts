@@ -13,6 +13,9 @@ import {
   buildRetentionWindows,
   saveRetentionWindows,
 } from "@/lib/retention-windows"
+import { createPendingRetentionWindowMedia } from "@/lib/retention-window-media"
+import { triggerRetentionWindowMediaExtraction } from "@/lib/retention-window-media-trigger"
+import { getSourceFileForVideo } from "@/lib/source-files/source-files"
 import {
   generatePacingAnalysis,
   type PacingAnalysis,
@@ -30,6 +33,10 @@ import {
   parseVideoId,
   type TranscriptCue,
 } from "@/lib/youtube/youtube"
+
+// Extraction runs in the background via after() once the response is sent, but
+// still within this invocation's time budget — give it room beyond the default.
+export const maxDuration = 300
 
 // POST /api/analyze  { url: string }
 // Resolves the pasted YouTube URL, confirms the signed-in user owns the video,
@@ -160,12 +167,27 @@ export async function POST(request: NextRequest) {
       })
       if (savedVideo) {
         try {
-          await saveRetentionWindows(
+          const savedWindows = await saveRetentionWindows(
             supabase,
             user.id,
             savedVideo.id,
             buildRetentionWindows(retention, video.durationSeconds),
           )
+          await createPendingRetentionWindowMedia(
+            supabase,
+            user.id,
+            savedVideo.id,
+            savedWindows,
+          )
+          // The source video may already be uploaded and normalised (this
+          // analyze call can come after the upload) — if so, kick off
+          // extraction now instead of waiting on the normalisation callback.
+          const sourceFile = await getSourceFileForVideo(
+            supabase,
+            user.id,
+            videoId,
+          )
+          triggerRetentionWindowMediaExtraction(sourceFile)
         } catch (retentionSaveError) {
           console.error(
             "Failed to save retention windows",
