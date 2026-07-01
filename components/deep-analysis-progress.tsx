@@ -18,7 +18,9 @@ const STAGE_LABELS: {
 }[] = [
   { key: "transcoding", label: "Transcoding video" },
   { key: "snapshots", label: "Fetching snapshots" },
+  { key: "snapshotAnalysis", label: "Analyzing visuals" },
   { key: "audio", label: "Fetching audio" },
+  { key: "audioAnalysis", label: "Analyzing audio" },
   { key: "transcript", label: "Fetching transcript" },
 ]
 
