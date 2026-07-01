@@ -135,6 +135,26 @@ describe("getDeepAnalysisProgress", () => {
     expect(progress.complete).toBe(true)
   })
 
+  it("keeps the analysis stage in progress while a row is claimed ('processing') mid-LLM-call", async () => {
+    const supabase = makeFakeSupabase({
+      retention_window_snapshots: [
+        { status: "ready", analysis_status: "processing" },
+      ],
+      retention_window_audio: [],
+    })
+    const progress = await getDeepAnalysisProgress(
+      supabase,
+      "user-1",
+      "av-1",
+      makeSourceFile(),
+    )
+
+    expect(progress.stages).toMatchObject({
+      snapshotAnalysis: "in_progress",
+    })
+    expect(progress.complete).toBe(false)
+  })
+
   it("marks the analysis stage ready once every extracted row has been analysed", async () => {
     const supabase = makeFakeSupabase({
       retention_window_snapshots: [

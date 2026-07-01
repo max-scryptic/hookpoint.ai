@@ -7,10 +7,7 @@ import {
   healCachedTranscript,
   saveAnalysedVideo,
 } from "@/lib/analysed-videos"
-import {
-  getPacingAnalysis,
-  savePacingAnalysis,
-} from "@/lib/pacing-analyses"
+import { getOrGeneratePacingAnalysis } from "@/lib/pacing-analyses"
 import {
   buildRetentionWindows,
   getRetentionWindows,
@@ -132,28 +129,17 @@ async function analyse(
           )
         }
       }
-      let pacingAnalysis = await getPacingAnalysis(
-        supabase,
-        userId,
-        cached.id,
-      )
-      if (!pacingAnalysis && transcript.length > 0) {
-        try {
-          pacingAnalysis = await generatePacingAnalysis(
-            cached.videoDetails,
-            transcript,
-          )
-          if (pacingAnalysis) {
-            await savePacingAnalysis(
-              supabase,
-              userId,
-              cached.id,
-              pacingAnalysis,
-            )
-          }
-        } catch (pacingError) {
-          console.error("Failed to generate pacing analysis", pacingError)
-        }
+      let pacingAnalysis: PacingAnalysis | null = null
+      try {
+        pacingAnalysis = await getOrGeneratePacingAnalysis(
+          supabase,
+          userId,
+          cached.id,
+          cached.videoDetails,
+          transcript,
+        )
+      } catch (pacingError) {
+        console.error("Failed to generate pacing analysis", pacingError)
       }
 
       return {
@@ -186,16 +172,10 @@ async function analyse(
         return [] as TranscriptCue[]
       },
     )
+    // Persist everything we fetched so future visits hit the cache above, and
+    // so pacing analysis below has a video row to claim against.
     let pacingAnalysis: PacingAnalysis | null = null
-    if (transcript.length > 0) {
-      try {
-        pacingAnalysis = await generatePacingAnalysis(video, transcript)
-      } catch (pacingError) {
-        console.error("Failed to generate pacing analysis", pacingError)
-      }
-    }
-
-    // Persist everything we fetched so future visits hit the cache above.
+    let videoPersisted = false
     try {
       const savedVideo = await saveAnalysedVideo(supabase, {
         userId,
@@ -204,6 +184,7 @@ async function analyse(
         transcript,
       })
       if (savedVideo) {
+        videoPersisted = true
         try {
           const savedWindows = await saveRetentionWindows(
             supabase,
@@ -233,22 +214,33 @@ async function analyse(
             retentionSaveError,
           )
         }
-        if (pacingAnalysis) {
+        if (transcript.length > 0) {
           try {
-            await savePacingAnalysis(
+            pacingAnalysis = await getOrGeneratePacingAnalysis(
               supabase,
               userId,
               savedVideo.id,
-              pacingAnalysis,
+              video,
+              transcript,
             )
-          } catch (pacingSaveError) {
-            console.error("Failed to save pacing analysis", pacingSaveError)
+          } catch (pacingError) {
+            console.error("Failed to generate pacing analysis", pacingError)
           }
         }
       }
     } catch (saveError) {
       // Saving is best-effort — never block showing the analysis on a DB write.
       console.error("Failed to save analysed video", saveError)
+    }
+
+    // The video row failed to save, so there's nothing to claim/save a pacing
+    // analysis against — fall back to generating one just for this response.
+    if (!videoPersisted && transcript.length > 0) {
+      try {
+        pacingAnalysis = await generatePacingAnalysis(video, transcript)
+      } catch (pacingError) {
+        console.error("Failed to generate pacing analysis", pacingError)
+      }
     }
 
     return {
