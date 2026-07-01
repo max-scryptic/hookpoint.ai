@@ -19,6 +19,7 @@ import {
 } from "@/lib/retention-windows"
 import { createPendingRetentionWindowMedia } from "@/lib/retention-window-media"
 import { triggerRetentionWindowMediaExtraction } from "@/lib/retention-window-media-trigger"
+import { saveRetentionWindowTranscripts } from "@/lib/retention-window-transcripts"
 import {
   generatePacingAnalysis,
   type PacingAnalysis,
@@ -114,6 +115,13 @@ async function analyse(
             cached.id,
             savedWindows,
           )
+          await saveRetentionWindowTranscripts(
+            supabase,
+            userId,
+            cached.id,
+            savedWindows,
+            transcript,
+          )
           triggerRetentionWindowMediaExtraction(
             await getSourceFileForVideo(supabase, userId, videoId),
           )
@@ -208,6 +216,13 @@ async function analyse(
             userId,
             savedVideo.id,
             savedWindows,
+          )
+          await saveRetentionWindowTranscripts(
+            supabase,
+            userId,
+            savedVideo.id,
+            savedWindows,
+            transcript,
           )
           triggerRetentionWindowMediaExtraction(
             await getSourceFileForVideo(supabase, userId, videoId),
