@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   AreaChartIcon,
   GaugeIcon,
@@ -338,6 +338,26 @@ export function AnalysedVideoDetail({
     fromSeconds: number
     toSeconds: number
   } | null>(null)
+  const insightAreaRef = useRef<HTMLDivElement | null>(null)
+
+  // Dismiss the open insight (returning the video to its thumbnail) when the
+  // user clicks anywhere outside the video/chart area — not just inside the
+  // chart itself — so scrolling down and clicking elsewhere on the page
+  // closes it the same way clicking off inside the chart already does.
+  useEffect(() => {
+    if (!playbackWindow) return
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!insightAreaRef.current) return
+      if (!(event.target instanceof Node)) return
+      if (!insightAreaRef.current.contains(event.target)) {
+        setPlaybackWindow(null)
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown)
+    return () => document.removeEventListener("pointerdown", handlePointerDown)
+  }, [playbackWindow])
 
   const hookWindows = retentionWindows.filter((w) => w.kind === "hook")
   const drops = retentionWindows.filter((w) => w.kind === "drop_off")
@@ -437,50 +457,53 @@ export function AnalysedVideoDetail({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-        {video.thumbnailUrl && (
-          <SourceVideoThumbnail
-            videoId={video.id}
-            thumbnailUrl={video.thumbnailUrl}
-            title={video.title}
-            scrubTime={previewTime}
-            playbackWindow={playbackWindow}
-          />
-        )}
-        <div>
-          <h1 className="text-2xl font-semibold tracking-normal">
-            {video.title}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Audience retention across this video, with the moments where you lost
-            and held the most viewers.
-          </p>
+      <div ref={insightAreaRef} className="flex flex-col gap-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+          {video.thumbnailUrl && (
+            <SourceVideoThumbnail
+              videoId={video.id}
+              thumbnailUrl={video.thumbnailUrl}
+              title={video.title}
+              scrubTime={previewTime}
+              playbackWindow={playbackWindow}
+            />
+          )}
+          <div>
+            <h1 className="text-2xl font-semibold tracking-normal">
+              {video.title}
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Audience retention across this video, with the moments where you
+              lost and held the most viewers.
+            </p>
+          </div>
         </div>
-      </div>
 
-      <section className="flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <AreaChartIcon className="size-4 text-muted-foreground" />
-          <h2 className="text-sm font-medium">Audience retention</h2>
-        </div>
-        <RetentionChart
-          points={retention}
-          durationSeconds={video.durationSeconds}
-          insights={chartInsights}
-          onScrubTimeChange={setPreviewTime}
-          onInsightSelect={(insight) =>
-            setPlaybackWindow(
-              insight
-                ? {
-                    id: insight.id,
-                    fromSeconds: insight.fromSeconds,
-                    toSeconds: insight.toSeconds,
-                  }
-                : null,
-            )
-          }
-        />
-      </section>
+        <section className="flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <AreaChartIcon className="size-4 text-muted-foreground" />
+            <h2 className="text-sm font-medium">Audience retention</h2>
+          </div>
+          <RetentionChart
+            points={retention}
+            durationSeconds={video.durationSeconds}
+            insights={chartInsights}
+            selectedInsightId={playbackWindow?.id ?? null}
+            onScrubTimeChange={setPreviewTime}
+            onInsightSelect={(insight) =>
+              setPlaybackWindow(
+                insight
+                  ? {
+                      id: insight.id,
+                      fromSeconds: insight.fromSeconds,
+                      toSeconds: insight.toSeconds,
+                    }
+                  : null,
+              )
+            }
+          />
+        </section>
+      </div>
 
       <RetentionWindows windows={hookWindows} transcript={transcript} />
 

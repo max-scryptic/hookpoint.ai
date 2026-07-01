@@ -47,19 +47,23 @@ export function RetentionChart({
   points,
   durationSeconds,
   insights = [],
+  selectedInsightId = null,
   onScrubTimeChange,
   onInsightSelect,
 }: {
   points: RetentionPoint[]
   durationSeconds: number
   insights?: RetentionChartInsight[]
+  // Selection is controlled by the parent so it can share a single source of
+  // truth with anything else that needs to know an insight is open (e.g. an
+  // outside-click handler that also covers the video player).
+  selectedInsightId?: string | null
   onScrubTimeChange?: (seconds: number | null) => void
   onInsightSelect?: (insight: RetentionChartInsight | null) => void
 }) {
   const gradientId = useId()
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
   const [hoverX, setHoverX] = useState<number | null>(null)
-  const [selectedInsightId, setSelectedInsightId] = useState<string | null>(null)
   const [hoveredInsightId, setHoveredInsightId] = useState<string | null>(null)
 
   const model = useMemo(() => {
@@ -187,13 +191,11 @@ export function RetentionChart({
   }
 
   function clearSelectedInsight() {
-    setSelectedInsightId(null)
     onInsightSelect?.(null)
   }
 
   function toggleInsight(insight: RetentionChartInsight) {
     const next = selectedInsightId === insight.id ? null : insight
-    setSelectedInsightId(next?.id ?? null)
     onInsightSelect?.(next)
   }
 
