@@ -51,3 +51,24 @@ export function buildRetentionAudioObjectPath(params: {
 }): string {
   return `${params.userId}/${params.analysedVideoId}/${params.retentionWindowId}/audio.aac`
 }
+
+// OpenAI model used to describe a window's harvested snapshots (vision input).
+// Defaults to the same model already used for transcript pacing analysis.
+export function getSnapshotAnalysisModel(): string {
+  return process.env.OPENAI_SNAPSHOT_ANALYSIS_MODEL || "gpt-5.4-mini"
+}
+
+// OpenAI model used to describe a window's harvested audio clip (audio input).
+export function getAudioAnalysisModel(): string {
+  return process.env.OPENAI_AUDIO_ANALYSIS_MODEL || "gpt-5.4-mini"
+}
+
+// How long the signed read URL handed to OpenAI for a harvested snapshot
+// stays valid. Short-lived since it's minted right before the request that
+// consumes it, unlike the source-video URL which is reused across a whole
+// extraction run. Default 10 minutes.
+export function getAnalysisMediaReadUrlExpirySeconds(): number {
+  const raw = process.env.RETENTION_WINDOW_ANALYSIS_MEDIA_URL_EXPIRY_SECONDS
+  const parsed = raw != null ? Number(raw) : NaN
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 10 * 60
+}

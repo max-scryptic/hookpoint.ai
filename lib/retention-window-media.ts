@@ -26,6 +26,9 @@ export interface RetentionWindowSnapshot {
   storagePath: string | null
   status: RetentionWindowMediaStatus
   error: string | null
+  analysisStatus: RetentionWindowMediaStatus
+  analysis: unknown
+  analysisError: string | null
 }
 
 export interface RetentionWindowAudioClip {
@@ -36,6 +39,9 @@ export interface RetentionWindowAudioClip {
   storagePath: string | null
   status: RetentionWindowMediaStatus
   error: string | null
+  analysisStatus: RetentionWindowMediaStatus
+  analysis: unknown
+  analysisError: string | null
 }
 
 interface SnapshotRow {
@@ -46,6 +52,9 @@ interface SnapshotRow {
   storage_path: string | null
   status: RetentionWindowMediaStatus
   error: string | null
+  analysis_status: RetentionWindowMediaStatus
+  analysis: unknown
+  analysis_error: string | null
 }
 
 interface AudioRow {
@@ -56,12 +65,15 @@ interface AudioRow {
   storage_path: string | null
   status: RetentionWindowMediaStatus
   error: string | null
+  analysis_status: RetentionWindowMediaStatus
+  analysis: unknown
+  analysis_error: string | null
 }
 
 const SNAPSHOT_COLUMNS =
-  "id, retention_window_id, chunk_index, timestamp_seconds, storage_path, status, error"
+  "id, retention_window_id, chunk_index, timestamp_seconds, storage_path, status, error, analysis_status, analysis, analysis_error"
 const AUDIO_COLUMNS =
-  "id, retention_window_id, from_seconds, to_seconds, storage_path, status, error"
+  "id, retention_window_id, from_seconds, to_seconds, storage_path, status, error, analysis_status, analysis, analysis_error"
 
 function mapSnapshotRow(row: SnapshotRow): RetentionWindowSnapshot {
   return {
@@ -72,6 +84,9 @@ function mapSnapshotRow(row: SnapshotRow): RetentionWindowSnapshot {
     storagePath: row.storage_path,
     status: row.status,
     error: row.error,
+    analysisStatus: row.analysis_status,
+    analysis: row.analysis,
+    analysisError: row.analysis_error,
   }
 }
 
@@ -84,6 +99,9 @@ function mapAudioRow(row: AudioRow): RetentionWindowAudioClip {
     storagePath: row.storage_path,
     status: row.status,
     error: row.error,
+    analysisStatus: row.analysis_status,
+    analysis: row.analysis,
+    analysisError: row.analysis_error,
   }
 }
 
@@ -356,5 +374,123 @@ export async function updateRetentionWindowAudioStatus(
 
   if (error) {
     throw new Error(`Failed to update retention window audio: ${error.message}`)
+  }
+}
+
+// Loads every successfully-extracted snapshot still waiting on analysis,
+// ordered so a batch call can group consecutive rows by window.
+export async function getRetentionWindowSnapshotsPendingAnalysis(
+  supabase: SupabaseClient,
+  userId: string,
+  analysedVideoId: string,
+): Promise<RetentionWindowSnapshot[]> {
+  const { data, error } = await supabase
+    .from("retention_window_snapshots")
+    .select(SNAPSHOT_COLUMNS)
+    .eq("user_id", userId)
+    .eq("analysed_video_id", analysedVideoId)
+    .eq("status", "ready")
+    .eq("analysis_status", "pending")
+    .order("retention_window_id", { ascending: true })
+    .order("chunk_index", { ascending: true })
+
+  if (error) {
+    throw new Error(
+      `Failed to load retention window snapshots pending analysis: ${error.message}`,
+    )
+  }
+
+  return ((data ?? []) as SnapshotRow[]).map(mapSnapshotRow)
+}
+
+// Loads every successfully-extracted audio clip still waiting on analysis.
+export async function getRetentionWindowAudioPendingAnalysis(
+  supabase: SupabaseClient,
+  userId: string,
+  analysedVideoId: string,
+): Promise<RetentionWindowAudioClip[]> {
+  const { data, error } = await supabase
+    .from("retention_window_audio")
+    .select(AUDIO_COLUMNS)
+    .eq("user_id", userId)
+    .eq("analysed_video_id", analysedVideoId)
+    .eq("status", "ready")
+    .eq("analysis_status", "pending")
+    .order("retention_window_id", { ascending: true })
+
+  if (error) {
+    throw new Error(
+      `Failed to load retention window audio pending analysis: ${error.message}`,
+    )
+  }
+
+  return ((data ?? []) as AudioRow[]).map(mapAudioRow)
+}
+
+// Marks a single snapshot row's analysis 'ready' with its structured result,
+// or 'failed' with an error message. Scoped to its owner.
+export async function updateRetentionWindowSnapshotAnalysis(
+  supabase: SupabaseClient,
+  userId: string,
+  id: string,
+  outcome:
+    | { status: "ready"; analysis: unknown; model: string }
+    | { status: "failed"; error: string },
+): Promise<void> {
+  const payload =
+    outcome.status === "ready"
+      ? {
+          analysis_status: "ready",
+          analysis: outcome.analysis,
+          analysis_model: outcome.model,
+          analysis_error: null,
+          analyzed_at: new Date().toISOString(),
+        }
+      : { analysis_status: "failed", analysis_error: outcome.error }
+
+  const { error } = await supabase
+    .from("retention_window_snapshots")
+    .update(payload)
+    .eq("id", id)
+    .eq("user_id", userId)
+
+  if (error) {
+    throw new Error(
+      `Failed to update retention window snapshot analysis: ${error.message}`,
+    )
+  }
+}
+
+// Marks a single audio row's analysis 'ready' with its structured result, or
+// 'failed' with an error message. Scoped to its owner.
+export async function updateRetentionWindowAudioAnalysis(
+  supabase: SupabaseClient,
+  userId: string,
+  id: string,
+  outcome:
+    | { status: "ready"; analysis: unknown; model: string }
+    | { status: "failed"; error: string },
+): Promise<void> {
+  const payload =
+    outcome.status === "ready"
+      ? {
+          analysis_status: "ready",
+          analysis: outcome.analysis,
+          analysis_model: outcome.model,
+          analysis_error: null,
+          analyzed_at: new Date().toISOString(),
+        }
+      : { analysis_status: "failed", analysis_error: outcome.error }
+
+  const { error } = await supabase
+    .from("retention_window_audio")
+    .update(payload)
+    .eq("id", id)
+    .eq("user_id", userId)
+
+  if (error) {
+    throw new Error(
+      `Failed to update retention window audio analysis: ${error.message}`,
+    )
   }
 }

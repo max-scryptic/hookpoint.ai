@@ -32,13 +32,16 @@ export class FfmpegError extends Error {
   }
 }
 
-// Runs ffmpeg with `args`, capturing stdout as a single Buffer — the caller's
-// args must write output to `pipe:1`. Rejects with the captured stderr on a
-// non-zero exit, or if the process doesn't finish within `timeoutMs`.
-export function runFfmpeg(
+// Runs ffmpeg with `args`, capturing both stdout and stderr as a Buffer/string
+// pair. Rejects with the captured stderr on a non-zero exit, or if the process
+// doesn't finish within `timeoutMs`. Split out from runFfmpeg below because
+// some callers (e.g. the volumedetect/silencedetect audio-stats filters) only
+// ever write to `pipe:1` with `-f null -`, and read their actual result off
+// stderr's log lines even on a successful (code 0) exit.
+export function runFfmpegCapturingOutput(
   args: string[],
   { timeoutMs = 30_000 }: { timeoutMs?: number } = {},
-): Promise<Buffer> {
+): Promise<{ stdout: Buffer; stderr: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn(resolveFfmpegPath(), args, {
       stdio: ["ignore", "pipe", "pipe"],
@@ -52,7 +55,12 @@ export function runFfmpeg(
       if (settled) return
       settled = true
       child.kill("SIGKILL")
-      reject(new FfmpegError(`ffmpeg timed out after ${timeoutMs}ms`, ""))
+      reject(
+        new FfmpegError(
+          `ffmpeg timed out after ${timeoutMs}ms`,
+          Buffer.concat(stderrChunks).toString("utf8"),
+        ),
+      )
     }, timeoutMs)
 
     child.stdout.on("data", (chunk: Buffer) => stdoutChunks.push(chunk))
@@ -69,12 +77,23 @@ export function runFfmpeg(
       if (settled) return
       settled = true
       clearTimeout(timer)
+      const stderr = Buffer.concat(stderrChunks).toString("utf8")
       if (code !== 0) {
-        const stderr = Buffer.concat(stderrChunks).toString("utf8")
         reject(new FfmpegError(`ffmpeg exited with code ${code}`, stderr))
         return
       }
-      resolve(Buffer.concat(stdoutChunks))
+      resolve({ stdout: Buffer.concat(stdoutChunks), stderr })
     })
   })
+}
+
+// Runs ffmpeg with `args`, capturing stdout as a single Buffer — the caller's
+// args must write output to `pipe:1`. Rejects with the captured stderr on a
+// non-zero exit, or if the process doesn't finish within `timeoutMs`.
+export async function runFfmpeg(
+  args: string[],
+  opts: { timeoutMs?: number } = {},
+): Promise<Buffer> {
+  const { stdout } = await runFfmpegCapturingOutput(args, opts)
+  return stdout
 }
