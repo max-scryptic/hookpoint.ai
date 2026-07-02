@@ -10,6 +10,12 @@
 // than judging isolated frames in a vacuum. Audio clips are already one row
 // per window, so each gets its own call.
 //
+// On-screen text is not asked of the vision model at all — it's already
+// deterministic (retention_window_snapshots.ocr_text, extracted via
+// lib/media/ocr.ts) and handed to the model as ground-truth context instead,
+// the same don't-ask-a-model-to-guess-what-you-can-measure principle already
+// applied to audio's loudness/silence below.
+//
 // Independent of extraction (lib/retention-window-media-extraction.ts): keyed
 // off `analysis_status`, not `status`, so it only ever touches rows that have
 // already finished extracting (`status = 'ready'`) but haven't been analysed
@@ -61,7 +67,6 @@ export interface SnapshotAnalysis {
   motion: "low" | "moderate" | "high"
   people_count: number
   camera_movement: CameraMovement
-  on_screen_text: string | null
   notable_event: string | null
   description: string
 }
@@ -93,10 +98,12 @@ export interface AudioAnalysis extends AudioAnalysisModelOutput {
 // RetentionWindowMediaExtractionDeps lets extraction tests inject a fake
 // ffmpeg extractor.
 export interface RetentionWindowMediaAnalyzer {
-  // One call per window: every chunk's signed image URL in, one analysis per
-  // chunkIndex out. Must return an entry for every chunkIndex passed in.
+  // One call per window: every chunk's signed image URL in (plus its
+  // deterministic OCR text, given as ground truth rather than asked of the
+  // model — see lib/media/ocr.ts), one analysis per chunkIndex out. Must
+  // return an entry for every chunkIndex passed in.
   analyzeSnapshots(
-    images: { chunkIndex: number; imageUrl: string }[],
+    images: { chunkIndex: number; imageUrl: string; ocrText: string | null }[],
   ): Promise<Map<number, SnapshotAnalysis>>
   analyzeAudio(audio: {
     base64: string
@@ -171,6 +178,7 @@ export async function analyzeRetentionWindowMedia(
             snapshot.storagePath as string,
             expiry,
           ),
+          ocrText: snapshot.ocrText,
         })),
       )
       const results = await deps.analyzer.analyzeSnapshots(images)
@@ -330,7 +338,6 @@ const SNAPSHOT_ANALYSIS_SCHEMA = {
           "motion",
           "people_count",
           "camera_movement",
-          "on_screen_text",
           "notable_event",
           "description",
         ],
@@ -343,7 +350,6 @@ const SNAPSHOT_ANALYSIS_SCHEMA = {
           motion: { type: "string", enum: ["low", "moderate", "high"] },
           people_count: { type: "integer", minimum: 0 },
           camera_movement: { type: "string", enum: CAMERA_MOVEMENT_VALUES },
-          on_screen_text: { type: ["string", "null"] },
           notable_event: { type: ["string", "null"] },
           description: { type: "string" },
         },
@@ -374,10 +380,11 @@ const AUDIO_ANALYSIS_SCHEMA = {
 } as const
 
 const SNAPSHOT_ANALYSIS_INSTRUCTIONS = [
-  "You describe frames sampled roughly every 5 seconds from one window of a YouTube video, in chunkIndex order (0 is earliest).",
-  "For each chunk, classify: scene (best-fitting category), whether a face is visible, whether on-screen text/captions/graphics are present, whether source code is visible, the amount of on-screen motion, how many distinct people are visible, and the camera's behaviour relative to the surrounding chunks.",
-  "Also give: on_screen_text (verbatim legible text/captions/overlays, or null if none), notable_event (a single thing distinguishing this chunk from its neighbours — a cut, a zoom, a graphic appearing, a change of location — or null if nothing stands out), and a short free-text description of the composition and action.",
-  "Base every judgment only on what's visible in that chunk's image. Do not infer audio, speech, or viewer reaction.",
+  "You describe frames from one window of a YouTube video, in chunkIndex order (0 is earliest). Most frames are placed in flanking pairs just before and just after a detected hard cut or transition, so consecutive chunks often straddle a real edit rather than an arbitrary moment; a window with no detected cuts instead gets evenly spaced frames across it.",
+  "Each chunk is also given ocrText: text already recognized from that exact frame by a separate deterministic OCR pass (null if none was found). Treat it as ground truth, not a guess to verify — do not re-transcribe or second-guess it, but you may reference it in notable_event/description when it's relevant to what changed (e.g. a caption or graphic appearing).",
+  "For each chunk, classify: scene (best-fitting category), whether a face is visible, whether on-screen text/captions/graphics are present (contains_text — judge this visually even where ocrText is null, e.g. stylised or hard-to-read text), whether source code is visible, the amount of on-screen motion, how many distinct people are visible, and the camera's behaviour relative to the surrounding chunks.",
+  "Also give: notable_event (a single thing distinguishing this chunk from its neighbours — a cut, a zoom, a graphic appearing, a change of location — or null if nothing stands out), and a short free-text description of the composition and action.",
+  "Base every judgment only on what's visible in that chunk's image (plus its given ocrText). Do not infer audio, speech, or viewer reaction.",
   "Return exactly one entry per supplied chunkIndex.",
 ].join(" ")
 
@@ -399,7 +406,12 @@ function extractOutputText(response: {
   return null
 }
 
-async function callOpenAiResponses(body: Record<string, unknown>): Promise<string> {
+// Exported for reuse by lib/retention-window-event-synthesis.ts, which needs
+// the same OpenAI Responses wrapper for its own (text-only) structured-output
+// call rather than duplicating it.
+export async function callOpenAiResponses(
+  body: Record<string, unknown>,
+): Promise<string> {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) throw new Error("OPENAI_API_KEY is not configured")
 
@@ -444,7 +456,12 @@ export const openAiRetentionWindowMediaAnalyzer: RetentionWindowMediaAnalyzer = 
           content: [
             {
               type: "input_text",
-              text: JSON.stringify({ chunkIndexes: images.map((i) => i.chunkIndex) }),
+              text: JSON.stringify({
+                chunks: images.map((image) => ({
+                  chunkIndex: image.chunkIndex,
+                  ocrText: image.ocrText,
+                })),
+              }),
             },
             ...images.map((image) => ({
               type: "input_image",

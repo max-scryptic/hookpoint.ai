@@ -63,6 +63,14 @@ export function getAudioAnalysisModel(): string {
   return process.env.OPENAI_AUDIO_ANALYSIS_MODEL || "gpt-5.4-mini"
 }
 
+// OpenAI model used for the per-window cross-modal event-synthesis call
+// (lib/retention-window-event-synthesis.ts). Text-only — it consumes the
+// already-computed structured evidence, not raw media — so this can be a
+// cheaper/faster model independent of the vision/audio models above.
+export function getEventSynthesisModel(): string {
+  return process.env.OPENAI_EVENT_SYNTHESIS_MODEL || "gpt-5.4-mini"
+}
+
 // How long the signed read URL handed to OpenAI for a harvested snapshot
 // stays valid. Short-lived since it's minted right before the request that
 // consumes it, unlike the source-video URL which is reused across a whole

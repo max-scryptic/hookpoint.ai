@@ -1,8 +1,10 @@
 // Aggregates a video's "deep analysis" pipeline — transcoding the raw upload,
-// harvesting per-window snapshots/audio from it, then running AI analysis
-// over the harvested media (lib/retention-window-media-analysis.ts) — into a
-// small set of stage statuses the source-file card can poll and render as a
-// checklist. Transcript clipping isn't included as real progress: it runs
+// scanning each window for scene cues, harvesting the resulting
+// snapshots/audio, running AI analysis over the harvested media
+// (lib/retention-window-media-analysis.ts), then synthesizing cross-modal
+// events from that analysis (lib/retention-window-event-synthesis.ts) — into
+// a small set of stage statuses the source-file card can poll and render as
+// a checklist. Transcript clipping isn't included as real progress: it runs
 // synchronously off the YouTube captions API while retention windows are
 // saved (see lib/retention-window-transcripts.ts), so by the time a source
 // file even exists to poll about, it has already settled.
@@ -15,10 +17,12 @@ export type DeepAnalysisStageStatus = "pending" | "in_progress" | "ready" | "fai
 
 export interface DeepAnalysisStages {
   transcoding: DeepAnalysisStageStatus
+  sceneCueScan: DeepAnalysisStageStatus
   snapshots: DeepAnalysisStageStatus
   snapshotAnalysis: DeepAnalysisStageStatus
   audio: DeepAnalysisStageStatus
   audioAnalysis: DeepAnalysisStageStatus
+  eventSynthesis: DeepAnalysisStageStatus
   transcript: DeepAnalysisStageStatus
 }
 
@@ -115,18 +119,29 @@ export async function getDeepAnalysisProgress(
   analysedVideoId: string,
   sourceFile: SourceFile,
 ): Promise<DeepAnalysisProgress> {
-  const [snapshotsResult, audioResult] = await Promise.all([
-    supabase
-      .from("retention_window_snapshots")
-      .select("status, analysis_status")
-      .eq("user_id", userId)
-      .eq("analysed_video_id", analysedVideoId),
-    supabase
-      .from("retention_window_audio")
-      .select("status, analysis_status")
-      .eq("user_id", userId)
-      .eq("analysed_video_id", analysedVideoId),
-  ])
+  const [snapshotsResult, audioResult, sceneCueScansResult, eventSynthesisResult] =
+    await Promise.all([
+      supabase
+        .from("retention_window_snapshots")
+        .select("status, analysis_status")
+        .eq("user_id", userId)
+        .eq("analysed_video_id", analysedVideoId),
+      supabase
+        .from("retention_window_audio")
+        .select("status, analysis_status")
+        .eq("user_id", userId)
+        .eq("analysed_video_id", analysedVideoId),
+      supabase
+        .from("retention_window_scene_cue_scans")
+        .select("status")
+        .eq("user_id", userId)
+        .eq("analysed_video_id", analysedVideoId),
+      supabase
+        .from("retention_window_event_synthesis")
+        .select("status")
+        .eq("user_id", userId)
+        .eq("analysed_video_id", analysedVideoId),
+    ])
 
   if (snapshotsResult.error) {
     throw new Error(
@@ -138,6 +153,16 @@ export async function getDeepAnalysisProgress(
       `Failed to load retention window audio statuses: ${audioResult.error.message}`,
     )
   }
+  if (sceneCueScansResult.error) {
+    throw new Error(
+      `Failed to load scene cue scan statuses: ${sceneCueScansResult.error.message}`,
+    )
+  }
+  if (eventSynthesisResult.error) {
+    throw new Error(
+      `Failed to load event synthesis statuses: ${eventSynthesisResult.error.message}`,
+    )
+  }
 
   const snapshotRows = (snapshotsResult.data ?? []) as {
     status: string
@@ -147,19 +172,40 @@ export async function getDeepAnalysisProgress(
     status: string
     analysis_status: string
   }[]
+  const sceneCueScanRows = (sceneCueScansResult.data ?? []) as { status: string }[]
+  const eventSynthesisRows = (eventSynthesisResult.data ?? []) as {
+    status: string
+  }[]
 
   const snapshotCounts = countByStatus(snapshotRows)
   const audioCounts = countByStatus(audioRows)
   const snapshotAnalysisCounts = countByAnalysisStatus(snapshotRows)
   const audioAnalysisCounts = countByAnalysisStatus(audioRows)
+  const sceneCueScanCounts = countByStatus(sceneCueScanRows)
+  const eventSynthesisCounts = countByStatus(eventSynthesisRows)
 
+  const sceneCueScan = deriveMediaStageStatus(
+    sceneCueScanCounts.total,
+    sceneCueScanCounts.pending,
+    sceneCueScanCounts.failed,
+  )
+
+  // Snapshot rows don't exist until a window's scene-cue scan has actually
+  // produced them (their timestamps are derived from its detected cuts — see
+  // createRetentionWindowSnapshotsFromSceneCues) — so a snapshot count of
+  // zero only means "nothing to harvest" once every scan has settled. While
+  // scans are still in flight, report snapshots as in-progress instead of
+  // misreading "no rows yet" as "already done".
   const stages: DeepAnalysisStages = {
     transcoding: normalisationToStageStatus(sourceFile.normalisationStatus),
-    snapshots: deriveMediaStageStatus(
-      snapshotCounts.total,
-      snapshotCounts.pending,
-      snapshotCounts.failed,
-    ),
+    sceneCueScan,
+    snapshots: isStageSettled(sceneCueScan)
+      ? deriveMediaStageStatus(
+          snapshotCounts.total,
+          snapshotCounts.pending,
+          snapshotCounts.failed,
+        )
+      : "in_progress",
     snapshotAnalysis: deriveMediaStageStatus(
       snapshotAnalysisCounts.total,
       snapshotAnalysisCounts.pending,
@@ -174,6 +220,16 @@ export async function getDeepAnalysisProgress(
       audioAnalysisCounts.total,
       audioAnalysisCounts.pending,
       audioAnalysisCounts.failed,
+    ),
+    // Unlike snapshots, event-synthesis jobs are created eagerly (at analyze
+    // time, alongside audio/scene-cue-scan jobs) rather than derived from a
+    // prior step — so a zero count here needs no extra gating, it really
+    // does mean "nothing to synthesize" (e.g. no window had an analysis
+    // window at all).
+    eventSynthesis: deriveMediaStageStatus(
+      eventSynthesisCounts.total,
+      eventSynthesisCounts.pending,
+      eventSynthesisCounts.failed,
     ),
     transcript: "ready",
   }

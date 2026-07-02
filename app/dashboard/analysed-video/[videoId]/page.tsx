@@ -14,9 +14,11 @@ import {
   saveRetentionWindows,
   type RetentionWindow,
 } from "@/lib/retention-windows"
-import { createPendingRetentionWindowMedia } from "@/lib/retention-window-media"
+import { createPendingRetentionWindowAudio } from "@/lib/retention-window-media"
 import { triggerRetentionWindowMediaExtraction } from "@/lib/retention-window-media-trigger"
 import { saveRetentionWindowTranscripts } from "@/lib/retention-window-transcripts"
+import { createPendingRetentionWindowSceneCueScans } from "@/lib/video-scene-cues"
+import { createPendingRetentionWindowEventSynthesis } from "@/lib/retention-window-events"
 import {
   generatePacingAnalysis,
   type PacingAnalysis,
@@ -106,7 +108,19 @@ async function analyse(
             cached.id,
             built,
           )
-          await createPendingRetentionWindowMedia(
+          await createPendingRetentionWindowAudio(
+            supabase,
+            userId,
+            cached.id,
+            savedWindows,
+          )
+          await createPendingRetentionWindowSceneCueScans(
+            supabase,
+            userId,
+            cached.id,
+            savedWindows,
+          )
+          await createPendingRetentionWindowEventSynthesis(
             supabase,
             userId,
             cached.id,
@@ -192,7 +206,19 @@ async function analyse(
             savedVideo.id,
             retentionWindows,
           )
-          await createPendingRetentionWindowMedia(
+          await createPendingRetentionWindowAudio(
+            supabase,
+            userId,
+            savedVideo.id,
+            savedWindows,
+          )
+          await createPendingRetentionWindowSceneCueScans(
+            supabase,
+            userId,
+            savedVideo.id,
+            savedWindows,
+          )
+          await createPendingRetentionWindowEventSynthesis(
             supabase,
             userId,
             savedVideo.id,

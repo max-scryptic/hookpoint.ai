@@ -17,10 +17,12 @@ const STAGE_LABELS: {
   label: string
 }[] = [
   { key: "transcoding", label: "Transcoding video" },
+  { key: "sceneCueScan", label: "Detecting scene changes" },
   { key: "snapshots", label: "Fetching snapshots" },
   { key: "snapshotAnalysis", label: "Analyzing visuals" },
   { key: "audio", label: "Fetching audio" },
   { key: "audioAnalysis", label: "Analyzing audio" },
+  { key: "eventSynthesis", label: "Synthesizing retention events" },
   { key: "transcript", label: "Fetching transcript" },
 ]
 

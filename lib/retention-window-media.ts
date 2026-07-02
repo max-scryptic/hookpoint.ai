@@ -4,14 +4,19 @@
 // range (analysisFromSeconds/analysisToSeconds, computed alongside the window
 // itself in lib/retention-windows.ts).
 //
-// Rows are created 'pending' as soon as a retention window is saved — the
-// timestamps/range are known immediately, independent of whether the source
-// video has been uploaded yet — and flipped to 'ready' or 'failed' once
-// extraction actually runs (lib/retention-window-media-extraction.ts). AI
-// analysis of the harvested media is a later step, not handled here.
+// Audio rows are created 'pending' as soon as a retention window is saved —
+// the range is known immediately, independent of whether the source video
+// has been uploaded yet. Snapshot rows are different: their timestamps are
+// derived from the window's scene-cue scan (see
+// buildSnapshotTimestampsFromSceneCues below), which only runs once the
+// source video is readable, so they're created later, during extraction
+// (lib/retention-window-media-extraction.ts) rather than up front here. Both
+// flip to 'ready' or 'failed' once extraction actually runs. AI analysis of
+// the harvested media is a later step, not handled here.
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import type { SceneCueScanResult } from "@/lib/media/scene-detection"
 import type { PersistedRetentionWindow } from "@/lib/retention-windows"
 
 export const CHUNK_STEP_SECONDS = 5
@@ -31,6 +36,10 @@ export interface RetentionWindowSnapshot {
   storagePath: string | null
   status: RetentionWindowMediaStatus
   error: string | null
+  // Deterministic (no LLM) on-screen text recognized via tesseract.js at
+  // extraction time (see lib/media/ocr.ts) — null if recognition failed or
+  // the frame had no text confidently readable.
+  ocrText: string | null
   analysisStatus: RetentionWindowAnalysisStatus
   analysis: unknown
   analysisError: string | null
@@ -57,6 +66,7 @@ interface SnapshotRow {
   storage_path: string | null
   status: RetentionWindowMediaStatus
   error: string | null
+  ocr_text: string | null
   analysis_status: RetentionWindowAnalysisStatus
   analysis: unknown
   analysis_error: string | null
@@ -76,7 +86,7 @@ interface AudioRow {
 }
 
 const SNAPSHOT_COLUMNS =
-  "id, retention_window_id, chunk_index, timestamp_seconds, storage_path, status, error, analysis_status, analysis, analysis_error"
+  "id, retention_window_id, chunk_index, timestamp_seconds, storage_path, status, error, ocr_text, analysis_status, analysis, analysis_error"
 const AUDIO_COLUMNS =
   "id, retention_window_id, from_seconds, to_seconds, storage_path, status, error, analysis_status, analysis, analysis_error"
 
@@ -89,6 +99,7 @@ function mapSnapshotRow(row: SnapshotRow): RetentionWindowSnapshot {
     storagePath: row.storage_path,
     status: row.status,
     error: row.error,
+    ocrText: row.ocr_text,
     analysisStatus: row.analysis_status,
     analysis: row.analysis,
     analysisError: row.analysis_error,
@@ -138,25 +149,27 @@ function round(seconds: number): number {
   return Math.round(seconds * 1000) / 1000
 }
 
-// Creates the pending snapshot/audio rows for a video's retention windows, one
-// snapshot per chunk timestamp plus one audio clip per window, from each
-// window's analysisFromSeconds/analysisToSeconds. Windows with no analysis
-// window (null bounds — see computeAnalysisWindow) are skipped entirely.
+// Creates the pending audio row for each of a video's retention windows that
+// has an analysis window (null bounds — see computeAnalysisWindow — are
+// skipped entirely), one row per window, from its
+// analysisFromSeconds/analysisToSeconds. Snapshot rows are *not* created
+// here — their timestamps depend on that window's scene-cue scan, which only
+// runs once the source video is readable (see
+// createRetentionWindowSnapshotsFromSceneCues below, called from
+// lib/retention-window-media-extraction.ts).
 //
 // Always resets status to 'pending' on upsert (never merges into an existing
 // 'ready'/'failed' row's status): a fresh analyze recomputes the retention
-// curve, so a chunk's timestamp can shift between runs, and a previously
-// harvested thumbnail/audio clip captured at the old timestamp would otherwise
-// be left claiming 'ready' for a timestamp it no longer matches.
-export async function createPendingRetentionWindowMedia(
+// curve, so a window's range can shift between runs, and a previously
+// harvested audio clip captured at the old range would otherwise be left
+// claiming 'ready' for a range it no longer matches.
+export async function createPendingRetentionWindowAudio(
   supabase: SupabaseClient,
   userId: string,
   analysedVideoId: string,
   windows: PersistedRetentionWindow[],
 ): Promise<void> {
-  const snapshotRows: Record<string, unknown>[] = []
   const audioRows: Record<string, unknown>[] = []
-  const chunkCountByWindow = new Map<string, number>()
 
   for (const window of windows) {
     if (
@@ -165,25 +178,6 @@ export async function createPendingRetentionWindowMedia(
     ) {
       continue
     }
-
-    const timestamps = buildChunkTimestamps(
-      window.analysisFromSeconds,
-      window.analysisToSeconds,
-    )
-    chunkCountByWindow.set(window.id, timestamps.length)
-
-    timestamps.forEach((timestampSeconds, chunkIndex) => {
-      snapshotRows.push({
-        retention_window_id: window.id,
-        analysed_video_id: analysedVideoId,
-        user_id: userId,
-        chunk_index: chunkIndex,
-        timestamp_seconds: timestampSeconds,
-        status: "pending",
-        storage_path: null,
-        error: null,
-      })
-    })
 
     audioRows.push({
       retention_window_id: window.id,
@@ -197,18 +191,6 @@ export async function createPendingRetentionWindowMedia(
     })
   }
 
-  if (snapshotRows.length > 0) {
-    const { error } = await supabase
-      .from("retention_window_snapshots")
-      .upsert(snapshotRows, { onConflict: "retention_window_id,chunk_index" })
-
-    if (error) {
-      throw new Error(
-        `Failed to save retention window snapshots: ${error.message}`,
-      )
-    }
-  }
-
   if (audioRows.length > 0) {
     const { error } = await supabase
       .from("retention_window_audio")
@@ -216,25 +198,6 @@ export async function createPendingRetentionWindowMedia(
 
     if (error) {
       throw new Error(`Failed to save retention window audio: ${error.message}`)
-    }
-  }
-
-  // Prune stale trailing chunk rows per window — a re-analysis can shrink a
-  // window's span (fewer chunks) or drop its analysis window entirely (zero
-  // chunks, deleting every row window_index >= 0 previously saved for it).
-  for (const window of windows) {
-    const count = chunkCountByWindow.get(window.id) ?? 0
-    const { error } = await supabase
-      .from("retention_window_snapshots")
-      .delete()
-      .eq("user_id", userId)
-      .eq("retention_window_id", window.id)
-      .gte("chunk_index", count)
-
-    if (error) {
-      throw new Error(
-        `Failed to remove stale retention window snapshots: ${error.message}`,
-      )
     }
   }
 
@@ -254,6 +217,115 @@ export async function createPendingRetentionWindowMedia(
         `Failed to remove stale retention window audio: ${error.message}`,
       )
     }
+  }
+}
+
+// How far before/after a detected hard cut to place the two flanking
+// snapshots — small enough to land clearly on either side of the transition
+// without ffmpeg's seek landing on the same frame for both.
+const CUT_SNAPSHOT_OFFSET_SECONDS = 1
+
+// Ceiling on how many snapshots one window can produce. A window with an
+// unusually high cut rate (a fast-cut montage) would otherwise generate one
+// flanking pair per cut and blow past what's worth extracting/storing/
+// sending to the vision model; subsampling evenly keeps coverage spread
+// across the whole window instead of just its first few cuts.
+const MAX_SNAPSHOTS_PER_WINDOW = 12
+
+function subsampleEvenly(values: number[], max: number): number[] {
+  if (values.length <= max) return values
+  const step = (values.length - 1) / (max - 1)
+  const picked = new Set<number>()
+  for (let i = 0; i < max; i++) {
+    picked.add(values[Math.round(i * step)])
+  }
+  return [...picked].sort((a, b) => a - b)
+}
+
+// Derives a window's snapshot timestamps from its scene-cue scan instead of
+// a blind uniform grid: two flanking frames — just before and just after —
+// per detected hard cut, so the harvested images actually straddle a real
+// transition instead of landing at an arbitrary 5-second mark that might
+// miss every cut in the window entirely. Falls back to the original
+// fixed-step grid when a window has no detected cuts at all (e.g. a static
+// talking-head shot), so it still gets some visual evidence rather than none.
+export function buildSnapshotTimestampsFromSceneCues(
+  fromSeconds: number,
+  toSeconds: number,
+  cues: SceneCueScanResult,
+): number[] {
+  if (cues.cuts.length === 0) {
+    return buildChunkTimestamps(fromSeconds, toSeconds)
+  }
+
+  const timestamps = new Set<number>()
+  for (const cut of cues.cuts) {
+    timestamps.add(
+      round(Math.max(fromSeconds, cut.atSeconds - CUT_SNAPSHOT_OFFSET_SECONDS)),
+    )
+    timestamps.add(
+      round(Math.min(toSeconds, cut.atSeconds + CUT_SNAPSHOT_OFFSET_SECONDS)),
+    )
+  }
+
+  return subsampleEvenly(
+    [...timestamps].sort((a, b) => a - b),
+    MAX_SNAPSHOTS_PER_WINDOW,
+  )
+}
+
+// Creates one window's snapshot rows from its scene-cue scan result, once the
+// scan itself has completed. Always resets status to 'pending' on upsert, the
+// same don't-merge-into-'ready' reasoning createPendingRetentionWindowAudio
+// uses: a re-scan can shift cut positions, and a previously harvested
+// thumbnail at the old timestamp would otherwise be left claiming 'ready' for
+// a moment it no longer matches. Also prunes any trailing chunk rows a
+// previous (larger) scan of this window left behind.
+export async function createRetentionWindowSnapshotsFromSceneCues(
+  supabase: SupabaseClient,
+  userId: string,
+  analysedVideoId: string,
+  retentionWindowId: string,
+  fromSeconds: number,
+  toSeconds: number,
+  cues: SceneCueScanResult,
+): Promise<void> {
+  const timestamps = buildSnapshotTimestampsFromSceneCues(
+    fromSeconds,
+    toSeconds,
+    cues,
+  )
+
+  const rows = timestamps.map((timestampSeconds, chunkIndex) => ({
+    retention_window_id: retentionWindowId,
+    analysed_video_id: analysedVideoId,
+    user_id: userId,
+    chunk_index: chunkIndex,
+    timestamp_seconds: timestampSeconds,
+    status: "pending",
+    storage_path: null,
+    error: null,
+  }))
+
+  const { error } = await supabase
+    .from("retention_window_snapshots")
+    .upsert(rows, { onConflict: "retention_window_id,chunk_index" })
+
+  if (error) {
+    throw new Error(`Failed to save retention window snapshots: ${error.message}`)
+  }
+
+  const { error: pruneError } = await supabase
+    .from("retention_window_snapshots")
+    .delete()
+    .eq("user_id", userId)
+    .eq("retention_window_id", retentionWindowId)
+    .gte("chunk_index", rows.length)
+
+  if (pruneError) {
+    throw new Error(
+      `Failed to remove stale retention window snapshots: ${pruneError.message}`,
+    )
   }
 }
 
@@ -305,6 +377,53 @@ export async function getPendingRetentionWindowAudio(
   return ((data ?? []) as AudioRow[]).map(mapAudioRow)
 }
 
+// Loads every snapshot row for a video regardless of status — used by event
+// synthesis (lib/retention-window-event-synthesis.ts) to check whether every
+// snapshot in a window has finished analysis (ready or failed) before
+// synthesizing that window's events.
+export async function getRetentionWindowSnapshotsForVideo(
+  supabase: SupabaseClient,
+  userId: string,
+  analysedVideoId: string,
+): Promise<RetentionWindowSnapshot[]> {
+  const { data, error } = await supabase
+    .from("retention_window_snapshots")
+    .select(SNAPSHOT_COLUMNS)
+    .eq("user_id", userId)
+    .eq("analysed_video_id", analysedVideoId)
+    .order("retention_window_id", { ascending: true })
+    .order("chunk_index", { ascending: true })
+
+  if (error) {
+    throw new Error(
+      `Failed to load retention window snapshots: ${error.message}`,
+    )
+  }
+
+  return ((data ?? []) as SnapshotRow[]).map(mapSnapshotRow)
+}
+
+// Loads every audio row for a video regardless of status — same purpose as
+// getRetentionWindowSnapshotsForVideo, for the audio side.
+export async function getRetentionWindowAudioForVideo(
+  supabase: SupabaseClient,
+  userId: string,
+  analysedVideoId: string,
+): Promise<RetentionWindowAudioClip[]> {
+  const { data, error } = await supabase
+    .from("retention_window_audio")
+    .select(AUDIO_COLUMNS)
+    .eq("user_id", userId)
+    .eq("analysed_video_id", analysedVideoId)
+    .order("retention_window_id", { ascending: true })
+
+  if (error) {
+    throw new Error(`Failed to load retention window audio: ${error.message}`)
+  }
+
+  return ((data ?? []) as AudioRow[]).map(mapAudioRow)
+}
+
 // True when a video has any snapshot or audio row still waiting on
 // extraction. Used to decide whether it's worth kicking off a run at all.
 export async function hasPendingRetentionWindowMedia(
@@ -328,19 +447,25 @@ export async function hasPendingRetentionWindowMedia(
   return (count ?? 0) > 0
 }
 
-// Marks a single snapshot row 'ready' with its storage path, or 'failed' with
-// an error message. Scoped to its owner.
+// Marks a single snapshot row 'ready' with its storage path and recognized
+// OCR text (null if recognition found nothing confident), or 'failed' with an
+// error message. Scoped to its owner.
 export async function updateRetentionWindowSnapshotStatus(
   supabase: SupabaseClient,
   userId: string,
   id: string,
   outcome:
-    | { status: "ready"; storagePath: string }
+    | { status: "ready"; storagePath: string; ocrText: string | null }
     | { status: "failed"; error: string },
 ): Promise<void> {
   const payload =
     outcome.status === "ready"
-      ? { status: "ready", storage_path: outcome.storagePath, error: null }
+      ? {
+          status: "ready",
+          storage_path: outcome.storagePath,
+          ocr_text: outcome.ocrText,
+          error: null,
+        }
       : { status: "failed", error: outcome.error }
 
   const { error } = await supabase

@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import type { SceneCueScanResult } from "@/lib/media/scene-detection"
 import {
   buildChunkTimestamps,
-  createPendingRetentionWindowMedia,
+  buildSnapshotTimestampsFromSceneCues,
+  createPendingRetentionWindowAudio,
+  createRetentionWindowSnapshotsFromSceneCues,
 } from "@/lib/retention-window-media"
 import type { PersistedRetentionWindow } from "@/lib/retention-windows"
 
@@ -27,8 +30,73 @@ describe("buildChunkTimestamps", () => {
   })
 })
 
+function emptyCues(): SceneCueScanResult {
+  return { cuts: [], freezes: [], blacks: [] }
+}
+
+describe("buildSnapshotTimestampsFromSceneCues", () => {
+  it("falls back to the fixed grid when the window has no detected cuts", () => {
+    expect(buildSnapshotTimestampsFromSceneCues(0, 30, emptyCues())).toEqual(
+      buildChunkTimestamps(0, 30),
+    )
+  })
+
+  it("places a flanking pair just before and after each detected cut", () => {
+    const cues: SceneCueScanResult = {
+      cuts: [{ atSeconds: 15 }],
+      freezes: [],
+      blacks: [],
+    }
+
+    expect(buildSnapshotTimestampsFromSceneCues(0, 30, cues)).toEqual([14, 16])
+  })
+
+  it("clamps flanking offsets to the window's own bounds", () => {
+    const cues: SceneCueScanResult = {
+      cuts: [{ atSeconds: 0.5 }, { atSeconds: 29.5 }],
+      freezes: [],
+      blacks: [],
+    }
+
+    expect(buildSnapshotTimestampsFromSceneCues(0, 30, cues)).toEqual([
+      0, 1.5, 28.5, 30,
+    ])
+  })
+
+  it("de-duplicates overlapping flanking pairs from adjacent cuts", () => {
+    const cues: SceneCueScanResult = {
+      cuts: [{ atSeconds: 10 }, { atSeconds: 11.5 }],
+      freezes: [],
+      blacks: [],
+    }
+
+    // 10±1 => [9, 11]; 11.5±1 => [10.5, 12.5]; none of these coincide, so all
+    // four survive — this just documents dedup happens on exact overlaps.
+    expect(buildSnapshotTimestampsFromSceneCues(0, 30, cues)).toEqual([
+      9, 10.5, 11, 12.5,
+    ])
+  })
+
+  it("caps the result and spreads it evenly across a high cut-rate window", () => {
+    const cuts = Array.from({ length: 20 }, (_, i) => ({ atSeconds: i * 2 + 1 }))
+    const timestamps = buildSnapshotTimestampsFromSceneCues(0, 40, {
+      cuts,
+      freezes: [],
+      blacks: [],
+    })
+
+    expect(timestamps.length).toBeLessThanOrEqual(12)
+    expect(timestamps[0]).toBeLessThan(5)
+    expect(timestamps[timestamps.length - 1]).toBeGreaterThan(35)
+    // Strictly ascending, no duplicates from the subsampling itself.
+    for (let i = 1; i < timestamps.length; i++) {
+      expect(timestamps[i]).toBeGreaterThan(timestamps[i - 1])
+    }
+  })
+})
+
 // A minimal chainable fake of the Supabase query builder, just enough to
-// capture what createPendingRetentionWindowMedia writes to each table.
+// capture what these functions write to each table.
 function makeFakeSupabase() {
   const upserts: Record<string, Record<string, unknown>[]> = {}
   const deletes: { table: string; retentionWindowId?: string; ids?: string[] }[] =
@@ -87,28 +155,16 @@ function makeWindow(
   }
 }
 
-describe("createPendingRetentionWindowMedia", () => {
-  it("creates one snapshot row per chunk timestamp and one audio row per window", async () => {
+describe("createPendingRetentionWindowAudio", () => {
+  it("creates one audio row per window with an analysis window", async () => {
     const { supabase, upserts } = makeFakeSupabase()
     const window = makeWindow()
 
-    await createPendingRetentionWindowMedia(supabase, "user-1", "av-1", [
+    await createPendingRetentionWindowAudio(supabase, "user-1", "av-1", [
       window,
     ])
 
-    const snapshots = upserts["retention_window_snapshots"]
-    expect(snapshots).toHaveLength(7) // 0,5,10,...,30
-    expect(snapshots[0]).toMatchObject({
-      retention_window_id: "rw-1",
-      chunk_index: 0,
-      timestamp_seconds: 0,
-      status: "pending",
-    })
-    expect(snapshots[6]).toMatchObject({
-      chunk_index: 6,
-      timestamp_seconds: 30,
-    })
-
+    expect(upserts["retention_window_snapshots"]).toBeUndefined()
     const audio = upserts["retention_window_audio"]
     expect(audio).toHaveLength(1)
     expect(audio[0]).toMatchObject({
@@ -129,11 +185,48 @@ describe("createPendingRetentionWindowMedia", () => {
       analysisToSeconds: null,
     })
 
-    await createPendingRetentionWindowMedia(supabase, "user-1", "av-1", [
+    await createPendingRetentionWindowAudio(supabase, "user-1", "av-1", [
       window,
     ])
 
-    expect(upserts["retention_window_snapshots"]).toBeUndefined()
     expect(upserts["retention_window_audio"]).toBeUndefined()
+  })
+})
+
+describe("createRetentionWindowSnapshotsFromSceneCues", () => {
+  it("creates one snapshot row per derived timestamp and prunes stale trailing rows", async () => {
+    const { supabase, upserts, deletes } = makeFakeSupabase()
+
+    await createRetentionWindowSnapshotsFromSceneCues(
+      supabase,
+      "user-1",
+      "av-1",
+      "rw-1",
+      0,
+      30,
+      { cuts: [{ atSeconds: 15 }], freezes: [], blacks: [] },
+    )
+
+    const snapshots = upserts["retention_window_snapshots"]
+    expect(snapshots).toEqual([
+      expect.objectContaining({
+        retention_window_id: "rw-1",
+        chunk_index: 0,
+        timestamp_seconds: 14,
+        status: "pending",
+      }),
+      expect.objectContaining({
+        retention_window_id: "rw-1",
+        chunk_index: 1,
+        timestamp_seconds: 16,
+        status: "pending",
+      }),
+    ])
+    expect(deletes).toContainEqual(
+      expect.objectContaining({
+        table: "retention_window_snapshots",
+        retentionWindowId: "rw-1",
+      }),
+    )
   })
 })
