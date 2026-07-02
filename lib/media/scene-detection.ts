@@ -1,23 +1,30 @@
 // Detects video-editing cues — hard cuts, freeze-frames, and cuts-to-black —
-// via a single ffmpeg pass over a whole source video. Purely deterministic
-// (ffmpeg's own scene-change/freeze/black filters), no model involved: see
-// lib/video-scene-cues.ts for how the resulting timestamps turn into
-// cut-count/cuts-per-minute/freeze-and-black-coverage metrics for any window
-// on demand.
+// within one retention window's analysis range, via a single ffmpeg pass over
+// just that span. Purely deterministic (ffmpeg's own scene-change/freeze/
+// black filters), no model involved: see lib/video-scene-cues.ts for how the
+// resulting timestamps turn into cut-count/cuts-per-minute/freeze-and-black
+// coverage metrics for any window on demand.
+//
+// Scoped to a window (like extractThumbnail/extractAudioSegment) rather than
+// the whole video: a full-video decode has to read every frame of the
+// source, so its cost scales with total video length rather than the number
+// of interesting moments, and can exceed the timeout budget the routes that
+// trigger extraction already run under for anything but a short video. `-ss`
+// before `-i` seeks directly instead of decoding from the start, the same
+// trick the other extraction functions already rely on.
 //
 // All three filters run in one -vf chain, not three separate ffmpeg
-// invocations — the full-video decode is the expensive part, so it's worth
-// paying for once. freezedetect/blackdetect pass every frame through
-// unmodified (they just annotate stderr), so placing them ahead of
-// select/showinfo — which drops every frame that isn't a detected cut — lets
-// all three see the same single decode.
+// invocations, since freezedetect/blackdetect pass every frame through
+// unmodified (they just annotate stderr) — placing them ahead of
+// select/showinfo (which drops every frame that isn't a detected cut) lets
+// one decode of the window feed all three.
 
 import { runFfmpegCapturingOutput } from "@/lib/media/ffmpeg"
 
 // Downscaled before analysis: none of these filters need full resolution to
-// tell a cut from a freeze from a black frame, and decoding at a fraction of
-// the source's size is the main lever for keeping a whole-video pass fast.
-// Never upscales a source narrower than this.
+// tell a cut from a freeze from a black frame, and it cuts the cost of the
+// per-pixel comparisons the filters make. Never upscales a source narrower
+// than this.
 const SCENE_DETECTION_SCALE_WIDTH = 320
 
 // ffmpeg scene-change score threshold (0-1) above which a frame transition
@@ -53,7 +60,17 @@ export interface SceneCueScanResult {
   blacks: SceneSpan[]
 }
 
-export function buildSceneCueScanArgs(sourceUrl: string): string[] {
+// `-copyts` keeps every reported timestamp (pts_time, freeze_start,
+// black_start/end) in the source video's own absolute timeline instead of
+// rebasing to zero at the seek point — the default ffmpeg behaviour for a
+// trimmed output. Without it, every parsed timestamp would need `fromSeconds`
+// manually added back on, and would be wrong by however much `-ss` overshot
+// while seeking to the nearest keyframe.
+export function buildSceneCueScanArgs(
+  sourceUrl: string,
+  fromSeconds: number,
+  toSeconds: number,
+): string[] {
   const filters = [
     `scale='min(${SCENE_DETECTION_SCALE_WIDTH},iw)':-2`,
     `freezedetect=n=${FREEZE_NOISE_THRESHOLD_DB}dB:d=${FREEZE_MIN_DURATION_SECONDS}`,
@@ -62,7 +79,21 @@ export function buildSceneCueScanArgs(sourceUrl: string): string[] {
     "showinfo",
   ].join(",")
 
-  return ["-i", sourceUrl, "-an", "-vf", filters, "-f", "null", "-"]
+  return [
+    "-ss",
+    String(Math.max(0, fromSeconds)),
+    "-i",
+    sourceUrl,
+    "-t",
+    String(Math.max(0, toSeconds - fromSeconds)),
+    "-an",
+    "-copyts",
+    "-vf",
+    filters,
+    "-f",
+    "null",
+    "-",
+  ]
 }
 
 // Parses the stderr log lines showinfo/freezedetect/blackdetect write for a
@@ -75,12 +106,13 @@ export function buildSceneCueScanArgs(sourceUrl: string): string[] {
 // blackdetect logs one line per span with start/end already paired
 // (`black_start:X black_end:Y`), so no pairing logic is needed. freezedetect
 // instead logs `freeze_start`/`freeze_duration` as separate log lines in
-// order, one pair per span; `durationSeconds` closes out a freeze still
-// ongoing when the video ends, since ffmpeg only logs freeze_duration once a
-// freeze *ends* and a freeze running to EOF would otherwise be dropped.
+// order, one pair per span; `windowToSeconds` closes out a freeze still
+// ongoing when the scanned window ends, since ffmpeg only logs
+// freeze_duration once a freeze *ends* and a freeze running past the window
+// would otherwise be dropped.
 export function parseSceneCues(
   stderr: string,
-  durationSeconds: number,
+  windowToSeconds: number,
 ): SceneCueScanResult {
   const cuts = [
     ...stderr.matchAll(/Parsed_showinfo_\d+ @ [^\]]+\].*?pts_time:([\d.]+)/g),
@@ -97,7 +129,7 @@ export function parseSceneCues(
     const toSeconds =
       duration != null
         ? fromSeconds + duration
-        : Math.max(fromSeconds, durationSeconds)
+        : Math.max(fromSeconds, windowToSeconds)
     return { fromSeconds, toSeconds }
   })
 
@@ -113,30 +145,20 @@ export function parseSceneCues(
   return { cuts, freezes, blacks }
 }
 
-// A whole-video decode can comfortably exceed the 30s default ffmpeg
-// timeout even at the scale-down above — a long-form upload still has to be
-// read frame-by-frame once. Overridable for unusually long sources.
-const SCENE_CUE_SCAN_DEFAULT_TIMEOUT_MS = 10 * 60 * 1000
-
-function getSceneCueScanTimeoutMs(): number {
-  const raw = process.env.SCENE_CUE_SCAN_TIMEOUT_MS
-  const parsed = raw != null ? Number(raw) : NaN
-  return Number.isFinite(parsed) && parsed > 0
-    ? parsed
-    : SCENE_CUE_SCAN_DEFAULT_TIMEOUT_MS
-}
-
-// Runs the full-video scan against a signed source URL and returns the
-// parsed cues. Bubbles ffmpeg failures/timeouts to the caller, which treats
-// the whole scan as failed (see lib/video-scene-cue-scan.ts) rather than
-// trying to salvage a partial decode.
+// Runs the scan against a signed source URL for [fromSeconds, toSeconds] and
+// returns the parsed cues. Bubbles ffmpeg failures/timeouts to the caller,
+// which treats the whole window's scan as failed (see
+// lib/retention-window-media-extraction.ts) rather than trying to salvage a
+// partial decode. No custom timeout: a single window's span is small enough
+// (same order of magnitude as the audio/snapshot extraction already sharing
+// this budget) that the default ffmpeg timeout is enough.
 export async function scanVideoSceneCues(
   sourceUrl: string,
-  durationSeconds: number,
+  fromSeconds: number,
+  toSeconds: number,
 ): Promise<SceneCueScanResult> {
   const { stderr } = await runFfmpegCapturingOutput(
-    buildSceneCueScanArgs(sourceUrl),
-    { timeoutMs: getSceneCueScanTimeoutMs() },
+    buildSceneCueScanArgs(sourceUrl, fromSeconds, toSeconds),
   )
-  return parseSceneCues(stderr, durationSeconds)
+  return parseSceneCues(stderr, toSeconds)
 }

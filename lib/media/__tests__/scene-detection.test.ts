@@ -3,14 +3,33 @@ import { describe, expect, it } from "vitest"
 import { buildSceneCueScanArgs, parseSceneCues } from "@/lib/media/scene-detection"
 
 describe("buildSceneCueScanArgs", () => {
-  it("chains downscale, freezedetect, blackdetect and scene-select in one -vf graph", () => {
-    const args = buildSceneCueScanArgs("https://signed.example/video.mp4")
+  it("seeks to the window before -i and limits output to the window's duration", () => {
+    const args = buildSceneCueScanArgs("https://signed.example/video.mp4", 20, 60)
 
-    expect(args[0]).toBe("-i")
-    expect(args[1]).toBe("https://signed.example/video.mp4")
+    expect(args[0]).toBe("-ss")
+    expect(args[1]).toBe("20")
+    expect(args[2]).toBe("-i")
+    expect(args[3]).toBe("https://signed.example/video.mp4")
+    expect(args[args.indexOf("-t") + 1]).toBe("40")
     expect(args).toContain("-an")
+    expect(args).toContain("-copyts")
+  })
 
+  it("clamps a negative fromSeconds to 0 (duration still spans the full requested range)", () => {
+    const args = buildSceneCueScanArgs("https://s.example/v.mp4", -5, 10)
+    expect(args[1]).toBe("0")
+    expect(args[args.indexOf("-t") + 1]).toBe("15")
+  })
+
+  it("clamps a negative duration to 0 rather than going negative", () => {
+    const args = buildSceneCueScanArgs("https://s.example/v.mp4", 10, 5)
+    expect(args[args.indexOf("-t") + 1]).toBe("0")
+  })
+
+  it("chains downscale, freezedetect, blackdetect and scene-select in one -vf graph", () => {
+    const args = buildSceneCueScanArgs("https://signed.example/video.mp4", 0, 30)
     const filters = args[args.indexOf("-vf") + 1]
+
     expect(filters).toContain("scale=")
     expect(filters).toContain("freezedetect=")
     expect(filters).toContain("blackdetect=")
@@ -50,7 +69,7 @@ describe("parseSceneCues", () => {
     ])
   })
 
-  it("closes out a freeze still running at end of stream using durationSeconds", () => {
+  it("closes out a freeze still running when the scanned window ends", () => {
     const stderr = "[freezedetect @ 0x1] freeze_start: 55"
 
     expect(parseSceneCues(stderr, 60).freezes).toEqual([

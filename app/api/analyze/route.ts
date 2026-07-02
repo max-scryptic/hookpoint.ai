@@ -14,6 +14,7 @@ import { createPendingRetentionWindowMedia } from "@/lib/retention-window-media"
 import { saveRetentionWindowTranscripts } from "@/lib/retention-window-transcripts"
 import { triggerRetentionWindowMediaExtraction } from "@/lib/retention-window-media-trigger"
 import { getSourceFileForVideo } from "@/lib/source-files/source-files"
+import { createPendingRetentionWindowSceneCueScans } from "@/lib/video-scene-cues"
 import {
   generatePacingAnalysis,
   type PacingAnalysis,
@@ -154,6 +155,12 @@ export async function POST(request: NextRequest) {
             buildRetentionWindows(retention, video.durationSeconds),
           )
           await createPendingRetentionWindowMedia(
+            supabase,
+            user.id,
+            savedVideo.id,
+            savedWindows,
+          )
+          await createPendingRetentionWindowSceneCueScans(
             supabase,
             user.id,
             savedVideo.id,

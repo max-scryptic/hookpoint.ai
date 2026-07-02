@@ -5,6 +5,7 @@ import {
   extractPendingRetentionWindowMedia,
   isSourceFileReady,
   type RetentionWindowMediaExtractionDeps,
+  type SceneCueScanner,
 } from "@/lib/retention-window-media-extraction"
 import type { SourceFile } from "@/lib/source-files/source-files"
 import type { StorageProvider } from "@/lib/storage"
@@ -68,14 +69,30 @@ describe("isSourceFileReady", () => {
   })
 })
 
-// A fake Supabase client that serves canned rows for the two "pending" reads
-// this module issues and records every status-update payload.
+const SELECT_TABLES = new Set([
+  "retention_window_snapshots",
+  "retention_window_audio",
+  "retention_window_scene_cue_scans",
+])
+
+// A fake Supabase client that serves canned rows for the three "pending"
+// reads this module issues, and records every status-update/insert/delete
+// this module makes in response.
 function makeFakeSupabase(
   snapshots: Record<string, unknown>[],
   audio: Record<string, unknown>[],
+  sceneCueScans: Record<string, unknown>[] = [],
 ) {
   const updates: { table: string; id: string; payload: Record<string, unknown> }[] =
     []
+  const inserts: { table: string; rows: Record<string, unknown>[] }[] = []
+  const deletes: { table: string }[] = []
+
+  const rowsByTable: Record<string, Record<string, unknown>[]> = {
+    retention_window_snapshots: snapshots,
+    retention_window_audio: audio,
+    retention_window_scene_cue_scans: sceneCueScans,
+  }
 
   const supabase = {
     from(table: string) {
@@ -85,6 +102,14 @@ function makeFakeSupabase(
         update: (payload: Record<string, unknown>) => {
           builder._payload = payload
           return builder
+        },
+        delete: () => {
+          builder._delete = true
+          return builder
+        },
+        insert: (rows: Record<string, unknown>[]) => {
+          inserts.push({ table, rows })
+          return Promise.resolve({ error: null })
         },
         eq: (column: string, value: string) => {
           if (column === "id") pendingId = value
@@ -100,7 +125,11 @@ function makeFakeSupabase(
             })
             return Promise.resolve({ error: null }).then(resolve)
           }
-          const rows = table === "retention_window_snapshots" ? snapshots : audio
+          if (builder._delete) {
+            deletes.push({ table })
+            return Promise.resolve({ error: null }).then(resolve)
+          }
+          const rows = SELECT_TABLES.has(table) ? rowsByTable[table] : []
           return Promise.resolve({ data: rows, error: null }).then(resolve)
         },
       }
@@ -108,7 +137,7 @@ function makeFakeSupabase(
     },
   } as unknown as SupabaseClient
 
-  return { supabase, updates }
+  return { supabase, updates, inserts, deletes }
 }
 
 function fakeStorage(): StorageProvider {
@@ -122,6 +151,12 @@ function fakeStorage(): StorageProvider {
   } as unknown as StorageProvider
 }
 
+function fakeSceneCueScanner(): SceneCueScanner & { scan: ReturnType<typeof vi.fn> } {
+  return {
+    scan: vi.fn(async () => ({ cuts: [], freezes: [], blacks: [] })),
+  }
+}
+
 describe("extractPendingRetentionWindowMedia", () => {
   it("does nothing (and mints no signed URL) when nothing is pending", async () => {
     const { supabase } = makeFakeSupabase([], [])
@@ -133,6 +168,7 @@ describe("extractPendingRetentionWindowMedia", () => {
     const deps: RetentionWindowMediaExtractionDeps = {
       extractor,
       mediaStorage: fakeStorage(),
+      sceneCueScanner: fakeSceneCueScanner(),
     }
 
     await extractPendingRetentionWindowMedia(
@@ -181,6 +217,7 @@ describe("extractPendingRetentionWindowMedia", () => {
     await extractPendingRetentionWindowMedia(supabase, storage, makeSourceFile(), {
       extractor,
       mediaStorage,
+      sceneCueScanner: fakeSceneCueScanner(),
     })
 
     expect(storage.createSignedReadUrl).toHaveBeenCalledWith(
@@ -250,7 +287,7 @@ describe("extractPendingRetentionWindowMedia", () => {
       supabase,
       fakeStorage(),
       makeSourceFile(),
-      { extractor, mediaStorage: fakeStorage() },
+      { extractor, mediaStorage: fakeStorage(), sceneCueScanner: fakeSceneCueScanner() },
     )
 
     expect(updates).toContainEqual(
@@ -268,6 +305,115 @@ describe("extractPendingRetentionWindowMedia", () => {
         table: "retention_window_snapshots",
         id: "snap-2",
         payload: expect.objectContaining({ status: "ready" }),
+      }),
+    )
+  })
+
+  it("scans each pending window for scene cues, stores them, and marks the scan ready", async () => {
+    const { supabase, updates, inserts, deletes } = makeFakeSupabase(
+      [],
+      [],
+      [
+        {
+          id: "scan-1",
+          retention_window_id: "rw-1",
+          from_seconds: 0,
+          to_seconds: 30,
+          status: "pending",
+          error: null,
+        },
+      ],
+    )
+    const sceneCueScanner = fakeSceneCueScanner()
+    sceneCueScanner.scan.mockResolvedValueOnce({
+      cuts: [{ atSeconds: 12.3 }],
+      freezes: [],
+      blacks: [],
+    })
+
+    await extractPendingRetentionWindowMedia(supabase, fakeStorage(), makeSourceFile(), {
+      extractor: { extractThumbnail: vi.fn(), extractAudioSegment: vi.fn() },
+      mediaStorage: fakeStorage(),
+      sceneCueScanner,
+    })
+
+    expect(sceneCueScanner.scan).toHaveBeenCalledWith(
+      "https://signed.example/video.mp4",
+      0,
+      30,
+    )
+    expect(deletes).toContainEqual({ table: "video_scene_cues" })
+    expect(inserts).toContainEqual({
+      table: "video_scene_cues",
+      rows: [
+        expect.objectContaining({
+          retention_window_id: "rw-1",
+          kind: "cut",
+          from_seconds: 12.3,
+        }),
+      ],
+    })
+    expect(updates).toContainEqual(
+      expect.objectContaining({
+        table: "retention_window_scene_cue_scans",
+        id: "scan-1",
+        payload: expect.objectContaining({ status: "ready" }),
+      }),
+    )
+  })
+
+  it("marks a window's scene cue scan failed without affecting other rows", async () => {
+    const { supabase, updates } = makeFakeSupabase(
+      [
+        {
+          id: "snap-1",
+          retention_window_id: "rw-1",
+          chunk_index: 0,
+          timestamp_seconds: 0,
+          storage_path: null,
+          status: "pending",
+          error: null,
+        },
+      ],
+      [],
+      [
+        {
+          id: "scan-1",
+          retention_window_id: "rw-1",
+          from_seconds: 0,
+          to_seconds: 30,
+          status: "pending",
+          error: null,
+        },
+      ],
+    )
+    const sceneCueScanner = fakeSceneCueScanner()
+    sceneCueScanner.scan.mockRejectedValueOnce(new Error("ffmpeg failed"))
+
+    await extractPendingRetentionWindowMedia(supabase, fakeStorage(), makeSourceFile(), {
+      extractor: {
+        extractThumbnail: vi.fn(async () => Buffer.from("jpeg-bytes")),
+        extractAudioSegment: vi.fn(),
+      },
+      mediaStorage: fakeStorage(),
+      sceneCueScanner,
+    })
+
+    expect(updates).toContainEqual(
+      expect.objectContaining({
+        table: "retention_window_snapshots",
+        id: "snap-1",
+        payload: expect.objectContaining({ status: "ready" }),
+      }),
+    )
+    expect(updates).toContainEqual(
+      expect.objectContaining({
+        table: "retention_window_scene_cue_scans",
+        id: "scan-1",
+        payload: expect.objectContaining({
+          status: "failed",
+          error: "ffmpeg failed",
+        }),
       }),
     )
   })
