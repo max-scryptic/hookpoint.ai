@@ -70,7 +70,38 @@ describe("getDeepAnalysisProgress", () => {
       snapshotAnalysis: "ready",
       audio: "ready",
       audioAnalysis: "ready",
+      eventSynthesis: "ready",
     })
+    expect(progress.complete).toBe(true)
+  })
+
+  it("reports the event synthesis stage in progress while a job is still pending", async () => {
+    const supabase = makeFakeSupabase({
+      retention_window_event_synthesis: [{ status: "pending" }],
+    })
+    const progress = await getDeepAnalysisProgress(
+      supabase,
+      "user-1",
+      "av-1",
+      makeSourceFile(),
+    )
+
+    expect(progress.stages).toMatchObject({ eventSynthesis: "in_progress" })
+    expect(progress.complete).toBe(false)
+  })
+
+  it("reports an event synthesis stage failure when every job failed", async () => {
+    const supabase = makeFakeSupabase({
+      retention_window_event_synthesis: [{ status: "failed" }],
+    })
+    const progress = await getDeepAnalysisProgress(
+      supabase,
+      "user-1",
+      "av-1",
+      makeSourceFile(),
+    )
+
+    expect(progress.stages).toMatchObject({ eventSynthesis: "failed" })
     expect(progress.complete).toBe(true)
   })
 
