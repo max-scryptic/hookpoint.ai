@@ -371,6 +371,53 @@ export async function getPendingRetentionWindowAudio(
   return ((data ?? []) as AudioRow[]).map(mapAudioRow)
 }
 
+// Loads every snapshot row for a video regardless of status — used by event
+// synthesis (lib/retention-window-event-synthesis.ts) to check whether every
+// snapshot in a window has finished analysis (ready or failed) before
+// synthesizing that window's events.
+export async function getRetentionWindowSnapshotsForVideo(
+  supabase: SupabaseClient,
+  userId: string,
+  analysedVideoId: string,
+): Promise<RetentionWindowSnapshot[]> {
+  const { data, error } = await supabase
+    .from("retention_window_snapshots")
+    .select(SNAPSHOT_COLUMNS)
+    .eq("user_id", userId)
+    .eq("analysed_video_id", analysedVideoId)
+    .order("retention_window_id", { ascending: true })
+    .order("chunk_index", { ascending: true })
+
+  if (error) {
+    throw new Error(
+      `Failed to load retention window snapshots: ${error.message}`,
+    )
+  }
+
+  return ((data ?? []) as SnapshotRow[]).map(mapSnapshotRow)
+}
+
+// Loads every audio row for a video regardless of status — same purpose as
+// getRetentionWindowSnapshotsForVideo, for the audio side.
+export async function getRetentionWindowAudioForVideo(
+  supabase: SupabaseClient,
+  userId: string,
+  analysedVideoId: string,
+): Promise<RetentionWindowAudioClip[]> {
+  const { data, error } = await supabase
+    .from("retention_window_audio")
+    .select(AUDIO_COLUMNS)
+    .eq("user_id", userId)
+    .eq("analysed_video_id", analysedVideoId)
+    .order("retention_window_id", { ascending: true })
+
+  if (error) {
+    throw new Error(`Failed to load retention window audio: ${error.message}`)
+  }
+
+  return ((data ?? []) as AudioRow[]).map(mapAudioRow)
+}
+
 // True when a video has any snapshot or audio row still waiting on
 // extraction. Used to decide whether it's worth kicking off a run at all.
 export async function hasPendingRetentionWindowMedia(

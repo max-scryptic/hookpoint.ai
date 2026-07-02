@@ -147,6 +147,38 @@ export async function getPendingRetentionWindowSceneCueScans(
   return ((data ?? []) as SceneCueScanRow[]).map(mapScanRow)
 }
 
+export interface RetentionWindowSceneCueScanStatusRow {
+  retentionWindowId: string
+  status: SceneCueScanStatus
+}
+
+// Loads just the status of every window's scene-cue scan for a video — used
+// by event synthesis (lib/retention-window-event-synthesis.ts) to check
+// whether a window's scan has settled (ready or failed) before synthesizing
+// its events. The actual detected cues come from getVideoSceneCues below.
+export async function getRetentionWindowSceneCueScanStatuses(
+  supabase: SupabaseClient,
+  userId: string,
+  analysedVideoId: string,
+): Promise<RetentionWindowSceneCueScanStatusRow[]> {
+  const { data, error } = await supabase
+    .from("retention_window_scene_cue_scans")
+    .select("retention_window_id, status")
+    .eq("user_id", userId)
+    .eq("analysed_video_id", analysedVideoId)
+
+  if (error) {
+    throw new Error(`Failed to load scene cue scan statuses: ${error.message}`)
+  }
+
+  return (
+    (data ?? []) as { retention_window_id: string; status: SceneCueScanStatus }[]
+  ).map((row) => ({
+    retentionWindowId: row.retention_window_id,
+    status: row.status,
+  }))
+}
+
 export async function updateRetentionWindowSceneCueScanStatus(
   supabase: SupabaseClient,
   userId: string,

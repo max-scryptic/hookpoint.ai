@@ -399,7 +399,12 @@ function extractOutputText(response: {
   return null
 }
 
-async function callOpenAiResponses(body: Record<string, unknown>): Promise<string> {
+// Exported for reuse by lib/retention-window-event-synthesis.ts, which needs
+// the same OpenAI Responses wrapper for its own (text-only) structured-output
+// call rather than duplicating it.
+export async function callOpenAiResponses(
+  body: Record<string, unknown>,
+): Promise<string> {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) throw new Error("OPENAI_API_KEY is not configured")
 
