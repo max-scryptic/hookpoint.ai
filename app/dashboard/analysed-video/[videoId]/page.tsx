@@ -1,5 +1,7 @@
 import { AnalysedVideoDetail } from "@/components/analysed-video-detail"
+import { DeepAnalysisEvidence } from "@/components/deep-analysis-evidence"
 import { SourceFileUpload } from "@/components/source-file-upload"
+import { getDeepAnalysisEvidence } from "@/lib/deep-analysis-evidence"
 import { requireAuthenticatedUser } from "@/lib/auth"
 import { createClient } from "@/lib/supabase/server"
 import {
@@ -328,6 +330,23 @@ export default async function Page({
     }
   }
 
+  // Load whatever deep-analysis evidence (synthesized events, transcripts,
+  // snapshots, audio) has been generated so far. Best-effort: a failure here
+  // must not break the rest of the analysis view.
+  let deepAnalysisEvidence: Awaited<ReturnType<typeof getDeepAnalysisEvidence>> = []
+  if (result.status === "ok") {
+    try {
+      const supabase = await createClient()
+      deepAnalysisEvidence = await getDeepAnalysisEvidence(
+        supabase,
+        user.id,
+        videoId,
+      )
+    } catch (error) {
+      console.error("Failed to load deep analysis evidence", error)
+    }
+  }
+
   return (
     <>
       <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
@@ -376,6 +395,7 @@ export default async function Page({
               filenameSimilarityThreshold={getFilenameSimilarityThreshold()}
               initialSourceFile={initialSourceFile}
             />
+            <DeepAnalysisEvidence evidence={deepAnalysisEvidence} />
           </>
         )}
 
