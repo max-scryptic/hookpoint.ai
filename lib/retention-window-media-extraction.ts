@@ -12,9 +12,16 @@
 //
 // The scene-cue scan is folded into this same pass (not a separate trigger)
 // because it needs exactly the same signed source URL, over exactly the same
-// per-window [from, to] range, as the audio extraction right above it — see
+// per-window [from, to] range, as the audio extraction below it — see
 // lib/media/scene-detection.ts for why it's scoped to a window rather than a
 // whole-video decode.
+//
+// Scene-cue scans run *before* snapshots, not after: a window's snapshot
+// timestamps are now derived from its detected cuts (see
+// buildSnapshotTimestampsFromSceneCues in lib/retention-window-media.ts) —
+// flanking frames just before/after each real transition, instead of a blind
+// fixed-interval grid — so those rows can't be created until the scan for
+// that window has actually run.
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
@@ -27,6 +34,7 @@ import {
   type SceneCueScanResult,
 } from "@/lib/media/scene-detection"
 import {
+  createRetentionWindowSnapshotsFromSceneCues,
   getPendingRetentionWindowAudio,
   getPendingRetentionWindowSnapshots,
   updateRetentionWindowAudioStatus,
@@ -95,26 +103,27 @@ export async function extractPendingRetentionWindowMedia(
   const playbackPath = resolvePlaybackStoragePath(sourceFile)
   if (!playbackPath) return
 
-  const [pendingSnapshots, pendingAudio, pendingSceneCueScans] = await Promise.all([
-    getPendingRetentionWindowSnapshots(
-      admin,
-      sourceFile.userId,
-      sourceFile.analysedVideoId,
-    ),
-    getPendingRetentionWindowAudio(
-      admin,
-      sourceFile.userId,
-      sourceFile.analysedVideoId,
-    ),
-    getPendingRetentionWindowSceneCueScans(
-      admin,
-      sourceFile.userId,
-      sourceFile.analysedVideoId,
-    ),
-  ])
+  const [initialPendingSnapshots, pendingAudio, pendingSceneCueScans] =
+    await Promise.all([
+      getPendingRetentionWindowSnapshots(
+        admin,
+        sourceFile.userId,
+        sourceFile.analysedVideoId,
+      ),
+      getPendingRetentionWindowAudio(
+        admin,
+        sourceFile.userId,
+        sourceFile.analysedVideoId,
+      ),
+      getPendingRetentionWindowSceneCueScans(
+        admin,
+        sourceFile.userId,
+        sourceFile.analysedVideoId,
+      ),
+    ])
 
   if (
-    pendingSnapshots.length === 0 &&
+    initialPendingSnapshots.length === 0 &&
     pendingAudio.length === 0 &&
     pendingSceneCueScans.length === 0
   ) {
@@ -125,6 +134,62 @@ export async function extractPendingRetentionWindowMedia(
     playbackPath,
     getSourceVideoReadUrlExpirySeconds(),
   )
+
+  for (const scan of pendingSceneCueScans) {
+    try {
+      const result = await deps.sceneCueScanner.scan(
+        sourceUrl,
+        scan.fromSeconds,
+        scan.toSeconds,
+      )
+      await replaceRetentionWindowSceneCues(
+        admin,
+        sourceFile.userId,
+        sourceFile.analysedVideoId,
+        scan.retentionWindowId,
+        result,
+      )
+      await createRetentionWindowSnapshotsFromSceneCues(
+        admin,
+        sourceFile.userId,
+        sourceFile.analysedVideoId,
+        scan.retentionWindowId,
+        scan.fromSeconds,
+        scan.toSeconds,
+        result,
+      )
+      await updateRetentionWindowSceneCueScanStatus(
+        admin,
+        sourceFile.userId,
+        scan.id,
+        { status: "ready" },
+      )
+    } catch (error) {
+      console.error("Failed to scan retention window scene cues", error)
+      await updateRetentionWindowSceneCueScanStatus(
+        admin,
+        sourceFile.userId,
+        scan.id,
+        {
+          status: "failed",
+          error:
+            error instanceof Error ? error.message : "Failed to scan scene cues",
+        },
+      ).catch(() => {})
+    }
+  }
+
+  // Re-read pending snapshots after the scan loop above: it may have just
+  // created fresh rows (derived from cues) for whichever windows it scanned,
+  // which the earlier read couldn't have seen yet.
+  const pendingSnapshots =
+    pendingSceneCueScans.length > 0
+      ? await getPendingRetentionWindowSnapshots(
+          admin,
+          sourceFile.userId,
+          sourceFile.analysedVideoId,
+        )
+      : initialPendingSnapshots
 
   for (const snapshot of pendingSnapshots) {
     try {
@@ -191,41 +256,6 @@ export async function extractPendingRetentionWindowMedia(
           status: "failed",
           error:
             error instanceof Error ? error.message : "Failed to extract audio",
-        },
-      ).catch(() => {})
-    }
-  }
-
-  for (const scan of pendingSceneCueScans) {
-    try {
-      const result = await deps.sceneCueScanner.scan(
-        sourceUrl,
-        scan.fromSeconds,
-        scan.toSeconds,
-      )
-      await replaceRetentionWindowSceneCues(
-        admin,
-        sourceFile.userId,
-        sourceFile.analysedVideoId,
-        scan.retentionWindowId,
-        result,
-      )
-      await updateRetentionWindowSceneCueScanStatus(
-        admin,
-        sourceFile.userId,
-        scan.id,
-        { status: "ready" },
-      )
-    } catch (error) {
-      console.error("Failed to scan retention window scene cues", error)
-      await updateRetentionWindowSceneCueScanStatus(
-        admin,
-        sourceFile.userId,
-        scan.id,
-        {
-          status: "failed",
-          error:
-            error instanceof Error ? error.message : "Failed to scan scene cues",
         },
       ).catch(() => {})
     }

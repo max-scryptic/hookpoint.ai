@@ -374,7 +374,7 @@ const AUDIO_ANALYSIS_SCHEMA = {
 } as const
 
 const SNAPSHOT_ANALYSIS_INSTRUCTIONS = [
-  "You describe frames sampled roughly every 5 seconds from one window of a YouTube video, in chunkIndex order (0 is earliest).",
+  "You describe frames from one window of a YouTube video, in chunkIndex order (0 is earliest). Most frames are placed in flanking pairs just before and just after a detected hard cut or transition, so consecutive chunks often straddle a real edit rather than an arbitrary moment; a window with no detected cuts instead gets evenly spaced frames across it.",
   "For each chunk, classify: scene (best-fitting category), whether a face is visible, whether on-screen text/captions/graphics are present, whether source code is visible, the amount of on-screen motion, how many distinct people are visible, and the camera's behaviour relative to the surrounding chunks.",
   "Also give: on_screen_text (verbatim legible text/captions/overlays, or null if none), notable_event (a single thing distinguishing this chunk from its neighbours — a cut, a zoom, a graphic appearing, a change of location — or null if nothing stands out), and a short free-text description of the composition and action.",
   "Base every judgment only on what's visible in that chunk's image. Do not infer audio, speech, or viewer reaction.",

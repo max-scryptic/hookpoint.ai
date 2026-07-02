@@ -75,9 +75,14 @@ const SELECT_TABLES = new Set([
   "retention_window_scene_cue_scans",
 ])
 
+let nextGeneratedId = 0
+
 // A fake Supabase client that serves canned rows for the three "pending"
-// reads this module issues, and records every status-update/insert/delete
-// this module makes in response.
+// reads this module issues, and records every status-update/insert/delete it
+// makes in response. Stateful for retention_window_snapshots: an upsert on
+// that table replaces what a later select on it returns, since
+// createRetentionWindowSnapshotsFromSceneCues creates rows mid-run that the
+// snapshot-extraction loop right after it has to see.
 function makeFakeSupabase(
   snapshots: Record<string, unknown>[],
   audio: Record<string, unknown>[],
@@ -107,6 +112,17 @@ function makeFakeSupabase(
           builder._delete = true
           return builder
         },
+        upsert: (rows: Record<string, unknown>[]) => {
+          if (table === "retention_window_snapshots") {
+            rowsByTable[table] = rows.map((row) => ({
+              id: `generated-${nextGeneratedId++}`,
+              status: "pending",
+              error: null,
+              ...row,
+            }))
+          }
+          return Promise.resolve({ error: null })
+        },
         insert: (rows: Record<string, unknown>[]) => {
           inserts.push({ table, rows })
           return Promise.resolve({ error: null })
@@ -115,6 +131,7 @@ function makeFakeSupabase(
           if (column === "id") pendingId = value
           return builder
         },
+        gte: () => builder,
         order: () => builder,
         then: (resolve: (v: unknown) => unknown) => {
           if (builder._payload) {
@@ -182,7 +199,7 @@ describe("extractPendingRetentionWindowMedia", () => {
     expect(extractor.extractThumbnail).not.toHaveBeenCalled()
   })
 
-  it("extracts each pending snapshot and audio clip and marks them ready", async () => {
+  it("extracts a pre-existing pending snapshot and audio clip and marks them ready", async () => {
     const { supabase, updates } = makeFakeSupabase(
       [
         {
@@ -309,8 +326,8 @@ describe("extractPendingRetentionWindowMedia", () => {
     )
   })
 
-  it("scans each pending window for scene cues, stores them, and marks the scan ready", async () => {
-    const { supabase, updates, inserts, deletes } = makeFakeSupabase(
+  it("scans a window's scene cues first, derives snapshots from the detected cut, and extracts them in the same run", async () => {
+    const { supabase, updates, inserts } = makeFakeSupabase(
       [],
       [],
       [
@@ -326,13 +343,17 @@ describe("extractPendingRetentionWindowMedia", () => {
     )
     const sceneCueScanner = fakeSceneCueScanner()
     sceneCueScanner.scan.mockResolvedValueOnce({
-      cuts: [{ atSeconds: 12.3 }],
+      cuts: [{ atSeconds: 15 }],
       freezes: [],
       blacks: [],
     })
+    const extractor: VideoExtractor = {
+      extractThumbnail: vi.fn(async () => Buffer.from("jpeg-bytes")),
+      extractAudioSegment: vi.fn(),
+    }
 
     await extractPendingRetentionWindowMedia(supabase, fakeStorage(), makeSourceFile(), {
-      extractor: { extractThumbnail: vi.fn(), extractAudioSegment: vi.fn() },
+      extractor,
       mediaStorage: fakeStorage(),
       sceneCueScanner,
     })
@@ -342,17 +363,27 @@ describe("extractPendingRetentionWindowMedia", () => {
       0,
       30,
     )
-    expect(deletes).toContainEqual({ table: "video_scene_cues" })
     expect(inserts).toContainEqual({
       table: "video_scene_cues",
       rows: [
         expect.objectContaining({
           retention_window_id: "rw-1",
           kind: "cut",
-          from_seconds: 12.3,
+          from_seconds: 15,
         }),
       ],
     })
+
+    // The cut at 15s => flanking snapshots at 14s and 16s, extracted in this
+    // same run rather than waiting for a second trigger.
+    expect(extractor.extractThumbnail).toHaveBeenCalledWith(
+      "https://signed.example/video.mp4",
+      14,
+    )
+    expect(extractor.extractThumbnail).toHaveBeenCalledWith(
+      "https://signed.example/video.mp4",
+      16,
+    )
     expect(updates).toContainEqual(
       expect.objectContaining({
         table: "retention_window_scene_cue_scans",
@@ -360,21 +391,18 @@ describe("extractPendingRetentionWindowMedia", () => {
         payload: expect.objectContaining({ status: "ready" }),
       }),
     )
+    expect(
+      updates.filter(
+        (update) =>
+          update.table === "retention_window_snapshots" &&
+          (update.payload as Record<string, unknown>).status === "ready",
+      ),
+    ).toHaveLength(2)
   })
 
-  it("marks a window's scene cue scan failed without affecting other rows", async () => {
-    const { supabase, updates } = makeFakeSupabase(
-      [
-        {
-          id: "snap-1",
-          retention_window_id: "rw-1",
-          chunk_index: 0,
-          timestamp_seconds: 0,
-          storage_path: null,
-          status: "pending",
-          error: null,
-        },
-      ],
+  it("marks a window's scene cue scan failed without creating any snapshots for it", async () => {
+    const { supabase, updates, inserts } = makeFakeSupabase(
+      [],
       [],
       [
         {
@@ -391,21 +419,12 @@ describe("extractPendingRetentionWindowMedia", () => {
     sceneCueScanner.scan.mockRejectedValueOnce(new Error("ffmpeg failed"))
 
     await extractPendingRetentionWindowMedia(supabase, fakeStorage(), makeSourceFile(), {
-      extractor: {
-        extractThumbnail: vi.fn(async () => Buffer.from("jpeg-bytes")),
-        extractAudioSegment: vi.fn(),
-      },
+      extractor: { extractThumbnail: vi.fn(), extractAudioSegment: vi.fn() },
       mediaStorage: fakeStorage(),
       sceneCueScanner,
     })
 
-    expect(updates).toContainEqual(
-      expect.objectContaining({
-        table: "retention_window_snapshots",
-        id: "snap-1",
-        payload: expect.objectContaining({ status: "ready" }),
-      }),
-    )
+    expect(inserts).toHaveLength(0)
     expect(updates).toContainEqual(
       expect.objectContaining({
         table: "retention_window_scene_cue_scans",

@@ -46,7 +46,7 @@ function mapRow(row: TranscriptRow): RetentionWindowTranscript {
 // upserts the resulting text, one row per window. Windows with no analysis
 // window (null bounds — see computeAnalysisWindow) are skipped, and any row a
 // previous save left behind for them is removed — mirroring how
-// createPendingRetentionWindowMedia prunes stale audio rows.
+// createPendingRetentionWindowAudio prunes stale audio rows.
 export async function saveRetentionWindowTranscripts(
   supabase: SupabaseClient,
   userId: string,

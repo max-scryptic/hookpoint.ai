@@ -54,8 +54,8 @@ function mapScanRow(row: SceneCueScanRow): RetentionWindowSceneCueScan {
 }
 
 // Creates the pending scene-cue-scan row for each of a video's retention
-// windows that has an analysis window, one row per window (mirrors the audio
-// half of createPendingRetentionWindowMedia). Windows with no analysis window
+// windows that has an analysis window, one row per window (mirrors
+// createPendingRetentionWindowAudio). Windows with no analysis window
 // (null bounds — see computeAnalysisWindow) are skipped, and any row a
 // previous save left behind for them is removed, the same way a shrunk or
 // removed analysis window prunes its stale audio row.

@@ -10,7 +10,7 @@ import {
   buildRetentionWindows,
   saveRetentionWindows,
 } from "@/lib/retention-windows"
-import { createPendingRetentionWindowMedia } from "@/lib/retention-window-media"
+import { createPendingRetentionWindowAudio } from "@/lib/retention-window-media"
 import { saveRetentionWindowTranscripts } from "@/lib/retention-window-transcripts"
 import { triggerRetentionWindowMediaExtraction } from "@/lib/retention-window-media-trigger"
 import { getSourceFileForVideo } from "@/lib/source-files/source-files"
@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
             savedVideo.id,
             buildRetentionWindows(retention, video.durationSeconds),
           )
-          await createPendingRetentionWindowMedia(
+          await createPendingRetentionWindowAudio(
             supabase,
             user.id,
             savedVideo.id,

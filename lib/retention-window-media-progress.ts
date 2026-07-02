@@ -1,11 +1,12 @@
 // Aggregates a video's "deep analysis" pipeline — transcoding the raw upload,
-// harvesting per-window snapshots/audio from it, then running AI analysis
-// over the harvested media (lib/retention-window-media-analysis.ts) — into a
-// small set of stage statuses the source-file card can poll and render as a
-// checklist. Transcript clipping isn't included as real progress: it runs
-// synchronously off the YouTube captions API while retention windows are
-// saved (see lib/retention-window-transcripts.ts), so by the time a source
-// file even exists to poll about, it has already settled.
+// scanning each window for scene cues, harvesting the resulting
+// snapshots/audio, then running AI analysis over the harvested media
+// (lib/retention-window-media-analysis.ts) — into a small set of stage
+// statuses the source-file card can poll and render as a checklist.
+// Transcript clipping isn't included as real progress: it runs synchronously
+// off the YouTube captions API while retention windows are saved (see
+// lib/retention-window-transcripts.ts), so by the time a source file even
+// exists to poll about, it has already settled.
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
@@ -15,6 +16,7 @@ export type DeepAnalysisStageStatus = "pending" | "in_progress" | "ready" | "fai
 
 export interface DeepAnalysisStages {
   transcoding: DeepAnalysisStageStatus
+  sceneCueScan: DeepAnalysisStageStatus
   snapshots: DeepAnalysisStageStatus
   snapshotAnalysis: DeepAnalysisStageStatus
   audio: DeepAnalysisStageStatus
@@ -115,7 +117,7 @@ export async function getDeepAnalysisProgress(
   analysedVideoId: string,
   sourceFile: SourceFile,
 ): Promise<DeepAnalysisProgress> {
-  const [snapshotsResult, audioResult] = await Promise.all([
+  const [snapshotsResult, audioResult, sceneCueScansResult] = await Promise.all([
     supabase
       .from("retention_window_snapshots")
       .select("status, analysis_status")
@@ -124,6 +126,11 @@ export async function getDeepAnalysisProgress(
     supabase
       .from("retention_window_audio")
       .select("status, analysis_status")
+      .eq("user_id", userId)
+      .eq("analysed_video_id", analysedVideoId),
+    supabase
+      .from("retention_window_scene_cue_scans")
+      .select("status")
       .eq("user_id", userId)
       .eq("analysed_video_id", analysedVideoId),
   ])
@@ -138,6 +145,11 @@ export async function getDeepAnalysisProgress(
       `Failed to load retention window audio statuses: ${audioResult.error.message}`,
     )
   }
+  if (sceneCueScansResult.error) {
+    throw new Error(
+      `Failed to load scene cue scan statuses: ${sceneCueScansResult.error.message}`,
+    )
+  }
 
   const snapshotRows = (snapshotsResult.data ?? []) as {
     status: string
@@ -147,19 +159,36 @@ export async function getDeepAnalysisProgress(
     status: string
     analysis_status: string
   }[]
+  const sceneCueScanRows = (sceneCueScansResult.data ?? []) as { status: string }[]
 
   const snapshotCounts = countByStatus(snapshotRows)
   const audioCounts = countByStatus(audioRows)
   const snapshotAnalysisCounts = countByAnalysisStatus(snapshotRows)
   const audioAnalysisCounts = countByAnalysisStatus(audioRows)
+  const sceneCueScanCounts = countByStatus(sceneCueScanRows)
 
+  const sceneCueScan = deriveMediaStageStatus(
+    sceneCueScanCounts.total,
+    sceneCueScanCounts.pending,
+    sceneCueScanCounts.failed,
+  )
+
+  // Snapshot rows don't exist until a window's scene-cue scan has actually
+  // produced them (their timestamps are derived from its detected cuts — see
+  // createRetentionWindowSnapshotsFromSceneCues) — so a snapshot count of
+  // zero only means "nothing to harvest" once every scan has settled. While
+  // scans are still in flight, report snapshots as in-progress instead of
+  // misreading "no rows yet" as "already done".
   const stages: DeepAnalysisStages = {
     transcoding: normalisationToStageStatus(sourceFile.normalisationStatus),
-    snapshots: deriveMediaStageStatus(
-      snapshotCounts.total,
-      snapshotCounts.pending,
-      snapshotCounts.failed,
-    ),
+    sceneCueScan,
+    snapshots: isStageSettled(sceneCueScan)
+      ? deriveMediaStageStatus(
+          snapshotCounts.total,
+          snapshotCounts.pending,
+          snapshotCounts.failed,
+        )
+      : "in_progress",
     snapshotAnalysis: deriveMediaStageStatus(
       snapshotAnalysisCounts.total,
       snapshotAnalysisCounts.pending,

@@ -39,7 +39,7 @@ function makeSourceFile(overrides: Partial<SourceFile> = {}): SourceFile {
 }
 
 // A minimal fake of the Supabase query builder that just serves canned rows
-// for the two "select status, analysis_status" reads this module issues.
+// for the three "select status[, analysis_status]" reads this module issues.
 function makeFakeSupabase(tables: Record<string, Record<string, unknown>[]>) {
   return {
     from(table: string) {
@@ -65,12 +65,70 @@ describe("getDeepAnalysisProgress", () => {
     )
 
     expect(progress.stages).toMatchObject({
+      sceneCueScan: "ready",
       snapshots: "ready",
       snapshotAnalysis: "ready",
       audio: "ready",
       audioAnalysis: "ready",
     })
     expect(progress.complete).toBe(true)
+  })
+
+  it("reports snapshots as in-progress while its scene-cue scan is still pending, even though no snapshot rows exist yet", async () => {
+    const supabase = makeFakeSupabase({
+      retention_window_scene_cue_scans: [{ status: "pending" }],
+    })
+    const progress = await getDeepAnalysisProgress(
+      supabase,
+      "user-1",
+      "av-1",
+      makeSourceFile(),
+    )
+
+    expect(progress.stages).toMatchObject({
+      sceneCueScan: "in_progress",
+      snapshots: "in_progress",
+    })
+    expect(progress.complete).toBe(false)
+  })
+
+  it("defers to the actual snapshot rows once every window's scene-cue scan has settled", async () => {
+    const supabase = makeFakeSupabase({
+      retention_window_scene_cue_scans: [{ status: "ready" }, { status: "ready" }],
+      retention_window_snapshots: [
+        { status: "ready", analysis_status: "pending" },
+      ],
+    })
+    const progress = await getDeepAnalysisProgress(
+      supabase,
+      "user-1",
+      "av-1",
+      makeSourceFile(),
+    )
+
+    expect(progress.stages).toMatchObject({
+      sceneCueScan: "ready",
+      snapshots: "ready",
+    })
+  })
+
+  it("reports a scene-cue scan stage failure when every window's scan failed", async () => {
+    const supabase = makeFakeSupabase({
+      retention_window_scene_cue_scans: [{ status: "failed" }],
+    })
+    const progress = await getDeepAnalysisProgress(
+      supabase,
+      "user-1",
+      "av-1",
+      makeSourceFile(),
+    )
+
+    expect(progress.stages).toMatchObject({
+      sceneCueScan: "failed",
+      // The scan settled (as a failure), so a genuinely empty snapshot set
+      // is read at face value rather than assumed still in flight.
+      snapshots: "ready",
+    })
   })
 
   it("shows the analysis stage in progress once extraction is ready but analysis hasn't run", async () => {
