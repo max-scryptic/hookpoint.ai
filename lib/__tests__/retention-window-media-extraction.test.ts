@@ -10,6 +10,7 @@ import {
 import type { SourceFile } from "@/lib/source-files/source-files"
 import type { StorageProvider } from "@/lib/storage"
 import type { VideoExtractor } from "@/lib/media/video-extraction"
+import type { OcrEngine } from "@/lib/media/ocr"
 
 function makeSourceFile(overrides: Partial<SourceFile> = {}): SourceFile {
   return {
@@ -175,6 +176,16 @@ function fakeSceneCueScanner(): SceneCueScanner & { scan: ReturnType<typeof vi.f
   }
 }
 
+function fakeOcrEngine(): OcrEngine & {
+  recognize: ReturnType<typeof vi.fn>
+  terminate: ReturnType<typeof vi.fn>
+} {
+  return {
+    recognize: vi.fn(async () => ({ text: null, confidence: 0 })),
+    terminate: vi.fn(async () => {}),
+  }
+}
+
 describe("extractPendingRetentionWindowMedia", () => {
   it("does nothing (and mints no signed URL) when nothing is pending", async () => {
     const { supabase } = makeFakeSupabase([], [])
@@ -183,10 +194,12 @@ describe("extractPendingRetentionWindowMedia", () => {
       extractThumbnail: vi.fn(),
       extractAudioSegment: vi.fn(),
     }
+    const createOcrEngineSpy = vi.fn(async () => fakeOcrEngine())
     const deps: RetentionWindowMediaExtractionDeps = {
       extractor,
       mediaStorage: fakeStorage(),
       sceneCueScanner: fakeSceneCueScanner(),
+      createOcrEngine: createOcrEngineSpy,
     }
 
     await extractPendingRetentionWindowMedia(
@@ -198,6 +211,9 @@ describe("extractPendingRetentionWindowMedia", () => {
 
     expect(storage.createSignedReadUrl).not.toHaveBeenCalled()
     expect(extractor.extractThumbnail).not.toHaveBeenCalled()
+    // No pending snapshots at all — never worth paying for a worker/model
+    // load that would go completely unused.
+    expect(createOcrEngineSpy).not.toHaveBeenCalled()
   })
 
   it("extracts a pre-existing pending snapshot and audio clip and marks them ready", async () => {
@@ -231,11 +247,14 @@ describe("extractPendingRetentionWindowMedia", () => {
       extractThumbnail: vi.fn(async () => Buffer.from("jpeg-bytes")),
       extractAudioSegment: vi.fn(async () => Buffer.from("aac-bytes")),
     }
+    const ocrEngine = fakeOcrEngine()
+    ocrEngine.recognize.mockResolvedValueOnce({ text: "SALE 50% OFF", confidence: 90 })
 
     await extractPendingRetentionWindowMedia(supabase, storage, makeSourceFile(), {
       extractor,
       mediaStorage,
       sceneCueScanner: fakeSceneCueScanner(),
+      createOcrEngine: async () => ocrEngine,
     })
 
     expect(storage.createSignedReadUrl).toHaveBeenCalledWith(
@@ -252,12 +271,19 @@ describe("extractPendingRetentionWindowMedia", () => {
       30,
     )
     expect(mediaStorage.putObject).toHaveBeenCalledTimes(2)
+    // One worker for the whole run, reused across snapshots and torn down
+    // once extraction finishes — not recreated per frame.
+    expect(ocrEngine.recognize).toHaveBeenCalledWith(Buffer.from("jpeg-bytes"))
+    expect(ocrEngine.terminate).toHaveBeenCalledTimes(1)
 
     expect(updates).toContainEqual(
       expect.objectContaining({
         table: "retention_window_snapshots",
         id: "snap-1",
-        payload: expect.objectContaining({ status: "ready" }),
+        payload: expect.objectContaining({
+          status: "ready",
+          ocr_text: "SALE 50% OFF",
+        }),
       }),
     )
     expect(updates).toContainEqual(
@@ -267,6 +293,45 @@ describe("extractPendingRetentionWindowMedia", () => {
         payload: expect.objectContaining({ status: "ready" }),
       }),
     )
+  })
+
+  it("treats an OCR failure as best-effort — the snapshot still succeeds with a null ocrText", async () => {
+    const { supabase, updates } = makeFakeSupabase(
+      [
+        {
+          id: "snap-1",
+          retention_window_id: "rw-1",
+          chunk_index: 0,
+          timestamp_seconds: 0,
+          storage_path: null,
+          status: "pending",
+          error: null,
+        },
+      ],
+      [],
+    )
+    const extractor: VideoExtractor = {
+      extractThumbnail: vi.fn(async () => Buffer.from("jpeg-bytes")),
+      extractAudioSegment: vi.fn(),
+    }
+    const ocrEngine = fakeOcrEngine()
+    ocrEngine.recognize.mockRejectedValueOnce(new Error("tesseract crashed"))
+
+    await extractPendingRetentionWindowMedia(supabase, fakeStorage(), makeSourceFile(), {
+      extractor,
+      mediaStorage: fakeStorage(),
+      sceneCueScanner: fakeSceneCueScanner(),
+      createOcrEngine: async () => ocrEngine,
+    })
+
+    expect(updates).toContainEqual(
+      expect.objectContaining({
+        table: "retention_window_snapshots",
+        id: "snap-1",
+        payload: expect.objectContaining({ status: "ready", ocr_text: null }),
+      }),
+    )
+    expect(ocrEngine.terminate).toHaveBeenCalledTimes(1)
   })
 
   it("records a failure on one row and still processes the rest", async () => {
@@ -305,7 +370,12 @@ describe("extractPendingRetentionWindowMedia", () => {
       supabase,
       fakeStorage(),
       makeSourceFile(),
-      { extractor, mediaStorage: fakeStorage(), sceneCueScanner: fakeSceneCueScanner() },
+      {
+        extractor,
+        mediaStorage: fakeStorage(),
+        sceneCueScanner: fakeSceneCueScanner(),
+        createOcrEngine: async () => fakeOcrEngine(),
+      },
     )
 
     expect(updates).toContainEqual(
@@ -357,6 +427,7 @@ describe("extractPendingRetentionWindowMedia", () => {
       extractor,
       mediaStorage: fakeStorage(),
       sceneCueScanner,
+      createOcrEngine: async () => fakeOcrEngine(),
     })
 
     expect(sceneCueScanner.scan).toHaveBeenCalledWith(
@@ -427,6 +498,7 @@ describe("extractPendingRetentionWindowMedia", () => {
       extractor,
       mediaStorage: fakeStorage(),
       sceneCueScanner,
+      createOcrEngine: async () => fakeOcrEngine(),
     })
 
     // No cue data to store — the scan itself never produced any.

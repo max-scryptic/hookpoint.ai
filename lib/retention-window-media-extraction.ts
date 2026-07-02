@@ -1,6 +1,9 @@
 // Runs the actual thumbnail/audio/scene-cue harvest for a video's pending
 // retention_window_snapshots/retention_window_audio/
 // retention_window_scene_cue_scans rows, once the source video is available.
+// Each harvested snapshot also gets deterministic (no LLM) OCR run on it
+// inline, right after extraction, using the JPEG bytes already in hand — see
+// lib/media/ocr.ts.
 // Triggered best-effort from whichever of the two async processes finishes
 // second (see lib/retention-window-media-trigger.ts): the retention analysis,
 // which computes the rows, or the source-file normalisation callback, which
@@ -37,6 +40,7 @@ import {
   scanVideoSceneCues,
   type SceneCueScanResult,
 } from "@/lib/media/scene-detection"
+import { createOcrEngine, type OcrEngine } from "@/lib/media/ocr"
 import {
   createRetentionWindowSnapshotsFromSceneCues,
   getPendingRetentionWindowAudio,
@@ -73,6 +77,11 @@ export interface RetentionWindowMediaExtractionDeps {
   extractor: VideoExtractor
   mediaStorage: StorageProvider
   sceneCueScanner: SceneCueScanner
+  // A factory, not a shared instance: a fresh OCR engine (and the WASM
+  // core/language-data load that comes with creating one) is created once
+  // per extraction run, only if snapshots are actually pending, and
+  // terminated at the end of that run.
+  createOcrEngine: () => Promise<OcrEngine>
 }
 
 export function defaultRetentionWindowMediaExtractionDeps(): RetentionWindowMediaExtractionDeps {
@@ -80,6 +89,7 @@ export function defaultRetentionWindowMediaExtractionDeps(): RetentionWindowMedi
     extractor: defaultVideoExtractor,
     mediaStorage: getRetentionWindowMediaStorageProvider(),
     sceneCueScanner: { scan: scanVideoSceneCues },
+    createOcrEngine,
   }
 }
 
@@ -221,42 +231,65 @@ export async function extractPendingRetentionWindowMedia(
         )
       : initialPendingSnapshots
 
-  for (const snapshot of pendingSnapshots) {
-    try {
-      const jpeg = await deps.extractor.extractThumbnail(
-        sourceUrl,
-        snapshot.timestampSeconds,
-      )
-      const path = buildRetentionSnapshotObjectPath({
-        userId: sourceFile.userId,
-        analysedVideoId: sourceFile.analysedVideoId,
-        retentionWindowId: snapshot.retentionWindowId,
-        chunkIndex: snapshot.chunkIndex,
-      })
-      await deps.mediaStorage.putObject(path, jpeg, {
-        contentType: "image/jpeg",
-      })
-      await updateRetentionWindowSnapshotStatus(
-        admin,
-        sourceFile.userId,
-        snapshot.id,
-        { status: "ready", storagePath: path },
-      )
-    } catch (error) {
-      console.error("Failed to extract retention window snapshot", error)
-      await updateRetentionWindowSnapshotStatus(
-        admin,
-        sourceFile.userId,
-        snapshot.id,
-        {
-          status: "failed",
-          error:
-            error instanceof Error
-              ? error.message
-              : "Failed to extract thumbnail",
-        },
-      ).catch(() => {})
+  // One OCR engine (the WASM core + trained language data load) for every
+  // snapshot in this run, not one per snapshot — recreating it per frame
+  // would pay that load cost repeatedly for no benefit.
+  const ocrEngine =
+    pendingSnapshots.length > 0 ? await deps.createOcrEngine() : null
+
+  try {
+    for (const snapshot of pendingSnapshots) {
+      try {
+        const jpeg = await deps.extractor.extractThumbnail(
+          sourceUrl,
+          snapshot.timestampSeconds,
+        )
+        const path = buildRetentionSnapshotObjectPath({
+          userId: sourceFile.userId,
+          analysedVideoId: sourceFile.analysedVideoId,
+          retentionWindowId: snapshot.retentionWindowId,
+          chunkIndex: snapshot.chunkIndex,
+        })
+        await deps.mediaStorage.putObject(path, jpeg, {
+          contentType: "image/jpeg",
+        })
+        // Deterministic OCR is best-effort: a recognition failure shouldn't
+        // fail the whole row, since the JPEG itself extracted fine — just
+        // leave ocrText null, the same tolerance ffmpeg's own volumedetect/
+        // silencedetect measurements already get on the audio side.
+        const ocrText = ocrEngine
+          ? await ocrEngine
+              .recognize(jpeg)
+              .then((result) => result.text)
+              .catch((error) => {
+                console.error("Failed to OCR retention window snapshot", error)
+                return null
+              })
+          : null
+        await updateRetentionWindowSnapshotStatus(
+          admin,
+          sourceFile.userId,
+          snapshot.id,
+          { status: "ready", storagePath: path, ocrText },
+        )
+      } catch (error) {
+        console.error("Failed to extract retention window snapshot", error)
+        await updateRetentionWindowSnapshotStatus(
+          admin,
+          sourceFile.userId,
+          snapshot.id,
+          {
+            status: "failed",
+            error:
+              error instanceof Error
+                ? error.message
+                : "Failed to extract thumbnail",
+          },
+        ).catch(() => {})
+      }
     }
+  } finally {
+    await ocrEngine?.terminate().catch(() => {})
   }
 
   for (const audio of pendingAudio) {

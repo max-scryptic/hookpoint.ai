@@ -58,7 +58,6 @@ const SNAPSHOT_RESULT: SnapshotAnalysis = {
   motion: "low",
   people_count: 1,
   camera_movement: "static",
-  on_screen_text: null,
   notable_event: null,
   description: "A person talking to camera.",
 }
@@ -157,6 +156,7 @@ function snapshotRow(overrides: Record<string, unknown> = {}) {
     storage_path: "user-1/av-1/rw-1/snapshot-0.jpg",
     status: "ready",
     error: null,
+    ocr_text: null,
     analysis_status: "pending",
     analysis: null,
     analysis_error: null,
@@ -207,10 +207,10 @@ describe("analyzeRetentionWindowMedia", () => {
     expect(analyzer.analyzeAudio).not.toHaveBeenCalled()
   })
 
-  it("batches a window's chunks into one call and marks them ready", async () => {
+  it("batches a window's chunks into one call, with each chunk's OCR text, and marks them ready", async () => {
     const { supabase, updates } = makeFakeSupabase({
       retention_window_snapshots: [
-        snapshotRow({ id: "snap-1", chunk_index: 0 }),
+        snapshotRow({ id: "snap-1", chunk_index: 0, ocr_text: "SALE 50% OFF" }),
         snapshotRow({
           id: "snap-2",
           chunk_index: 1,
@@ -232,10 +232,12 @@ describe("analyzeRetentionWindowMedia", () => {
       {
         chunkIndex: 0,
         imageUrl: "https://signed.example/user-1/av-1/rw-1/snapshot-0.jpg",
+        ocrText: "SALE 50% OFF",
       },
       {
         chunkIndex: 1,
         imageUrl: "https://signed.example/user-1/av-1/rw-1/snapshot-1.jpg",
+        ocrText: null,
       },
     ])
 

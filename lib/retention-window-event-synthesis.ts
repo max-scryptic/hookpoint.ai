@@ -63,6 +63,10 @@ export interface WindowEvidence {
   visual: {
     chunkIndex: number
     timestampSeconds: number
+    // Deterministic OCR text for this exact frame (lib/media/ocr.ts), not the
+    // vision model's own judgment — on_screen_text_change events can compare
+    // this across chunks without needing the model to have transcribed it.
+    ocrText: string | null
     analysis: SnapshotAnalysis
   }[]
   audio: AudioAnalysis | null
@@ -165,6 +169,7 @@ export async function synthesizeRetentionWindowEvents(
         .map((s) => ({
           chunkIndex: s.chunkIndex,
           timestampSeconds: s.timestampSeconds,
+          ocrText: s.ocrText,
           analysis: s.analysis as SnapshotAnalysis,
         }))
 
@@ -267,7 +272,7 @@ const EVENT_SYNTHESIS_SCHEMA = {
 } as const
 
 const EVENT_SYNTHESIS_INSTRUCTIONS = [
-  "You are given every piece of already-analysed evidence for one window of a YouTube video where audience retention rose or fell: the window's retention delta, its transcript, deterministic editing metrics (cut count/rate, freeze/black-frame coverage), a chronological list of already-described video frames, and an audio analysis of the clip.",
+  "You are given every piece of already-analysed evidence for one window of a YouTube video where audience retention rose or fell: the window's retention delta, its transcript, deterministic editing metrics (cut count/rate, freeze/black-frame coverage), a chronological list of already-described video frames (each with its own deterministic OCR text, ocrText — ground truth, not a guess), and an audio analysis of the clip.",
   "Identify the distinct, timestamped moments within the window that plausibly explain the retention change — a hard cut, a topic change in the transcript, a shift in pacing or energy, on-screen text or a graphic appearing/disappearing, a freeze or dead air, and so on. A single window commonly has more than one such moment.",
   "For each event, give: event_type (the best-fitting category), timestamp_seconds (must fall within the window's fromSeconds/toSeconds), a one- or two-sentence narrative tying the evidence to the retention change, and primary_evidence (which evidence source most explains it — use 'combined' only when multiple sources genuinely converge on the same moment).",
   "Only surface events actually supported by the evidence given — never invent frame content, transcript text, or audio characteristics that weren't provided. If nothing in the evidence plausibly explains the retention change, return an empty events array rather than guessing.",

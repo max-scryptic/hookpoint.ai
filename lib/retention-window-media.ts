@@ -36,6 +36,10 @@ export interface RetentionWindowSnapshot {
   storagePath: string | null
   status: RetentionWindowMediaStatus
   error: string | null
+  // Deterministic (no LLM) on-screen text recognized via tesseract.js at
+  // extraction time (see lib/media/ocr.ts) — null if recognition failed or
+  // the frame had no text confidently readable.
+  ocrText: string | null
   analysisStatus: RetentionWindowAnalysisStatus
   analysis: unknown
   analysisError: string | null
@@ -62,6 +66,7 @@ interface SnapshotRow {
   storage_path: string | null
   status: RetentionWindowMediaStatus
   error: string | null
+  ocr_text: string | null
   analysis_status: RetentionWindowAnalysisStatus
   analysis: unknown
   analysis_error: string | null
@@ -81,7 +86,7 @@ interface AudioRow {
 }
 
 const SNAPSHOT_COLUMNS =
-  "id, retention_window_id, chunk_index, timestamp_seconds, storage_path, status, error, analysis_status, analysis, analysis_error"
+  "id, retention_window_id, chunk_index, timestamp_seconds, storage_path, status, error, ocr_text, analysis_status, analysis, analysis_error"
 const AUDIO_COLUMNS =
   "id, retention_window_id, from_seconds, to_seconds, storage_path, status, error, analysis_status, analysis, analysis_error"
 
@@ -94,6 +99,7 @@ function mapSnapshotRow(row: SnapshotRow): RetentionWindowSnapshot {
     storagePath: row.storage_path,
     status: row.status,
     error: row.error,
+    ocrText: row.ocr_text,
     analysisStatus: row.analysis_status,
     analysis: row.analysis,
     analysisError: row.analysis_error,
@@ -441,19 +447,25 @@ export async function hasPendingRetentionWindowMedia(
   return (count ?? 0) > 0
 }
 
-// Marks a single snapshot row 'ready' with its storage path, or 'failed' with
-// an error message. Scoped to its owner.
+// Marks a single snapshot row 'ready' with its storage path and recognized
+// OCR text (null if recognition found nothing confident), or 'failed' with an
+// error message. Scoped to its owner.
 export async function updateRetentionWindowSnapshotStatus(
   supabase: SupabaseClient,
   userId: string,
   id: string,
   outcome:
-    | { status: "ready"; storagePath: string }
+    | { status: "ready"; storagePath: string; ocrText: string | null }
     | { status: "failed"; error: string },
 ): Promise<void> {
   const payload =
     outcome.status === "ready"
-      ? { status: "ready", storage_path: outcome.storagePath, error: null }
+      ? {
+          status: "ready",
+          storage_path: outcome.storagePath,
+          ocr_text: outcome.ocrText,
+          error: null,
+        }
       : { status: "failed", error: outcome.error }
 
   const { error } = await supabase

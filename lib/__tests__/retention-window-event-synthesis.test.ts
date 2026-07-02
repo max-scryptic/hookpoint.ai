@@ -35,6 +35,7 @@ function snapshotRow(overrides: Record<string, unknown> = {}) {
     storage_path: "user-1/av-1/rw-1/snapshot-0.jpg",
     status: "ready",
     error: null,
+    ocr_text: null,
     analysis_status: "ready",
     analysis: { scene: "talking_head", description: "a person talking" },
     analysis_error: null,
@@ -168,7 +169,12 @@ describe("synthesizeRetentionWindowEvents", () => {
       ],
       retention_windows: [WINDOW_ROW],
       retention_window_snapshots: [
-        snapshotRow({ id: "snap-1", chunk_index: 0, timestamp_seconds: 150 }),
+        snapshotRow({
+          id: "snap-1",
+          chunk_index: 0,
+          timestamp_seconds: 150,
+          ocr_text: "SALE 50% OFF",
+        }),
         snapshotRow({ id: "snap-2", chunk_index: 1, timestamp_seconds: 158 }),
       ],
       retention_window_audio: [audioRow()],
@@ -211,6 +217,8 @@ describe("synthesizeRetentionWindowEvents", () => {
     expect(evidence.transcript).toBe("we made five thousand dollars last month")
     expect(evidence.editing.cutCount).toBe(1)
     expect(evidence.visual).toHaveLength(2)
+    expect(evidence.visual[0].ocrText).toBe("SALE 50% OFF")
+    expect(evidence.visual[1].ocrText).toBeNull()
     expect(evidence.audio).toMatchObject({ tone: "excited", speech_rate: 148 })
 
     expect(deletes).toContainEqual({ table: "retention_window_events" })
