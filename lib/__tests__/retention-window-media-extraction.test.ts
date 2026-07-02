@@ -133,6 +133,7 @@ function makeFakeSupabase(
         },
         gte: () => builder,
         order: () => builder,
+        or: () => builder,
         then: (resolve: (v: unknown) => unknown) => {
           if (builder._payload) {
             updates.push({
@@ -400,7 +401,7 @@ describe("extractPendingRetentionWindowMedia", () => {
     ).toHaveLength(2)
   })
 
-  it("marks a window's scene cue scan failed without creating any snapshots for it", async () => {
+  it("still derives fallback-grid snapshots when a window's scene-cue scan fails, but marks the scan itself failed", async () => {
     const { supabase, updates, inserts } = makeFakeSupabase(
       [],
       [],
@@ -409,7 +410,7 @@ describe("extractPendingRetentionWindowMedia", () => {
           id: "scan-1",
           retention_window_id: "rw-1",
           from_seconds: 0,
-          to_seconds: 30,
+          to_seconds: 10,
           status: "pending",
           error: null,
         },
@@ -417,14 +418,28 @@ describe("extractPendingRetentionWindowMedia", () => {
     )
     const sceneCueScanner = fakeSceneCueScanner()
     sceneCueScanner.scan.mockRejectedValueOnce(new Error("ffmpeg failed"))
+    const extractor: VideoExtractor = {
+      extractThumbnail: vi.fn(async () => Buffer.from("jpeg-bytes")),
+      extractAudioSegment: vi.fn(),
+    }
 
     await extractPendingRetentionWindowMedia(supabase, fakeStorage(), makeSourceFile(), {
-      extractor: { extractThumbnail: vi.fn(), extractAudioSegment: vi.fn() },
+      extractor,
       mediaStorage: fakeStorage(),
       sceneCueScanner,
     })
 
-    expect(inserts).toHaveLength(0)
+    // No cue data to store — the scan itself never produced any.
+    expect(inserts.filter((i) => i.table === "video_scene_cues")).toHaveLength(0)
+
+    // [0,10] with no cut data falls back to the fixed 5s grid: 0, 5, 10.
+    for (const timestamp of [0, 5, 10]) {
+      expect(extractor.extractThumbnail).toHaveBeenCalledWith(
+        "https://signed.example/video.mp4",
+        timestamp,
+      )
+    }
+
     expect(updates).toContainEqual(
       expect.objectContaining({
         table: "retention_window_scene_cue_scans",
@@ -435,5 +450,12 @@ describe("extractPendingRetentionWindowMedia", () => {
         }),
       }),
     )
+    expect(
+      updates.filter(
+        (update) =>
+          update.table === "retention_window_snapshots" &&
+          (update.payload as Record<string, unknown>).status === "ready",
+      ),
+    ).toHaveLength(3)
   })
 })

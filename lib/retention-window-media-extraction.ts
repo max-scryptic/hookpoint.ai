@@ -21,7 +21,11 @@
 // buildSnapshotTimestampsFromSceneCues in lib/retention-window-media.ts) —
 // flanking frames just before/after each real transition, instead of a blind
 // fixed-interval grid — so those rows can't be created until the scan for
-// that window has actually run.
+// that window has actually run. A scan that fails still creates snapshots
+// (via the same fixed-grid fallback a zero-cut window gets), so a window is
+// never left with no visual evidence just because ffmpeg errored once; see
+// getPendingRetentionWindowSceneCueScans in lib/video-scene-cues.ts for how a
+// failed scan itself gets retried.
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
@@ -136,8 +140,17 @@ export async function extractPendingRetentionWindowMedia(
   )
 
   for (const scan of pendingSceneCueScans) {
+    // Snapshots still get derived and created below even when the scan
+    // itself fails — from these empty cues, which is exactly the fallback a
+    // window with genuinely zero detected cuts already gets (see
+    // buildSnapshotTimestampsFromSceneCues). Without this, a single
+    // transient ffmpeg failure (a network hiccup, a bad seek) would leave a
+    // window with no visual evidence at all until the next full re-analyze.
+    let cues: SceneCueScanResult = { cuts: [], freezes: [], blacks: [] }
+    let scanError: string | null = null
+
     try {
-      const result = await deps.sceneCueScanner.scan(
+      cues = await deps.sceneCueScanner.scan(
         sourceUrl,
         scan.fromSeconds,
         scan.toSeconds,
@@ -147,8 +160,15 @@ export async function extractPendingRetentionWindowMedia(
         sourceFile.userId,
         sourceFile.analysedVideoId,
         scan.retentionWindowId,
-        result,
+        cues,
       )
+    } catch (error) {
+      console.error("Failed to scan retention window scene cues", error)
+      scanError =
+        error instanceof Error ? error.message : "Failed to scan scene cues"
+    }
+
+    try {
       await createRetentionWindowSnapshotsFromSceneCues(
         admin,
         sourceFile.userId,
@@ -156,16 +176,23 @@ export async function extractPendingRetentionWindowMedia(
         scan.retentionWindowId,
         scan.fromSeconds,
         scan.toSeconds,
-        result,
+        cues,
       )
+      // The scan's own status still faithfully reports failure when the
+      // ffmpeg call itself errored — snapshots existing doesn't mean cut
+      // detection actually ran for this window, and a failed scan is what
+      // makes it eligible for retry (see getPendingRetentionWindowSceneCueScans).
       await updateRetentionWindowSceneCueScanStatus(
         admin,
         sourceFile.userId,
         scan.id,
-        { status: "ready" },
+        scanError ? { status: "failed", error: scanError } : { status: "ready" },
       )
     } catch (error) {
-      console.error("Failed to scan retention window scene cues", error)
+      console.error(
+        "Failed to save retention window snapshots derived from scene cues",
+        error,
+      )
       await updateRetentionWindowSceneCueScanStatus(
         admin,
         sourceFile.userId,
@@ -173,7 +200,10 @@ export async function extractPendingRetentionWindowMedia(
         {
           status: "failed",
           error:
-            error instanceof Error ? error.message : "Failed to scan scene cues",
+            scanError ??
+            (error instanceof Error
+              ? error.message
+              : "Failed to save snapshots"),
         },
       ).catch(() => {})
     }

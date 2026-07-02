@@ -100,6 +100,7 @@ function makeFakeSupabase(seedRows: Record<string, unknown>[] = []) {
     []
   const deletes: { table: string; retentionWindowId?: string; ids?: string[] }[] =
     []
+  const orCalls: { table: string; expr: string }[] = []
 
   const supabase = {
     from(table: string) {
@@ -124,6 +125,10 @@ function makeFakeSupabase(seedRows: Record<string, unknown>[] = []) {
           return builder
         },
         order: () => builder,
+        or: (expr: string) => {
+          orCalls.push({ table, expr })
+          return builder
+        },
         eq: (column: string, value: string) => {
           if (column === "id") pendingId = value
           if (column === "retention_window_id") pendingWindowId = value
@@ -158,7 +163,7 @@ function makeFakeSupabase(seedRows: Record<string, unknown>[] = []) {
     },
   } as unknown as SupabaseClient
 
-  return { supabase, upserts, inserts, updates, deletes }
+  return { supabase, upserts, inserts, updates, deletes, orCalls }
 }
 
 function makeWindow(
@@ -247,6 +252,19 @@ describe("getPendingRetentionWindowSceneCueScans", () => {
         error: null,
       },
     ])
+  })
+
+  it("also retries scans that failed a while ago, not just ones still pending", async () => {
+    const { supabase, orCalls } = makeFakeSupabase([])
+
+    await getPendingRetentionWindowSceneCueScans(supabase, "user-1", "av-1")
+
+    const call = orCalls.find(
+      (c) => c.table === "retention_window_scene_cue_scans",
+    )
+    expect(call?.expr).toContain("status.eq.pending")
+    expect(call?.expr).toContain("status.eq.failed")
+    expect(call?.expr).toContain("updated_at.lt.")
   })
 })
 

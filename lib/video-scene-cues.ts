@@ -110,20 +110,32 @@ export async function createPendingRetentionWindowSceneCueScans(
   }
 }
 
-// Loads every pending scene-cue scan for a video. No claim/processing state:
-// unlike the LLM analysis calls, a rare double-run (two triggers picking up
-// the same pending row) just repeats a cheap ffmpeg pass, not a paid one.
+// A failed scan older than this is retried automatically, rather than
+// staying 'failed' until the next full re-analyze resets it back to
+// 'pending' — a transient ffmpeg error (a network hiccup, a bad seek)
+// shouldn't permanently strand a window without cut data. Bounded rather
+// than immediate so a source that's genuinely broken (e.g. an unreachable
+// signed URL) doesn't get re-attempted by every trigger that fires for the
+// video in the meantime.
+const SCAN_RETRY_STALE_MS = 10 * 60 * 1000
+
+// Loads every scene-cue scan ready to (re)run for a video: still 'pending',
+// or 'failed' long enough ago to retry. No claim/processing state: unlike
+// the LLM analysis calls, a rare double-run (two triggers picking up the
+// same row) just repeats a cheap ffmpeg pass, not a paid one.
 export async function getPendingRetentionWindowSceneCueScans(
   supabase: SupabaseClient,
   userId: string,
   analysedVideoId: string,
 ): Promise<RetentionWindowSceneCueScan[]> {
+  const staleBefore = new Date(Date.now() - SCAN_RETRY_STALE_MS).toISOString()
+
   const { data, error } = await supabase
     .from("retention_window_scene_cue_scans")
     .select(SCAN_COLUMNS)
     .eq("user_id", userId)
     .eq("analysed_video_id", analysedVideoId)
-    .eq("status", "pending")
+    .or(`status.eq.pending,and(status.eq.failed,updated_at.lt.${staleBefore})`)
     .order("retention_window_id", { ascending: true })
 
   if (error) {
