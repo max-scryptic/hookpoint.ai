@@ -149,8 +149,8 @@ export function RetentionChart({
 
   const insightTone = {
     hook: {
-      band: "#ec4899",
-      badge: "bg-pink-100 text-pink-700 dark:bg-pink-500/15 dark:text-pink-300",
+      band: "#facc15",
+      badge: "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-300",
       name: "Hook",
     },
     drop: {
