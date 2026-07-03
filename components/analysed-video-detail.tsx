@@ -505,7 +505,7 @@ export function AnalysedVideoDetail({
       <Tabs defaultValue="hook">
         <TabsList>
           <TabsTrigger value="hook">
-            <GaugeIcon className="text-pink-600 dark:text-pink-400" />
+            <GaugeIcon className="text-yellow-500 dark:text-yellow-400" />
             The Hook
           </TabsTrigger>
           <TabsTrigger value="drop-offs">
