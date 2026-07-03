@@ -43,7 +43,7 @@ describe("saveAnalysedVideo", () => {
       {
         startSeconds: 0,
         endSeconds: 2,
-        text: "we made ***** money",
+        text: "we made **** money",
       },
     ])
   })
