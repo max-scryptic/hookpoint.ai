@@ -13,6 +13,12 @@ import {
   type RetentionChartInsight,
 } from "@/components/retention-chart"
 import { SourceVideoThumbnail } from "@/components/source-video-thumbnail"
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs"
 import type { PacingAnalysis } from "@/lib/pacing-analysis"
 import type { RetentionWindow } from "@/lib/retention-windows"
 import {
@@ -43,75 +49,71 @@ function RetentionWindows({
   windows: RetentionWindow[]
   transcript: TranscriptCue[]
 }) {
-  if (windows.length === 0) return null
+  if (windows.length === 0) {
+    return (
+      <div className="rounded-xl border bg-muted/30 p-6 text-sm text-muted-foreground">
+        No hook windows are available for this video.
+      </div>
+    )
+  }
 
   return (
-    <section className="flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <GaugeIcon className="size-4 text-muted-foreground" />
-        <h2 className="text-sm font-medium">The Hook</h2>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        {windows.map((window) => {
-          const said = transcriptForSegment(
-            transcript,
-            window.fromSeconds,
-            window.toSeconds,
-          )
-          const endPercentage = Math.round((window.endWatchRatio ?? 0) * 100)
-          const lostPercentage = Math.max(
-            0,
-            Math.round((window.startWatchRatio ?? 0) * 100) - endPercentage,
-          )
-          return (
-            <div
-              key={window.windowKey ?? window.windowIndex}
-              className="rounded-xl border bg-card p-4"
-            >
-              <div className="flex items-baseline justify-between gap-2">
-                <h3 className="text-sm font-medium">{window.label}</h3>
-                <span className="font-mono text-xs text-muted-foreground">
-                  {formatTimestamp(window.fromSeconds)} –{" "}
-                  {formatTimestamp(window.toSeconds)}
-                </span>
-              </div>
-
-              {window.outOfRange ? (
-                <p className="mt-3 text-sm text-muted-foreground">
-                  This video is too short to reach this window.
-                </p>
-              ) : (
-                <>
-                  <div className="mt-3 flex flex-wrap items-start gap-x-6 gap-y-4">
-                    <Metric
-                      label="Viewers lost"
-                      value={`${lostPercentage}%`}
-                    />
-                    <Metric
-                      label="Still watching at end"
-                      value={`${endPercentage}%`}
-                    />
-                    {window.relativePerformance != null && (
-                      <Metric
-                        label="vs. similar videos"
-                        value={`${Math.round(window.relativePerformance * 100)}%`}
-                      />
-                    )}
-                  </div>
-
-                  {said && (
-                    <p className="mt-3 text-sm text-muted-foreground">
-                      “{said.length > 240 ? `${said.slice(0, 240)}…` : said}”
-                    </p>
-                  )}
-                </>
-              )}
+    <div className="grid gap-3 sm:grid-cols-2">
+      {windows.map((window) => {
+        const said = transcriptForSegment(
+          transcript,
+          window.fromSeconds,
+          window.toSeconds,
+        )
+        const endPercentage = Math.round((window.endWatchRatio ?? 0) * 100)
+        const lostPercentage = Math.max(
+          0,
+          Math.round((window.startWatchRatio ?? 0) * 100) - endPercentage,
+        )
+        return (
+          <div
+            key={window.windowKey ?? window.windowIndex}
+            className="rounded-xl border bg-card p-4"
+          >
+            <div className="flex items-baseline justify-between gap-2">
+              <h3 className="text-sm font-medium">{window.label}</h3>
+              <span className="font-mono text-xs text-muted-foreground">
+                {formatTimestamp(window.fromSeconds)} –{" "}
+                {formatTimestamp(window.toSeconds)}
+              </span>
             </div>
-          )
-        })}
-      </div>
-    </section>
+
+            {window.outOfRange ? (
+              <p className="mt-3 text-sm text-muted-foreground">
+                This video is too short to reach this window.
+              </p>
+            ) : (
+              <>
+                <div className="mt-3 flex flex-wrap items-start gap-x-6 gap-y-4">
+                  <Metric label="Viewers lost" value={`${lostPercentage}%`} />
+                  <Metric
+                    label="Still watching at end"
+                    value={`${endPercentage}%`}
+                  />
+                  {window.relativePerformance != null && (
+                    <Metric
+                      label="vs. similar videos"
+                      value={`${Math.round(window.relativePerformance * 100)}%`}
+                    />
+                  )}
+                </div>
+
+                {said && (
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    “{said.length > 240 ? `${said.slice(0, 240)}…` : said}”
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        )
+      })}
+    </div>
   )
 }
 
@@ -132,12 +134,7 @@ function PacingAnalysisSection({
   hasTranscript: boolean
 }) {
   return (
-    <section className="flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <GaugeIcon className="size-4 text-violet-600 dark:text-violet-400" />
-        <h2 className="text-sm font-medium">Pacing analysis</h2>
-      </div>
-
+    <>
       {!analysis ? (
         <div className="rounded-xl border bg-muted/30 p-6 text-sm text-muted-foreground">
           {hasTranscript
@@ -178,7 +175,7 @@ function PacingAnalysisSection({
           ))}
         </ul>
       )}
-    </section>
+    </>
   )
 }
 
@@ -505,30 +502,51 @@ export function AnalysedVideoDetail({
         </section>
       </div>
 
-      <RetentionWindows windows={hookWindows} transcript={transcript} />
+      <Tabs defaultValue="hook">
+        <TabsList>
+          <TabsTrigger value="hook">
+            <GaugeIcon className="text-muted-foreground" />
+            The Hook
+          </TabsTrigger>
+          <TabsTrigger value="drop-offs">
+            <TrendingDownIcon className="text-destructive" />
+            Retention Drop Offs
+          </TabsTrigger>
+          <TabsTrigger value="gains">
+            <TrendingUpIcon className="text-emerald-600 dark:text-emerald-400" />
+            Retention Gains
+          </TabsTrigger>
+          <TabsTrigger value="pacing">
+            <GaugeIcon className="text-violet-600 dark:text-violet-400" />
+            Pacing Analysis
+          </TabsTrigger>
+        </TabsList>
 
-      <section className="flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <TrendingDownIcon className="size-4 text-destructive" />
-          <h2 className="text-sm font-medium">Biggest drop-offs</h2>
-        </div>
-        <DropList drops={drops} transcript={transcript} />
-      </section>
+        <TabsContent value="hook">
+          <RetentionWindows windows={hookWindows} transcript={transcript} />
+        </TabsContent>
 
-      {gains.length > 0 && (
-        <section className="flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <TrendingUpIcon className="size-4 text-emerald-600 dark:text-emerald-400" />
-            <h2 className="text-sm font-medium">Biggest retention gains</h2>
-          </div>
-          <GainList gains={gains} transcript={transcript} />
-        </section>
-      )}
+        <TabsContent value="drop-offs">
+          <DropList drops={drops} transcript={transcript} />
+        </TabsContent>
 
-      <PacingAnalysisSection
-        analysis={pacingAnalysis}
-        hasTranscript={transcript.length > 0}
-      />
+        <TabsContent value="gains">
+          {gains.length === 0 ? (
+            <div className="rounded-xl border bg-muted/30 p-6 text-sm text-muted-foreground">
+              No notable retention gains stood out for this video.
+            </div>
+          ) : (
+            <GainList gains={gains} transcript={transcript} />
+          )}
+        </TabsContent>
+
+        <TabsContent value="pacing">
+          <PacingAnalysisSection
+            analysis={pacingAnalysis}
+            hasTranscript={transcript.length > 0}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
