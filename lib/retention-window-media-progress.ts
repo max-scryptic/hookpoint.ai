@@ -4,10 +4,11 @@
 // (lib/retention-window-media-analysis.ts), then synthesizing cross-modal
 // events from that analysis (lib/retention-window-event-synthesis.ts) — into
 // a small set of stage statuses the source-file card can poll and render as
-// a checklist. Transcript clipping isn't included as real progress: it runs
+// a checklist. Transcript clipping isn't included here: it runs
 // synchronously off the YouTube captions API while retention windows are
 // saved (see lib/retention-window-transcripts.ts), so by the time a source
-// file even exists to poll about, it has already settled.
+// file even exists to poll about, it has already settled — there's nothing
+// left to report progress on.
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
@@ -24,7 +25,6 @@ export interface DeepAnalysisStages {
   audio: DeepAnalysisStageStatus
   audioAnalysis: DeepAnalysisStageStatus
   eventSynthesis: DeepAnalysisStageStatus
-  transcript: DeepAnalysisStageStatus
 }
 
 export interface DeepAnalysisProgress {
@@ -261,7 +261,6 @@ export async function getDeepAnalysisProgress(
       eventSynthesisCounts.pending,
       eventSynthesisCounts.failed,
     ),
-    transcript: "ready",
   }
 
   return {

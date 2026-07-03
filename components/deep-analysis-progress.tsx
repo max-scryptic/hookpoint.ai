@@ -23,7 +23,6 @@ const STAGE_LABELS: {
   { key: "audio", label: "Fetching audio" },
   { key: "audioAnalysis", label: "Analyzing audio" },
   { key: "eventSynthesis", label: "Synthesizing retention events" },
-  { key: "transcript", label: "Fetching transcript" },
 ]
 
 // Polls /api/videos/:videoId/analysis-progress while a raw upload's
