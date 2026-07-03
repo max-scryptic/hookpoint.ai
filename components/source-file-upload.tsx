@@ -6,6 +6,7 @@ import {
   CheckCircle2Icon,
   FileVideoIcon,
   Loader2Icon,
+  RefreshCwIcon,
   TrashIcon,
   UploadIcon,
   XCircleIcon,
@@ -299,6 +300,13 @@ export function SourceFileUpload({
     initialSourceFile,
   )
   const [client, setClient] = useState<ClientState>({ phase: "idle" })
+  const [retryState, setRetryState] = useState<{
+    busy: boolean
+    error: string | null
+  }>({ busy: false, error: null })
+  // Bumped on every successful retry to remount DeepAnalysisProgress, which
+  // otherwise stops polling for good once it's seen every stage settle.
+  const [analysisAttempt, setAnalysisAttempt] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Whether a stored record is in a settled (non-in-flight) state.
@@ -532,6 +540,36 @@ export function SourceFileUpload({
     }
   }
 
+  // Resets the video's deep analysis (scene cues, snapshots, audio and their
+  // AI analysis, synthesized events) and re-kicks the pipeline against the
+  // source file already on hand — the file itself and the light analysis
+  // (retention curve, transcript, pacing) are untouched.
+  async function onRetryDeepAnalysis() {
+    setRetryState({ busy: true, error: null })
+    try {
+      const res = await fetch(`/api/videos/${videoId}/retry-deep-analysis`, {
+        method: "POST",
+      })
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as {
+          message?: string
+        }
+        setRetryState({
+          busy: false,
+          error: data.message ?? "Could not restart deep analysis.",
+        })
+        return
+      }
+      setRetryState({ busy: false, error: null })
+      setAnalysisAttempt((attempt) => attempt + 1)
+    } catch {
+      setRetryState({
+        busy: false,
+        error: "Could not restart deep analysis.",
+      })
+    }
+  }
+
   function triggerPicker() {
     inputRef.current?.click()
   }
@@ -567,6 +605,9 @@ export function SourceFileUpload({
           onChooseAnother={chooseAnotherFile}
           videoTitle={videoTitle}
           youtubeDurationSeconds={youtubeDurationSeconds}
+          onRetryDeepAnalysis={onRetryDeepAnalysis}
+          retryState={retryState}
+          analysisAttempt={analysisAttempt}
         />
       </div>
     </section>
@@ -584,6 +625,9 @@ function Body({
   onChooseAnother,
   videoTitle,
   youtubeDurationSeconds,
+  onRetryDeepAnalysis,
+  retryState,
+  analysisAttempt,
 }: {
   videoId: string
   sourceFile: SerialisedSourceFile | null
@@ -595,6 +639,9 @@ function Body({
   onChooseAnother: () => void
   videoTitle: string
   youtubeDurationSeconds: number
+  onRetryDeepAnalysis: () => void
+  retryState: { busy: boolean; error: string | null }
+  analysisAttempt: number
 }) {
   // In-flight states take precedence over the stored record's state.
   if (client.phase === "preparing") {
@@ -763,6 +810,18 @@ function Body({
         <Meta sourceFile={sourceFile} />
 
         <div className="flex gap-2 sm:ml-auto">
+          <Button
+            variant="outline"
+            onClick={onRetryDeepAnalysis}
+            disabled={isBusy || retryState.busy}
+          >
+            {retryState.busy ? (
+              <Loader2Icon className="size-4 animate-spin" />
+            ) : (
+              <RefreshCwIcon className="size-4" />
+            )}
+            Retry deep analysis
+          </Button>
           <Button variant="outline" onClick={onPick} disabled={isBusy}>
             <UploadIcon className="size-4" />
             Replace
@@ -774,7 +833,11 @@ function Body({
         </div>
       </div>
 
-      <DeepAnalysisProgress videoId={videoId} />
+      {retryState.error && (
+        <p className="mt-2 text-sm text-destructive">{retryState.error}</p>
+      )}
+
+      <DeepAnalysisProgress key={analysisAttempt} videoId={videoId} />
     </div>
   )
 }
