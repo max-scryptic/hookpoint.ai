@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   analyzeRetentionWindowMedia,
   computeSpeechRate,
+  openAiRetentionWindowMediaAnalyzer,
   type AudioAnalysis,
   type RetentionWindowMediaAnalyzer,
   type SnapshotAnalysis,
@@ -20,6 +21,7 @@ vi.mock("@/lib/media/video-extraction", () => ({
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.clearAllMocks()
+  delete process.env.OPENAI_API_KEY
 })
 
 describe("computeSpeechRate", () => {
@@ -361,5 +363,86 @@ describe("analyzeRetentionWindowMedia", () => {
         }),
       }),
     )
+  })
+})
+
+// Regression coverage for the real OpenAI-backed analyzer: audio has no
+// input_audio content type on the Responses API, and audio-capable Chat
+// Completions models don't support response_format json_schema, so this
+// exercises the actual HTTP call/parse instead of stopping at the fake
+// analyzer boundary the tests above use.
+describe("openAiRetentionWindowMediaAnalyzer.analyzeAudio", () => {
+  it("calls Chat Completions (not Responses) with an input_audio content part and json_object mode", async () => {
+    process.env.OPENAI_API_KEY = "test-key"
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  music: true,
+                  music_description: "Light background synth",
+                  speakers: 2,
+                  tone: "upbeat",
+                  energy: "high",
+                  notable_events: ["laughter"],
+                }),
+              },
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    )
+    vi.stubGlobal("fetch", fetchMock)
+
+    const result = await openAiRetentionWindowMediaAnalyzer.analyzeAudio({
+      base64: "AAAA",
+      format: "mp3",
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.openai.com/v1/chat/completions",
+      expect.objectContaining({ method: "POST" }),
+    )
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body)
+    expect(body.modalities).toEqual(["text"])
+    expect(body.response_format).toEqual({ type: "json_object" })
+    expect(body.messages).toContainEqual(
+      expect.objectContaining({
+        role: "user",
+        content: [
+          { type: "input_audio", input_audio: { data: "AAAA", format: "mp3" } },
+        ],
+      }),
+    )
+    expect(result).toEqual({
+      music: true,
+      music_description: "Light background synth",
+      speakers: 2,
+      tone: "upbeat",
+      energy: "high",
+      notable_events: ["laughter"],
+    })
+  })
+
+  it("throws when the model's JSON doesn't match the expected shape", async () => {
+    process.env.OPENAI_API_KEY = "test-key"
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { content: JSON.stringify({ music: true }) } }],
+          }),
+          { status: 200 },
+        ),
+      ),
+    )
+
+    await expect(
+      openAiRetentionWindowMediaAnalyzer.analyzeAudio({ base64: "AAAA", format: "mp3" }),
+    ).rejects.toThrow(/unexpected shape/)
   })
 })
