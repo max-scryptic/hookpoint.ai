@@ -30,8 +30,18 @@ const nextConfig: NextConfig = {
   // WASM core, trained-language data) that Next's import-following
   // file-tracing has no way to discover, so serverless deploys ship without
   // them unless listed explicitly here.
+  //
+  // Keyed on "/**/*" (every route), not just "/api/**/*": retention window
+  // media extraction (which needs all of these) also runs via after() from
+  // the dashboard's analysed-video page route, not only from /api/* routes —
+  // scoping this to /api/**/* left that page's serverless function without
+  // tesseract's worker-script/WASM core/trained data. (The production
+  // "createOcrEngine ... path argument must be of type string" error itself
+  // traced back to a separate bug — a bundler-rewritten `require.resolve` in
+  // lib/media/ocr.ts, see the comment there — but this route was still a real
+  // gap in its own right once that's fixed.)
   outputFileTracingIncludes: {
-    "/api/**/*": [
+    "/**/*": [
       "./node_modules/@ffmpeg-installer/**",
       "./node_modules/tesseract.js/src/worker-script/**",
       "./node_modules/tesseract.js-core/**",

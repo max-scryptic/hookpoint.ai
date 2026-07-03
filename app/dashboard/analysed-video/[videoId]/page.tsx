@@ -75,6 +75,11 @@ type AnalysisResult =
       retentionWindows: RetentionWindow[]
       transcript: TranscriptCue[]
       pacingAnalysis: PacingAnalysis | null
+      // The analysed_videos row's own UUID — distinct from the route's YouTube
+      // video id — that retention_windows and everything derived from them are
+      // keyed on. Null when the video row itself failed to save, in which case
+      // there's nothing for deep-analysis evidence to look up.
+      analysedVideoId: string | null
     }
   | { status: "not_found" }
   | { status: "no_data" }
@@ -173,6 +178,7 @@ async function analyse(
         retentionWindows,
         transcript,
         pacingAnalysis,
+        analysedVideoId: cached.id,
       }
     }
 
@@ -200,6 +206,7 @@ async function analyse(
     // so pacing analysis below has a video row to claim against.
     let pacingAnalysis: PacingAnalysis | null = null
     let videoPersisted = false
+    let analysedVideoId: string | null = null
     try {
       const savedVideo = await saveAnalysedVideo(supabase, {
         userId,
@@ -209,6 +216,7 @@ async function analyse(
       })
       if (savedVideo) {
         videoPersisted = true
+        analysedVideoId = savedVideo.id
         try {
           const savedWindows = await saveRetentionWindows(
             supabase,
@@ -286,6 +294,7 @@ async function analyse(
       retentionWindows,
       transcript,
       pacingAnalysis,
+      analysedVideoId,
     }
   } catch (error) {
     if (error instanceof ReconsentRequiredError) {
@@ -342,13 +351,13 @@ export default async function Page({
   // snapshots, audio) has been generated so far. Best-effort: a failure here
   // must not break the rest of the analysis view.
   let deepAnalysisEvidence: Awaited<ReturnType<typeof getDeepAnalysisEvidence>> = []
-  if (result.status === "ok") {
+  if (result.status === "ok" && result.analysedVideoId) {
     try {
       const supabase = await createClient()
       deepAnalysisEvidence = await getDeepAnalysisEvidence(
         supabase,
         user.id,
-        videoId,
+        result.analysedVideoId,
       )
     } catch (error) {
       console.error("Failed to load deep analysis evidence", error)
