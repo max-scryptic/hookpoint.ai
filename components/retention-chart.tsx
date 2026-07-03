@@ -62,6 +62,8 @@ export function RetentionChart({
   onInsightSelect?: (insight: RetentionChartInsight | null) => void
 }) {
   const gradientId = useId()
+  const haloFilterId = `${gradientId}-halo`
+  const markerShadowFilterId = `${gradientId}-marker-shadow`
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
   const [hoverX, setHoverX] = useState<number | null>(null)
   const [hoveredInsightId, setHoveredInsightId] = useState<string | null>(null)
@@ -226,6 +228,34 @@ export function RetentionChart({
             <stop offset="0%" stopColor="var(--chart-1)" stopOpacity="0.35" />
             <stop offset="100%" stopColor="var(--chart-1)" stopOpacity="0.02" />
           </linearGradient>
+          {/* Soft blur for the marker halo, so the hover/selection glow reads as
+              a gentle diffuse light rather than a hard-edged translucent disc. */}
+          <filter
+            id={haloFilterId}
+            x="-150%"
+            y="-150%"
+            width="400%"
+            height="400%"
+          >
+            <feGaussianBlur stdDeviation="2.5" />
+          </filter>
+          {/* Subtle elevation shadow so each marker reads as a small raised bead
+              sitting on the curve, rather than a flat dot. */}
+          <filter
+            id={markerShadowFilterId}
+            x="-100%"
+            y="-100%"
+            width="300%"
+            height="300%"
+          >
+            <feDropShadow
+              dx="0"
+              dy="1"
+              stdDeviation="1"
+              floodColor="#0f172a"
+              floodOpacity="0.35"
+            />
+          </filter>
         </defs>
 
         {/* Horizontal gridlines and y-axis percentage labels. */}
@@ -377,9 +407,9 @@ export function RetentionChart({
           const tone = insightTone[insight.kind]
           // Scale up smoothly on hover, and further when selected. A gentle
           // overshoot easing gives the growth a little life rather than a snap.
-          const scale = isActive ? 1.6 : isHovered ? 1.3 : 1
-          const haloScale = isActive ? 3 : isHovered ? 2.5 : 1.6
-          const haloOpacity = isActive ? 0.28 : isHovered ? 0.18 : 0
+          const scale = isActive ? 1.5 : isHovered ? 1.22 : 1
+          const haloScale = isActive ? 2.4 : isHovered ? 2 : 1.4
+          const haloOpacity = isActive ? 0.32 : isHovered ? 0.2 : 0
           const grow = "cubic-bezier(0.34, 1.56, 0.64, 1)"
           const transformOrigin = `${x}px ${y}px`
 
@@ -414,31 +444,49 @@ export function RetentionChart({
                 }
               }}
             >
-              {/* Soft halo that fades and expands on hover / selection. */}
+              {/* Soft, blurred glow that fades and expands on hover / selection,
+                  in place of a hard-edged translucent disc. */}
               <circle
                 cx={x}
                 cy={y}
                 r={6}
                 fill={tone.band}
                 pointerEvents="none"
+                filter={`url(#${haloFilterId})`}
                 style={{
                   transformOrigin,
                   transform: `scale(${haloScale})`,
                   opacity: haloOpacity,
-                  transition: `transform 220ms ${grow}, opacity 220ms ease-out`,
+                  transition: `transform 260ms ${grow}, opacity 260ms ease-out`,
                 }}
               />
-              {/* The marker itself, with a ring matched to the card background so
-                  it reads as a distinct dot sitting on the curve. */}
+              {/* The marker itself: a small raised bead with a ring matched to
+                  the card background so it reads as a distinct dot sitting on
+                  the curve, and a soft shadow for depth. */}
               <circle
                 cx={x}
                 cy={y}
-                r={6}
+                r={5.5}
                 fill={tone.band}
                 stroke="var(--card)"
                 strokeWidth={2}
                 pointerEvents="none"
                 vectorEffect="non-scaling-stroke"
+                filter={`url(#${markerShadowFilterId})`}
+                style={{
+                  transformOrigin,
+                  transform: `scale(${scale})`,
+                  transition: `transform 220ms ${grow}`,
+                }}
+              />
+              {/* A subtle glossy highlight for a polished, tactile finish. */}
+              <circle
+                cx={x - 1.6}
+                cy={y - 1.7}
+                r={1.5}
+                fill="#ffffff"
+                opacity={0.55}
+                pointerEvents="none"
                 style={{
                   transformOrigin,
                   transform: `scale(${scale})`,
