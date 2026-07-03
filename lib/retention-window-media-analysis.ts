@@ -374,8 +374,10 @@ const AUDIO_ANALYSIS_INSTRUCTIONS = [
   "Set music/music_description based only on audible background music, not speech. Estimate speakers as the number of distinct voices heard, not named identities.",
   "notable_events lists distinct audible occurrences worth flagging (laughter, a sudden volume or pace change, applause, a sound effect, an abrupt silence) — return an empty array if there's nothing notable.",
   // Audio-capable chat-completions models don't support response_format
-  // json_schema (unlike the vision path above), so the shape is enforced here
-  // in the prompt and re-checked by parseAudioAnalysis instead.
+  // json_schema or json_object (unlike the vision path above), so the shape
+  // is enforced here in the prompt and re-checked by parseAudioAnalysis
+  // instead — see callOpenAiChatCompletionsAudio for why no response_format
+  // is sent at all.
   "Respond with only a single JSON object, no other text, with exactly these keys: music (boolean), music_description (string, or null when music is false), speakers (integer), tone (short string), energy (one of \"low\", \"moderate\", \"high\"), notable_events (array of strings, [] if none).",
 ].join(" ")
 
@@ -427,9 +429,11 @@ export async function callOpenAiResponses(
 // Audio input isn't accepted by the Responses API at all (only
 // input_text/input_image/input_file/etc. — see callOpenAiResponses above), so
 // the audio clip goes through Chat Completions instead, against an
-// audio-capable model. That family also doesn't support response_format
-// json_schema, so this asks for plain json_object mode and the caller
-// (parseAudioAnalysis) re-checks the shape instead of trusting a schema.
+// audio-capable model. That family doesn't support response_format at all —
+// not json_schema, and not even plain json_object (OpenAI rejects it with
+// "response_format of type json_object is not supported with this model") —
+// so no response_format is sent, and the caller (parseAudioAnalysis)
+// re-checks the shape of whatever comes back instead of trusting a schema.
 async function callOpenAiChatCompletionsAudio(
   body: Record<string, unknown>,
 ): Promise<string> {
@@ -544,7 +548,6 @@ export const openAiRetentionWindowMediaAnalyzer: RetentionWindowMediaAnalyzer = 
     const text = await callOpenAiChatCompletionsAudio({
       model: getAudioAnalysisModel(),
       modalities: ["text"],
-      response_format: { type: "json_object" },
       messages: [
         { role: "developer", content: AUDIO_ANALYSIS_INSTRUCTIONS },
         {

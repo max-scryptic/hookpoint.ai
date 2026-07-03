@@ -368,11 +368,11 @@ describe("analyzeRetentionWindowMedia", () => {
 
 // Regression coverage for the real OpenAI-backed analyzer: audio has no
 // input_audio content type on the Responses API, and audio-capable Chat
-// Completions models don't support response_format json_schema, so this
-// exercises the actual HTTP call/parse instead of stopping at the fake
-// analyzer boundary the tests above use.
+// Completions models don't support response_format at all (not even plain
+// json_object), so this exercises the actual HTTP call/parse instead of
+// stopping at the fake analyzer boundary the tests above use.
 describe("openAiRetentionWindowMediaAnalyzer.analyzeAudio", () => {
-  it("calls Chat Completions (not Responses) with an input_audio content part and json_object mode", async () => {
+  it("calls Chat Completions (not Responses) with an input_audio content part and no response_format", async () => {
     process.env.OPENAI_API_KEY = "test-key"
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
@@ -408,7 +408,7 @@ describe("openAiRetentionWindowMediaAnalyzer.analyzeAudio", () => {
     )
     const body = JSON.parse(fetchMock.mock.calls[0][1].body)
     expect(body.modalities).toEqual(["text"])
-    expect(body.response_format).toEqual({ type: "json_object" })
+    expect(body.response_format).toBeUndefined()
     expect(body.messages).toContainEqual(
       expect.objectContaining({
         role: "user",
