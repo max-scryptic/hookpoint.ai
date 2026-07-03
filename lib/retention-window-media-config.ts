@@ -52,6 +52,19 @@ export function buildRetentionAudioObjectPath(params: {
   return `${params.userId}/${params.analysedVideoId}/${params.retentionWindowId}/audio.mp3`
 }
 
+// How many snapshot/audio/scene-cue-scan rows an extraction run processes at
+// once. Each row spawns its own ffmpeg subprocess and network seek into the
+// signed source URL, and rows are fully independent (own status column, own
+// storage object), so serializing them one-at-a-time only adds wall-clock
+// time for no correctness benefit. Bounded rather than unlimited so one run
+// can't spike CPU/network past what the host (or the signed URL's storage
+// backend) can comfortably serve at once. Default 4.
+export function getRetentionWindowExtractionConcurrency(): number {
+  const raw = process.env.RETENTION_WINDOW_EXTRACTION_CONCURRENCY
+  const parsed = raw != null ? Number(raw) : NaN
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 4
+}
+
 // OpenAI model used to describe a window's harvested snapshots (vision input).
 // Defaults to the same model already used for transcript pacing analysis.
 export function getSnapshotAnalysisModel(): string {
