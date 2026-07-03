@@ -689,7 +689,7 @@ function Body({
     return (
       <div className="flex flex-col items-start gap-3">
         <p className="text-sm text-muted-foreground">
-          Upload the original video file to enable deeper visual analysis.
+          Want to unlock the full report? Upload your source file below to enable deeper visual analysis.
         </p>
         <Button onClick={onPick} disabled={isBusy}>
           <UploadIcon className="size-4" />
