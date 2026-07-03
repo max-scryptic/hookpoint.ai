@@ -233,9 +233,20 @@ export async function extractPendingRetentionWindowMedia(
 
   // One OCR engine (the WASM core + trained language data load) for every
   // snapshot in this run, not one per snapshot — recreating it per frame
-  // would pay that load cost repeatedly for no benefit.
-  const ocrEngine =
-    pendingSnapshots.length > 0 ? await deps.createOcrEngine() : null
+  // would pay that load cost repeatedly for no benefit. Engine setup itself
+  // is best-effort: it's a deterministic add-on to a snapshot row, not a
+  // prerequisite for it, so a broken/missing OCR runtime (a bad deploy, a
+  // worker-thread spawn failure) should fall back to skipping OCR rather
+  // than aborting extraction outright and leaving every pending snapshot,
+  // and everything after it, stuck 'pending' with nothing left to retry it.
+  let ocrEngine: OcrEngine | null = null
+  if (pendingSnapshots.length > 0) {
+    try {
+      ocrEngine = await deps.createOcrEngine()
+    } catch (error) {
+      console.error("Failed to start OCR engine", error)
+    }
+  }
 
   try {
     for (const snapshot of pendingSnapshots) {

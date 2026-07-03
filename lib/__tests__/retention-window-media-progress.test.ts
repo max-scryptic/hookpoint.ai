@@ -143,9 +143,11 @@ describe("getDeepAnalysisProgress", () => {
     })
   })
 
-  it("reports a scene-cue scan stage failure when every window's scan failed", async () => {
+  it("reports a scene-cue scan stage failure once every window's scan has been failed past its own retry grace period", async () => {
     const supabase = makeFakeSupabase({
-      retention_window_scene_cue_scans: [{ status: "failed" }],
+      retention_window_scene_cue_scans: [
+        { status: "failed", updated_at: "2020-01-01T00:00:00Z" },
+      ],
     })
     const progress = await getDeepAnalysisProgress(
       supabase,
@@ -160,6 +162,30 @@ describe("getDeepAnalysisProgress", () => {
       // is read at face value rather than assumed still in flight.
       snapshots: "ready",
     })
+  })
+
+  it("reports the scene-cue scan stage as still in progress right after a fresh failure, not a settled X", async () => {
+    const supabase = makeFakeSupabase({
+      retention_window_scene_cue_scans: [
+        { status: "failed", updated_at: new Date().toISOString() },
+      ],
+    })
+    const progress = await getDeepAnalysisProgress(
+      supabase,
+      "user-1",
+      "av-1",
+      makeSourceFile(),
+    )
+
+    // A scan that just failed is still eligible for its own automatic retry
+    // (see SCAN_RETRY_STALE_MS) — the system hasn't given up on it yet, so
+    // the checklist shouldn't show a red X for it before that grace period
+    // has actually elapsed.
+    expect(progress.stages).toMatchObject({
+      sceneCueScan: "in_progress",
+      snapshots: "in_progress",
+    })
+    expect(progress.complete).toBe(false)
   })
 
   it("shows the analysis stage in progress once extraction is ready but analysis hasn't run", async () => {

@@ -334,6 +334,64 @@ describe("extractPendingRetentionWindowMedia", () => {
     expect(ocrEngine.terminate).toHaveBeenCalledTimes(1)
   })
 
+  it("treats OCR engine setup itself failing as best-effort — snapshots and audio still extract", async () => {
+    const { supabase, updates } = makeFakeSupabase(
+      [
+        {
+          id: "snap-1",
+          retention_window_id: "rw-1",
+          chunk_index: 0,
+          timestamp_seconds: 0,
+          storage_path: null,
+          status: "pending",
+          error: null,
+        },
+      ],
+      [
+        {
+          id: "aud-1",
+          retention_window_id: "rw-1",
+          from_seconds: 0,
+          to_seconds: 30,
+          storage_path: null,
+          status: "pending",
+          error: null,
+        },
+      ],
+    )
+    const extractor: VideoExtractor = {
+      extractThumbnail: vi.fn(async () => Buffer.from("jpeg-bytes")),
+      extractAudioSegment: vi.fn(async () => Buffer.from("aac-bytes")),
+    }
+
+    await extractPendingRetentionWindowMedia(supabase, fakeStorage(), makeSourceFile(), {
+      extractor,
+      mediaStorage: fakeStorage(),
+      sceneCueScanner: fakeSceneCueScanner(),
+      createOcrEngine: async () => {
+        throw new Error("worker-script not found")
+      },
+    })
+
+    // A broken OCR runtime (e.g. a bundling issue that leaves the worker
+    // script missing in production) must not strand every pending snapshot
+    // and audio clip 'pending' forever — only OCR itself is skipped.
+    expect(updates).toContainEqual(
+      expect.objectContaining({
+        table: "retention_window_snapshots",
+        id: "snap-1",
+        payload: expect.objectContaining({ status: "ready", ocr_text: null }),
+      }),
+    )
+    expect(updates).toContainEqual(
+      expect.objectContaining({
+        table: "retention_window_audio",
+        id: "aud-1",
+        payload: expect.objectContaining({ status: "ready" }),
+      }),
+    )
+  })
+
   it("records a failure on one row and still processes the rest", async () => {
     const { supabase, updates } = makeFakeSupabase(
       [
