@@ -49,7 +49,7 @@ export function buildRetentionAudioObjectPath(params: {
   analysedVideoId: string
   retentionWindowId: string
 }): string {
-  return `${params.userId}/${params.analysedVideoId}/${params.retentionWindowId}/audio.aac`
+  return `${params.userId}/${params.analysedVideoId}/${params.retentionWindowId}/audio.mp3`
 }
 
 // OpenAI model used to describe a window's harvested snapshots (vision input).

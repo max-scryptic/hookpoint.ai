@@ -276,10 +276,9 @@ async function analyzeOneAudioClip(
   const [modelOutput, stats] = await Promise.all([
     deps.analyzer.analyzeAudio({
       base64: bytes.toString("base64"),
-      // Matches buildRetentionAudioObjectPath's fixed "audio.aac" extraction
-      // output. If OpenAI's audio input ever rejects aac directly, extraction
-      // would need to emit wav/mp3 instead rather than transcoding here.
-      format: "aac",
+      // Matches buildRetentionAudioObjectPath's "audio.mp3" extraction
+      // output. OpenAI's input_audio only accepts wav/mp3, not aac.
+      format: "mp3",
     }),
     // Loudness/silence are measured deterministically via ffmpeg, so a
     // measurement failure shouldn't fail the whole row — just leave those two

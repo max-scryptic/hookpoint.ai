@@ -53,11 +53,11 @@ export function buildAudioSegmentArgs(
     String(duration),
     "-vn",
     "-acodec",
-    "aac",
+    "libmp3lame",
     "-b:a",
     "128k",
     "-f",
-    "adts",
+    "mp3",
     "pipe:1",
   ]
 }
@@ -70,7 +70,8 @@ export async function extractThumbnail(
   return runFfmpeg(buildThumbnailArgs(sourceUrl, atSeconds))
 }
 
-// Extracts the audio track for [fromSeconds, toSeconds] as AAC.
+// Extracts the audio track for [fromSeconds, toSeconds] as MP3 (OpenAI's
+// audio-input models only accept wav/mp3, not AAC).
 export async function extractAudioSegment(
   sourceUrl: string,
   fromSeconds: number,
@@ -140,7 +141,7 @@ export function parseAudioSignalStats(
 }
 
 // Measures loudness and silence ratio for an already-extracted audio clip
-// (not the source video — this runs against the harvested per-window .aac
+// (not the source video — this runs against the harvested per-window .mp3
 // file). Best-effort: callers should treat a rejection the same as "stats
 // unavailable" rather than failing the whole analysis.
 export async function measureAudioClipStats(
