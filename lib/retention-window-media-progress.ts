@@ -226,21 +226,30 @@ export async function getDeepAnalysisProgress(
   // zero only means "nothing to harvest" once every scan has settled. While
   // scans are still in flight, report snapshots as in-progress instead of
   // misreading "no rows yet" as "already done".
+  const snapshots: DeepAnalysisStageStatus = isStageSettled(sceneCueScan)
+    ? deriveMediaStageStatus(
+        snapshotCounts.total,
+        snapshotCounts.pending,
+        snapshotCounts.failed,
+      )
+    : "in_progress"
+
   const stages: DeepAnalysisStages = {
     transcoding: normalisationToStageStatus(sourceFile.normalisationStatus),
     sceneCueScan,
-    snapshots: isStageSettled(sceneCueScan)
+    snapshots,
+    // Same "no rows yet" ambiguity as snapshots above: snapshot rows (and
+    // thus their analysis_status) don't exist until the scan has produced
+    // them, so a zero count here only means "already done" once snapshots
+    // itself has settled — otherwise report in-progress instead of flashing
+    // ready before the scan/harvest has even started.
+    snapshotAnalysis: isStageSettled(snapshots)
       ? deriveMediaStageStatus(
-          snapshotCounts.total,
-          snapshotCounts.pending,
-          snapshotCounts.failed,
+          snapshotAnalysisCounts.total,
+          snapshotAnalysisCounts.pending,
+          snapshotAnalysisCounts.failed,
         )
       : "in_progress",
-    snapshotAnalysis: deriveMediaStageStatus(
-      snapshotAnalysisCounts.total,
-      snapshotAnalysisCounts.pending,
-      snapshotAnalysisCounts.failed,
-    ),
     audio: deriveMediaStageStatus(
       audioCounts.total,
       audioCounts.pending,

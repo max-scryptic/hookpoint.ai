@@ -123,6 +123,25 @@ describe("getDeepAnalysisProgress", () => {
     expect(progress.complete).toBe(false)
   })
 
+  it("reports snapshot analysis as in-progress while its scene-cue scan is still pending, even though no snapshot rows exist yet", async () => {
+    const supabase = makeFakeSupabase({
+      retention_window_scene_cue_scans: [{ status: "pending" }],
+    })
+    const progress = await getDeepAnalysisProgress(
+      supabase,
+      "user-1",
+      "av-1",
+      makeSourceFile(),
+    )
+
+    expect(progress.stages).toMatchObject({
+      sceneCueScan: "in_progress",
+      snapshots: "in_progress",
+      snapshotAnalysis: "in_progress",
+    })
+    expect(progress.complete).toBe(false)
+  })
+
   it("defers to the actual snapshot rows once every window's scene-cue scan has settled", async () => {
     const supabase = makeFakeSupabase({
       retention_window_scene_cue_scans: [{ status: "ready" }, { status: "ready" }],
