@@ -8,10 +8,24 @@
 // first use, which would add a live external dependency to every extraction
 // run for no reason.
 
+import { createRequire } from "node:module"
 import os from "node:os"
 import path from "node:path"
 
 import { createWorker, type Worker } from "tesseract.js"
+
+// A real, un-bundled require, used only for `.resolve()` below. Turbopack
+// (and webpack before it) statically rewrites a literal `require.resolve(...)`
+// call in bundled application code to return the bundler's own numeric module
+// id instead of forwarding to Node's real module resolution — even though
+// @tesseract.js-data/eng itself is kept external via serverExternalPackages
+// in next.config.ts, this *calling* file still gets bundled, so the rewrite
+// still applies to it. That numeric id then flowed into path.dirname/path.join
+// below and ultimately into node:worker_threads' Worker(), surfacing in
+// production as "The 'path' argument must be of type string. Received type
+// number" — createRequire builds its require function at runtime, which
+// bundlers can't statically rewrite, so its .resolve() behaves like real Node.
+const nodeRequire = createRequire(import.meta.url)
 
 // Below this recognition confidence (tesseract's own 0-100 scale) a result is
 // usually noise from a text-free frame (a face, a hand, background clutter)
@@ -38,7 +52,7 @@ export interface OcrEngine {
 // this resolves that directory directly rather than trusting the package's
 // own export.
 function resolveEnglishLangPath(): string {
-  const packageEntry = require.resolve("@tesseract.js-data/eng")
+  const packageEntry = nodeRequire.resolve("@tesseract.js-data/eng")
   return path.join(path.dirname(packageEntry), "4.0.0_best_int")
 }
 

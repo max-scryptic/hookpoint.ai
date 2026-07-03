@@ -58,11 +58,22 @@ export function buildRetentionAudioObjectPath(params: {
 // storage object), so serializing them one-at-a-time only adds wall-clock
 // time for no correctness benefit. Bounded rather than unlimited so one run
 // can't spike CPU/network past what the host (or the signed URL's storage
-// backend) can comfortably serve at once. Default 4.
+// backend) can comfortably serve at once.
+//
+// Default 2, not 4: a scene-cue scan decodes every frame of its window at
+// full source resolution before the scale filter downsamples it, which is
+// genuinely CPU-bound — on a Vercel serverless function's single (or
+// fractional) vCPU, 4 of those running at once means each gets a quarter of
+// one core, which routinely pushed a 30-40s window's decode past the 90s
+// scanVideoSceneCues timeout (or, worse, past the surrounding route's whole
+// 300s budget) even though the same decode comfortably finishes in well
+// under 90s with no contention. Halving it trades some run-to-run throughput
+// for those scans actually completing instead of timing out and endlessly
+// retrying.
 export function getRetentionWindowExtractionConcurrency(): number {
   const raw = process.env.RETENTION_WINDOW_EXTRACTION_CONCURRENCY
   const parsed = raw != null ? Number(raw) : NaN
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 4
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 2
 }
 
 // OpenAI model used to describe a window's harvested snapshots (vision input).
