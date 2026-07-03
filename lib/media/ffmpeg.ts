@@ -98,10 +98,23 @@ export function runFfmpegCapturingOutput(
 // Runs ffmpeg with `args`, capturing stdout as a single Buffer — the caller's
 // args must write output to `pipe:1`. Rejects with the captured stderr on a
 // non-zero exit, or if the process doesn't finish within `timeoutMs`.
+//
+// Also rejects on an empty (0-byte) stdout even though ffmpeg exited 0: a
+// `-frames:v 1` grab seeking to (or past) the last decodable moment of a
+// source — e.g. a retention window's computed end time landing a fraction of
+// a second beyond the actual media length — can write nothing and still exit
+// successfully, since "no frame matched" isn't always treated as an ffmpeg
+// error. Left unchecked, that empty buffer gets uploaded and the row marked
+// 'ready' as if extraction worked, and the failure only surfaces later as a
+// confusing "file downloaded contains no data" error from whichever API
+// consumes the signed URL.
 export async function runFfmpeg(
   args: string[],
   opts: { timeoutMs?: number } = {},
 ): Promise<Buffer> {
   const { stdout } = await runFfmpegCapturingOutput(args, opts)
+  if (stdout.length === 0) {
+    throw new FfmpegError("ffmpeg produced no output", "")
+  }
   return stdout
 }
