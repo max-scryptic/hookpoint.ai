@@ -12,6 +12,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import type { NormalisationStatus, SourceFile } from "@/lib/source-files/source-files"
+import { SCAN_RETRY_STALE_MS } from "@/lib/video-scene-cues"
 
 export type DeepAnalysisStageStatus = "pending" | "in_progress" | "ready" | "failed"
 
@@ -80,6 +81,32 @@ function countByStatus(
   return { total: rows.length, pending, failed }
 }
 
+// Scene-cue scans are the one stage with its own automatic retry (see
+// SCAN_RETRY_STALE_MS in lib/video-scene-cues.ts): a failed scan isn't
+// abandoned until it's been failed for that long, so a scan that failed a
+// moment ago (a single transient ffmpeg timeout/seek error) is still
+// something the system intends to retry, not a settled outcome yet. Counting
+// it as failed here would flash a red X in the checklist for a scan that
+// hasn't actually had its retry attempt yet; count it as pending instead,
+// same as one still waiting on its first attempt, until that grace period
+// actually elapses with no successful retry.
+function countSceneCueScansByStatus(
+  rows: { status: string; updated_at: string }[],
+): { total: number; pending: number; failed: number } {
+  const retryDeadline = Date.now() - SCAN_RETRY_STALE_MS
+  let pending = 0
+  let failed = 0
+  for (const row of rows) {
+    if (row.status === "pending") {
+      pending++
+    } else if (row.status === "failed") {
+      if (new Date(row.updated_at).getTime() > retryDeadline) pending++
+      else failed++
+    }
+  }
+  return { total: rows.length, pending, failed }
+}
+
 // Analysis only ever runs on a row once extraction has succeeded
 // (status = 'ready') — see claimRetentionWindowSnapshotsPendingAnalysis/
 // claimRetentionWindowAudioPendingAnalysis. So a row whose extraction is still
@@ -133,7 +160,7 @@ export async function getDeepAnalysisProgress(
         .eq("analysed_video_id", analysedVideoId),
       supabase
         .from("retention_window_scene_cue_scans")
-        .select("status")
+        .select("status, updated_at")
         .eq("user_id", userId)
         .eq("analysed_video_id", analysedVideoId),
       supabase
@@ -172,7 +199,10 @@ export async function getDeepAnalysisProgress(
     status: string
     analysis_status: string
   }[]
-  const sceneCueScanRows = (sceneCueScansResult.data ?? []) as { status: string }[]
+  const sceneCueScanRows = (sceneCueScansResult.data ?? []) as {
+    status: string
+    updated_at: string
+  }[]
   const eventSynthesisRows = (eventSynthesisResult.data ?? []) as {
     status: string
   }[]
@@ -181,7 +211,7 @@ export async function getDeepAnalysisProgress(
   const audioCounts = countByStatus(audioRows)
   const snapshotAnalysisCounts = countByAnalysisStatus(snapshotRows)
   const audioAnalysisCounts = countByAnalysisStatus(audioRows)
-  const sceneCueScanCounts = countByStatus(sceneCueScanRows)
+  const sceneCueScanCounts = countSceneCueScansByStatus(sceneCueScanRows)
   const eventSynthesisCounts = countByStatus(eventSynthesisRows)
 
   const sceneCueScan = deriveMediaStageStatus(

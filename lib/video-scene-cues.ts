@@ -117,7 +117,13 @@ export async function createPendingRetentionWindowSceneCueScans(
 // than immediate so a source that's genuinely broken (e.g. an unreachable
 // signed URL) doesn't get re-attempted by every trigger that fires for the
 // video in the meantime.
-const SCAN_RETRY_STALE_MS = 10 * 60 * 1000
+//
+// Exported so lib/retention-window-media-progress.ts can apply the same
+// grace period to what it reports: a scan that failed moments ago is still
+// eligible for this exact auto-retry, so surfacing it as a settled "failed"
+// (a red X) before that window has even elapsed would show the user a
+// permanent-looking failure for something the system hasn't given up on yet.
+export const SCAN_RETRY_STALE_MS = 10 * 60 * 1000
 
 // Loads every scene-cue scan ready to (re)run for a video: still 'pending',
 // or 'failed' long enough ago to retry. No claim/processing state: unlike
