@@ -1,8 +1,10 @@
-// Calls OpenAI's Responses API to describe the harvested visual/audio media
-// for a retention window, once extraction has produced it. Structured JSON
-// output (json_schema, strict) the same way lib/pacing-analysis.ts already
-// analyses transcripts — this reuses the same OPENAI_API_KEY, just pointed at
-// vision/audio-capable models instead of a text-only one.
+// Describes the harvested visual/audio media for a retention window, once
+// extraction has produced it, reusing the same OPENAI_API_KEY as
+// lib/pacing-analysis.ts. Snapshots go through the Responses API with
+// structured JSON output (json_schema, strict). Audio goes through Chat
+// Completions instead against an audio-capable model, since the Responses API
+// has no audio-input content type and audio-capable chat models don't support
+// json_schema — see callOpenAiChatCompletionsAudio below.
 //
 // Snapshots are analysed one *window* at a time: every chunk harvested for
 // that window goes into a single vision call, so the model can describe
@@ -357,27 +359,6 @@ const SNAPSHOT_ANALYSIS_SCHEMA = {
   },
 } as const
 
-const AUDIO_ANALYSIS_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  required: [
-    "music",
-    "music_description",
-    "speakers",
-    "tone",
-    "energy",
-    "notable_events",
-  ],
-  properties: {
-    music: { type: "boolean" },
-    music_description: { type: ["string", "null"] },
-    speakers: { type: "integer", minimum: 0 },
-    tone: { type: "string" },
-    energy: { type: "string", enum: ["low", "moderate", "high"] },
-    notable_events: { type: "array", items: { type: "string" } },
-  },
-} as const
-
 const SNAPSHOT_ANALYSIS_INSTRUCTIONS = [
   "You describe frames from one window of a YouTube video, in chunkIndex order (0 is earliest). Most frames are placed in flanking pairs just before and just after a detected hard cut or transition, so consecutive chunks often straddle a real edit rather than an arbitrary moment; a window with no detected cuts instead gets evenly spaced frames across it.",
   "Each chunk is also given ocrText: text already recognized from that exact frame by a separate deterministic OCR pass (null if none was found). Treat it as ground truth, not a guess to verify — do not re-transcribe or second-guess it, but you may reference it in notable_event/description when it's relevant to what changed (e.g. a caption or graphic appearing).",
@@ -392,6 +373,10 @@ const AUDIO_ANALYSIS_INSTRUCTIONS = [
   "The spoken words are already transcribed elsewhere, and loudness/silence are measured separately — do not transcribe speech, restate what is said, or estimate volume or silence here.",
   "Set music/music_description based only on audible background music, not speech. Estimate speakers as the number of distinct voices heard, not named identities.",
   "notable_events lists distinct audible occurrences worth flagging (laughter, a sudden volume or pace change, applause, a sound effect, an abrupt silence) — return an empty array if there's nothing notable.",
+  // Audio-capable chat-completions models don't support response_format
+  // json_schema (unlike the vision path above), so the shape is enforced here
+  // in the prompt and re-checked by parseAudioAnalysis instead.
+  "Respond with only a single JSON object, no other text, with exactly these keys: music (boolean), music_description (string, or null when music is false), speakers (integer), tone (short string), energy (one of \"low\", \"moderate\", \"high\"), notable_events (array of strings, [] if none).",
 ].join(" ")
 
 function extractOutputText(response: {
@@ -437,6 +422,73 @@ export async function callOpenAiResponses(
   const text = extractOutputText(json)
   if (!text) throw new Error("OpenAI returned no analysis text")
   return text
+}
+
+// Audio input isn't accepted by the Responses API at all (only
+// input_text/input_image/input_file/etc. — see callOpenAiResponses above), so
+// the audio clip goes through Chat Completions instead, against an
+// audio-capable model. That family also doesn't support response_format
+// json_schema, so this asks for plain json_object mode and the caller
+// (parseAudioAnalysis) re-checks the shape instead of trusting a schema.
+async function callOpenAiChatCompletionsAudio(
+  body: Record<string, unknown>,
+): Promise<string> {
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) throw new Error("OPENAI_API_KEY is not configured")
+
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  })
+
+  if (!response.ok) {
+    const detail = await response.text()
+    throw new Error(
+      `OpenAI audio analysis failed (${response.status}): ${detail.slice(0, 500)}`,
+    )
+  }
+
+  const json = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string | null } }>
+  }
+  const text = json.choices?.[0]?.message?.content
+  if (!text) throw new Error("OpenAI returned no analysis text")
+  return text
+}
+
+function parseAudioAnalysis(text: string): AudioAnalysisModelOutput {
+  let parsed: Partial<AudioAnalysisModelOutput>
+  try {
+    parsed = JSON.parse(text) as Partial<AudioAnalysisModelOutput>
+  } catch {
+    throw new Error(`OpenAI audio analysis returned non-JSON: ${text.slice(0, 500)}`)
+  }
+
+  if (
+    typeof parsed.music !== "boolean" ||
+    typeof parsed.speakers !== "number" ||
+    typeof parsed.tone !== "string" ||
+    (parsed.energy !== "low" && parsed.energy !== "moderate" && parsed.energy !== "high") ||
+    !Array.isArray(parsed.notable_events)
+  ) {
+    throw new Error(
+      `OpenAI audio analysis returned unexpected shape: ${text.slice(0, 500)}`,
+    )
+  }
+
+  return {
+    music: parsed.music,
+    music_description: parsed.music_description ?? null,
+    speakers: parsed.speakers,
+    tone: parsed.tone,
+    energy: parsed.energy,
+    notable_events: parsed.notable_events,
+  }
 }
 
 export const openAiRetentionWindowMediaAnalyzer: RetentionWindowMediaAnalyzer = {
@@ -489,30 +541,19 @@ export const openAiRetentionWindowMediaAnalyzer: RetentionWindowMediaAnalyzer = 
   },
 
   async analyzeAudio({ base64, format }) {
-    const text = await callOpenAiResponses({
+    const text = await callOpenAiChatCompletionsAudio({
       model: getAudioAnalysisModel(),
-      reasoning: { effort: "low" },
-      max_output_tokens: 1500,
-      input: [
-        {
-          role: "developer",
-          content: [{ type: "input_text", text: AUDIO_ANALYSIS_INSTRUCTIONS }],
-        },
+      modalities: ["text"],
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "developer", content: AUDIO_ANALYSIS_INSTRUCTIONS },
         {
           role: "user",
           content: [{ type: "input_audio", input_audio: { data: base64, format } }],
         },
       ],
-      text: {
-        format: {
-          type: "json_schema",
-          name: "retention_window_audio_analysis",
-          strict: true,
-          schema: AUDIO_ANALYSIS_SCHEMA,
-        },
-      },
     })
 
-    return JSON.parse(text) as AudioAnalysisModelOutput
+    return parseAudioAnalysis(text)
   },
 }

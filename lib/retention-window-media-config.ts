@@ -58,9 +58,11 @@ export function getSnapshotAnalysisModel(): string {
   return process.env.OPENAI_SNAPSHOT_ANALYSIS_MODEL || "gpt-5.4-mini"
 }
 
-// OpenAI model used to describe a window's harvested audio clip (audio input).
+// OpenAI model used to describe a window's harvested audio clip (audio
+// input). Must be an audio-capable Chat Completions model — gpt-5.4-mini
+// (used for the other analysis steps) has no audio modality at all.
 export function getAudioAnalysisModel(): string {
-  return process.env.OPENAI_AUDIO_ANALYSIS_MODEL || "gpt-5.4-mini"
+  return process.env.OPENAI_AUDIO_ANALYSIS_MODEL || "gpt-audio-mini"
 }
 
 // OpenAI model used for the per-window cross-modal event-synthesis call
