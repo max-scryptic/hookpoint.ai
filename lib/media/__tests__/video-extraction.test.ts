@@ -45,11 +45,11 @@ describe("buildAudioSegmentArgs", () => {
       "40",
       "-vn",
       "-acodec",
-      "aac",
+      "libmp3lame",
       "-b:a",
       "128k",
       "-f",
-      "adts",
+      "mp3",
       "pipe:1",
     ])
   })
@@ -62,9 +62,9 @@ describe("buildAudioSegmentArgs", () => {
 
 describe("buildAudioStatsArgs", () => {
   it("runs volumedetect and silencedetect against the clip with no output file", () => {
-    expect(buildAudioStatsArgs("https://signed.example/audio.aac")).toEqual([
+    expect(buildAudioStatsArgs("https://signed.example/audio.mp3")).toEqual([
       "-i",
-      "https://signed.example/audio.aac",
+      "https://signed.example/audio.mp3",
       "-af",
       "silencedetect=noise=-35dB:d=0.3,volumedetect",
       "-f",

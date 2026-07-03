@@ -170,7 +170,7 @@ function audioRow(overrides: Record<string, unknown> = {}) {
     retention_window_id: "rw-1",
     from_seconds: 0,
     to_seconds: 30,
-    storage_path: "user-1/av-1/rw-1/audio.aac",
+    storage_path: "user-1/av-1/rw-1/audio.mp3",
     status: "ready",
     error: null,
     analysis_status: "pending",

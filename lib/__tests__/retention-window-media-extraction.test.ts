@@ -245,7 +245,7 @@ describe("extractPendingRetentionWindowMedia", () => {
     const mediaStorage = fakeStorage()
     const extractor: VideoExtractor = {
       extractThumbnail: vi.fn(async () => Buffer.from("jpeg-bytes")),
-      extractAudioSegment: vi.fn(async () => Buffer.from("aac-bytes")),
+      extractAudioSegment: vi.fn(async () => Buffer.from("mp3-bytes")),
     }
     const ocrEngine = fakeOcrEngine()
     ocrEngine.recognize.mockResolvedValueOnce({ text: "SALE 50% OFF", confidence: 90 })
@@ -361,7 +361,7 @@ describe("extractPendingRetentionWindowMedia", () => {
     )
     const extractor: VideoExtractor = {
       extractThumbnail: vi.fn(async () => Buffer.from("jpeg-bytes")),
-      extractAudioSegment: vi.fn(async () => Buffer.from("aac-bytes")),
+      extractAudioSegment: vi.fn(async () => Buffer.from("mp3-bytes")),
     }
 
     await extractPendingRetentionWindowMedia(supabase, fakeStorage(), makeSourceFile(), {

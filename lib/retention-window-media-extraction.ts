@@ -315,7 +315,7 @@ export async function extractPendingRetentionWindowMedia(
         analysedVideoId: sourceFile.analysedVideoId,
         retentionWindowId: audio.retentionWindowId,
       })
-      await deps.mediaStorage.putObject(path, clip, { contentType: "audio/aac" })
+      await deps.mediaStorage.putObject(path, clip, { contentType: "audio/mpeg" })
       await updateRetentionWindowAudioStatus(admin, sourceFile.userId, audio.id, {
         status: "ready",
         storagePath: path,
