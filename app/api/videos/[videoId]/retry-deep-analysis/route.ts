@@ -7,6 +7,11 @@ import { isSourceFileReady } from "@/lib/retention-window-media-extraction"
 import { resetDeepAnalysis } from "@/lib/retention-window-deep-analysis-reset"
 import { triggerRetentionWindowMediaExtraction } from "@/lib/retention-window-media-trigger"
 
+// Extraction runs in the background via after() once the response is sent, but
+// still within this invocation's time budget — give it room beyond the default,
+// matching every other trigger point for this pipeline (see /api/analyze).
+export const maxDuration = 300
+
 // POST /api/videos/:videoId/retry-deep-analysis
 // Resets a video's deep analysis: clears every scene-cue/snapshot/audio/event
 // row the pipeline in lib/retention-window-media-trigger.ts has written so

@@ -17,7 +17,11 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import { getEventSynthesisModel } from "@/lib/retention-window-media-config"
+import { runWithConcurrency } from "@/lib/concurrency"
+import {
+  getEventSynthesisModel,
+  getRetentionWindowAiCallConcurrency,
+} from "@/lib/retention-window-media-config"
 import {
   callOpenAiResponses,
   type AudioAnalysis,
@@ -134,94 +138,104 @@ export async function synthesizeRetentionWindowEvents(
 
   const model = getEventSynthesisModel()
 
-  for (const job of pendingJobs) {
-    const window = windowById.get(job.retentionWindowId)
-    if (
-      !window ||
-      window.analysisFromSeconds == null ||
-      window.analysisToSeconds == null
-    ) {
-      // The window vanished or lost its analysis window since this job was
-      // created — nothing to synthesize; leave the job pending rather than
-      // erroring (createPendingRetentionWindowEventSynthesis will clean it
-      // up on the next analyze).
-      continue
-    }
-
-    const windowSnapshots = snapshotsByWindow.get(job.retentionWindowId) ?? []
-    const scanStatus = scanStatusByWindow.get(job.retentionWindowId)
-    const audio = audioByWindow.get(job.retentionWindowId)
-
-    const scanSettled = scanStatus != null && isSettled(scanStatus)
-    const hasSnapshots = windowSnapshots.length > 0
-    const snapshotsSettled = windowSnapshots.every((s) =>
-      isSettled(s.analysisStatus),
-    )
-    const audioSettled = audio != null && isSettled(audio.analysisStatus)
-
-    if (!scanSettled || !hasSnapshots || !snapshotsSettled || !audioSettled) {
-      continue // Not ready yet — retried on a later trigger.
-    }
-
-    try {
-      const visual = windowSnapshots
-        .filter((s) => s.analysisStatus === "ready" && s.analysis != null)
-        .map((s) => ({
-          chunkIndex: s.chunkIndex,
-          timestampSeconds: s.timestampSeconds,
-          ocrText: s.ocrText,
-          analysis: s.analysis as SnapshotAnalysis,
-        }))
-
-      const metrics = computeSceneCueMetrics(
-        cues,
-        window.analysisFromSeconds,
-        window.analysisToSeconds,
-      )
-
-      const evidence: WindowEvidence = {
-        kind: window.kind,
-        delta: window.delta,
-        steepness: window.steepness,
-        relativePerformance: window.relativePerformance,
-        fromSeconds: window.analysisFromSeconds,
-        toSeconds: window.analysisToSeconds,
-        transcript: transcriptByWindow.get(job.retentionWindowId) ?? null,
-        editing: {
-          cutCount: metrics.cutCount,
-          cutsPerMinute: metrics.cutsPerMinute,
-          freezeCoverage: metrics.freezeCoverage,
-          blackCoverage: metrics.blackCoverage,
-        },
-        visual,
-        audio:
-          audio.analysisStatus === "ready"
-            ? (audio.analysis as AudioAnalysis)
-            : null,
+  // Every window's synthesis call is independent (own evidence bundle, own
+  // job row) — the same property that already lets extraction run
+  // concurrently, so there's no reason to award one window's OpenAI call
+  // exclusive use of the wait before starting the next.
+  await runWithConcurrency(
+    pendingJobs,
+    getRetentionWindowAiCallConcurrency(),
+    async (job) => {
+      const window = windowById.get(job.retentionWindowId)
+      if (
+        !window ||
+        window.analysisFromSeconds == null ||
+        window.analysisToSeconds == null
+      ) {
+        // The window vanished or lost its analysis window since this job was
+        // created — nothing to synthesize; leave the job pending rather than
+        // erroring (createPendingRetentionWindowEventSynthesis will clean it
+        // up on the next analyze).
+        return
       }
 
-      const events = await deps.synthesizer.synthesize(evidence)
+      const windowSnapshots = snapshotsByWindow.get(job.retentionWindowId) ?? []
+      const scanStatus = scanStatusByWindow.get(job.retentionWindowId)
+      const audio = audioByWindow.get(job.retentionWindowId)
 
-      await replaceRetentionWindowEvents(
-        admin,
-        userId,
-        analysedVideoId,
-        job.retentionWindowId,
-        events,
+      const scanSettled = scanStatus != null && isSettled(scanStatus)
+      const hasSnapshots = windowSnapshots.length > 0
+      const snapshotsSettled = windowSnapshots.every((s) =>
+        isSettled(s.analysisStatus),
       )
-      await updateRetentionWindowEventSynthesisStatus(admin, userId, job.id, {
-        status: "ready",
-        model,
-      })
-    } catch (error) {
-      console.error("Failed to synthesize retention window events", error)
-      await updateRetentionWindowEventSynthesisStatus(admin, userId, job.id, {
-        status: "failed",
-        error:
-          error instanceof Error ? error.message : "Failed to synthesize events",
-      }).catch(() => {})
-    }
-  }
+      const audioSettled = audio != null && isSettled(audio.analysisStatus)
+
+      if (!scanSettled || !hasSnapshots || !snapshotsSettled || !audioSettled) {
+        return // Not ready yet — retried on a later trigger.
+      }
+
+      try {
+        const visual = windowSnapshots
+          .filter((s) => s.analysisStatus === "ready" && s.analysis != null)
+          .map((s) => ({
+            chunkIndex: s.chunkIndex,
+            timestampSeconds: s.timestampSeconds,
+            ocrText: s.ocrText,
+            analysis: s.analysis as SnapshotAnalysis,
+          }))
+
+        const metrics = computeSceneCueMetrics(
+          cues,
+          window.analysisFromSeconds,
+          window.analysisToSeconds,
+        )
+
+        const evidence: WindowEvidence = {
+          kind: window.kind,
+          delta: window.delta,
+          steepness: window.steepness,
+          relativePerformance: window.relativePerformance,
+          fromSeconds: window.analysisFromSeconds,
+          toSeconds: window.analysisToSeconds,
+          transcript: transcriptByWindow.get(job.retentionWindowId) ?? null,
+          editing: {
+            cutCount: metrics.cutCount,
+            cutsPerMinute: metrics.cutsPerMinute,
+            freezeCoverage: metrics.freezeCoverage,
+            blackCoverage: metrics.blackCoverage,
+          },
+          visual,
+          audio:
+            audio.analysisStatus === "ready"
+              ? (audio.analysis as AudioAnalysis)
+              : null,
+        }
+
+        const events = await deps.synthesizer.synthesize(evidence)
+
+        await replaceRetentionWindowEvents(
+          admin,
+          userId,
+          analysedVideoId,
+          job.retentionWindowId,
+          events,
+        )
+        await updateRetentionWindowEventSynthesisStatus(admin, userId, job.id, {
+          status: "ready",
+          model,
+        })
+      } catch (error) {
+        console.error("Failed to synthesize retention window events", error)
+        await updateRetentionWindowEventSynthesisStatus(admin, userId, job.id, {
+          status: "failed",
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to synthesize events",
+        }).catch(() => {})
+      }
+    },
+  )
 }
 
 // --- OpenAI-backed default synthesizer ---
