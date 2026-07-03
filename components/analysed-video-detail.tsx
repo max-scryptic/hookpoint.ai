@@ -505,7 +505,7 @@ export function AnalysedVideoDetail({
       <Tabs defaultValue="hook">
         <TabsList>
           <TabsTrigger value="hook">
-            <GaugeIcon className="text-muted-foreground" />
+            <GaugeIcon className="text-pink-600 dark:text-pink-400" />
             The Hook
           </TabsTrigger>
           <TabsTrigger value="drop-offs">
@@ -517,7 +517,7 @@ export function AnalysedVideoDetail({
             Retention Gains
           </TabsTrigger>
           <TabsTrigger value="pacing">
-            <GaugeIcon className="text-violet-600 dark:text-violet-400" />
+            <GaugeIcon className="text-blue-600 dark:text-blue-400" />
             Pacing Analysis
           </TabsTrigger>
         </TabsList>
