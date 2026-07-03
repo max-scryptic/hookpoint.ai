@@ -32,6 +32,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import { runWithConcurrency } from "@/lib/concurrency"
 import {
   defaultVideoExtractor,
   type VideoExtractor,
@@ -51,6 +52,7 @@ import {
 import {
   buildRetentionAudioObjectPath,
   buildRetentionSnapshotObjectPath,
+  getRetentionWindowExtractionConcurrency,
   getRetentionWindowMediaStorageProvider,
   getSourceVideoReadUrlExpirySeconds,
 } from "@/lib/retention-window-media-config"
@@ -149,7 +151,9 @@ export async function extractPendingRetentionWindowMedia(
     getSourceVideoReadUrlExpirySeconds(),
   )
 
-  for (const scan of pendingSceneCueScans) {
+  const concurrency = getRetentionWindowExtractionConcurrency()
+
+  await runWithConcurrency(pendingSceneCueScans, concurrency, async (scan) => {
     // Snapshots still get derived and created below even when the scan
     // itself fails — from these empty cues, which is exactly the fallback a
     // window with genuinely zero detected cuts already gets (see
@@ -217,7 +221,7 @@ export async function extractPendingRetentionWindowMedia(
         },
       ).catch(() => {})
     }
-  }
+  })
 
   // Re-read pending snapshots after the scan loop above: it may have just
   // created fresh rows (derived from cues) for whichever windows it scanned,
@@ -249,7 +253,7 @@ export async function extractPendingRetentionWindowMedia(
   }
 
   try {
-    for (const snapshot of pendingSnapshots) {
+    await runWithConcurrency(pendingSnapshots, concurrency, async (snapshot) => {
       try {
         const jpeg = await deps.extractor.extractThumbnail(
           sourceUrl,
@@ -298,12 +302,12 @@ export async function extractPendingRetentionWindowMedia(
           },
         ).catch(() => {})
       }
-    }
+    })
   } finally {
     await ocrEngine?.terminate().catch(() => {})
   }
 
-  for (const audio of pendingAudio) {
+  await runWithConcurrency(pendingAudio, concurrency, async (audio) => {
     try {
       const clip = await deps.extractor.extractAudioSegment(
         sourceUrl,
@@ -333,5 +337,5 @@ export async function extractPendingRetentionWindowMedia(
         },
       ).catch(() => {})
     }
-  }
+  })
 }
