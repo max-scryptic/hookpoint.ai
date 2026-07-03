@@ -59,6 +59,14 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 
+// A first visit that backfills retention windows also triggers extraction in
+// the background via after() (see triggerRetentionWindowMediaExtraction),
+// which still runs within this render's invocation time budget — give it the
+// same headroom /api/analyze and the normalisation callback grant themselves,
+// so a video with several windows to scan isn't killed mid-extraction and
+// left with rows stuck 'pending' forever.
+export const maxDuration = 300
+
 type AnalysisResult =
   | {
       status: "ok"
