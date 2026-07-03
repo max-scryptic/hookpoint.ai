@@ -25,7 +25,10 @@ import {
   generatePacingAnalysis,
   type PacingAnalysis,
 } from "@/lib/pacing-analysis"
-import { getSourceFileForVideo } from "@/lib/source-files/source-files"
+import {
+  getSourceFileForVideo,
+  type SourceFile,
+} from "@/lib/source-files/source-files"
 import {
   getDurationToleranceSeconds,
   getFilenameSimilarityThreshold,
@@ -34,6 +37,7 @@ import {
   discardSourceFile,
   isStaleSourceFile,
 } from "@/lib/source-files/upload-service"
+import { getDeepAnalysisProgress } from "@/lib/retention-window-media-progress"
 import { getStorageProvider } from "@/lib/storage/provider"
 import { serialiseSourceFile } from "@/lib/source-files/serialise"
 import {
@@ -320,6 +324,7 @@ export default async function Page({
   // render its current state on first paint. Best-effort: a failure here must
   // not break the analysis view.
   let initialSourceFile = null
+  let readySourceFile: SourceFile | null = null
   if (result.status === "ok") {
     try {
       const supabase = await createClient()
@@ -342,23 +347,36 @@ export default async function Page({
         sourceFile = null
       }
       initialSourceFile = sourceFile ? serialiseSourceFile(sourceFile) : null
+      if (sourceFile && sourceFile.uploadStatus === "ready") {
+        readySourceFile = sourceFile
+      }
     } catch (error) {
       console.error("Failed to load source file", error)
     }
   }
 
-  // Load whatever deep-analysis evidence (synthesized events, transcripts,
-  // snapshots, audio) has been generated so far. Best-effort: a failure here
-  // must not break the rest of the analysis view.
+  // Only surface the deep-analysis evidence section once the pipeline has
+  // fully settled for this video — every window's snapshots/audio have been
+  // harvested and analysed, and events have been synthesized from all of it.
+  // Showing it any earlier just flashes an empty-looking "0 events" card
+  // before there's anything to actually show.
   let deepAnalysisEvidence: Awaited<ReturnType<typeof getDeepAnalysisEvidence>> = []
-  if (result.status === "ok" && result.analysedVideoId) {
+  if (result.status === "ok" && result.analysedVideoId && readySourceFile) {
     try {
       const supabase = await createClient()
-      deepAnalysisEvidence = await getDeepAnalysisEvidence(
+      const progress = await getDeepAnalysisProgress(
         supabase,
         user.id,
         result.analysedVideoId,
+        readySourceFile,
       )
+      if (progress.complete) {
+        deepAnalysisEvidence = await getDeepAnalysisEvidence(
+          supabase,
+          user.id,
+          result.analysedVideoId,
+        )
+      }
     } catch (error) {
       console.error("Failed to load deep analysis evidence", error)
     }
