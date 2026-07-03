@@ -6,16 +6,24 @@
 import { spawn } from "node:child_process"
 
 // Resolves the ffmpeg binary to run: an explicit override first, then the
-// static binary bundled via the ffmpeg-static dependency, then plain "ffmpeg"
-// on PATH (for an environment that provides its own, e.g. a base image with it
-// installed). Wrapped in try/catch so an environment ffmpeg-static didn't
-// publish a build for can still fall through instead of failing to import.
+// static binary bundled via the @ffmpeg-installer/ffmpeg dependency, then
+// plain "ffmpeg" on PATH (for an environment that provides its own, e.g. a
+// base image with it installed). Wrapped in try/catch so an environment
+// @ffmpeg-installer/ffmpeg didn't publish a build for can still fall through
+// instead of failing to import.
+//
+// Deliberately not ffmpeg-static: its install script downloads the binary
+// from GitHub Releases at install time, which fails (403) in build
+// environments that restrict egress to the npm registry — leaving the
+// package present but its binary missing, so every spawn ENOENTs at
+// runtime. @ffmpeg-installer/* ships the binary as the npm package content
+// itself, resolved by ordinary `npm install`.
 export function resolveFfmpegPath(): string {
   if (process.env.FFMPEG_PATH) return process.env.FFMPEG_PATH
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const bundled = require("ffmpeg-static") as string | null
-    if (bundled) return bundled
+    const bundled = require("@ffmpeg-installer/ffmpeg") as { path: string } | null
+    if (bundled) return bundled.path
   } catch {
     // Fall through to PATH.
   }
