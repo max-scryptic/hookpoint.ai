@@ -14,7 +14,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import type { PersistedRetentionWindow } from "@/lib/retention-windows"
 
-export type EventSynthesisStatus = "pending" | "ready" | "failed"
+export type EventSynthesisStatus = "pending" | "processing" | "ready" | "failed"
 
 export interface RetentionWindowEventSynthesisJob {
   id: string
@@ -106,9 +106,11 @@ export async function createPendingRetentionWindowEventSynthesis(
 // permanently strand a window without events.
 const SYNTHESIS_RETRY_STALE_MS = 10 * 60 * 1000
 
-// Loads every event-synthesis job ready to (re)run for a video: still
-// 'pending', or 'failed' long enough ago to retry.
-export async function getPendingRetentionWindowEventSynthesisJobs(
+// Atomically claims every event-synthesis job ready to (re)run for a video.
+// The processing lease prevents overlapping progress polls / pipeline
+// callbacks from issuing duplicate OpenAI calls. A worker that is terminated
+// mid-call is recovered once its claim becomes stale.
+export async function claimPendingRetentionWindowEventSynthesisJobs(
   supabase: SupabaseClient,
   userId: string,
   analysedVideoId: string,
@@ -119,14 +121,17 @@ export async function getPendingRetentionWindowEventSynthesisJobs(
 
   const { data, error } = await supabase
     .from("retention_window_event_synthesis")
-    .select(SYNTHESIS_COLUMNS)
+    .update({ status: "processing", error: null })
     .eq("user_id", userId)
     .eq("analysed_video_id", analysedVideoId)
-    .or(`status.eq.pending,and(status.eq.failed,updated_at.lt.${staleBefore})`)
+    .or(
+      `status.eq.pending,and(status.eq.failed,updated_at.lt.${staleBefore}),and(status.eq.processing,updated_at.lt.${staleBefore})`,
+    )
+    .select(SYNTHESIS_COLUMNS)
     .order("retention_window_id", { ascending: true })
 
   if (error) {
-    throw new Error(`Failed to load pending event synthesis jobs: ${error.message}`)
+    throw new Error(`Failed to claim pending event synthesis jobs: ${error.message}`)
   }
 
   return ((data ?? []) as EventSynthesisRow[]).map(mapSynthesisRow)
@@ -137,11 +142,14 @@ export async function updateRetentionWindowEventSynthesisStatus(
   userId: string,
   id: string,
   outcome:
+    | { status: "pending" }
     | { status: "ready"; model: string }
     | { status: "failed"; error: string },
 ): Promise<void> {
   const payload =
-    outcome.status === "ready"
+    outcome.status === "pending"
+      ? { status: "pending", error: null }
+      : outcome.status === "ready"
       ? {
           status: "ready",
           error: null,

@@ -75,7 +75,7 @@ function countByStatus(
   let pending = 0
   let failed = 0
   for (const row of rows) {
-    if (row.status === "pending") pending++
+    if (row.status === "pending" || row.status === "processing") pending++
     else if (row.status === "failed") failed++
   }
   return { total: rows.length, pending, failed }

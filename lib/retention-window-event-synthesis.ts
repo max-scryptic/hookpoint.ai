@@ -32,7 +32,7 @@ import {
   getRetentionWindowSnapshotsForVideo,
 } from "@/lib/retention-window-media"
 import {
-  getPendingRetentionWindowEventSynthesisJobs,
+  claimPendingRetentionWindowEventSynthesisJobs,
   replaceRetentionWindowEvents,
   updateRetentionWindowEventSynthesisStatus,
   type RetentionWindowEventPrimaryEvidence,
@@ -104,7 +104,7 @@ export async function synthesizeRetentionWindowEvents(
   analysedVideoId: string,
   deps: RetentionWindowEventSynthesisDeps = defaultRetentionWindowEventSynthesisDeps(),
 ): Promise<void> {
-  const pendingJobs = await getPendingRetentionWindowEventSynthesisJobs(
+  const pendingJobs = await claimPendingRetentionWindowEventSynthesisJobs(
     admin,
     userId,
     analysedVideoId,
@@ -171,7 +171,13 @@ export async function synthesizeRetentionWindowEvents(
       const audioSettled = audio != null && isSettled(audio.analysisStatus)
 
       if (!scanSettled || !hasSnapshots || !snapshotsSettled || !audioSettled) {
-        return // Not ready yet — retried on a later trigger.
+        // The job was claimed before loading its evidence. Release it so the
+        // next trigger can retry immediately when the final prerequisite
+        // settles rather than waiting for the stale-processing lease.
+        await updateRetentionWindowEventSynthesisStatus(admin, userId, job.id, {
+          status: "pending",
+        })
+        return
       }
 
       try {

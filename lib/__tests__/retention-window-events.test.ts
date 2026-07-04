@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import {
   createPendingRetentionWindowEventSynthesis,
-  getPendingRetentionWindowEventSynthesisJobs,
+  claimPendingRetentionWindowEventSynthesisJobs,
   getRetentionWindowEvents,
   replaceRetentionWindowEvents,
   updateRetentionWindowEventSynthesisStatus,
@@ -89,7 +89,7 @@ function makeFakeSupabase(seedRows: Record<string, unknown>[] = []) {
               id: pendingId,
               payload: builder._payload as Record<string, unknown>,
             })
-            return Promise.resolve({ error: null }).then(resolve)
+            return Promise.resolve({ data: seedRows, error: null }).then(resolve)
           }
           if (builder._delete) {
             deletes.push({ table })
@@ -136,13 +136,13 @@ describe("createPendingRetentionWindowEventSynthesis", () => {
   })
 })
 
-describe("getPendingRetentionWindowEventSynthesisJobs", () => {
+describe("claimPendingRetentionWindowEventSynthesisJobs", () => {
   it("maps pending rows to their camelCase shape", async () => {
     const { supabase } = makeFakeSupabase([
       { id: "job-1", retention_window_id: "rw-1", status: "pending", error: null },
     ])
 
-    const jobs = await getPendingRetentionWindowEventSynthesisJobs(
+    const jobs = await claimPendingRetentionWindowEventSynthesisJobs(
       supabase,
       "user-1",
       "av-1",
@@ -156,18 +156,39 @@ describe("getPendingRetentionWindowEventSynthesisJobs", () => {
   it("retries a failure long enough ago, not just pending jobs", async () => {
     const { supabase, orCalls } = makeFakeSupabase([])
 
-    await getPendingRetentionWindowEventSynthesisJobs(supabase, "user-1", "av-1")
+    await claimPendingRetentionWindowEventSynthesisJobs(
+      supabase,
+      "user-1",
+      "av-1",
+    )
 
     const call = orCalls.find(
       (c) => c.table === "retention_window_event_synthesis",
     )
     expect(call?.expr).toContain("status.eq.pending")
     expect(call?.expr).toContain("status.eq.failed")
+    expect(call?.expr).toContain("status.eq.processing")
     expect(call?.expr).toContain("updated_at.lt.")
   })
 })
 
 describe("updateRetentionWindowEventSynthesisStatus", () => {
+  it("releases an unsettled claim back to pending", async () => {
+    const { supabase, updates } = makeFakeSupabase()
+
+    await updateRetentionWindowEventSynthesisStatus(supabase, "user-1", "job-1", {
+      status: "pending",
+    })
+
+    expect(updates).toContainEqual(
+      expect.objectContaining({
+        table: "retention_window_event_synthesis",
+        id: "job-1",
+        payload: { status: "pending", error: null },
+      }),
+    )
+  })
+
   it("records the model and clears any prior error when marking ready", async () => {
     const { supabase, updates } = makeFakeSupabase()
 

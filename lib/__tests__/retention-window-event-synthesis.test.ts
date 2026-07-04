@@ -99,7 +99,10 @@ function makeFakeSupabase(tables: Record<string, Record<string, unknown>[]>) {
               id: pendingId,
               payload: builder._payload as Record<string, unknown>,
             })
-            return Promise.resolve({ error: null }).then(resolve)
+            return Promise.resolve({
+              data: tables[table] ?? [],
+              error: null,
+            }).then(resolve)
           }
           if (builder._delete) {
             deletes.push({ table })
@@ -158,7 +161,13 @@ describe("synthesizeRetentionWindowEvents", () => {
     })
 
     expect(synthesizer.synthesize).not.toHaveBeenCalled()
-    expect(updates).toHaveLength(0)
+    expect(updates).toContainEqual(
+      expect.objectContaining({
+        table: "retention_window_event_synthesis",
+        id: "job-1",
+        payload: expect.objectContaining({ status: "pending" }),
+      }),
+    )
     expect(inserts).toHaveLength(0)
   })
 
