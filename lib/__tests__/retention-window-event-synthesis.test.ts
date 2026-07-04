@@ -171,6 +171,44 @@ describe("synthesizeRetentionWindowEvents", () => {
     expect(inserts).toHaveLength(0)
   })
 
+  it("synthesizes without visual evidence when snapshot extraction failed", async () => {
+    const { supabase, updates } = makeFakeSupabase({
+      retention_window_event_synthesis: [
+        { id: "job-1", retention_window_id: "rw-1", status: "pending", error: null },
+      ],
+      retention_windows: [WINDOW_ROW],
+      retention_window_snapshots: [
+        snapshotRow({
+          status: "failed",
+          storage_path: null,
+          analysis_status: "pending",
+          analysis: null,
+        }),
+      ],
+      retention_window_audio: [audioRow()],
+      retention_window_scene_cue_scans: [
+        { retention_window_id: "rw-1", status: "ready" },
+      ],
+      video_scene_cues: [],
+      retention_window_transcripts: [],
+    })
+    const synthesizer = fakeSynthesizer()
+
+    await synthesizeRetentionWindowEvents(supabase, "user-1", "av-1", {
+      synthesizer,
+    })
+
+    expect(synthesizer.synthesize).toHaveBeenCalledTimes(1)
+    expect(synthesizer.synthesize.mock.calls[0][0]).toMatchObject({ visual: [] })
+    expect(updates).toContainEqual(
+      expect.objectContaining({
+        table: "retention_window_event_synthesis",
+        id: "job-1",
+        payload: expect.objectContaining({ status: "ready" }),
+      }),
+    )
+  })
+
   it("synthesizes events once every prerequisite has settled, and marks the job ready", async () => {
     const { supabase, updates, inserts, deletes } = makeFakeSupabase({
       retention_window_event_synthesis: [
