@@ -25,6 +25,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import { runWithConcurrency } from "@/lib/concurrency"
 import { measureAudioClipStats } from "@/lib/media/video-extraction"
 import {
   claimRetentionWindowAudioPendingAnalysis,
@@ -37,6 +38,7 @@ import {
 import {
   getAnalysisMediaReadUrlExpirySeconds,
   getAudioAnalysisModel,
+  getRetentionWindowAiCallConcurrency,
   getRetentionWindowMediaStorageProvider,
   getSnapshotAnalysisModel,
 } from "@/lib/retention-window-media-config"
@@ -171,52 +173,62 @@ export async function analyzeRetentionWindowMedia(
         )
       : new Map<string, string>()
 
-  for (const windowSnapshots of groupByWindow(pendingSnapshots).values()) {
-    try {
-      const images = await Promise.all(
-        windowSnapshots.map(async (snapshot) => ({
-          chunkIndex: snapshot.chunkIndex,
-          imageUrl: await deps.mediaStorage.createSignedReadUrl(
-            snapshot.storagePath as string,
-            expiry,
-          ),
-          ocrText: snapshot.ocrText,
-        })),
-      )
-      const results = await deps.analyzer.analyzeSnapshots(images)
+  const concurrency = getRetentionWindowAiCallConcurrency()
 
-      await Promise.all(
-        windowSnapshots.map((snapshot) => {
-          const analysis = results.get(snapshot.chunkIndex)
-          if (!analysis) {
-            throw new Error(
-              `No analysis returned for chunk ${snapshot.chunkIndex}`,
-            )
-          }
-          return updateRetentionWindowSnapshotAnalysis(admin, userId, snapshot.id, {
-            status: "ready",
-            analysis,
-            model: snapshotModel,
-          })
-        }),
-      )
-    } catch (error) {
-      console.error("Failed to analyse retention window snapshots", error)
-      const message =
-        error instanceof Error ? error.message : "Failed to analyse snapshots"
-      await Promise.all(
-        windowSnapshots.map((snapshot) =>
-          updateRetentionWindowSnapshotAnalysis(admin, userId, snapshot.id, {
-            status: "failed",
-            error: message,
-          }).catch(() => {}),
-        ),
-      )
-    }
-  }
+  // Every window's vision call is fully independent (own rows, own storage
+  // objects), the same property that already makes extraction safe to run
+  // concurrently — running them one at a time here just adds wall-clock time
+  // for no correctness benefit.
+  await runWithConcurrency(
+    Array.from(groupByWindow(pendingSnapshots).values()),
+    concurrency,
+    async (windowSnapshots) => {
+      try {
+        const images = await Promise.all(
+          windowSnapshots.map(async (snapshot) => ({
+            chunkIndex: snapshot.chunkIndex,
+            imageUrl: await deps.mediaStorage.createSignedReadUrl(
+              snapshot.storagePath as string,
+              expiry,
+            ),
+            ocrText: snapshot.ocrText,
+          })),
+        )
+        const results = await deps.analyzer.analyzeSnapshots(images)
+
+        await Promise.all(
+          windowSnapshots.map((snapshot) => {
+            const analysis = results.get(snapshot.chunkIndex)
+            if (!analysis) {
+              throw new Error(
+                `No analysis returned for chunk ${snapshot.chunkIndex}`,
+              )
+            }
+            return updateRetentionWindowSnapshotAnalysis(admin, userId, snapshot.id, {
+              status: "ready",
+              analysis,
+              model: snapshotModel,
+            })
+          }),
+        )
+      } catch (error) {
+        console.error("Failed to analyse retention window snapshots", error)
+        const message =
+          error instanceof Error ? error.message : "Failed to analyse snapshots"
+        await Promise.all(
+          windowSnapshots.map((snapshot) =>
+            updateRetentionWindowSnapshotAnalysis(admin, userId, snapshot.id, {
+              status: "failed",
+              error: message,
+            }).catch(() => {}),
+          ),
+        )
+      }
+    },
+  )
 
   const audioModel = getAudioAnalysisModel()
-  for (const audio of pendingAudio) {
+  await runWithConcurrency(pendingAudio, concurrency, async (audio) => {
     try {
       const analysis = await analyzeOneAudioClip(
         audio,
@@ -236,7 +248,7 @@ export async function analyzeRetentionWindowMedia(
           error instanceof Error ? error.message : "Failed to analyse audio",
       }).catch(() => {})
     }
-  }
+  })
 }
 
 function countWords(text: string): number {

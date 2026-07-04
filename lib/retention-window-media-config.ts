@@ -76,6 +76,20 @@ export function getRetentionWindowExtractionConcurrency(): number {
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 2
 }
 
+// How many windows' worth of OpenAI calls (vision/audio analysis, event
+// synthesis) run at once. Unlike extraction's ffmpeg concurrency above, these
+// calls are network-bound, not CPU-bound — the wait is almost entirely on
+// OpenAI's side, so there's no local-CPU-contention reason to keep this low.
+// Every window is fully independent (own rows, own storage objects), the same
+// property that makes extraction's concurrency safe. Default 5, comfortably
+// under typical per-account OpenAI rate limits while still turning what would
+// otherwise be dozens of sequential round-trips into a handful of batches.
+export function getRetentionWindowAiCallConcurrency(): number {
+  const raw = process.env.RETENTION_WINDOW_AI_CALL_CONCURRENCY
+  const parsed = raw != null ? Number(raw) : NaN
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 5
+}
+
 // OpenAI model used to describe a window's harvested snapshots (vision input).
 // Defaults to the same model already used for transcript pacing analysis.
 export function getSnapshotAnalysisModel(): string {
