@@ -27,6 +27,8 @@ function makeSourceFile(overrides: Partial<SourceFile> = {}): SourceFile {
     deleteAfter: null,
     proxyStoragePath: "user-1/vid-1/sf-1/proxy-1080p.mp4",
     proxySizeBytes: 2048,
+    analysisProxyStoragePath: null,
+    analysisProxySizeBytes: null,
     normalisationStatus: "ready",
     normalisationProvider: "qencode",
     normalisationTaskToken: "task-1",

@@ -4,9 +4,12 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   extractPendingRetentionWindowMedia,
   isSourceFileReady,
+  mergeScanSpans,
+  sliceSceneCues,
   type RetentionWindowMediaExtractionDeps,
   type SceneCueScanner,
 } from "@/lib/retention-window-media-extraction"
+import type { RetentionWindowSceneCueScan } from "@/lib/video-scene-cues"
 import type { SourceFile } from "@/lib/source-files/source-files"
 import type { StorageProvider } from "@/lib/storage"
 import type { VideoExtractor } from "@/lib/media/video-extraction"
@@ -35,6 +38,8 @@ function makeSourceFile(overrides: Partial<SourceFile> = {}): SourceFile {
     deleteAfter: null,
     proxyStoragePath: "user-1/vid-1/sf-1/proxy-1080p.mp4",
     proxySizeBytes: 2048,
+    analysisProxyStoragePath: null,
+    analysisProxySizeBytes: null,
     normalisationStatus: "ready",
     normalisationProvider: "qencode",
     normalisationTaskToken: "task-1",
@@ -80,10 +85,10 @@ let nextGeneratedId = 0
 
 // A fake Supabase client that serves canned rows for the three "pending"
 // reads this module issues, and records every status-update/insert/delete it
-// makes in response. Stateful for retention_window_snapshots: an upsert on
-// that table replaces what a later select on it returns, since
-// createRetentionWindowSnapshotsFromSceneCues creates rows mid-run that the
-// snapshot-extraction loop right after it has to see.
+// makes in response. Stateful for retention_window_snapshots: rows an upsert
+// adds to that table show up in a later select on it, since
+// createRetentionWindowSnapshotsFromSceneCues creates rows mid-run (one batch
+// per window) that the snapshot-extraction loop right after it has to see.
 function makeFakeSupabase(
   snapshots: Record<string, unknown>[],
   audio: Record<string, unknown>[],
@@ -115,12 +120,15 @@ function makeFakeSupabase(
         },
         upsert: (rows: Record<string, unknown>[]) => {
           if (table === "retention_window_snapshots") {
-            rowsByTable[table] = rows.map((row) => ({
-              id: `generated-${nextGeneratedId++}`,
-              status: "pending",
-              error: null,
-              ...row,
-            }))
+            rowsByTable[table] = [
+              ...rowsByTable[table],
+              ...rows.map((row) => ({
+                id: `generated-${nextGeneratedId++}`,
+                status: "pending",
+                error: null,
+                ...row,
+              })),
+            ]
           }
           return Promise.resolve({ error: null })
         },
@@ -200,6 +208,7 @@ describe("extractPendingRetentionWindowMedia", () => {
       mediaStorage: fakeStorage(),
       sceneCueScanner: fakeSceneCueScanner(),
       createOcrEngine: createOcrEngineSpy,
+      acquireLocalSource: async () => null,
     }
 
     await extractPendingRetentionWindowMedia(
@@ -255,6 +264,7 @@ describe("extractPendingRetentionWindowMedia", () => {
       mediaStorage,
       sceneCueScanner: fakeSceneCueScanner(),
       createOcrEngine: async () => ocrEngine,
+      acquireLocalSource: async () => null,
     })
 
     expect(storage.createSignedReadUrl).toHaveBeenCalledWith(
@@ -322,6 +332,7 @@ describe("extractPendingRetentionWindowMedia", () => {
       mediaStorage: fakeStorage(),
       sceneCueScanner: fakeSceneCueScanner(),
       createOcrEngine: async () => ocrEngine,
+      acquireLocalSource: async () => null,
     })
 
     expect(updates).toContainEqual(
@@ -371,6 +382,7 @@ describe("extractPendingRetentionWindowMedia", () => {
       createOcrEngine: async () => {
         throw new Error("worker-script not found")
       },
+      acquireLocalSource: async () => null,
     })
 
     // A broken OCR runtime (e.g. a bundling issue that leaves the worker
@@ -433,6 +445,7 @@ describe("extractPendingRetentionWindowMedia", () => {
         mediaStorage: fakeStorage(),
         sceneCueScanner: fakeSceneCueScanner(),
         createOcrEngine: async () => fakeOcrEngine(),
+        acquireLocalSource: async () => null,
       },
     )
 
@@ -486,6 +499,7 @@ describe("extractPendingRetentionWindowMedia", () => {
       mediaStorage: fakeStorage(),
       sceneCueScanner,
       createOcrEngine: async () => fakeOcrEngine(),
+      acquireLocalSource: async () => null,
     })
 
     expect(sceneCueScanner.scan).toHaveBeenCalledWith(
@@ -557,6 +571,7 @@ describe("extractPendingRetentionWindowMedia", () => {
       mediaStorage: fakeStorage(),
       sceneCueScanner,
       createOcrEngine: async () => fakeOcrEngine(),
+      acquireLocalSource: async () => null,
     })
 
     // No cue data to store — the scan itself never produced any.
@@ -587,5 +602,301 @@ describe("extractPendingRetentionWindowMedia", () => {
           (update.payload as Record<string, unknown>).status === "ready",
       ),
     ).toHaveLength(3)
+  })
+})
+
+function makeScan(
+  overrides: Partial<RetentionWindowSceneCueScan> = {},
+): RetentionWindowSceneCueScan {
+  return {
+    id: "scan-1",
+    retentionWindowId: "rw-1",
+    fromSeconds: 0,
+    toSeconds: 30,
+    status: "pending",
+    error: null,
+    ...overrides,
+  }
+}
+
+describe("mergeScanSpans", () => {
+  it("coalesces overlapping and nearly-adjacent ranges into one span", () => {
+    const spans = mergeScanSpans([
+      makeScan({ id: "a", fromSeconds: 0, toSeconds: 30 }),
+      makeScan({ id: "b", fromSeconds: 25, toSeconds: 60 }),
+      makeScan({ id: "c", fromSeconds: 65, toSeconds: 90 }),
+      makeScan({ id: "d", fromSeconds: 200, toSeconds: 240 }),
+    ])
+
+    expect(spans).toHaveLength(2)
+    expect(spans[0]).toMatchObject({ fromSeconds: 0, toSeconds: 90 })
+    expect(spans[0].scans.map((scan) => scan.id)).toEqual(["a", "b", "c"])
+    expect(spans[1]).toMatchObject({ fromSeconds: 200, toSeconds: 240 })
+  })
+
+  it("never lets a contained range shrink the span", () => {
+    const spans = mergeScanSpans([
+      makeScan({ id: "a", fromSeconds: 0, toSeconds: 60 }),
+      makeScan({ id: "b", fromSeconds: 10, toSeconds: 20 }),
+    ])
+
+    expect(spans).toHaveLength(1)
+    expect(spans[0]).toMatchObject({ fromSeconds: 0, toSeconds: 60 })
+  })
+})
+
+describe("sliceSceneCues", () => {
+  it("keeps cuts inside the window and clips freeze/black spans to it", () => {
+    const sliced = sliceSceneCues(
+      {
+        cuts: [{ atSeconds: 5 }, { atSeconds: 35 }, { atSeconds: 70 }],
+        freezes: [{ fromSeconds: 25, toSeconds: 45 }],
+        blacks: [{ fromSeconds: 0, toSeconds: 10 }],
+      },
+      30,
+      60,
+    )
+
+    expect(sliced.cuts).toEqual([{ atSeconds: 35 }])
+    expect(sliced.freezes).toEqual([{ fromSeconds: 30, toSeconds: 45 }])
+    expect(sliced.blacks).toEqual([])
+  })
+})
+
+describe("extractPendingRetentionWindowMedia — merged scans and shared frames", () => {
+  it("decodes overlapping windows' scans as one span and slices cues per window", async () => {
+    const { supabase, updates, inserts } = makeFakeSupabase(
+      [],
+      [],
+      [
+        {
+          id: "scan-1",
+          retention_window_id: "rw-1",
+          from_seconds: 0,
+          to_seconds: 30,
+          status: "pending",
+          error: null,
+        },
+        {
+          id: "scan-2",
+          retention_window_id: "rw-2",
+          from_seconds: 25,
+          to_seconds: 60,
+          status: "pending",
+          error: null,
+        },
+      ],
+    )
+    const sceneCueScanner = fakeSceneCueScanner()
+    sceneCueScanner.scan.mockResolvedValueOnce({
+      cuts: [{ atSeconds: 15 }, { atSeconds: 40 }],
+      freezes: [],
+      blacks: [],
+    })
+    const extractor: VideoExtractor = {
+      extractThumbnail: vi.fn(async () => Buffer.from("jpeg-bytes")),
+      extractAudioSegment: vi.fn(),
+    }
+
+    await extractPendingRetentionWindowMedia(supabase, fakeStorage(), makeSourceFile(), {
+      extractor,
+      mediaStorage: fakeStorage(),
+      sceneCueScanner,
+      createOcrEngine: async () => fakeOcrEngine(),
+      acquireLocalSource: async () => null,
+    })
+
+    // One decode covering both windows, not one per window.
+    expect(sceneCueScanner.scan).toHaveBeenCalledTimes(1)
+    expect(sceneCueScanner.scan).toHaveBeenCalledWith(
+      "https://signed.example/video.mp4",
+      0,
+      60,
+    )
+
+    // Each window stores only its own slice of the master cue list.
+    expect(inserts).toContainEqual({
+      table: "video_scene_cues",
+      rows: [
+        expect.objectContaining({
+          retention_window_id: "rw-1",
+          kind: "cut",
+          from_seconds: 15,
+        }),
+      ],
+    })
+    expect(inserts).toContainEqual({
+      table: "video_scene_cues",
+      rows: [
+        expect.objectContaining({
+          retention_window_id: "rw-2",
+          kind: "cut",
+          from_seconds: 40,
+        }),
+      ],
+    })
+
+    // Both scans settle ready off the single decode.
+    for (const id of ["scan-1", "scan-2"]) {
+      expect(updates).toContainEqual(
+        expect.objectContaining({
+          table: "retention_window_scene_cue_scans",
+          id,
+          payload: expect.objectContaining({ status: "ready" }),
+        }),
+      )
+    }
+  })
+
+  it("extracts and OCRs a timestamp shared by two windows once, but stores both rows", async () => {
+    const { supabase, updates } = makeFakeSupabase(
+      [
+        {
+          id: "snap-1",
+          retention_window_id: "rw-1",
+          chunk_index: 0,
+          timestamp_seconds: 12,
+          storage_path: null,
+          status: "pending",
+          error: null,
+        },
+        {
+          id: "snap-2",
+          retention_window_id: "rw-2",
+          chunk_index: 3,
+          timestamp_seconds: 12,
+          storage_path: null,
+          status: "pending",
+          error: null,
+        },
+      ],
+      [],
+    )
+    const extractor: VideoExtractor = {
+      extractThumbnail: vi.fn(async () => Buffer.from("jpeg-bytes")),
+      extractAudioSegment: vi.fn(),
+    }
+    const ocrEngine = fakeOcrEngine()
+    const mediaStorage = fakeStorage()
+
+    await extractPendingRetentionWindowMedia(supabase, fakeStorage(), makeSourceFile(), {
+      extractor,
+      mediaStorage,
+      sceneCueScanner: fakeSceneCueScanner(),
+      createOcrEngine: async () => ocrEngine,
+      acquireLocalSource: async () => null,
+    })
+
+    // The expensive work (decode + OCR) happens once for the shared
+    // timestamp; only the cheap per-row object writes repeat.
+    expect(extractor.extractThumbnail).toHaveBeenCalledTimes(1)
+    expect(ocrEngine.recognize).toHaveBeenCalledTimes(1)
+    expect(mediaStorage.putObject).toHaveBeenCalledTimes(2)
+    for (const id of ["snap-1", "snap-2"]) {
+      expect(updates).toContainEqual(
+        expect.objectContaining({
+          table: "retention_window_snapshots",
+          id,
+          payload: expect.objectContaining({ status: "ready" }),
+        }),
+      )
+    }
+  })
+
+  it("reads the 360p analysis proxy when normalisation produced one", async () => {
+    const { supabase } = makeFakeSupabase(
+      [
+        {
+          id: "snap-1",
+          retention_window_id: "rw-1",
+          chunk_index: 0,
+          timestamp_seconds: 0,
+          storage_path: null,
+          status: "pending",
+          error: null,
+        },
+      ],
+      [],
+    )
+    const storage = fakeStorage()
+    const extractor: VideoExtractor = {
+      extractThumbnail: vi.fn(async () => Buffer.from("jpeg-bytes")),
+      extractAudioSegment: vi.fn(),
+    }
+
+    await extractPendingRetentionWindowMedia(
+      supabase,
+      storage,
+      makeSourceFile({
+        analysisProxyStoragePath: "user-1/vid-1/sf-1/proxy-360p.mp4",
+        analysisProxySizeBytes: 512,
+      }),
+      {
+        extractor,
+        mediaStorage: fakeStorage(),
+        sceneCueScanner: fakeSceneCueScanner(),
+        createOcrEngine: async () => fakeOcrEngine(),
+        acquireLocalSource: async () => null,
+      },
+    )
+
+    expect(storage.createSignedReadUrl).toHaveBeenCalledWith(
+      "user-1/vid-1/sf-1/proxy-360p.mp4",
+      expect.any(Number),
+    )
+  })
+
+  it("decodes from the locally cached copy when one is available, and cleans it up", async () => {
+    const { supabase } = makeFakeSupabase(
+      [
+        {
+          id: "snap-1",
+          retention_window_id: "rw-1",
+          chunk_index: 0,
+          timestamp_seconds: 0,
+          storage_path: null,
+          status: "pending",
+          error: null,
+        },
+      ],
+      [
+        {
+          id: "aud-1",
+          retention_window_id: "rw-1",
+          from_seconds: 0,
+          to_seconds: 30,
+          storage_path: null,
+          status: "pending",
+          error: null,
+        },
+      ],
+    )
+    const extractor: VideoExtractor = {
+      extractThumbnail: vi.fn(async () => Buffer.from("jpeg-bytes")),
+      extractAudioSegment: vi.fn(async () => Buffer.from("mp3-bytes")),
+    }
+    const cleanup = vi.fn(async () => {})
+
+    await extractPendingRetentionWindowMedia(supabase, fakeStorage(), makeSourceFile(), {
+      extractor,
+      mediaStorage: fakeStorage(),
+      sceneCueScanner: fakeSceneCueScanner(),
+      createOcrEngine: async () => fakeOcrEngine(),
+      acquireLocalSource: async () => ({
+        path: "/tmp/cache/source.mp4",
+        cleanup,
+      }),
+    })
+
+    expect(extractor.extractThumbnail).toHaveBeenCalledWith(
+      "/tmp/cache/source.mp4",
+      0,
+    )
+    expect(extractor.extractAudioSegment).toHaveBeenCalledWith(
+      "/tmp/cache/source.mp4",
+      0,
+      30,
+    )
+    expect(cleanup).toHaveBeenCalledTimes(1)
   })
 })

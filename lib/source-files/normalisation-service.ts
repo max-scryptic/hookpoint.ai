@@ -25,6 +25,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { QencodeClient, type QencodeQuery } from "@/lib/qencode/qencode"
 import {
+  getAnalysisProxyTargetHeight,
   getNormalisationCallbackUrl,
   getNormalisationSourceExpirySeconds,
   getProxyFormatOverrides,
@@ -40,6 +41,13 @@ import {
 import type { StorageProvider } from "@/lib/storage"
 
 const NORMALISATION_PROVIDER = "qencode"
+
+// `tag` values set on each Qencode format so the completion callback can tell
+// the outputs apart (Qencode echoes them back on each entry of the status
+// payload's `videos` array) — more robust than relying on output order or on
+// Qencode reporting a height per video.
+const PLAYBACK_OUTPUT_TAG = "playback"
+const ANALYSIS_OUTPUT_TAG = "analysis"
 
 // Injectable seam so tests can supply a fake transcoder client. Defaults build a
 // real Qencode client from env config.
@@ -87,6 +95,15 @@ export async function startNormalisation(
 
   const targetHeight = getProxyTargetHeight()
   const proxyPath = buildProxyObjectPath(sourceFile.storagePath, targetHeight)
+  // The 360p analysis proxy rides along in the same job as a second output.
+  // Skipped when disabled (height 0) or when it wouldn't actually be smaller
+  // than the playback proxy — a duplicate output would also collide on the
+  // height-tagged object path.
+  const analysisHeight = getAnalysisProxyTargetHeight()
+  const wantAnalysisProxy = analysisHeight > 0 && analysisHeight < targetHeight
+  const analysisProxyPath = wantAnalysisProxy
+    ? buildProxyObjectPath(sourceFile.storagePath, analysisHeight)
+    : null
 
   try {
     const sourceUrl = await storage.createSignedReadUrl(
@@ -101,8 +118,19 @@ export async function startNormalisation(
           output: "mp4",
           video_codec: "libx264",
           height: targetHeight,
+          tag: PLAYBACK_OUTPUT_TAG,
           ...getProxyFormatOverrides(),
         },
+        ...(wantAnalysisProxy
+          ? [
+              {
+                output: "mp4",
+                video_codec: "libx264",
+                height: analysisHeight,
+                tag: ANALYSIS_OUTPUT_TAG,
+              },
+            ]
+          : []),
       ],
       callback_url: getNormalisationCallbackUrl() ?? undefined,
     }
@@ -116,6 +144,7 @@ export async function startNormalisation(
       // Recorded now but only consulted by playback once the status is 'ready',
       // so it never points readers at a not-yet-written object.
       proxyStoragePath: proxyPath,
+      analysisProxyStoragePath: analysisProxyPath,
       normalisationError: null,
     })
   } catch (error) {
@@ -130,17 +159,28 @@ export async function startNormalisation(
   }
 }
 
+// One finished output in a transcoder status callback: its temporary download
+// URL plus whatever identifying metadata the callback carried for it.
+export interface NormalisationCallbackVideo {
+  url: string
+  // The `tag` we set on the format when submitting the job, echoed back by
+  // Qencode (as `tag` or `user_tag`) — the reliable way to tell the playback
+  // proxy from the analysis proxy. Null for a provider/event that dropped it.
+  tag: string | null
+  height: number | null
+}
+
 // The minimal, provider-agnostic view of a transcoder status callback.
 export interface NormalisationCallback {
   taskToken: string
-  // 'completed' = a finished video is ready to pull; 'error' = transcode
+  // 'completed' = finished videos are ready to pull; 'error' = transcode
   // failed; 'progress' = an interim event we acknowledge but don't act on.
   outcome: "completed" | "error" | "progress"
   errorMessage?: string
-  // Temporary download URL for the finished proxy (Qencode holds it on its own
-  // storage for 24h since no destination was configured). Only set when
-  // outcome === "completed".
-  videoUrl?: string
+  // Every finished output's temporary download URL (Qencode holds them on its
+  // own storage for 24h since no destination was configured). Only populated
+  // when outcome === "completed".
+  videos: NormalisationCallbackVideo[]
 }
 
 // Qencode POSTs callbacks as application/x-www-form-urlencoded fields, not
@@ -184,11 +224,50 @@ export function parseQencodeCallback(
         ? fields.message
         : undefined
 
-  const videos = Array.isArray(status.videos) ? status.videos : []
-  const firstVideo = videos[0] as Record<string, unknown> | undefined
-  const videoUrl = typeof firstVideo?.url === "string" ? firstVideo.url : undefined
+  const rawVideos = Array.isArray(status.videos) ? status.videos : []
+  const videos: NormalisationCallbackVideo[] = []
+  for (const entry of rawVideos) {
+    const video = entry as Record<string, unknown> | null
+    if (!video || typeof video.url !== "string") continue
+    const tag = video.tag ?? video.user_tag
+    videos.push({
+      url: video.url,
+      tag: typeof tag === "string" ? tag : null,
+      height: typeof video.height === "number" ? video.height : null,
+    })
+  }
 
-  return { taskToken, outcome, errorMessage, videoUrl }
+  return { taskToken, outcome, errorMessage, videos }
+}
+
+// Picks one callback output by its format tag, falling back for callbacks that
+// dropped the tags: the playback proxy is the tallest output (or the only
+// one), and the analysis proxy is the shortest — provided there are two
+// distinct outputs to tell apart, otherwise the lone video is playback-only.
+export function pickCallbackVideo(
+  videos: NormalisationCallbackVideo[],
+  which: typeof PLAYBACK_OUTPUT_TAG | typeof ANALYSIS_OUTPUT_TAG,
+): NormalisationCallbackVideo | null {
+  const tagged = videos.find((video) => video.tag === which)
+  if (tagged) return tagged
+
+  // No tags to go on. With a single output, assume it's the playback proxy —
+  // the required one — and report no analysis proxy at all.
+  if (videos.length <= 1) {
+    return which === PLAYBACK_OUTPUT_TAG ? (videos[0] ?? null) : null
+  }
+
+  const withHeights = videos.filter((video) => video.height != null)
+  if (withHeights.length !== videos.length) {
+    // Ambiguous (some heights missing): keep the old first-video behaviour for
+    // playback rather than guessing which of several outputs is which.
+    return which === PLAYBACK_OUTPUT_TAG ? videos[0] : null
+  }
+
+  const sorted = [...withHeights].sort(
+    (a, b) => (b.height as number) - (a.height as number),
+  )
+  return which === PLAYBACK_OUTPUT_TAG ? sorted[0] : sorted[sorted.length - 1]
 }
 
 // Applies a parsed callback to the matching source file. On completion it pulls
@@ -218,7 +297,8 @@ export async function applyNormalisationCallback(
   // outcome === "completed": we need somewhere to write the proxy and a URL to
   // pull it from before we can commit to deleting the original.
   const proxyPath = sourceFile.proxyStoragePath
-  if (!proxyPath || !callback.videoUrl) {
+  const playbackVideo = pickCallbackVideo(callback.videos, PLAYBACK_OUTPUT_TAG)
+  if (!proxyPath || !playbackVideo) {
     await updateSourceFile(admin, sourceFile.userId, sourceFile.id, {
       normalisationStatus: "failed",
       normalisationError: "Completed callback had no output to pull",
@@ -235,7 +315,7 @@ export async function applyNormalisationCallback(
   }
 
   try {
-    await storage.putObjectFromUrl(proxyPath, callback.videoUrl, {
+    await storage.putObjectFromUrl(proxyPath, playbackVideo.url, {
       contentType: "video/mp4",
     })
   } catch (error) {
@@ -262,10 +342,18 @@ export async function applyNormalisationCallback(
     return
   }
 
+  // The 360p analysis proxy is strictly best-effort: extraction falls back to
+  // the playback proxy when it's absent, so a failed pull here must not fail
+  // normalisation — it just clears the recorded path so nothing ever reads a
+  // missing/empty object.
+  const analysisProxy = await pullAnalysisProxy(storage, sourceFile, callback)
+
   const originalPath = sourceFile.storagePath
   await updateSourceFile(admin, sourceFile.userId, sourceFile.id, {
     normalisationStatus: "ready",
     proxySizeBytes: info.sizeBytes,
+    analysisProxyStoragePath: analysisProxy?.storagePath ?? null,
+    analysisProxySizeBytes: analysisProxy?.sizeBytes ?? null,
     originalDeletedAt: new Date().toISOString(),
     // Drop the pointer to the original now that the proxy is the live file.
     storagePath: null,
@@ -280,5 +368,31 @@ export async function applyNormalisationCallback(
     } catch (error) {
       console.error("Failed to delete original after normalisation", error)
     }
+  }
+}
+
+// Pulls the 360p analysis proxy into our bucket and verifies it landed with
+// real content. Returns null — never throws — when the job produced no
+// analysis output, the row never recorded a destination for it, or the pull
+// itself failed, so the caller records "no analysis proxy" and moves on.
+async function pullAnalysisProxy(
+  storage: StorageProvider,
+  sourceFile: SourceFile,
+  callback: NormalisationCallback,
+): Promise<{ storagePath: string; sizeBytes: number } | null> {
+  const analysisPath = sourceFile.analysisProxyStoragePath
+  const analysisVideo = pickCallbackVideo(callback.videos, ANALYSIS_OUTPUT_TAG)
+  if (!analysisPath || !analysisVideo || !storage.putObjectFromUrl) return null
+
+  try {
+    await storage.putObjectFromUrl(analysisPath, analysisVideo.url, {
+      contentType: "video/mp4",
+    })
+    const info = await storage.statObject(analysisPath)
+    if (!info.exists || !info.sizeBytes) return null
+    return { storagePath: analysisPath, sizeBytes: info.sizeBytes }
+  } catch (error) {
+    console.error("Failed to pull analysis proxy after normalisation", error)
+    return null
   }
 }

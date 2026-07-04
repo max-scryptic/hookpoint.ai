@@ -132,20 +132,28 @@ export async function initiateSourceFileUpload(
 
   // Replace any prior upload for this video with a fresh pending record. The old
   // storage object (if any) is cleaned up below so it doesn't linger.
-  const { sourceFile, previousStoragePath, previousProxyStoragePath } =
-    await replaceSourceFile(supabase, {
-      userId: params.userId,
-      analysedVideoId: analysed.id,
-      youtubeVideoId: params.youtubeVideoId,
-      originalFilename: filename,
-      mimeType: params.mimeType ?? null,
-      storageProvider: storage.name,
-      youtubeDurationSeconds,
-    })
+  const {
+    sourceFile,
+    previousStoragePath,
+    previousProxyStoragePath,
+    previousAnalysisProxyStoragePath,
+  } = await replaceSourceFile(supabase, {
+    userId: params.userId,
+    analysedVideoId: analysed.id,
+    youtubeVideoId: params.youtubeVideoId,
+    originalFilename: filename,
+    mimeType: params.mimeType ?? null,
+    storageProvider: storage.name,
+    youtubeDurationSeconds,
+  })
 
-  // Best-effort cleanup of the replaced upload's objects (original + any proxy)
-  // — never block a new upload on a stale-object delete.
-  for (const stalePath of [previousStoragePath, previousProxyStoragePath]) {
+  // Best-effort cleanup of the replaced upload's objects (original + any
+  // proxies) — never block a new upload on a stale-object delete.
+  for (const stalePath of [
+    previousStoragePath,
+    previousProxyStoragePath,
+    previousAnalysisProxyStoragePath,
+  ]) {
     if (!stalePath) continue
     try {
       await storage.deleteObject(stalePath)
