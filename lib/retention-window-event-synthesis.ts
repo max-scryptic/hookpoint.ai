@@ -94,6 +94,16 @@ function isSettled(status: string): boolean {
   return status === "ready" || status === "failed"
 }
 
+// Analysis only runs after extraction succeeds. A failed extraction therefore
+// settles that evidence item even though its analysis_status remains pending:
+// there will never be media for the analysis worker to claim.
+function isMediaAnalysisSettled(media: {
+  status: string
+  analysisStatus: string
+}): boolean {
+  return media.status === "failed" || isSettled(media.analysisStatus)
+}
+
 // Synthesizes events for every window whose event-synthesis job is pending
 // (or a stale failure) *and* whose evidence has settled. Best-effort per
 // window — a bad OpenAI call or malformed response fails just that window's
@@ -164,13 +174,21 @@ export async function synthesizeRetentionWindowEvents(
       const audio = audioByWindow.get(job.retentionWindowId)
 
       const scanSettled = scanStatus != null && isSettled(scanStatus)
-      const hasSnapshots = windowSnapshots.length > 0
-      const snapshotsSettled = windowSnapshots.every((s) =>
-        isSettled(s.analysisStatus),
-      )
-      const audioSettled = audio != null && isSettled(audio.analysisStatus)
+      // A failed scan cannot produce snapshot rows, but is still a final
+      // evidence outcome. Likewise, a failed snapshot/audio extraction never
+      // advances its analysis_status beyond pending and must settle here via
+      // the extraction status instead.
+      const hasSnapshotOutcome =
+        windowSnapshots.length > 0 || scanStatus === "failed"
+      const snapshotsSettled = windowSnapshots.every(isMediaAnalysisSettled)
+      const audioSettled = audio != null && isMediaAnalysisSettled(audio)
 
-      if (!scanSettled || !hasSnapshots || !snapshotsSettled || !audioSettled) {
+      if (
+        !scanSettled ||
+        !hasSnapshotOutcome ||
+        !snapshotsSettled ||
+        !audioSettled
+      ) {
         // The job was claimed before loading its evidence. Release it so the
         // next trigger can retry immediately when the final prerequisite
         // settles rather than waiting for the stale-processing lease.
