@@ -92,6 +92,21 @@ describe("getDeepAnalysisProgress", () => {
     expect(progress.complete).toBe(false)
   })
 
+  it("reports the event synthesis stage in progress while a worker holds the claim", async () => {
+    const supabase = makeFakeSupabase({
+      retention_window_event_synthesis: [{ status: "processing" }],
+    })
+    const progress = await getDeepAnalysisProgress(
+      supabase,
+      "user-1",
+      "av-1",
+      makeSourceFile(),
+    )
+
+    expect(progress.stages).toMatchObject({ eventSynthesis: "in_progress" })
+    expect(progress.complete).toBe(false)
+  })
+
   it("reports an event synthesis stage failure when every job failed", async () => {
     const supabase = makeFakeSupabase({
       retention_window_event_synthesis: [{ status: "failed" }],
