@@ -39,6 +39,8 @@ function makeSourceFile(overrides: Partial<SourceFile> = {}): SourceFile {
     deleteAfter: null,
     proxyStoragePath: null,
     proxySizeBytes: null,
+    analysisProxyStoragePath: null,
+    analysisProxySizeBytes: null,
     normalisationStatus: "pending",
     normalisationProvider: null,
     normalisationTaskToken: null,
@@ -99,6 +101,8 @@ function rowFor(base: SourceFile, payload: Record<string, unknown> = {}) {
     delete_after: base.deleteAfter,
     proxy_storage_path: base.proxyStoragePath,
     proxy_size_bytes: base.proxySizeBytes,
+    analysis_proxy_storage_path: base.analysisProxyStoragePath,
+    analysis_proxy_size_bytes: base.analysisProxySizeBytes,
     normalisation_status: base.normalisationStatus,
     normalisation_provider: base.normalisationProvider,
     normalisation_task_token: base.normalisationTaskToken,
@@ -226,8 +230,56 @@ describe("startNormalisation", () => {
       normalisation_provider: "qencode",
       normalisation_task_token: "task-xyz",
       proxy_storage_path: "user-1/vid-1/sf-1/proxy-1080p.mp4",
+      // The 360p analysis proxy rides along in the same job.
+      analysis_proxy_storage_path: "user-1/vid-1/sf-1/proxy-360p.mp4",
     })
     expect(result.normalisationStatus).toBe("processing")
+  })
+
+  it("submits both a tagged playback output and a tagged analysis output", async () => {
+    enableNormalisation()
+    const sf = makeSourceFile()
+    const { supabase } = makeUpdateSupabase(sf)
+    let submitted: unknown
+    const deps: NormalisationDeps = {
+      createClient: () =>
+        ({
+          submitJob: async (query: unknown) => {
+            submitted = query
+            return "task-xyz"
+          },
+        }) as unknown as QencodeClient,
+    }
+
+    await startNormalisation(supabase, fakeStorage(), sf, deps)
+
+    const query = submitted as { format: Array<Record<string, unknown>> }
+    expect(query.format).toHaveLength(2)
+    expect(query.format[0]).toMatchObject({ height: 1080, tag: "playback" })
+    expect(query.format[1]).toMatchObject({ height: 360, tag: "analysis" })
+  })
+
+  it("skips the analysis output when disabled via height 0", async () => {
+    enableNormalisation()
+    vi.stubEnv("QENCODE_ANALYSIS_PROXY_HEIGHT", "0")
+    const sf = makeSourceFile()
+    const { supabase, updates } = makeUpdateSupabase(sf)
+    let submitted: unknown
+    const deps: NormalisationDeps = {
+      createClient: () =>
+        ({
+          submitJob: async (query: unknown) => {
+            submitted = query
+            return "task-xyz"
+          },
+        }) as unknown as QencodeClient,
+    }
+
+    await startNormalisation(supabase, fakeStorage(), sf, deps)
+
+    const query = submitted as { format: Array<Record<string, unknown>> }
+    expect(query.format).toHaveLength(1)
+    expect(updates[0]).toMatchObject({ analysis_proxy_storage_path: null })
   })
 
   it("records 'failed' (and keeps the original) when the transcoder errors", async () => {
@@ -255,21 +307,39 @@ describe("startNormalisation", () => {
 describe("parseQencodeCallback", () => {
   // Qencode POSTs application/x-www-form-urlencoded fields, with the bulk of
   // the payload nested in a JSON-encoded `status` string — not a JSON body.
-  it("maps a completed event and extracts the output URL", () => {
+  it("maps a completed event and extracts every output URL with its tag", () => {
     expect(
       parseQencodeCallback({
         task_token: "t",
         event: "saved",
         status: JSON.stringify({
           error: 0,
-          videos: [{ url: "https://storage.qencode.com/out.mp4" }],
+          videos: [
+            { url: "https://storage.qencode.com/out.mp4", tag: "playback" },
+            {
+              url: "https://storage.qencode.com/out-360.mp4",
+              user_tag: "analysis",
+              height: 360,
+            },
+          ],
         }),
       }),
     ).toEqual({
       taskToken: "t",
       outcome: "completed",
       errorMessage: undefined,
-      videoUrl: "https://storage.qencode.com/out.mp4",
+      videos: [
+        {
+          url: "https://storage.qencode.com/out.mp4",
+          tag: "playback",
+          height: null,
+        },
+        {
+          url: "https://storage.qencode.com/out-360.mp4",
+          tag: "analysis",
+          height: 360,
+        },
+      ],
     })
   })
 
@@ -332,7 +402,7 @@ describe("applyNormalisationCallback", () => {
     await applyNormalisationCallback(supabase, storage, sf, {
       taskToken: "task-1",
       outcome: "completed",
-      videoUrl,
+      videos: [{ url: videoUrl, tag: "playback", height: 1080 }],
     })
 
     expect(storage.putObjectFromUrl).toHaveBeenCalledWith(proxyPath, videoUrl, {
@@ -349,6 +419,70 @@ describe("applyNormalisationCallback", () => {
     )
   })
 
+  it("also pulls the analysis proxy and records its path and size", async () => {
+    const analysisPath = "user-1/vid-1/sf-1/proxy-360p.mp4"
+    const analysisUrl = "https://storage.qencode.com/e207/out-360.mp4"
+    const sf = makeSourceFile({
+      normalisationStatus: "processing",
+      proxyStoragePath: proxyPath,
+      analysisProxyStoragePath: analysisPath,
+    })
+    const { supabase, updates } = makeUpdateSupabase(sf)
+    const storage = fakeStorage(true)
+
+    await applyNormalisationCallback(supabase, storage, sf, {
+      taskToken: "task-1",
+      outcome: "completed",
+      videos: [
+        { url: videoUrl, tag: "playback", height: 1080 },
+        { url: analysisUrl, tag: "analysis", height: 360 },
+      ],
+    })
+
+    expect(storage.putObjectFromUrl).toHaveBeenCalledWith(
+      analysisPath,
+      analysisUrl,
+      { contentType: "video/mp4" },
+    )
+    expect(updates[0]).toMatchObject({
+      normalisation_status: "ready",
+      analysis_proxy_storage_path: analysisPath,
+      analysis_proxy_size_bytes: 2048,
+    })
+  })
+
+  it("still completes normalisation when the analysis proxy pull fails, clearing its path", async () => {
+    const analysisPath = "user-1/vid-1/sf-1/proxy-360p.mp4"
+    const analysisUrl = "https://storage.qencode.com/e207/out-360.mp4"
+    const sf = makeSourceFile({
+      normalisationStatus: "processing",
+      proxyStoragePath: proxyPath,
+      analysisProxyStoragePath: analysisPath,
+    })
+    const { supabase, updates } = makeUpdateSupabase(sf)
+    const storage = fakeStorage(true)
+    storage.putObjectFromUrl = vi.fn(async (path: string) => {
+      if (path === analysisPath) throw new Error("pull failed")
+    })
+
+    await applyNormalisationCallback(supabase, storage, sf, {
+      taskToken: "task-1",
+      outcome: "completed",
+      videos: [
+        { url: videoUrl, tag: "playback", height: 1080 },
+        { url: analysisUrl, tag: "analysis", height: 360 },
+      ],
+    })
+
+    // The analysis proxy is best-effort: the row still flips to ready, but
+    // nothing may point at the object that never landed.
+    expect(updates[0]).toMatchObject({
+      normalisation_status: "ready",
+      analysis_proxy_storage_path: null,
+      analysis_proxy_size_bytes: null,
+    })
+  })
+
   it("fails (and keeps the original) when a completed callback has no output URL", async () => {
     const sf = makeSourceFile({
       normalisationStatus: "processing",
@@ -360,6 +494,7 @@ describe("applyNormalisationCallback", () => {
     await applyNormalisationCallback(supabase, storage, sf, {
       taskToken: "task-1",
       outcome: "completed",
+      videos: [],
     })
 
     expect(storage.putObjectFromUrl).not.toHaveBeenCalled()
@@ -382,7 +517,7 @@ describe("applyNormalisationCallback", () => {
     await applyNormalisationCallback(supabase, storage, sf, {
       taskToken: "task-1",
       outcome: "completed",
-      videoUrl,
+      videos: [{ url: videoUrl, tag: "playback", height: 1080 }],
     })
 
     expect(updates[0]).toMatchObject({
@@ -406,7 +541,7 @@ describe("applyNormalisationCallback", () => {
     await applyNormalisationCallback(supabase, storage, sf, {
       taskToken: "task-1",
       outcome: "completed",
-      videoUrl,
+      videos: [{ url: videoUrl, tag: "playback", height: 1080 }],
     })
 
     expect(updates[0]).toMatchObject({
@@ -427,7 +562,7 @@ describe("applyNormalisationCallback", () => {
     await applyNormalisationCallback(supabase, storage, sf, {
       taskToken: "task-1",
       outcome: "completed",
-      videoUrl,
+      videos: [{ url: videoUrl, tag: "playback", height: 1080 }],
     })
 
     expect(updates[0]).toMatchObject({ normalisation_status: "failed" })
@@ -445,7 +580,7 @@ describe("applyNormalisationCallback", () => {
     await applyNormalisationCallback(supabase, storage, sf, {
       taskToken: "task-1",
       outcome: "completed",
-      videoUrl,
+      videos: [{ url: videoUrl, tag: "playback", height: 1080 }],
     })
 
     expect(updates[0]).toMatchObject({
@@ -464,6 +599,7 @@ describe("applyNormalisationCallback", () => {
       taskToken: "task-1",
       outcome: "error",
       errorMessage: "encode failed",
+      videos: [],
     })
 
     expect(updates[0]).toMatchObject({
@@ -481,6 +617,7 @@ describe("applyNormalisationCallback", () => {
     await applyNormalisationCallback(supabase, storage, sf, {
       taskToken: "task-1",
       outcome: "completed",
+      videos: [],
     })
 
     expect(updates).toHaveLength(0)
@@ -494,6 +631,7 @@ describe("applyNormalisationCallback", () => {
     await applyNormalisationCallback(supabase, fakeStorage(), sf, {
       taskToken: "task-1",
       outcome: "progress",
+      videos: [],
     })
 
     expect(updates).toHaveLength(0)

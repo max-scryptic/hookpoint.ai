@@ -145,20 +145,36 @@ export function parseSceneCues(
   return { cuts, freezes, blacks }
 }
 
-// Longer than runFfmpegCapturingOutput's 30s default: unlike a thumbnail/audio
-// grab (seek to one point, pull a little data), this decodes and filters
-// every frame across the whole window — observed in practice to routinely
-// exceed 30s for a 30-40s window (freezedetect+blackdetect+scene-cut all
-// running over the full decode), well within the 300s budget
-// app/api/source-files/normalisation-callback/route.ts gives the extraction
-// run that calls this.
-const SCENE_CUE_SCAN_TIMEOUT_MS = 90_000
+// Unlike a thumbnail/audio grab (seek to one point, pull a little data), a
+// scan decodes and filters every frame across its whole range — observed in
+// practice to routinely exceed 30s for a 30-40s window. Since overlapping
+// windows are now scanned as merged spans (see mergeScanSpans in
+// lib/retention-window-media-extraction.ts) the range can cover most of a
+// video, so the budget scales with the span rather than assuming a short
+// window: a generous ~3s of wall clock per second of footage on top of a
+// startup floor, capped under the 300s budget the routes that trigger
+// extraction run with.
+const SCENE_CUE_SCAN_TIMEOUT_FLOOR_MS = 60_000
+const SCENE_CUE_SCAN_TIMEOUT_PER_SECOND_MS = 3_000
+const SCENE_CUE_SCAN_TIMEOUT_CAP_MS = 240_000
 
-// Runs the scan against a signed source URL for [fromSeconds, toSeconds] and
-// returns the parsed cues. Bubbles ffmpeg failures/timeouts to the caller,
-// which treats the whole window's scan as failed (see
-// lib/retention-window-media-extraction.ts) rather than trying to salvage a
-// partial decode.
+export function computeSceneCueScanTimeoutMs(
+  fromSeconds: number,
+  toSeconds: number,
+): number {
+  const spanSeconds = Math.max(0, toSeconds - fromSeconds)
+  return Math.min(
+    SCENE_CUE_SCAN_TIMEOUT_CAP_MS,
+    SCENE_CUE_SCAN_TIMEOUT_FLOOR_MS +
+      spanSeconds * SCENE_CUE_SCAN_TIMEOUT_PER_SECOND_MS,
+  )
+}
+
+// Runs the scan against a source (local file or signed URL) for
+// [fromSeconds, toSeconds] and returns the parsed cues. Bubbles ffmpeg
+// failures/timeouts to the caller, which treats every window in the scanned
+// span as failed (see lib/retention-window-media-extraction.ts) rather than
+// trying to salvage a partial decode.
 export async function scanVideoSceneCues(
   sourceUrl: string,
   fromSeconds: number,
@@ -166,7 +182,7 @@ export async function scanVideoSceneCues(
 ): Promise<SceneCueScanResult> {
   const { stderr } = await runFfmpegCapturingOutput(
     buildSceneCueScanArgs(sourceUrl, fromSeconds, toSeconds),
-    { timeoutMs: SCENE_CUE_SCAN_TIMEOUT_MS },
+    { timeoutMs: computeSceneCueScanTimeoutMs(fromSeconds, toSeconds) },
   )
   return parseSceneCues(stderr, toSeconds)
 }

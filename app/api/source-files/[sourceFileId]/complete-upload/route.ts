@@ -4,7 +4,12 @@ import { createClient } from "@/lib/supabase/server"
 import { getStorageProvider } from "@/lib/storage/provider"
 import { completeSourceFileUpload } from "@/lib/source-files/upload-service"
 import { errorResponse, serialiseSourceFile } from "@/lib/source-files/http"
+import { triggerRetentionWindowMediaExtraction } from "@/lib/retention-window-media-trigger"
 import type { CompletedPart } from "@/lib/storage"
+
+// Extraction runs in the background via after() once the response is sent, but
+// still within this invocation's time budget — give it room beyond the default.
+export const maxDuration = 300
 
 // POST /api/source-files/:sourceFileId/complete-upload
 // Body: { durationSeconds?: number, uploadId?: string,
@@ -57,6 +62,14 @@ export async function POST(
         multipart,
       },
     )
+    // Deep analysis can start decoding the just-uploaded original right now,
+    // in parallel with the 1080p/360p proxy transcode that was kicked off
+    // above — the retention windows may already exist (analyze usually runs
+    // before the upload), and waiting for the normalisation callback would
+    // leave the whole extraction pipeline idle through an external transcode
+    // round-trip. If the analysis hasn't run yet this no-ops, and /api/analyze
+    // triggers extraction itself once the windows exist.
+    triggerRetentionWindowMediaExtraction(sourceFile)
     return NextResponse.json({ sourceFile: serialiseSourceFile(sourceFile) })
   } catch (error) {
     return errorResponse(error)

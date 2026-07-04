@@ -34,11 +34,15 @@ export async function DELETE(
       )
     }
 
-    // Delete the objects first (original master + any 1080p proxy); if it fails
+    // Delete the objects first (original master + any proxies); if it fails
     // we still remove the DB record so the user isn't stuck, but we log it for
     // cleanup. Storage delete is idempotent.
     const storage = getStorageProvider()
-    for (const path of [sourceFile.storagePath, sourceFile.proxyStoragePath]) {
+    for (const path of [
+      sourceFile.storagePath,
+      sourceFile.proxyStoragePath,
+      sourceFile.analysisProxyStoragePath,
+    ]) {
       if (!path) continue
       try {
         await storage.deleteObject(path)

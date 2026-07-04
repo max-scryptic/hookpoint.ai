@@ -52,6 +52,19 @@ export function buildRetentionAudioObjectPath(params: {
   return `${params.userId}/${params.analysedVideoId}/${params.retentionWindowId}/audio.mp3`
 }
 
+// Largest source video an extraction run will copy onto the function's own
+// disk before decoding (see lib/media/local-source-cache.ts). Anything larger
+// streams from the signed URL as before. Kept comfortably under Vercel's
+// default 512MB /tmp, which is also shared across warm invocations. Set to 0
+// to disable local caching entirely.
+export function getLocalSourceCacheMaxBytes(): number {
+  const raw = process.env.RETENTION_WINDOW_LOCAL_SOURCE_MAX_BYTES
+  const parsed = raw != null ? Number(raw) : NaN
+  return Number.isFinite(parsed) && parsed >= 0
+    ? Math.floor(parsed)
+    : 400 * 1024 * 1024
+}
+
 // How many snapshot/audio/scene-cue-scan rows an extraction run processes at
 // once. Each row spawns its own ffmpeg subprocess and network seek into the
 // signed source URL, and rows are fully independent (own status column, own

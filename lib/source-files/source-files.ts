@@ -50,6 +50,11 @@ export interface SourceFile {
   // --- Normalisation (1080p proxy transcode) ---
   proxyStoragePath: string | null
   proxySizeBytes: number | null
+  // 360p analysis proxy produced by the same transcode job — the low-res
+  // copy frame/audio/scene-cue extraction decodes instead of the playback
+  // proxy. Null when the analysis output failed or hasn't landed yet.
+  analysisProxyStoragePath: string | null
+  analysisProxySizeBytes: number | null
   normalisationStatus: NormalisationStatus
   normalisationProvider: string | null
   normalisationTaskToken: string | null
@@ -81,6 +86,8 @@ interface SourceFileRow {
   delete_after: string | null
   proxy_storage_path: string | null
   proxy_size_bytes: number | null
+  analysis_proxy_storage_path: string | null
+  analysis_proxy_size_bytes: number | null
   normalisation_status: NormalisationStatus
   normalisation_provider: string | null
   normalisation_task_token: string | null
@@ -91,7 +98,7 @@ interface SourceFileRow {
 }
 
 const COLUMNS =
-  "id, user_id, analysed_video_id, youtube_video_id, original_filename, storage_provider, storage_path, file_size_bytes, mime_type, uploaded_duration_seconds, youtube_duration_seconds, duration_difference_seconds, duration_validation_status, filename_validation_status, filename_similarity_score, validation_status, upload_status, failure_reason, delete_after, proxy_storage_path, proxy_size_bytes, normalisation_status, normalisation_provider, normalisation_task_token, normalisation_error, original_deleted_at, created_at, updated_at"
+  "id, user_id, analysed_video_id, youtube_video_id, original_filename, storage_provider, storage_path, file_size_bytes, mime_type, uploaded_duration_seconds, youtube_duration_seconds, duration_difference_seconds, duration_validation_status, filename_validation_status, filename_similarity_score, validation_status, upload_status, failure_reason, delete_after, proxy_storage_path, proxy_size_bytes, analysis_proxy_storage_path, analysis_proxy_size_bytes, normalisation_status, normalisation_provider, normalisation_task_token, normalisation_error, original_deleted_at, created_at, updated_at"
 
 export function mapSourceFileRow(row: SourceFileRow): SourceFile {
   return {
@@ -116,6 +123,8 @@ export function mapSourceFileRow(row: SourceFileRow): SourceFile {
     deleteAfter: row.delete_after,
     proxyStoragePath: row.proxy_storage_path,
     proxySizeBytes: row.proxy_size_bytes,
+    analysisProxyStoragePath: row.analysis_proxy_storage_path,
+    analysisProxySizeBytes: row.analysis_proxy_size_bytes,
     normalisationStatus: row.normalisation_status,
     normalisationProvider: row.normalisation_provider,
     normalisationTaskToken: row.normalisation_task_token,
@@ -142,6 +151,45 @@ export function resolvePlaybackStoragePath(
     return sourceFile.proxyStoragePath
   }
   return sourceFile.storagePath
+}
+
+// The object key extraction (frames/audio/scene-cue scans) should decode, plus
+// its storage-reported size when known. Prefers the 360p analysis proxy —
+// several-fold cheaper to decode than the playback proxy, with no quality the
+// extraction actually needs lost — falling back to whatever playback resolves
+// to (playback proxy or original) while the analysis proxy doesn't exist.
+// Consulted at 'ready' only, for the same never-point-at-an-unwritten-object
+// reason as resolvePlaybackStoragePath.
+export function resolveAnalysisSourceStoragePath(
+  sourceFile: Pick<
+    SourceFile,
+    | "analysisProxyStoragePath"
+    | "analysisProxySizeBytes"
+    | "proxyStoragePath"
+    | "proxySizeBytes"
+    | "storagePath"
+    | "fileSizeBytes"
+    | "normalisationStatus"
+  >,
+): { storagePath: string; sizeBytes: number | null } | null {
+  if (
+    sourceFile.normalisationStatus === "ready" &&
+    sourceFile.analysisProxyStoragePath
+  ) {
+    return {
+      storagePath: sourceFile.analysisProxyStoragePath,
+      sizeBytes: sourceFile.analysisProxySizeBytes,
+    }
+  }
+  const playbackPath = resolvePlaybackStoragePath(sourceFile)
+  if (!playbackPath) return null
+  return {
+    storagePath: playbackPath,
+    sizeBytes:
+      playbackPath === sourceFile.proxyStoragePath
+        ? sourceFile.proxySizeBytes
+        : sourceFile.fileSizeBytes,
+  }
 }
 
 export interface CreateSourceFileInput {
@@ -193,6 +241,7 @@ export async function replaceSourceFile(
   sourceFile: SourceFile
   previousStoragePath: string | null
   previousProxyStoragePath: string | null
+  previousAnalysisProxyStoragePath: string | null
 }> {
   const existing = await getSourceFileForVideo(
     supabase,
@@ -216,6 +265,7 @@ export async function replaceSourceFile(
     sourceFile,
     previousStoragePath: existing?.storagePath ?? null,
     previousProxyStoragePath: existing?.proxyStoragePath ?? null,
+    previousAnalysisProxyStoragePath: existing?.analysisProxyStoragePath ?? null,
   }
 }
 
@@ -302,6 +352,8 @@ export interface UpdateSourceFileInput {
   deleteAfter?: string | null
   proxyStoragePath?: string | null
   proxySizeBytes?: number | null
+  analysisProxyStoragePath?: string | null
+  analysisProxySizeBytes?: number | null
   normalisationStatus?: NormalisationStatus
   normalisationProvider?: string | null
   normalisationTaskToken?: string | null
@@ -332,6 +384,10 @@ function toRow(input: UpdateSourceFileInput): Record<string, unknown> {
   if ("deleteAfter" in input) row.delete_after = input.deleteAfter
   if ("proxyStoragePath" in input) row.proxy_storage_path = input.proxyStoragePath
   if ("proxySizeBytes" in input) row.proxy_size_bytes = input.proxySizeBytes
+  if ("analysisProxyStoragePath" in input)
+    row.analysis_proxy_storage_path = input.analysisProxyStoragePath
+  if ("analysisProxySizeBytes" in input)
+    row.analysis_proxy_size_bytes = input.analysisProxySizeBytes
   if ("normalisationStatus" in input)
     row.normalisation_status = input.normalisationStatus
   if ("normalisationProvider" in input)

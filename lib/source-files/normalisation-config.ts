@@ -33,6 +33,18 @@ export function getProxyTargetHeight(): number {
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 1080
 }
 
+// Target height of the analysis proxy — the second, much smaller output the
+// same Qencode job produces for frame/audio/scene-cue extraction to decode
+// instead of the playback proxy (decoding 360p instead of 1080p cuts that CPU
+// cost several-fold, and nothing extraction feeds a model needs more). Set to
+// 0 to disable the second output entirely.
+export function getAnalysisProxyTargetHeight(): number {
+  const raw = process.env.QENCODE_ANALYSIS_PROXY_HEIGHT
+  const parsed = raw != null ? Number(raw) : NaN
+  if (Number.isFinite(parsed)) return Math.max(0, Math.floor(parsed))
+  return 360
+}
+
 // Extra Qencode `format` knobs merged over the defaults, as a JSON object env
 // (e.g. {"video_bitrate":"4000k","framerate":30}). Lets the proxy profile be
 // tuned without a code change. Invalid JSON is ignored.
