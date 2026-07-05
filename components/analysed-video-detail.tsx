@@ -72,40 +72,6 @@ function formatWatchTime(minutes: number | null): string {
 // Performance summary (deterministic YouTube Analytics KPIs + engagement)
 // ---------------------------------------------------------------------------
 
-// Friendly labels for the raw insightTrafficSourceType codes the Analytics API
-// returns. Unmapped codes fall back to a title-cased version of the code.
-const TRAFFIC_SOURCE_LABELS: Record<string, string> = {
-  YT_SEARCH: "YouTube search",
-  RELATED_VIDEO: "Suggested videos",
-  YT_CHANNEL: "Channel page",
-  PLAYLIST: "Playlists",
-  YT_PLAYLIST_PAGE: "Playlist page",
-  SUBSCRIBER: "Browse / feed",
-  NOTIFICATION: "Notifications",
-  EXT_URL: "External",
-  NO_LINK_OTHER: "Direct / unknown",
-  NO_LINK_EMBEDDED: "Embedded players",
-  YT_OTHER_PAGE: "Other YouTube",
-  END_SCREEN: "End screens",
-  ANNOTATION: "Cards / annotations",
-  SHORTS: "Shorts feed",
-  HASHTAGS: "Hashtags",
-  ADVERTISING: "Ads",
-  PROMOTED: "Promoted",
-  CAMPAIGN_CARD: "Campaign cards",
-}
-
-function trafficSourceLabel(code: string): string {
-  return (
-    TRAFFIC_SOURCE_LABELS[code] ??
-    code
-      .toLowerCase()
-      .split("_")
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(" ")
-  )
-}
-
 function KpiTile({
   label,
   value,
@@ -137,11 +103,6 @@ function AnalyticsSummarySection({
     summary.subscribersGained != null || summary.subscribersLost != null
       ? (summary.subscribersGained ?? 0) - (summary.subscribersLost ?? 0)
       : null
-  const totalTrafficViews = summary.trafficSources.reduce(
-    (sum, source) => sum + source.views,
-    0,
-  )
-  const topSources = summary.trafficSources.slice(0, 6)
 
   return (
     <section className="flex flex-col gap-3">
@@ -150,7 +111,7 @@ function AnalyticsSummarySection({
         <h2 className="text-sm font-medium">Performance</h2>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
         <KpiTile label="Views" value={formatCompactNumber(summary.views)} />
         <KpiTile
           label="Avg. view duration"
@@ -182,9 +143,6 @@ function AnalyticsSummarySection({
               : undefined
           }
         />
-      </div>
-
-      <div className="grid grid-cols-3 gap-3">
         <KpiTile label="Likes" value={formatCompactNumber(summary.likes)} />
         <KpiTile
           label="Comments"
@@ -192,33 +150,6 @@ function AnalyticsSummarySection({
         />
         <KpiTile label="Shares" value={formatCompactNumber(summary.shares)} />
       </div>
-
-      {topSources.length > 0 && totalTrafficViews > 0 && (
-        <div className="rounded-xl border bg-card p-4">
-          <h3 className="text-sm font-medium">Where views came from</h3>
-          <ul className="mt-3 flex flex-col gap-2">
-            {topSources.map((source) => {
-              const share = source.views / totalTrafficViews
-              return (
-                <li key={source.source} className="flex flex-col gap-1">
-                  <div className="flex items-center justify-between text-sm">
-                    <span>{trafficSourceLabel(source.source)}</span>
-                    <span className="font-medium tabular-nums text-muted-foreground">
-                      {Math.round(share * 100)}%
-                    </span>
-                  </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-primary"
-                      style={{ width: `${Math.max(2, Math.round(share * 100))}%` }}
-                    />
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
-        </div>
-      )}
     </section>
   )
 }
@@ -900,6 +831,10 @@ export function AnalysedVideoDetail({
           </div>
         </div>
 
+        {analyticsSummary && (
+          <AnalyticsSummarySection summary={analyticsSummary} />
+        )}
+
         <section className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <AreaChartIcon className="size-4 text-muted-foreground" />
@@ -925,8 +860,6 @@ export function AnalysedVideoDetail({
           />
         </section>
       </div>
-
-      {analyticsSummary && <AnalyticsSummarySection summary={analyticsSummary} />}
 
       <Tabs defaultValue="hook">
         <TabsList>
