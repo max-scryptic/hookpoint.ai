@@ -85,8 +85,13 @@ export async function POST(request: NextRequest) {
 
     // The retention analysis may already have run for this video (this
     // callback can land after /api/analyze) — if so, kick off extraction now
-    // instead of waiting on a future analyze call.
-    if (callback.outcome === "completed") {
+    // instead of waiting on a future analyze call. Fired on failure too, not
+    // just success: extraction defers heavy sources while a proxy is still in
+    // flight (see shouldDeferExtractionUntilAnalysisProxy), and a failed
+    // transcode is what settles that wait — the master is now the final
+    // source, so the deferred rows should run against it rather than sit
+    // pending until the user happens to revisit the dashboard.
+    if (callback.outcome === "completed" || callback.outcome === "error") {
       const updated = await getSourceFileById(
         admin,
         sourceFile.userId,

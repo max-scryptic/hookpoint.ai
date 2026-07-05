@@ -5,6 +5,7 @@ import {
   extractPendingRetentionWindowMedia,
   isSourceFileReady,
   mergeScanSpans,
+  shouldDeferExtractionUntilAnalysisProxy,
   sliceSceneCues,
   type RetentionWindowMediaExtractionDeps,
   type SceneCueScanner,
@@ -72,6 +73,52 @@ describe("isSourceFileReady", () => {
     expect(
       isSourceFileReady(makeSourceFile({ uploadStatus: "uploading" })),
     ).toBe(false)
+  })
+})
+
+describe("shouldDeferExtractionUntilAnalysisProxy", () => {
+  const CACHE_BUDGET = 400 * 1024 * 1024
+
+  it("defers a master too big to cache locally while the proxy is transcoding", () => {
+    expect(
+      shouldDeferExtractionUntilAnalysisProxy(
+        makeSourceFile({ normalisationStatus: "processing" }),
+        2_000_000_000,
+        CACHE_BUDGET,
+      ),
+    ).toBe(true)
+  })
+
+  it("defers when the source size is unknown while the proxy is transcoding", () => {
+    expect(
+      shouldDeferExtractionUntilAnalysisProxy(
+        makeSourceFile({ normalisationStatus: "pending" }),
+        null,
+        CACHE_BUDGET,
+      ),
+    ).toBe(true)
+  })
+
+  it("keeps the parallel head start for a master small enough to decode locally", () => {
+    expect(
+      shouldDeferExtractionUntilAnalysisProxy(
+        makeSourceFile({ normalisationStatus: "processing" }),
+        100 * 1024 * 1024,
+        CACHE_BUDGET,
+      ),
+    ).toBe(false)
+  })
+
+  it("never defers once normalisation has settled — no proxy is coming", () => {
+    for (const normalisationStatus of ["ready", "failed", "skipped"] as const) {
+      expect(
+        shouldDeferExtractionUntilAnalysisProxy(
+          makeSourceFile({ normalisationStatus }),
+          2_000_000_000,
+          CACHE_BUDGET,
+        ),
+      ).toBe(false)
+    }
   })
 })
 
@@ -223,6 +270,96 @@ describe("extractPendingRetentionWindowMedia", () => {
     // No pending snapshots at all — never worth paying for a worker/model
     // load that would go completely unused.
     expect(createOcrEngineSpy).not.toHaveBeenCalled()
+  })
+
+  it("defers the whole run (rows stay pending) for a heavy master still being transcoded", async () => {
+    const { supabase, updates } = makeFakeSupabase(
+      [],
+      [],
+      [
+        {
+          id: "scan-1",
+          retention_window_id: "rw-1",
+          from_seconds: 0,
+          to_seconds: 240,
+          status: "pending",
+          error: null,
+        },
+      ],
+    )
+    const storage = fakeStorage()
+    const scanner = fakeSceneCueScanner()
+
+    await extractPendingRetentionWindowMedia(
+      supabase,
+      storage,
+      // A ~52Mbps 4K master, far past the local-cache budget, with the 360p
+      // analysis proxy still minutes away at Qencode.
+      makeSourceFile({
+        normalisationStatus: "processing",
+        proxyStoragePath: null,
+        fileSizeBytes: 2_000_000_000,
+      }),
+      {
+        extractor: {
+          extractThumbnail: vi.fn(),
+          extractAudioSegment: vi.fn(),
+        },
+        mediaStorage: fakeStorage(),
+        sceneCueScanner: scanner,
+        createOcrEngine: async () => fakeOcrEngine(),
+        acquireLocalSource: async () => null,
+      },
+    )
+
+    // Nothing decoded, nothing failed: the pending rows wait for the
+    // normalisation callback to re-trigger extraction against the proxy.
+    expect(storage.createSignedReadUrl).not.toHaveBeenCalled()
+    expect(scanner.scan).not.toHaveBeenCalled()
+    expect(updates).toEqual([])
+  })
+
+  it("runs against a heavy master once normalisation has failed (no proxy coming)", async () => {
+    const { supabase } = makeFakeSupabase(
+      [],
+      [
+        {
+          id: "aud-1",
+          retention_window_id: "rw-1",
+          from_seconds: 0,
+          to_seconds: 30,
+          storage_path: null,
+          status: "pending",
+          error: null,
+        },
+      ],
+    )
+    const storage = fakeStorage()
+
+    await extractPendingRetentionWindowMedia(
+      supabase,
+      storage,
+      makeSourceFile({
+        normalisationStatus: "failed",
+        proxyStoragePath: null,
+        fileSizeBytes: 2_000_000_000,
+      }),
+      {
+        extractor: {
+          extractThumbnail: vi.fn(),
+          extractAudioSegment: vi.fn(async () => Buffer.from("mp3-bytes")),
+        },
+        mediaStorage: fakeStorage(),
+        sceneCueScanner: fakeSceneCueScanner(),
+        createOcrEngine: async () => fakeOcrEngine(),
+        acquireLocalSource: async () => null,
+      },
+    )
+
+    expect(storage.createSignedReadUrl).toHaveBeenCalledWith(
+      "user-1/vid-1/sf-1/clip.mp4",
+      expect.any(Number),
+    )
   })
 
   it("extracts a pre-existing pending snapshot and audio clip and marks them ready", async () => {
