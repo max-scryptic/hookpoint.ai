@@ -6,6 +6,7 @@ import {
   GaugeIcon,
   ImageIcon,
   ListChecksIcon,
+  QuoteIcon,
   TrendingDownIcon,
   TrendingUpIcon,
 } from "lucide-react"
@@ -21,6 +22,11 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import type { PacingAnalysis } from "@/lib/pacing-analysis"
 import type { PackagingAlignment } from "@/lib/packaging-alignment"
 import type {
@@ -177,7 +183,7 @@ function DropList({
         return (
           <li key={`${drop.fromSeconds}-${index}`} className="flex flex-col gap-2 p-4">
             <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
                   {index + 1}
                 </span>
@@ -185,34 +191,49 @@ function DropList({
                   {formatTimestamp(drop.fromSeconds)} –{" "}
                   {formatTimestamp(drop.toSeconds)}
                 </span>
+                {drop.isAbnormallySteep && (
+                  <Badge>
+                    {(drop.steepness ?? 0).toFixed(1)}× steeper than normal
+                  </Badge>
+                )}
+                {drop.relativePerformance != null && (
+                  <Badge tone={drop.relativePerformance < 0.5 ? "warn" : "muted"}>
+                    {Math.round(drop.relativePerformance * 100)}% vs. similar
+                  </Badge>
+                )}
+                {said && <ScriptSegmentTooltip text={said} />}
               </div>
               <span className="text-sm font-medium text-destructive">
                 −{(Math.abs(drop.delta) * 100).toFixed(1)}%
               </span>
             </div>
 
-            <div className="flex flex-wrap gap-2 pl-10">
-              {drop.isAbnormallySteep && (
-                <Badge>
-                  {(drop.steepness ?? 0).toFixed(1)}× steeper than normal
-                </Badge>
-              )}
-              {drop.relativePerformance != null && (
-                <Badge tone={drop.relativePerformance < 0.5 ? "warn" : "muted"}>
-                  {Math.round(drop.relativePerformance * 100)}% vs. similar
-                </Badge>
-              )}
-            </div>
-
-            {said && (
-              <p className="pl-10 text-sm text-muted-foreground">“{said}”</p>
-            )}
-
             <AttributionNote attribution={attribution.get(drop.windowIndex)} />
           </li>
         )
       })}
     </ul>
+  )
+}
+
+// A compact hover affordance that reveals the transcript segment for a window
+// without spending vertical space on it in the card body.
+function ScriptSegmentTooltip({ text }: { text: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            className="inline-flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none"
+            aria-label="Show what was said in this window"
+          />
+        }
+      >
+        <QuoteIcon className="size-3.5" />
+      </TooltipTrigger>
+      <TooltipContent className="max-w-xs text-sm">“{text}”</TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -258,7 +279,7 @@ function GainList({
         return (
           <li key={`${gain.fromSeconds}-${index}`} className="flex flex-col gap-2 p-4">
             <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
                   {index + 1}
                 </span>
@@ -266,14 +287,12 @@ function GainList({
                   {formatTimestamp(gain.fromSeconds)} –{" "}
                   {formatTimestamp(gain.toSeconds)}
                 </span>
+                {said && <ScriptSegmentTooltip text={said} />}
               </div>
               <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
                 +{(gain.delta * 100).toFixed(1)}%
               </span>
             </div>
-            {said && (
-              <p className="pl-10 text-sm text-muted-foreground">“{said}”</p>
-            )}
 
             <AttributionNote attribution={attribution.get(gain.windowIndex)} />
           </li>
