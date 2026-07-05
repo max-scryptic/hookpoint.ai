@@ -278,7 +278,7 @@ function TranscriptSection({ transcript }: { transcript: string | null }) {
       />
       {transcript ? (
         <p className="rounded-lg bg-muted/40 p-3 text-sm whitespace-pre-wrap">
-          {transcript}
+          …{transcript}…
         </p>
       ) : (
         <p className="text-sm text-muted-foreground">

@@ -316,7 +316,7 @@ function ScriptSegmentTooltip({ text }: { text: string }) {
       >
         <QuoteIcon className="size-3.5" />
       </TooltipTrigger>
-      <TooltipContent className="max-w-xs text-sm">“{text}”</TooltipContent>
+      <TooltipContent className="max-w-xs text-sm">“…{text}…”</TooltipContent>
     </Tooltip>
   )
 }
