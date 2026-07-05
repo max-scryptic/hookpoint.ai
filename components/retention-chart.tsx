@@ -3,6 +3,7 @@
 import { useId, useMemo, useState } from "react"
 
 import { RecommendationCallout } from "@/components/recommendation-callout"
+import { TryCallout } from "@/components/try-callout"
 import type { RetentionPoint } from "@/lib/youtube/youtube"
 
 export type RetentionChartInsight = {
