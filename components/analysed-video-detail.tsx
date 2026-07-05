@@ -16,6 +16,7 @@ import {
   type RetentionChartInsight,
 } from "@/components/retention-chart"
 import { SourceVideoThumbnail } from "@/components/source-video-thumbnail"
+import { TryCallout } from "@/components/try-callout"
 import {
   Tabs,
   TabsContent,
@@ -195,10 +196,9 @@ function PacingAnalysisSection({
               </div>
               <p className="pl-10 text-sm">{stretch.reason}</p>
               {stretch.suggestion && (
-                <p className="pl-10 text-sm text-muted-foreground">
-                  <span className="font-medium text-foreground">Try: </span>
-                  {stretch.suggestion}
-                </p>
+                <div className="pl-10">
+                  <TryCallout>{stretch.suggestion}</TryCallout>
+                </div>
               )}
             </li>
             )
@@ -226,10 +226,9 @@ function AttributionNote({
     <div className="pl-10">
       <p className="text-sm">{attribution.explanation}</p>
       {attribution.tip && (
-        <p className="mt-1 text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">Try: </span>
-          {attribution.tip}
-        </p>
+        <div className="mt-2">
+          <TryCallout>{attribution.tip}</TryCallout>
+        </div>
       )}
     </div>
   )
