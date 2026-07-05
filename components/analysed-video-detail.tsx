@@ -22,10 +22,7 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs"
 import type { PacingAnalysis } from "@/lib/pacing-analysis"
-import type {
-  PackagingAlignment,
-  AlignmentRating,
-} from "@/lib/packaging-alignment"
+import type { PackagingAlignment } from "@/lib/packaging-alignment"
 import type {
   RetentionAttribution,
   RetentionMomentAttribution,
@@ -369,50 +366,11 @@ function GainList({
 // Title / Thumbnail / Hook alignment (LLM + vision over the thumbnail)
 // ---------------------------------------------------------------------------
 
-function RatingPill({ rating }: { rating: AlignmentRating }) {
-  const styles: Record<AlignmentRating, string> = {
-    strong:
-      "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400",
-    moderate:
-      "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400",
-    weak: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400",
-  }
-  return (
-    <span
-      className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${styles[rating]}`}
-    >
-      {rating}
-    </span>
-  )
-}
-
-function AlignmentJudgmentCard({
-  title,
-  rating,
-  assessment,
-}: {
-  title: string
-  rating: AlignmentRating
-  assessment: string
-}) {
-  return (
-    <div className="rounded-xl border bg-card p-4">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-medium">{title}</h3>
-        <RatingPill rating={rating} />
-      </div>
-      <p className="mt-2 text-sm text-muted-foreground">{assessment}</p>
-    </div>
-  )
-}
-
 function PackagingAlignmentSection({
   alignment,
-  video,
   hasThumbnail,
 }: {
   alignment: PackagingAlignment | null
-  video: VideoDetails
   hasThumbnail: boolean
 }) {
   if (!alignment) {
@@ -427,53 +385,21 @@ function PackagingAlignmentSection({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-4 rounded-xl border bg-card p-4 sm:flex-row sm:items-start">
-        {video.thumbnailUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={video.thumbnailUrl}
-            alt=""
-            className="aspect-video w-full shrink-0 rounded-lg object-cover sm:w-56"
-          />
-        )}
-        <div className="min-w-0">
-          <h3 className="text-sm font-medium">{video.title}</h3>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {alignment.overall}
-          </p>
-        </div>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <AlignmentJudgmentCard
-          title="Title ↔ Thumbnail"
-          rating={alignment.titleThumbnailAlignment.rating}
-          assessment={alignment.titleThumbnailAlignment.assessment}
-        />
-        <AlignmentJudgmentCard
-          title="Packaging ↔ Hook"
-          rating={alignment.hookAlignment.rating}
-          assessment={alignment.hookAlignment.assessment}
-        />
-      </div>
-
       <div className="rounded-xl border bg-card p-4">
-        <h3 className="text-sm font-medium">What the thumbnail shows</h3>
-        <p className="mt-2 text-sm text-muted-foreground">
-          {alignment.thumbnailObservations}
-        </p>
+        <h3 className="text-sm font-medium">Alignment Summary</h3>
+        <p className="mt-2 text-sm text-muted-foreground">{alignment.overall}</p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <PointsCard
-          title="What worked"
+          title="What worked well"
           tone="good"
-          points={alignment.whatWorked}
+          points={alignment.whatWorked.slice(0, 3)}
         />
         <PointsCard
-          title="What could be better"
+          title="What could be improved"
           tone="warn"
-          points={alignment.whatCouldBeBetter}
+          points={alignment.whatCouldBeBetter.slice(0, 3)}
         />
       </div>
     </div>
@@ -845,7 +771,6 @@ export function AnalysedVideoDetail({
         <TabsContent value="packaging">
           <PackagingAlignmentSection
             alignment={packagingAlignment}
-            video={video}
             hasThumbnail={Boolean(video.thumbnailUrl)}
           />
         </TabsContent>

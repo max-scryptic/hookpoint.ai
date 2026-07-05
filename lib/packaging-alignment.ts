@@ -3,8 +3,8 @@
 // is fetched as an image URL from the Data API, the title is metadata, and the
 // hook is the first ~30 seconds of the caption transcript, so none of it needs
 // the uploaded source file. A vision-capable OpenAI model looks at the actual
-// thumbnail image alongside the title and hook text and reports what works and
-// what could be better, plus explicit alignment judgments.
+// thumbnail image alongside the title and hook text and returns a short
+// alignment summary plus the top strengths and improvements.
 
 import {
   transcriptForSegment,
@@ -15,24 +15,14 @@ import {
 // The opening stretch treated as "the hook" for packaging-promise delivery.
 const HOOK_WINDOW_SECONDS = 30
 
-export type AlignmentRating = "strong" | "moderate" | "weak"
-
-export interface AlignmentJudgment {
-  rating: AlignmentRating
-  assessment: string
-}
-
 export interface PackagingAlignment {
-  // One or two sentences summarising how the packaging holds together.
+  // The alignment summary: one or two sentences giving an overview of how the
+  // packaging holds together, briefly commenting on each component (title,
+  // thumbnail, hook).
   overall: string
-  // Does the title match what the thumbnail shows/promises?
-  titleThumbnailAlignment: AlignmentJudgment
-  // Does the first ~30s deliver on the promise the title + thumbnail make?
-  hookAlignment: AlignmentJudgment
-  // What the model actually sees in the thumbnail image, so the creator can
-  // sanity-check that the vision read is grounded.
-  thumbnailObservations: string
+  // The top strengths of the packaging (up to 3).
   whatWorked: string[]
+  // The top improvements worth making (up to 3).
   whatCouldBeBetter: string[]
   model: string
   generatedAt: string
@@ -40,41 +30,16 @@ export interface PackagingAlignment {
 
 interface ModelOutput {
   overall: string
-  titleThumbnailAlignment: AlignmentJudgment
-  hookAlignment: AlignmentJudgment
-  thumbnailObservations: string
   whatWorked: string[]
   whatCouldBeBetter: string[]
 }
 
-const RATING_ENUM = ["strong", "moderate", "weak"] as const
-
-const JUDGMENT_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  required: ["rating", "assessment"],
-  properties: {
-    rating: { type: "string", enum: RATING_ENUM },
-    assessment: { type: "string" },
-  },
-} as const
-
 const PACKAGING_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: [
-    "overall",
-    "titleThumbnailAlignment",
-    "hookAlignment",
-    "thumbnailObservations",
-    "whatWorked",
-    "whatCouldBeBetter",
-  ],
+  required: ["overall", "whatWorked", "whatCouldBeBetter"],
   properties: {
     overall: { type: "string" },
-    titleThumbnailAlignment: JUDGMENT_SCHEMA,
-    hookAlignment: JUDGMENT_SCHEMA,
-    thumbnailObservations: { type: "string" },
     whatWorked: { type: "array", items: { type: "string" } },
     whatCouldBeBetter: { type: "array", items: { type: "string" } },
   },
@@ -91,27 +56,11 @@ function extractOutputText(response: {
   return null
 }
 
-function isRating(value: unknown): value is AlignmentRating {
-  return (
-    typeof value === "string" &&
-    (RATING_ENUM as readonly string[]).includes(value)
-  )
-}
-
-function isJudgment(value: unknown): value is AlignmentJudgment {
-  if (!value || typeof value !== "object") return false
-  const candidate = value as Partial<AlignmentJudgment>
-  return isRating(candidate.rating) && typeof candidate.assessment === "string"
-}
-
 function isModelOutput(value: unknown): value is ModelOutput {
   if (!value || typeof value !== "object") return false
   const candidate = value as Partial<ModelOutput>
   return (
     typeof candidate.overall === "string" &&
-    isJudgment(candidate.titleThumbnailAlignment) &&
-    isJudgment(candidate.hookAlignment) &&
-    typeof candidate.thumbnailObservations === "string" &&
     Array.isArray(candidate.whatWorked) &&
     Array.isArray(candidate.whatCouldBeBetter)
   )
@@ -129,10 +78,7 @@ export async function generatePackagingAlignment(
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) throw new Error("OPENAI_API_KEY is not configured")
 
-  const model =
-    process.env.OPENAI_PACKAGING_MODEL ??
-    process.env.OPENAI_SNAPSHOT_ANALYSIS_MODEL ??
-    "gpt-5.4-mini"
+  const model = process.env.OPENAI_PACKAGING_MODEL ?? "gpt-4.1-mini"
 
   const hookText = transcriptForSegment(transcript, 0, HOOK_WINDOW_SECONDS)
 
@@ -144,7 +90,6 @@ export async function generatePackagingAlignment(
     },
     body: JSON.stringify({
       model,
-      reasoning: { effort: "low" },
       max_output_tokens: 4_000,
       input: [
         {
@@ -153,14 +98,11 @@ export async function generatePackagingAlignment(
             {
               type: "input_text",
               text: [
-                "You review the packaging of a YouTube video: its title, its thumbnail image, and its spoken hook (the first ~30 seconds of transcript).",
-                "You are shown the actual thumbnail image. Describe what you genuinely see in it under thumbnailObservations; do not guess at elements that aren't visible.",
-                "Judge titleThumbnailAlignment: does the title and the thumbnail tell one coherent, compelling story, or do they compete / mismatch / leave the promise unclear?",
-                "Judge hookAlignment: does the spoken hook immediately deliver on, or pay off, the curiosity/promise the title and thumbnail set up? A hook that wanders or buries the promise is weak alignment even if the title and thumbnail are strong.",
-                "Rate each as strong, moderate or weak, with a one-to-two sentence assessment grounded in the specific title text, thumbnail contents and hook wording.",
-                "whatWorked: 2-4 concise, specific strengths of the packaging. whatCouldBeBetter: 2-4 concrete, actionable improvements. Reference the real title/thumbnail/hook, never generic advice.",
-                "If the hook transcript is empty, say so in hookAlignment rather than inventing what was said.",
-                "Write a one-sentence overall summary of how the packaging holds together.",
+                "You review the packaging of a YouTube video: its title, its thumbnail image, and its spoken hook (the first ~30 seconds of transcript). You are shown the actual thumbnail image; ground everything in what you genuinely see, read and hear, never in guesses about elements that aren't there.",
+                "overall: write a one-to-two sentence alignment summary that gives an overview of how the packaging holds together and briefly comments on each component (title, thumbnail, hook). For example: 'The packaging is cohesive but low-specificity: the title signals a casual comeback, the thumbnail reinforces a personal \"I'm back\" vibe, and the hook starts with that same energy but spends the opening on context instead of a sharper payoff.'",
+                "whatWorked: the top 3 concise, specific strengths of the packaging, most important first. whatCouldBeBetter: the top 3 concrete, actionable improvements, most important first. Reference the real title/thumbnail/hook, never generic advice. Return fewer than 3 only when there genuinely are fewer, and never more than 3.",
+                "If the hook transcript is empty, work from the title and thumbnail alone rather than inventing what was said.",
+                'Never output an em dash character ("—") anywhere in your response; if you would use one, rewrite the phrase with a comma, colon, parentheses, or two separate sentences instead.',
               ].join(" "),
             },
           ],
@@ -215,11 +157,8 @@ export async function generatePackagingAlignment(
 
   return {
     overall: parsed.overall,
-    titleThumbnailAlignment: parsed.titleThumbnailAlignment,
-    hookAlignment: parsed.hookAlignment,
-    thumbnailObservations: parsed.thumbnailObservations,
-    whatWorked: parsed.whatWorked,
-    whatCouldBeBetter: parsed.whatCouldBeBetter,
+    whatWorked: parsed.whatWorked.slice(0, 3),
+    whatCouldBeBetter: parsed.whatCouldBeBetter.slice(0, 3),
     model,
     generatedAt: new Date().toISOString(),
   }

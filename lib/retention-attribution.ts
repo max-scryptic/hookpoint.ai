@@ -154,7 +154,7 @@ export async function generateRetentionAttribution(
   const model =
     process.env.OPENAI_RETENTION_ATTRIBUTION_MODEL ??
     process.env.OPENAI_PACING_MODEL ??
-    "gpt-5.4-mini"
+    "gpt-4.1-mini"
 
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -164,7 +164,6 @@ export async function generateRetentionAttribution(
     },
     body: JSON.stringify({
       model,
-      reasoning: { effort: "low" },
       max_output_tokens: Math.min(32_000, Math.max(4_000, moments.length * 500)),
       input: [
         {
@@ -181,6 +180,7 @@ export async function generateRetentionAttribution(
                 "relativePerformance (0..1) compares this moment to similar videos; below 0.5 is underperforming. Use it to judge severity, not as the explanation itself.",
                 "Keep each explanation to 1-2 specific sentences that reference what is actually said. Never invent dialogue that isn't in the transcript.",
                 "Return exactly one moments entry for every supplied moment, using its momentIndex. Write a one-sentence overview of the video's overall retention story.",
+                'Never output an em dash character ("—") anywhere in your response; if you would use one, rewrite the phrase with a comma, colon, parentheses, or two separate sentences instead.',
               ].join(" "),
             },
           ],

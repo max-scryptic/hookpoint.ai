@@ -277,7 +277,7 @@ export async function generatePacingAnalysis(
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) throw new Error("OPENAI_API_KEY is not configured")
 
-  const model = process.env.OPENAI_PACING_MODEL ?? "gpt-5.4-mini"
+  const model = process.env.OPENAI_PACING_MODEL ?? "gpt-4.1-mini"
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
@@ -286,7 +286,6 @@ export async function generatePacingAnalysis(
     },
     body: JSON.stringify({
       model,
-      reasoning: { effort: "low" },
       max_output_tokens: Math.min(
         32_000,
         Math.max(4_000, windows.length * 450),
@@ -308,6 +307,7 @@ export async function generatePacingAnalysis(
                 "For slowOrRepetitiveStretches, pick the 3 to 5 areas most worth reviewing: where pacing drags or runs much slower than this video's own rhythm, wording or ideas repeat, or a stretch is low in novelty and risks feeling boring.",
                 "Each stretch needs a concise reason describing the specific problem and a suggestion giving one concrete, actionable way to tighten or improve that stretch. Both must reference what is actually said in that window.",
                 "Order stretches from most to least worth reviewing. Return fewer than 3 only when the video genuinely has no such areas, and never more than 5.",
+                'Never output an em dash character ("—") anywhere in your response; if you would use one, rewrite the phrase with a comma, colon, parentheses, or two separate sentences instead.',
               ].join(" "),
             },
           ],
