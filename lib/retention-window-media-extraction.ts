@@ -141,6 +141,38 @@ export function isSourceFileReady(sourceFile: SourceFile | null): boolean {
   )
 }
 
+// True when this run should wait for the in-flight 360p analysis proxy
+// instead of decoding the source that's readable right now.
+//
+// Starting extraction against the original master in parallel with the
+// transcode is a win only while the master is cheap enough to decode within
+// the run's timeout budgets. The dividing line used is whether the master
+// fits the local-source-cache budget: a source too large to pull onto local
+// disk means every scene-cue scan streams the full-bitrate original over
+// HTTPS — observed in production to sit at frame 0 for the entire 240s scan
+// timeout for a ~52Mbps 4K master, burning the whole serverless invocation
+// and failing every row, when the same rows extract in seconds from the 360p
+// proxy that arrives minutes later. Deferred rows just stay 'pending'; the
+// normalisation callback (or the next dashboard visit / retry) re-triggers
+// extraction once the proxy is ready — or against the master once
+// normalisation has conclusively failed and no proxy is coming.
+export function shouldDeferExtractionUntilAnalysisProxy(
+  sourceFile: Pick<SourceFile, "normalisationStatus">,
+  analysisSourceSizeBytes: number | null,
+  localCacheMaxBytes: number,
+): boolean {
+  const proxyInFlight =
+    sourceFile.normalisationStatus === "pending" ||
+    sourceFile.normalisationStatus === "processing"
+  if (!proxyInFlight) return false
+  // Unknown size defers too: it can't be proven cheap, and a proxy is
+  // coming regardless.
+  return (
+    analysisSourceSizeBytes == null ||
+    analysisSourceSizeBytes > localCacheMaxBytes
+  )
+}
+
 // A coalesced range covering one or more pending scans, so the footage under
 // overlapping windows is decoded once instead of once per window.
 export interface MergedScanSpan {
@@ -215,6 +247,16 @@ export async function extractPendingRetentionWindowMedia(
 ): Promise<void> {
   const analysisSource = resolveAnalysisSourceStoragePath(sourceFile)
   if (!analysisSource) return
+
+  if (
+    shouldDeferExtractionUntilAnalysisProxy(
+      sourceFile,
+      analysisSource.sizeBytes,
+      getLocalSourceCacheMaxBytes(),
+    )
+  ) {
+    return
+  }
 
   const [initialPendingSnapshots, pendingAudio, pendingSceneCueScans] =
     await Promise.all([

@@ -8,23 +8,24 @@
 // first use, which would add a live external dependency to every extraction
 // run for no reason.
 
+import fs from "node:fs"
 import { createRequire } from "node:module"
 import os from "node:os"
 import path from "node:path"
 
 import { createWorker, type Worker } from "tesseract.js"
 
-// A real, un-bundled require, used only for `.resolve()` below. Turbopack
-// (and webpack before it) statically rewrites a literal `require.resolve(...)`
-// call in bundled application code to return the bundler's own numeric module
-// id instead of forwarding to Node's real module resolution — even though
-// @tesseract.js-data/eng itself is kept external via serverExternalPackages
-// in next.config.ts, this *calling* file still gets bundled, so the rewrite
-// still applies to it. That numeric id then flowed into path.dirname/path.join
-// below and ultimately into node:worker_threads' Worker(), surfacing in
-// production as "The 'path' argument must be of type string. Received type
-// number" — createRequire builds its require function at runtime, which
-// bundlers can't statically rewrite, so its .resolve() behaves like real Node.
+// Used only for `.resolve()` below, and never trusted blindly. Turbopack
+// (and webpack before it) statically rewrites `require.resolve(...)` calls in
+// bundled application code to return the bundler's own numeric module id
+// instead of forwarding to Node's real module resolution — and, as observed
+// in production, Turbopack applies the same rewrite through
+// `createRequire(import.meta.url)`, so even this resolver can hand back a
+// number. That numeric id then flowed into path.dirname/path.join and
+// ultimately into node:worker_threads' Worker(), surfacing as "The 'path'
+// argument must be of type string. Received type number". The only rewrite-
+// proof answer is to treat resolution as a hint and verify the directory
+// actually exists on disk — see resolveEnglishLangPath.
 const nodeRequire = createRequire(import.meta.url)
 
 // Below this recognition confidence (tesseract's own 0-100 scale) a result is
@@ -51,9 +52,41 @@ export interface OcrEngine {
 // accurate engine), which needs the '4.0.0_best_int' variant instead — so
 // this resolves that directory directly rather than trusting the package's
 // own export.
+// Candidates are checked against the filesystem rather than trusted, because
+// a bundler-rewritten resolve can return a numeric module id or a virtual
+// path (see the nodeRequire comment above). The cwd-anchored fallback is what
+// actually holds in a serverless deploy: outputFileTracingIncludes (see
+// next.config.ts) ships ./node_modules/@tesseract.js-data/eng/** relative to
+// the project root, which is the function's working directory at runtime.
 function resolveEnglishLangPath(): string {
-  const packageEntry = nodeRequire.resolve("@tesseract.js-data/eng")
-  return path.join(path.dirname(packageEntry), "4.0.0_best_int")
+  const candidates: string[] = []
+
+  try {
+    const packageEntry: unknown = nodeRequire.resolve("@tesseract.js-data/eng")
+    if (typeof packageEntry === "string") {
+      candidates.push(path.join(path.dirname(packageEntry), "4.0.0_best_int"))
+    }
+  } catch {
+    // Resolution failing entirely is fine — the fallback below still applies.
+  }
+
+  candidates.push(
+    path.join(
+      process.cwd(),
+      "node_modules",
+      "@tesseract.js-data",
+      "eng",
+      "4.0.0_best_int",
+    ),
+  )
+
+  const found = candidates.find((candidate) => fs.existsSync(candidate))
+  if (!found) {
+    throw new Error(
+      `English OCR language data not found; looked in: ${candidates.join(", ")}`,
+    )
+  }
+  return found
 }
 
 export async function createOcrEngine(): Promise<OcrEngine> {
