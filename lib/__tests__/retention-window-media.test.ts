@@ -58,29 +58,33 @@ function emptyCues(): SceneCueScanResult {
 }
 
 describe("buildSnapshotTimestampsFromSceneCues", () => {
-  it("falls back to the fixed grid when the window has no detected cuts", () => {
-    expect(buildSnapshotTimestampsFromSceneCues(0, 30, emptyCues())).toEqual(
-      buildChunkTimestamps(0, 30),
-    )
+  it("samples a single frame at the window start when the scan confirmed no cuts", () => {
+    // A confirmed-static shot never visually changes, so one frame from the
+    // start of the window is enough — no grid of near-duplicates.
+    expect(buildSnapshotTimestampsFromSceneCues(0, 30, emptyCues())).toEqual([0])
+    // The lone frame tracks the window's actual start, not a global gridline.
+    expect(
+      buildSnapshotTimestampsFromSceneCues(7.375, 47.375, emptyCues()),
+    ).toEqual([7.375])
   })
 
-  it("applies the caller's coarser fallback step to a cut-less window", () => {
-    // A confirmed-static window is handed a wider step so it doesn't produce a
-    // dense stack of near-duplicate frames.
-    expect(buildSnapshotTimestampsFromSceneCues(0, 30, emptyCues(), 15)).toEqual(
-      [0, 15, 30],
-    )
+  it("falls back to the dense grid when the scan failed (content unknown)", () => {
+    // A window whose scan errored keeps the dense hedge grid rather than
+    // trusting a single frame for content the scan never actually inspected.
+    expect(
+      buildSnapshotTimestampsFromSceneCues(0, 30, emptyCues(), true),
+    ).toEqual(buildChunkTimestamps(0, 30))
   })
 
-  it("ignores the fallback step once real cuts exist", () => {
+  it("ignores the no-cut fallback once real cuts exist", () => {
     const cues: SceneCueScanResult = {
       cuts: [{ atSeconds: 15 }],
       freezes: [],
       blacks: [],
     }
-    // The coarse fallback step only governs the no-cut path; a detected cut
-    // still yields its flanking pair regardless.
-    expect(buildSnapshotTimestampsFromSceneCues(0, 30, cues, 15)).toEqual([
+    // The no-cut fallback only governs the cut-less path; a detected cut still
+    // yields its flanking pair regardless of the scanFailed flag.
+    expect(buildSnapshotTimestampsFromSceneCues(0, 30, cues, true)).toEqual([
       14, 16,
     ])
   })

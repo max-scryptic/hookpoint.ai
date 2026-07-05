@@ -240,16 +240,6 @@ const CUT_SNAPSHOT_OFFSET_SECONDS = 1
 // across the whole window instead of just its first few cuts.
 const MAX_SNAPSHOTS_PER_WINDOW = 12
 
-// Coarser fallback grid step for a window whose scan *ran and confidently
-// found no cuts* (a genuinely static shot — a talking head against a fixed
-// background). Dense 5s coverage of a shot that never visually changes just
-// hands the vision model near-duplicate frames, so a confirmed-static window
-// samples every 15s instead. A window whose scan *failed* keeps the tighter
-// CHUNK_STEP_SECONDS grid: its content is unknown (the scan never ran), so it
-// still hedges with denser coverage rather than under-sampling a window that
-// might actually contain cuts. Tune here if the vision step wants more/less.
-export const STATIC_FALLBACK_STEP_SECONDS = 15
-
 function subsampleEvenly(values: number[], max: number): number[] {
   if (values.length <= max) return values
   const step = (values.length - 1) / (max - 1)
@@ -264,20 +254,26 @@ function subsampleEvenly(values: number[], max: number): number[] {
 // a blind uniform grid: two flanking frames — just before and just after —
 // per detected hard cut, so the harvested images actually straddle a real
 // transition instead of landing at an arbitrary 5-second mark that might
-// miss every cut in the window entirely. Falls back to buildChunkTimestamps
-// (a fixed-step grid) when a window has no detected cuts at all, so it still
-// gets some visual evidence rather than none; the caller passes a coarser
-// fallbackStepSeconds for a window whose scan confidently found no cuts (a
-// genuinely static shot) than for one whose scan failed (content unknown) —
-// see STATIC_FALLBACK_STEP_SECONDS.
+// miss every cut in the window entirely.
+//
+// How a window with *no* detected cuts is sampled depends on why it has none:
+//   • The scan ran and confidently found no cuts — a genuinely static shot (a
+//     talking head against a fixed background). One frame from the start of
+//     the window is enough visual evidence: the shot never changes, so extra
+//     frames would just hand the vision model near-duplicates.
+//   • The scan *failed* (scanFailed) — content is unknown, so hedge with the
+//     dense fixed grid (buildChunkTimestamps) rather than under-sampling a
+//     window that might actually contain cuts the scan never got to see.
 export function buildSnapshotTimestampsFromSceneCues(
   fromSeconds: number,
   toSeconds: number,
   cues: SceneCueScanResult,
-  fallbackStepSeconds: number = CHUNK_STEP_SECONDS,
+  scanFailed = false,
 ): number[] {
   if (cues.cuts.length === 0) {
-    return buildChunkTimestamps(fromSeconds, toSeconds, fallbackStepSeconds)
+    return scanFailed
+      ? buildChunkTimestamps(fromSeconds, toSeconds)
+      : [round(fromSeconds)]
   }
 
   const timestamps = new Set<number>()
@@ -311,13 +307,13 @@ export async function createRetentionWindowSnapshotsFromSceneCues(
   fromSeconds: number,
   toSeconds: number,
   cues: SceneCueScanResult,
-  fallbackStepSeconds: number = CHUNK_STEP_SECONDS,
+  scanFailed = false,
 ): Promise<void> {
   const timestamps = buildSnapshotTimestampsFromSceneCues(
     fromSeconds,
     toSeconds,
     cues,
-    fallbackStepSeconds,
+    scanFailed,
   )
 
   const rows = timestamps.map((timestampSeconds, chunkIndex) => ({
