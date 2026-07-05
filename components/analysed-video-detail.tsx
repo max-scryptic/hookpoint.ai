@@ -102,8 +102,7 @@ function RetentionWindows({
             key={window.windowKey ?? window.windowIndex}
             className="rounded-xl border bg-card p-4"
           >
-            <div className="flex items-baseline justify-between gap-2">
-              <h3 className="text-sm font-medium">{window.label}</h3>
+            <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <span className="font-mono text-xs text-muted-foreground">
                   {formatTimestamp(window.fromSeconds)} –{" "}
@@ -111,6 +110,7 @@ function RetentionWindows({
                 </span>
                 {said && <ScriptSegmentTooltip text={said} />}
               </div>
+              <h3 className="text-sm font-medium">{window.label}</h3>
             </div>
 
             {window.outOfRange ? (
