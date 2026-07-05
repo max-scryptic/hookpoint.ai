@@ -57,6 +57,85 @@ function formatCompactNumber(value: number | null): string {
   }).format(value)
 }
 
+// ---------------------------------------------------------------------------
+// The Hook (fixed, always-on opening windows analysed for every video)
+// ---------------------------------------------------------------------------
+
+function RetentionWindows({
+  windows,
+  transcript,
+}: {
+  windows: RetentionWindow[]
+  transcript: TranscriptCue[]
+}) {
+  if (windows.length === 0) {
+    return (
+      <div className="rounded-xl border bg-muted/30 p-6 text-sm text-muted-foreground">
+        No hook windows are available for this video.
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {windows.map((window) => {
+        const said = transcriptForSegment(
+          transcript,
+          window.fromSeconds,
+          window.toSeconds,
+        )
+        const endPercentage = Math.round((window.endWatchRatio ?? 0) * 100)
+        const lostPercentage = Math.max(
+          0,
+          Math.round((window.startWatchRatio ?? 0) * 100) - endPercentage,
+        )
+        return (
+          <div
+            key={window.windowKey ?? window.windowIndex}
+            className="rounded-xl border bg-card p-4"
+          >
+            <div className="flex items-baseline justify-between gap-2">
+              <h3 className="text-sm font-medium">{window.label}</h3>
+              <span className="font-mono text-xs text-muted-foreground">
+                {formatTimestamp(window.fromSeconds)} –{" "}
+                {formatTimestamp(window.toSeconds)}
+              </span>
+            </div>
+
+            {window.outOfRange ? (
+              <p className="mt-3 text-sm text-muted-foreground">
+                This video is too short to reach this window.
+              </p>
+            ) : (
+              <>
+                <div className="mt-3 flex flex-wrap items-start gap-x-6 gap-y-4">
+                  <Metric label="Viewers lost" value={`${lostPercentage}%`} />
+                  <Metric
+                    label="Still watching at end"
+                    value={`${endPercentage}%`}
+                  />
+                  {window.relativePerformance != null && (
+                    <Metric
+                      label="vs. similar videos"
+                      value={`${Math.round(window.relativePerformance * 100)}%`}
+                    />
+                  )}
+                </div>
+
+                {said && (
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    “{said.length > 240 ? `${said.slice(0, 240)}…` : said}”
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col">
@@ -640,6 +719,10 @@ export function AnalysedVideoDetail({
             <ListChecksIcon className="text-teal-600 dark:text-teal-400" />
             Metadata
           </TabsTrigger>
+          <TabsTrigger value="hook">
+            <GaugeIcon className="text-yellow-500 dark:text-yellow-400" />
+            The Hook
+          </TabsTrigger>
           <TabsTrigger value="drop-offs">
             <TrendingDownIcon className="text-destructive" />
             Retention Drop Offs
@@ -663,6 +746,10 @@ export function AnalysedVideoDetail({
 
         <TabsContent value="metadata">
           <MetadataHygieneSection video={video} />
+        </TabsContent>
+
+        <TabsContent value="hook">
+          <RetentionWindows windows={hookWindows} transcript={transcript} />
         </TabsContent>
 
         <TabsContent value="drop-offs">
