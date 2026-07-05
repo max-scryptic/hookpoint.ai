@@ -158,12 +158,12 @@ export function RetentionChart({
     drop: {
       band: "#ef4444",
       badge: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300",
-      name: "Retention drop-off",
+      name: "Drop-offs",
     },
     gain: {
       band: "#22c55e",
       badge: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
-      name: "Retention gain",
+      name: "Gains",
     },
     pacing: {
       band: "#3b82f6",
