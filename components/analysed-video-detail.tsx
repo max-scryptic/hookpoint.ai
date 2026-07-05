@@ -790,7 +790,11 @@ export function AnalysedVideoDetail({
             </TabsList>
 
             <TabsContent value="hook">
-              <RetentionWindows windows={hookWindows} transcript={transcript} />
+              <RetentionWindows
+                windows={hookWindows}
+                transcript={transcript}
+                attribution={hookAttribution}
+              />
             </TabsContent>
 
             <TabsContent value="drop-offs">
