@@ -574,14 +574,18 @@ export function RetentionChart({
           </div>
           {activeInsight.details && activeInsight.details.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-2">
-              {activeInsight.details.map((detail) => (
-                <span
-                  key={detail}
-                  className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground"
-                >
-                  {detail}
-                </span>
-              ))}
+              {activeInsight.details.map((detail) =>
+                detail.startsWith("Try: ") ? (
+                  <TryCallout key={detail}>{detail.slice(5)}</TryCallout>
+                ) : (
+                  <span
+                    key={detail}
+                    className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground"
+                  >
+                    {detail}
+                  </span>
+                ),
+              )}
             </div>
           )}
           {activeInsight.recommendation && (
