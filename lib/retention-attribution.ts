@@ -173,6 +173,7 @@ export async function generateRetentionAttribution(
               type: "input_text",
               text: [
                 "You explain YouTube audience-retention moments using the transcript spoken around them.",
+                "Write to the uploader in the second person (you, your video), reviewing their own video. Whoever is heard speaking may be the uploader, a co-host, a guest, or a voiceover, so never pin what is said on a specific or gendered person (he, she, the creator, the host); frame it as the uploader's own video instead (say 'here you are still laying out the context', not 'he is still laying out the context').",
                 "Each moment is either a drop_off (viewers left) or a gain (viewers returned or re-watched).",
                 "Reason only from the supplied transcript, timestamps and retention numbers. Do not infer visuals, editing, music, thumbnails or vocal delivery — you cannot see or hear the video.",
                 "For a drop_off, explain the most likely reason viewers left based on what was being said (e.g. a topic change, a slow tangent, an unmet promise, an ad or sponsor read, a natural stopping point), and give one concrete tip to reduce that loss next time.",

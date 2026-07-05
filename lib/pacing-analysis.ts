@@ -298,6 +298,7 @@ export async function generatePacingAnalysis(
               type: "input_text",
               text: [
                 "You analyse narrative pacing in YouTube transcripts.",
+                "Write to the uploader in the second person (you, your video), reviewing their own video. Whoever is heard speaking may be the uploader, a co-host, a guest, or a voiceover, so never pin what is said on a specific or gendered person (he, she, the creator, the host); frame it as the uploader's own video instead (say 'here you are still laying out the context', not 'he is still laying out the context').",
                 "Judge each supplied window relative to this video's own rhythm, not an imagined universal ideal.",
                 "Use only transcript content and the supplied word metrics. Do not infer editing, visuals, music, vocal energy, audience retention, or causal effects.",
                 "Narrative pacing includes novelty, information density, progression, repetition, topic movement, setup/payoff, questions, and open loops.",
