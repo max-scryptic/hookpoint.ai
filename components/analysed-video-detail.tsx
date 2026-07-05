@@ -1,9 +1,11 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
   AreaChartIcon,
   GaugeIcon,
+  ImageIcon,
+  ListChecksIcon,
   TrendingDownIcon,
   TrendingUpIcon,
 } from "lucide-react"
@@ -20,11 +22,22 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs"
 import type { PacingAnalysis } from "@/lib/pacing-analysis"
+import type {
+  PackagingAlignment,
+  AlignmentRating,
+} from "@/lib/packaging-alignment"
+import type {
+  RetentionAttribution,
+  RetentionMomentAttribution,
+  RetentionMomentKind,
+} from "@/lib/retention-attribution"
+import { computeMetadataHygiene } from "@/lib/metadata-hygiene"
 import type { RetentionWindow } from "@/lib/retention-windows"
 import {
   transcriptForSegment,
   type RetentionPoint,
   type TranscriptCue,
+  type VideoAnalyticsSummary,
   type VideoDetails,
 } from "@/lib/youtube/youtube"
 
@@ -36,6 +49,178 @@ function formatTimestamp(totalSeconds: number): string {
   const mm = hrs > 0 ? String(mins).padStart(2, "0") : String(mins)
   const ss = String(secs).padStart(2, "0")
   return hrs > 0 ? `${hrs}:${mm}:${ss}` : `${mm}:${ss}`
+}
+
+// Compact human number: 12345 -> "12.3K", 2_400_000 -> "2.4M".
+function formatCompactNumber(value: number | null): string {
+  if (value == null) return "—"
+  return new Intl.NumberFormat("en", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value)
+}
+
+// Minutes of total watch time, shown as hours when large enough to matter.
+function formatWatchTime(minutes: number | null): string {
+  if (minutes == null) return "—"
+  if (minutes < 60) return `${Math.round(minutes)} min`
+  const hours = minutes / 60
+  return `${formatCompactNumber(Math.round(hours))} hr`
+}
+
+// ---------------------------------------------------------------------------
+// Performance summary (deterministic YouTube Analytics KPIs + engagement)
+// ---------------------------------------------------------------------------
+
+// Friendly labels for the raw insightTrafficSourceType codes the Analytics API
+// returns. Unmapped codes fall back to a title-cased version of the code.
+const TRAFFIC_SOURCE_LABELS: Record<string, string> = {
+  YT_SEARCH: "YouTube search",
+  RELATED_VIDEO: "Suggested videos",
+  YT_CHANNEL: "Channel page",
+  PLAYLIST: "Playlists",
+  YT_PLAYLIST_PAGE: "Playlist page",
+  SUBSCRIBER: "Browse / feed",
+  NOTIFICATION: "Notifications",
+  EXT_URL: "External",
+  NO_LINK_OTHER: "Direct / unknown",
+  NO_LINK_EMBEDDED: "Embedded players",
+  YT_OTHER_PAGE: "Other YouTube",
+  END_SCREEN: "End screens",
+  ANNOTATION: "Cards / annotations",
+  SHORTS: "Shorts feed",
+  HASHTAGS: "Hashtags",
+  ADVERTISING: "Ads",
+  PROMOTED: "Promoted",
+  CAMPAIGN_CARD: "Campaign cards",
+}
+
+function trafficSourceLabel(code: string): string {
+  return (
+    TRAFFIC_SOURCE_LABELS[code] ??
+    code
+      .toLowerCase()
+      .split("_")
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ")
+  )
+}
+
+function KpiTile({
+  label,
+  value,
+  sublabel,
+}: {
+  label: string
+  value: string
+  sublabel?: string
+}) {
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <div className="text-2xl font-semibold tabular-nums">{value}</div>
+      <div className="mt-1 text-xs font-medium text-muted-foreground">
+        {label}
+      </div>
+      {sublabel && (
+        <div className="mt-0.5 text-xs text-muted-foreground/70">{sublabel}</div>
+      )}
+    </div>
+  )
+}
+
+function AnalyticsSummarySection({
+  summary,
+}: {
+  summary: VideoAnalyticsSummary
+}) {
+  const netSubs =
+    summary.subscribersGained != null || summary.subscribersLost != null
+      ? (summary.subscribersGained ?? 0) - (summary.subscribersLost ?? 0)
+      : null
+  const totalTrafficViews = summary.trafficSources.reduce(
+    (sum, source) => sum + source.views,
+    0,
+  )
+  const topSources = summary.trafficSources.slice(0, 6)
+
+  return (
+    <section className="flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <AreaChartIcon className="size-4 text-muted-foreground" />
+        <h2 className="text-sm font-medium">Performance</h2>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <KpiTile label="Views" value={formatCompactNumber(summary.views)} />
+        <KpiTile
+          label="Avg. view duration"
+          value={
+            summary.averageViewDurationSeconds != null
+              ? formatTimestamp(summary.averageViewDurationSeconds)
+              : "—"
+          }
+          sublabel={
+            summary.averageViewPercentage != null
+              ? `${Math.round(summary.averageViewPercentage)}% of video`
+              : undefined
+          }
+        />
+        <KpiTile
+          label="Watch time"
+          value={formatWatchTime(summary.estimatedMinutesWatched)}
+        />
+        <KpiTile
+          label="Net subscribers"
+          value={
+            netSubs == null
+              ? "—"
+              : `${netSubs >= 0 ? "+" : "−"}${formatCompactNumber(Math.abs(netSubs))}`
+          }
+          sublabel={
+            summary.subscribersGained != null
+              ? `${formatCompactNumber(summary.subscribersGained)} gained`
+              : undefined
+          }
+        />
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <KpiTile label="Likes" value={formatCompactNumber(summary.likes)} />
+        <KpiTile
+          label="Comments"
+          value={formatCompactNumber(summary.comments)}
+        />
+        <KpiTile label="Shares" value={formatCompactNumber(summary.shares)} />
+      </div>
+
+      {topSources.length > 0 && totalTrafficViews > 0 && (
+        <div className="rounded-xl border bg-card p-4">
+          <h3 className="text-sm font-medium">Where views came from</h3>
+          <ul className="mt-3 flex flex-col gap-2">
+            {topSources.map((source) => {
+              const share = source.views / totalTrafficViews
+              return (
+                <li key={source.source} className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between text-sm">
+                    <span>{trafficSourceLabel(source.source)}</span>
+                    <span className="font-medium tabular-nums text-muted-foreground">
+                      {Math.round(share * 100)}%
+                    </span>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-primary"
+                      style={{ width: `${Math.max(2, Math.round(share * 100))}%` }}
+                    />
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
+    </section>
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -183,14 +368,39 @@ function PacingAnalysisSection({
 // Drop-off list (significant drops)
 // ---------------------------------------------------------------------------
 
+// A small explanation + optional tip block, shared by the drop-off and gain
+// lists, rendered from the LLM retention attribution when one is available for
+// that window.
+function AttributionNote({
+  attribution,
+}: {
+  attribution: RetentionMomentAttribution | undefined
+}) {
+  if (!attribution || attribution.explanation === "") return null
+  return (
+    <div className="pl-10">
+      <p className="text-sm">{attribution.explanation}</p>
+      {attribution.tip && (
+        <p className="mt-1 text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">Try: </span>
+          {attribution.tip}
+        </p>
+      )}
+    </div>
+  )
+}
+
 function DropList({
   drops,
   transcript,
+  attribution,
 }: {
   // The significant *mid-video* drop-offs (kind = 'drop_off'). The Hook section
   // above already covers the opening, so these never overlap it.
   drops: RetentionWindow[]
   transcript: TranscriptCue[]
+  // AI explanations/tips keyed by the drop-off's windowIndex, when generated.
+  attribution: Map<number, RetentionMomentAttribution>
 }) {
   if (drops.length === 0) {
     return (
@@ -242,6 +452,8 @@ function DropList({
             {said && (
               <p className="pl-10 text-sm text-muted-foreground">“{said}”</p>
             )}
+
+            <AttributionNote attribution={attribution.get(drop.windowIndex)} />
           </li>
         )
       })}
@@ -274,9 +486,11 @@ function Badge({
 function GainList({
   gains,
   transcript,
+  attribution,
 }: {
   gains: RetentionWindow[]
   transcript: TranscriptCue[]
+  attribution: Map<number, RetentionMomentAttribution>
 }) {
   return (
     <ul className="divide-y rounded-xl border bg-card">
@@ -305,10 +519,200 @@ function GainList({
             {said && (
               <p className="pl-10 text-sm text-muted-foreground">“{said}”</p>
             )}
+
+            <AttributionNote attribution={attribution.get(gain.windowIndex)} />
           </li>
         )
       })}
     </ul>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Title / Thumbnail / Hook alignment (LLM + vision over the thumbnail)
+// ---------------------------------------------------------------------------
+
+function RatingPill({ rating }: { rating: AlignmentRating }) {
+  const styles: Record<AlignmentRating, string> = {
+    strong:
+      "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400",
+    moderate:
+      "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400",
+    weak: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400",
+  }
+  return (
+    <span
+      className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${styles[rating]}`}
+    >
+      {rating}
+    </span>
+  )
+}
+
+function AlignmentJudgmentCard({
+  title,
+  rating,
+  assessment,
+}: {
+  title: string
+  rating: AlignmentRating
+  assessment: string
+}) {
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-medium">{title}</h3>
+        <RatingPill rating={rating} />
+      </div>
+      <p className="mt-2 text-sm text-muted-foreground">{assessment}</p>
+    </div>
+  )
+}
+
+function PackagingAlignmentSection({
+  alignment,
+  video,
+  hasThumbnail,
+}: {
+  alignment: PackagingAlignment | null
+  video: VideoDetails
+  hasThumbnail: boolean
+}) {
+  if (!alignment) {
+    return (
+      <div className="rounded-xl border bg-muted/30 p-6 text-sm text-muted-foreground">
+        {hasThumbnail
+          ? "Title & thumbnail analysis could not be generated right now. It will be retried the next time this report is opened."
+          : "Title & thumbnail analysis is unavailable because this video has no thumbnail image."}
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 rounded-xl border bg-card p-4 sm:flex-row sm:items-start">
+        {video.thumbnailUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={video.thumbnailUrl}
+            alt=""
+            className="aspect-video w-full shrink-0 rounded-lg object-cover sm:w-56"
+          />
+        )}
+        <div className="min-w-0">
+          <h3 className="text-sm font-medium">{video.title}</h3>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {alignment.overall}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <AlignmentJudgmentCard
+          title="Title ↔ Thumbnail"
+          rating={alignment.titleThumbnailAlignment.rating}
+          assessment={alignment.titleThumbnailAlignment.assessment}
+        />
+        <AlignmentJudgmentCard
+          title="Packaging ↔ Hook"
+          rating={alignment.hookAlignment.rating}
+          assessment={alignment.hookAlignment.assessment}
+        />
+      </div>
+
+      <div className="rounded-xl border bg-card p-4">
+        <h3 className="text-sm font-medium">What the thumbnail shows</h3>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {alignment.thumbnailObservations}
+        </p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <PointsCard
+          title="What worked"
+          tone="good"
+          points={alignment.whatWorked}
+        />
+        <PointsCard
+          title="What could be better"
+          tone="warn"
+          points={alignment.whatCouldBeBetter}
+        />
+      </div>
+    </div>
+  )
+}
+
+function PointsCard({
+  title,
+  tone,
+  points,
+}: {
+  title: string
+  tone: "good" | "warn"
+  points: string[]
+}) {
+  const dot =
+    tone === "good"
+      ? "bg-emerald-500 dark:bg-emerald-400"
+      : "bg-amber-500 dark:bg-amber-400"
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <h3 className="text-sm font-medium">{title}</h3>
+      {points.length === 0 ? (
+        <p className="mt-2 text-sm text-muted-foreground">Nothing to flag.</p>
+      ) : (
+        <ul className="mt-3 flex flex-col gap-2">
+          {points.map((point, index) => (
+            <li key={index} className="flex gap-2 text-sm">
+              <span className={`mt-1.5 size-1.5 shrink-0 rounded-full ${dot}`} />
+              <span>{point}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Metadata hygiene (deterministic checks)
+// ---------------------------------------------------------------------------
+
+function MetadataHygieneSection({ video }: { video: VideoDetails }) {
+  const hygiene = useMemo(() => computeMetadataHygiene(video), [video])
+
+  const statusStyles: Record<
+    (typeof hygiene.checks)[number]["status"],
+    string
+  > = {
+    good: "bg-emerald-500 dark:bg-emerald-400",
+    warn: "bg-amber-500 dark:bg-amber-400",
+    info: "bg-muted-foreground/40",
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="rounded-xl border bg-muted/30 p-4 text-sm text-muted-foreground">
+        {hygiene.goodCount} of {hygiene.scoredCount} metadata checks look
+        healthy. These are quick packaging basics you can fix in YouTube Studio.
+      </div>
+      <ul className="divide-y rounded-xl border bg-card">
+        {hygiene.checks.map((check) => (
+          <li key={check.id} className="flex items-start gap-3 p-4">
+            <span
+              className={`mt-1.5 size-2 shrink-0 rounded-full ${statusStyles[check.status]}`}
+            />
+            <div>
+              <div className="text-sm font-medium">{check.label}</div>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                {check.detail}
+              </p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 
@@ -322,12 +726,18 @@ export function AnalysedVideoDetail({
   retentionWindows,
   transcript = [],
   pacingAnalysis = null,
+  retentionAttribution = null,
+  packagingAlignment = null,
+  analyticsSummary = null,
 }: {
   video: VideoDetails
   retention: RetentionPoint[]
   retentionWindows: RetentionWindow[]
   transcript?: TranscriptCue[]
   pacingAnalysis?: PacingAnalysis | null
+  retentionAttribution?: RetentionAttribution | null
+  packagingAlignment?: PackagingAlignment | null
+  analyticsSummary?: VideoAnalyticsSummary | null
 }) {
   const [previewTime, setPreviewTime] = useState<number | null>(null)
   const [playbackWindow, setPlaybackWindow] = useState<{
@@ -359,6 +769,20 @@ export function AnalysedVideoDetail({
   const hookWindows = retentionWindows.filter((w) => w.kind === "hook")
   const drops = retentionWindows.filter((w) => w.kind === "drop_off")
   const gains = retentionWindows.filter((w) => w.kind === "gain")
+
+  // Index the LLM attribution by kind + windowIndex so each drop-off / gain card
+  // can pick up its own explanation and tip.
+  const attributionByKind = (
+    kind: RetentionMomentKind,
+  ): Map<number, RetentionMomentAttribution> => {
+    const map = new Map<number, RetentionMomentAttribution>()
+    for (const moment of retentionAttribution?.moments ?? []) {
+      if (moment.kind === kind) map.set(moment.windowIndex, moment)
+    }
+    return map
+  }
+  const dropAttribution = attributionByKind("drop_off")
+  const gainAttribution = attributionByKind("gain")
   const chartInsights: RetentionChartInsight[] = [
     ...hookWindows
       .filter((window) => !window.outOfRange)
@@ -502,6 +926,8 @@ export function AnalysedVideoDetail({
         </section>
       </div>
 
+      {analyticsSummary && <AnalyticsSummarySection summary={analyticsSummary} />}
+
       <Tabs defaultValue="hook">
         <TabsList>
           <TabsTrigger value="hook">
@@ -520,6 +946,14 @@ export function AnalysedVideoDetail({
             <GaugeIcon className="text-blue-600 dark:text-blue-400" />
             Pacing Analysis
           </TabsTrigger>
+          <TabsTrigger value="packaging">
+            <ImageIcon className="text-purple-600 dark:text-purple-400" />
+            Title &amp; Thumbnail
+          </TabsTrigger>
+          <TabsTrigger value="metadata">
+            <ListChecksIcon className="text-teal-600 dark:text-teal-400" />
+            Metadata
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="hook">
@@ -527,7 +961,11 @@ export function AnalysedVideoDetail({
         </TabsContent>
 
         <TabsContent value="drop-offs">
-          <DropList drops={drops} transcript={transcript} />
+          <DropList
+            drops={drops}
+            transcript={transcript}
+            attribution={dropAttribution}
+          />
         </TabsContent>
 
         <TabsContent value="gains">
@@ -536,7 +974,11 @@ export function AnalysedVideoDetail({
               No notable retention gains stood out for this video.
             </div>
           ) : (
-            <GainList gains={gains} transcript={transcript} />
+            <GainList
+              gains={gains}
+              transcript={transcript}
+              attribution={gainAttribution}
+            />
           )}
         </TabsContent>
 
@@ -545,6 +987,18 @@ export function AnalysedVideoDetail({
             analysis={pacingAnalysis}
             hasTranscript={transcript.length > 0}
           />
+        </TabsContent>
+
+        <TabsContent value="packaging">
+          <PackagingAlignmentSection
+            alignment={packagingAlignment}
+            video={video}
+            hasThumbnail={Boolean(video.thumbnailUrl)}
+          />
+        </TabsContent>
+
+        <TabsContent value="metadata">
+          <MetadataHygieneSection video={video} />
         </TabsContent>
       </Tabs>
     </div>
