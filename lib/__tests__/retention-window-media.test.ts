@@ -25,6 +25,29 @@ describe("buildChunkTimestamps", () => {
     expect(buildChunkTimestamps(0, 12)).toEqual([0, 5, 10, 12])
   })
 
+  it("snaps interior samples to a global grid, not to the window's start", () => {
+    // A window starting off the grid keeps its own start/end but its interior
+    // samples land on global 5s gridlines (10,15,…,45), not 7.4-relative ones
+    // (12.4,17.4,…). This is what lets it share those seconds with an
+    // overlapping window that also falls back to the grid.
+    expect(buildChunkTimestamps(7.375, 47.375)).toEqual([
+      7.375, 10, 15, 20, 25, 30, 35, 40, 45, 47.375,
+    ])
+  })
+
+  it("overlapping windows share their interior gridlines in the shared span", () => {
+    const hook = buildChunkTimestamps(0, 30)
+    const dropOff = buildChunkTimestamps(7.375, 47.375)
+    const shared = hook.filter((t) => dropOff.includes(t))
+    // Everything the hook samples from 10s on is shared with the drop-off,
+    // so the extraction frame cache grabs each of those seconds once.
+    expect(shared).toEqual([10, 15, 20, 25, 30])
+  })
+
+  it("honours a coarser step for a confirmed-static window", () => {
+    expect(buildChunkTimestamps(0, 30, 15)).toEqual([0, 15, 30])
+  })
+
   it("returns a single point for a degenerate (zero-length) window", () => {
     expect(buildChunkTimestamps(10, 10)).toEqual([10])
   })
@@ -39,6 +62,27 @@ describe("buildSnapshotTimestampsFromSceneCues", () => {
     expect(buildSnapshotTimestampsFromSceneCues(0, 30, emptyCues())).toEqual(
       buildChunkTimestamps(0, 30),
     )
+  })
+
+  it("applies the caller's coarser fallback step to a cut-less window", () => {
+    // A confirmed-static window is handed a wider step so it doesn't produce a
+    // dense stack of near-duplicate frames.
+    expect(buildSnapshotTimestampsFromSceneCues(0, 30, emptyCues(), 15)).toEqual(
+      [0, 15, 30],
+    )
+  })
+
+  it("ignores the fallback step once real cuts exist", () => {
+    const cues: SceneCueScanResult = {
+      cuts: [{ atSeconds: 15 }],
+      freezes: [],
+      blacks: [],
+    }
+    // The coarse fallback step only governs the no-cut path; a detected cut
+    // still yields its flanking pair regardless.
+    expect(buildSnapshotTimestampsFromSceneCues(0, 30, cues, 15)).toEqual([
+      14, 16,
+    ])
   })
 
   it("places a flanking pair just before and after each detected cut", () => {
