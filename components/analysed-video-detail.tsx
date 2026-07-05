@@ -139,7 +139,7 @@ function RetentionWindows({
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col">
-      <span className="text-2xl font-semibold tabular-nums">{value}</span>
+      <span className="text-xl font-semibold tabular-nums">{value}</span>
       <span className="text-xs text-muted-foreground">{label}</span>
     </div>
   )
@@ -642,17 +642,19 @@ export function AnalysedVideoDetail({
   return (
     <div className="flex flex-col gap-6">
       <div ref={insightAreaRef} className="flex flex-col gap-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-stretch">
           {video.thumbnailUrl && (
-            <SourceVideoThumbnail
-              videoId={video.id}
-              thumbnailUrl={video.thumbnailUrl}
-              title={video.title}
-              scrubTime={previewTime}
-              playbackWindow={playbackWindow}
-            />
+            <div className="shrink-0 sm:self-start">
+              <SourceVideoThumbnail
+                videoId={video.id}
+                thumbnailUrl={video.thumbnailUrl}
+                title={video.title}
+                scrubTime={previewTime}
+                playbackWindow={playbackWindow}
+              />
+            </div>
           )}
-          <div>
+          <div className="flex flex-1 flex-col">
             <h1 className="text-2xl font-semibold tracking-normal">
               {video.title}
             </h1>
@@ -661,7 +663,7 @@ export function AnalysedVideoDetail({
               lost and held the most viewers.
             </p>
             {analyticsSummary && (
-              <div className="mt-4 flex flex-wrap items-start gap-x-8 gap-y-3">
+              <div className="mt-4 flex flex-wrap items-start gap-x-8 gap-y-3 sm:mt-auto sm:pt-4">
                 <Metric
                   label="Views"
                   value={formatCompactNumber(analyticsSummary.views)}
