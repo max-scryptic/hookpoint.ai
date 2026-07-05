@@ -1,7 +1,7 @@
 // LLM attribution of a video's retention curve to its transcript: for each
-// significant drop-off and each retention gain, an explanation of what was
-// likely happening (grounded in what was being said at that moment) plus, for
-// drop-offs, a concrete tip. This is the API-only, source-file-free counterpart
+// hook window, significant drop-off and retention gain, an explanation of what
+// was likely happening (grounded in what was being said at that moment) plus a
+// concrete tip where useful. This is the API-only, source-file-free counterpart
 // to the deep-analysis events synthesized from harvested frames/audio — it
 // reasons purely from the retention numbers and the caption transcript.
 //
@@ -15,7 +15,9 @@ import {
   type VideoDetails,
 } from "@/lib/youtube/youtube"
 
-export type RetentionMomentKind = "drop_off" | "gain"
+export type RetentionMomentKind = "hook" | "drop_off" | "gain"
+
+export const RETENTION_ATTRIBUTION_SCHEMA_VERSION = 2
 
 export interface RetentionMomentAttribution {
   kind: RetentionMomentKind
@@ -32,6 +34,7 @@ export interface RetentionMomentAttribution {
 }
 
 export interface RetentionAttribution {
+  schemaVersion: number
   // One or two sentences framing the video's overall retention story.
   overview: string
   moments: RetentionMomentAttribution[]
@@ -84,8 +87,8 @@ const ATTRIBUTION_SCHEMA = {
   },
 } as const
 
-// Builds the ordered list of moments handed to the model. Drop-offs first, then
-// gains, each in the order they appear on screen. The transcript for a moment is
+// Builds the ordered list of moments handed to the model. Hooks first, then
+// drop-offs and gains, each in the order they appear on screen. The transcript for a moment is
 // taken over its padded analysis window when one exists (wider, so a mid-
 // sentence drop still picks up its lead-in), falling back to the detected step.
 export function prepareRetentionMoments(
@@ -94,7 +97,7 @@ export function prepareRetentionMoments(
 ): PreparedMoment[] {
   const moments: PreparedMoment[] = []
 
-  for (const kind of ["drop_off", "gain"] as const) {
+  for (const kind of ["hook", "drop_off", "gain"] as const) {
     windows
       .filter((window) => window.kind === kind && !window.outOfRange)
       .sort((a, b) => a.windowIndex - b.windowIndex)
@@ -174,8 +177,9 @@ export async function generateRetentionAttribution(
               text: [
                 "You explain YouTube audience-retention moments using the transcript spoken around them.",
                 "Write to the uploader in the second person (you, your video), reviewing their own video. Whoever is heard speaking may be the uploader, a co-host, a guest, or a voiceover, so never pin what is said on a specific or gendered person (he, she, the creator, the host); frame it as the uploader's own video instead (say 'here you are still laying out the context', not 'he is still laying out the context').",
-                "Each moment is either a drop_off (viewers left) or a gain (viewers returned or re-watched).",
+                "Each moment is either a hook (one of the opening hook windows), a drop_off (viewers left), or a gain (viewers returned or re-watched).",
                 "Reason only from the supplied transcript, timestamps and retention numbers. Do not infer visuals, editing, music, thumbnails or vocal delivery — you cannot see or hear the video.",
+                "For a hook, explain how effectively the words create curiosity, establish the promise, and move toward delivering it. Ground the explanation in the supplied transcript and give one concrete way to make the opening hold more viewers.",
                 "For a drop_off, explain the most likely reason viewers left based on what was being said (e.g. a topic change, a slow tangent, an unmet promise, an ad or sponsor read, a natural stopping point), and give one concrete tip to reduce that loss next time.",
                 "For a gain, explain what likely pulled viewers back or made them re-watch, and set tip to a short note on what to keep doing — or null if there's nothing actionable.",
                 "relativePerformance (0..1) compares this moment to similar videos; below 0.5 is underperforming. Use it to judge severity, not as the explanation itself.",
@@ -243,6 +247,7 @@ export async function generateRetentionAttribution(
   const byIndex = new Map(parsed.moments.map((moment) => [moment.momentIndex, moment]))
 
   return {
+    schemaVersion: RETENTION_ATTRIBUTION_SCHEMA_VERSION,
     overview: parsed.overview,
     moments: moments.map((moment, index) => {
       const analysis = byIndex.get(index)

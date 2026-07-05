@@ -8,6 +8,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { claimAnalysis, releaseAnalysisClaim } from "@/lib/analysis-claim"
 import {
   generateRetentionAttribution,
+  RETENTION_ATTRIBUTION_SCHEMA_VERSION,
   type RetentionAttribution,
 } from "@/lib/retention-attribution"
 import type { RetentionWindow } from "@/lib/retention-windows"
@@ -70,7 +71,9 @@ export async function getOrGenerateRetentionAttribution(
   transcript: TranscriptCue[],
 ): Promise<RetentionAttribution | null> {
   const existing = await getRetentionAttribution(supabase, userId, analysedVideoId)
-  if (existing) return existing
+  if (existing?.schemaVersion === RETENTION_ATTRIBUTION_SCHEMA_VERSION) {
+    return existing
+  }
   if (transcript.length === 0) return null
 
   const claimed = await claimAnalysis(

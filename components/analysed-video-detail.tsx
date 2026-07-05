@@ -70,9 +70,11 @@ function formatCompactNumber(value: number | null): string {
 function RetentionWindows({
   windows,
   transcript,
+  attribution,
 }: {
   windows: RetentionWindow[]
   transcript: TranscriptCue[]
+  attribution: Map<number, RetentionMomentAttribution>
 }) {
   if (windows.length === 0) {
     return (
@@ -83,7 +85,7 @@ function RetentionWindows({
   }
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
+    <ul className="divide-y rounded-xl border bg-card">
       {windows.map((window) => {
         const said = transcriptForSegment(
           transcript,
@@ -96,44 +98,42 @@ function RetentionWindows({
           Math.round((window.startWatchRatio ?? 0) * 100) - endPercentage,
         )
         return (
-          <div
+          <li
             key={window.windowKey ?? window.windowIndex}
-            className="rounded-xl border bg-card p-4"
+            className="flex flex-col gap-2 p-4"
           >
-            <div className="flex items-baseline justify-between gap-2">
-              <h3 className="text-sm font-medium">{window.label}</h3>
-              <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                 <span className="font-mono text-xs text-muted-foreground">
                   {formatTimestamp(window.fromSeconds)} –{" "}
                   {formatTimestamp(window.toSeconds)}
                 </span>
+                <Badge tone="hook">{window.label}</Badge>
+                {window.relativePerformance != null && (
+                  <Badge tone="warn">
+                    {Math.round(window.relativePerformance * 100)}% vs. similar
+                  </Badge>
+                )}
                 {said && <ScriptSegmentTooltip text={said} />}
               </div>
+              {!window.outOfRange && (
+                <span className="shrink-0 text-sm font-medium text-destructive">
+                  −{lostPercentage}%
+                </span>
+              )}
             </div>
 
             {window.outOfRange ? (
-              <p className="mt-3 text-sm text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 This video is too short to reach this window.
               </p>
             ) : (
-              <div className="mt-3 flex flex-wrap items-start gap-x-6 gap-y-4">
-                <Metric label="Viewers lost" value={`${lostPercentage}%`} />
-                <Metric
-                  label="Still watching at end"
-                  value={`${endPercentage}%`}
-                />
-                {window.relativePerformance != null && (
-                  <Metric
-                    label="vs. similar videos"
-                    value={`${Math.round(window.relativePerformance * 100)}%`}
-                  />
-                )}
-              </div>
+              <AttributionNote attribution={attribution.get(window.windowIndex)} />
             )}
-          </div>
+          </li>
         )
       })}
-    </div>
+    </ul>
   )
 }
 
@@ -326,11 +326,13 @@ function Badge({
   tone = "muted",
 }: {
   children: React.ReactNode
-  tone?: "muted" | "warn"
+  tone?: "muted" | "warn" | "hook"
 }) {
   const cls =
     tone === "warn"
       ? "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"
+      : tone === "hook"
+        ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-300"
       : "bg-muted text-muted-foreground"
   return (
     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>
@@ -557,7 +559,7 @@ export function AnalysedVideoDetail({
   const drops = retentionWindows.filter((w) => w.kind === "drop_off")
   const gains = retentionWindows.filter((w) => w.kind === "gain")
 
-  // Index the LLM attribution by kind + windowIndex so each drop-off / gain card
+  // Index the LLM attribution by kind + windowIndex so each hook/drop-off/gain card
   // can pick up its own explanation and tip.
   const attributionByKind = (
     kind: RetentionMomentKind,
@@ -570,6 +572,7 @@ export function AnalysedVideoDetail({
   }
   const dropAttribution = attributionByKind("drop_off")
   const gainAttribution = attributionByKind("gain")
+  const hookAttribution = attributionByKind("hook")
   const chartInsights: RetentionChartInsight[] = [
     ...hookWindows
       .filter((window) => !window.outOfRange)
@@ -773,7 +776,11 @@ export function AnalysedVideoDetail({
         </TabsContent>
 
         <TabsContent value="hook">
-          <RetentionWindows windows={hookWindows} transcript={transcript} />
+          <RetentionWindows
+            windows={hookWindows}
+            transcript={transcript}
+            attribution={hookAttribution}
+          />
         </TabsContent>
 
         <TabsContent value="drop-offs">

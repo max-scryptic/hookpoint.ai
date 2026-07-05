@@ -26,13 +26,21 @@ function window(overrides: Partial<RetentionWindow>): RetentionWindow {
 }
 
 const transcript: TranscriptCue[] = [
+  { startSeconds: 0, endSeconds: 10, text: "the opening promise starts here" },
   { startSeconds: 40, endSeconds: 50, text: "here comes the sponsor read" },
   { startSeconds: 120, endSeconds: 130, text: "the surprising payoff lands" },
 ]
 
 describe("prepareRetentionMoments", () => {
-  it("orders drop-offs before gains and pulls transcript from the analysis window", () => {
+  it("orders hooks, drop-offs, then gains and pulls transcript from the analysis window", () => {
     const windows: RetentionWindow[] = [
+      window({
+        kind: "hook",
+        windowIndex: 0,
+        fromSeconds: 0,
+        toSeconds: 10,
+        delta: -0.12,
+      }),
       window({
         kind: "gain",
         windowIndex: 0,
@@ -55,10 +63,15 @@ describe("prepareRetentionMoments", () => {
 
     const moments = prepareRetentionMoments(windows, transcript)
 
-    expect(moments.map((moment) => moment.kind)).toEqual(["drop_off", "gain"])
-    expect(moments[0].said).toContain("sponsor read")
-    expect(moments[0].deltaPercent).toBe(-8)
-    expect(moments[1].said).toContain("payoff")
+    expect(moments.map((moment) => moment.kind)).toEqual([
+      "hook",
+      "drop_off",
+      "gain",
+    ])
+    expect(moments[0].said).toContain("opening promise")
+    expect(moments[1].said).toContain("sponsor read")
+    expect(moments[1].deltaPercent).toBe(-8)
+    expect(moments[2].said).toContain("payoff")
   })
 
   it("skips out-of-range windows", () => {
