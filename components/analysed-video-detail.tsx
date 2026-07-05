@@ -28,7 +28,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import type { PacingAnalysis } from "@/lib/pacing-analysis"
-import type { PackagingAlignment } from "@/lib/packaging-alignment"
+import {
+  prioritizePackagingImprovements,
+  type PackagingAlignment,
+} from "@/lib/packaging-alignment"
 import type {
   RetentionAttribution,
   RetentionMomentAttribution,
@@ -423,7 +426,9 @@ function PackagingAlignmentSection({
         <PointsCard
           title="What could be improved"
           tone="warn"
-          points={alignment.whatCouldBeBetter.slice(0, 3)}
+          points={prioritizePackagingImprovements(
+            alignment.whatCouldBeBetter,
+          ).slice(0, 3)}
         />
       </div>
     </div>
