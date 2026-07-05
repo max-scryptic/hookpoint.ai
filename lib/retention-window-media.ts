@@ -121,11 +121,21 @@ function mapAudioRow(row: AudioRow): RetentionWindowAudioClip {
   }
 }
 
-// Splits [fromSeconds, toSeconds] into stepSeconds-wide chunk timestamps,
-// starting at fromSeconds and always including toSeconds as the final point —
-// e.g. buildChunkTimestamps(0, 30) => [0, 5, 10, 15, 20, 25, 30]. When the span
-// isn't an exact multiple of the step, the last gap is shorter than the rest
-// rather than overshooting toSeconds.
+// Samples [fromSeconds, toSeconds] at a global grid of stepSeconds-wide
+// gridlines (multiples of stepSeconds measured from 0, not from fromSeconds),
+// always including the window's own start and end — e.g.
+// buildChunkTimestamps(0, 30) => [0, 5, 10, 15, 20, 25, 30].
+//
+// Snapping the interior samples to a *global* phase rather than stepping from
+// fromSeconds is deliberate: when two overlapping windows both fall back to
+// this grid (a hook at 0-30 and a drop-off at 7.4-47.4, say), a from-relative
+// grid would land them on interleaved-but-distinct seconds (…,20,25 vs
+// …,22.4,27.4) so nothing is shared, whereas a global grid puts both on the
+// same 10,15,20,25 gridlines across their shared span. That lets the
+// extraction frame cache (keyed on the exact timestamp, see
+// lib/retention-window-media-extraction.ts) grab each shared second once
+// instead of once per window. The raw start/end are still included so edge
+// coverage isn't lost when the bounds aren't grid-aligned.
 export function buildChunkTimestamps(
   fromSeconds: number,
   toSeconds: number,
@@ -133,14 +143,12 @@ export function buildChunkTimestamps(
 ): number[] {
   if (toSeconds <= fromSeconds) return [round(fromSeconds)]
 
-  const timestamps: number[] = []
-  let t = fromSeconds
-  while (t < toSeconds) {
-    timestamps.push(round(t))
-    t += stepSeconds
+  const timestamps = new Set<number>([round(fromSeconds), round(toSeconds)])
+  const firstGridline = Math.ceil(fromSeconds / stepSeconds) * stepSeconds
+  for (let t = firstGridline; t < toSeconds; t += stepSeconds) {
+    timestamps.add(round(t))
   }
-  timestamps.push(round(toSeconds))
-  return timestamps
+  return [...timestamps].sort((a, b) => a - b)
 }
 
 // Rounds away floating-point noise (e.g. 22.299999999999997) without losing
@@ -232,6 +240,16 @@ const CUT_SNAPSHOT_OFFSET_SECONDS = 1
 // across the whole window instead of just its first few cuts.
 const MAX_SNAPSHOTS_PER_WINDOW = 12
 
+// Coarser fallback grid step for a window whose scan *ran and confidently
+// found no cuts* (a genuinely static shot — a talking head against a fixed
+// background). Dense 5s coverage of a shot that never visually changes just
+// hands the vision model near-duplicate frames, so a confirmed-static window
+// samples every 15s instead. A window whose scan *failed* keeps the tighter
+// CHUNK_STEP_SECONDS grid: its content is unknown (the scan never ran), so it
+// still hedges with denser coverage rather than under-sampling a window that
+// might actually contain cuts. Tune here if the vision step wants more/less.
+export const STATIC_FALLBACK_STEP_SECONDS = 15
+
 function subsampleEvenly(values: number[], max: number): number[] {
   if (values.length <= max) return values
   const step = (values.length - 1) / (max - 1)
@@ -246,16 +264,20 @@ function subsampleEvenly(values: number[], max: number): number[] {
 // a blind uniform grid: two flanking frames — just before and just after —
 // per detected hard cut, so the harvested images actually straddle a real
 // transition instead of landing at an arbitrary 5-second mark that might
-// miss every cut in the window entirely. Falls back to the original
-// fixed-step grid when a window has no detected cuts at all (e.g. a static
-// talking-head shot), so it still gets some visual evidence rather than none.
+// miss every cut in the window entirely. Falls back to buildChunkTimestamps
+// (a fixed-step grid) when a window has no detected cuts at all, so it still
+// gets some visual evidence rather than none; the caller passes a coarser
+// fallbackStepSeconds for a window whose scan confidently found no cuts (a
+// genuinely static shot) than for one whose scan failed (content unknown) —
+// see STATIC_FALLBACK_STEP_SECONDS.
 export function buildSnapshotTimestampsFromSceneCues(
   fromSeconds: number,
   toSeconds: number,
   cues: SceneCueScanResult,
+  fallbackStepSeconds: number = CHUNK_STEP_SECONDS,
 ): number[] {
   if (cues.cuts.length === 0) {
-    return buildChunkTimestamps(fromSeconds, toSeconds)
+    return buildChunkTimestamps(fromSeconds, toSeconds, fallbackStepSeconds)
   }
 
   const timestamps = new Set<number>()
@@ -289,11 +311,13 @@ export async function createRetentionWindowSnapshotsFromSceneCues(
   fromSeconds: number,
   toSeconds: number,
   cues: SceneCueScanResult,
+  fallbackStepSeconds: number = CHUNK_STEP_SECONDS,
 ): Promise<void> {
   const timestamps = buildSnapshotTimestampsFromSceneCues(
     fromSeconds,
     toSeconds,
     cues,
+    fallbackStepSeconds,
   )
 
   const rows = timestamps.map((timestampSeconds, chunkIndex) => ({

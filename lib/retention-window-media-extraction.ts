@@ -64,9 +64,11 @@ import {
 } from "@/lib/media/scene-detection"
 import { createOcrEngine, type OcrEngine } from "@/lib/media/ocr"
 import {
+  CHUNK_STEP_SECONDS,
   createRetentionWindowSnapshotsFromSceneCues,
   getPendingRetentionWindowAudio,
   getPendingRetentionWindowSnapshots,
+  STATIC_FALLBACK_STEP_SECONDS,
   updateRetentionWindowAudioStatus,
   updateRetentionWindowSnapshotStatus,
 } from "@/lib/retention-window-media"
@@ -154,17 +156,39 @@ export interface MergedScanSpan {
 // ffmpeg spawn and seek to skip them.
 export const SCAN_MERGE_GAP_SECONDS = 10
 
+// Ceiling on how long a single merged span may grow. Merging saves redundant
+// decoding, but it also concentrates cost into one ffmpeg pass and makes a
+// timeout fail *every* window in the span at once (all-or-nothing). Past this
+// length the scan's own timeout budget stops scaling anyway — the per-second
+// budget in computeSceneCueScanTimeoutMs (60s floor + 3s/s, capped at 240s)
+// hits its cap right around 60s of footage, so a span longer than that is one
+// the timeout can no longer model and is just betting the decode fits. Capping
+// merges here keeps every span inside that modelled budget and bounds the
+// blast radius: an unbounded merge is exactly what produced a single ~83s span
+// that timed out and failed four windows together. A lone scan longer than the
+// cap still forms its own span — the cap only blocks *merging*, never splits a
+// scan.
+export const SCAN_MERGE_MAX_SPAN_SECONDS = 60
+
 export function mergeScanSpans(
   scans: RetentionWindowSceneCueScan[],
   gapSeconds: number = SCAN_MERGE_GAP_SECONDS,
+  maxSpanSeconds: number = SCAN_MERGE_MAX_SPAN_SECONDS,
 ): MergedScanSpan[] {
   const sorted = [...scans].sort((a, b) => a.fromSeconds - b.fromSeconds)
   const spans: MergedScanSpan[] = []
 
   for (const scan of sorted) {
     const current = spans[spans.length - 1]
-    if (current && scan.fromSeconds <= current.toSeconds + gapSeconds) {
-      current.toSeconds = Math.max(current.toSeconds, scan.toSeconds)
+    const mergedToSeconds = current
+      ? Math.max(current.toSeconds, scan.toSeconds)
+      : 0
+    if (
+      current &&
+      scan.fromSeconds <= current.toSeconds + gapSeconds &&
+      mergedToSeconds - current.fromSeconds <= maxSpanSeconds
+    ) {
+      current.toSeconds = mergedToSeconds
       current.scans.push(scan)
     } else {
       spans.push({
@@ -480,6 +504,10 @@ async function scanMergedSpan(
         scan.fromSeconds,
         scan.toSeconds,
         cues,
+        // A confirmed-static window (the scan ran and returned zero cuts) can
+        // fall back sparsely; a window whose scan failed (spanCues null) keeps
+        // the denser default grid since its content is genuinely unknown.
+        spanCues ? STATIC_FALLBACK_STEP_SECONDS : CHUNK_STEP_SECONDS,
       )
       // The scan's own status still faithfully reports failure when the
       // ffmpeg call itself errored — snapshots existing doesn't mean cut

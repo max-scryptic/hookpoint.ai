@@ -544,6 +544,51 @@ describe("extractPendingRetentionWindowMedia", () => {
     ).toHaveLength(2)
   })
 
+  it("uses the coarse static grid for a window whose scan ran and found no cuts", async () => {
+    const { supabase, updates } = makeFakeSupabase(
+      [],
+      [],
+      [
+        {
+          id: "scan-1",
+          retention_window_id: "rw-1",
+          from_seconds: 0,
+          to_seconds: 30,
+          status: "pending",
+          error: null,
+        },
+      ],
+    )
+    // Default scanner resolves with zero cuts: a confirmed-static shot.
+    const sceneCueScanner = fakeSceneCueScanner()
+    const extractor: VideoExtractor = {
+      extractThumbnail: vi.fn(async () => Buffer.from("jpeg-bytes")),
+      extractAudioSegment: vi.fn(),
+    }
+
+    await extractPendingRetentionWindowMedia(supabase, fakeStorage(), makeSourceFile(), {
+      extractor,
+      mediaStorage: fakeStorage(),
+      sceneCueScanner,
+      createOcrEngine: async () => fakeOcrEngine(),
+      acquireLocalSource: async () => null,
+    })
+
+    // Confirmed static => 15s grid (0, 15, 30), not the dense 5s grid a failed
+    // scan would fall back to.
+    const grabbedTimestamps = (extractor.extractThumbnail as ReturnType<typeof vi.fn>).mock.calls
+      .map((call) => call[1])
+      .sort((a, b) => a - b)
+    expect(grabbedTimestamps).toEqual([0, 15, 30])
+    expect(
+      updates.filter(
+        (update) =>
+          update.table === "retention_window_snapshots" &&
+          (update.payload as Record<string, unknown>).status === "ready",
+      ),
+    ).toHaveLength(3)
+  })
+
   it("still derives fallback-grid snapshots when a window's scene-cue scan fails, but marks the scan itself failed", async () => {
     const { supabase, updates, inserts } = makeFakeSupabase(
       [],
@@ -622,14 +667,14 @@ function makeScan(
 describe("mergeScanSpans", () => {
   it("coalesces overlapping and nearly-adjacent ranges into one span", () => {
     const spans = mergeScanSpans([
-      makeScan({ id: "a", fromSeconds: 0, toSeconds: 30 }),
-      makeScan({ id: "b", fromSeconds: 25, toSeconds: 60 }),
-      makeScan({ id: "c", fromSeconds: 65, toSeconds: 90 }),
+      makeScan({ id: "a", fromSeconds: 0, toSeconds: 20 }),
+      makeScan({ id: "b", fromSeconds: 18, toSeconds: 35 }),
+      makeScan({ id: "c", fromSeconds: 38, toSeconds: 55 }),
       makeScan({ id: "d", fromSeconds: 200, toSeconds: 240 }),
     ])
 
     expect(spans).toHaveLength(2)
-    expect(spans[0]).toMatchObject({ fromSeconds: 0, toSeconds: 90 })
+    expect(spans[0]).toMatchObject({ fromSeconds: 0, toSeconds: 55 })
     expect(spans[0].scans.map((scan) => scan.id)).toEqual(["a", "b", "c"])
     expect(spans[1]).toMatchObject({ fromSeconds: 200, toSeconds: 240 })
   })
@@ -642,6 +687,46 @@ describe("mergeScanSpans", () => {
 
     expect(spans).toHaveLength(1)
     expect(spans[0]).toMatchObject({ fromSeconds: 0, toSeconds: 60 })
+  })
+
+  it("stops merging once a span would grow past the max length", () => {
+    // These four all overlap/adjoin, so the old unbounded merge coalesced them
+    // into a single ~83s decode that blew the scan timeout and failed every
+    // window at once. Capped at 60s, the run splits into bounded spans so a
+    // timeout can only take out the windows in one span, not all of them.
+    const spans = mergeScanSpans(
+      [
+        makeScan({ id: "hook", fromSeconds: 0, toSeconds: 30 }),
+        makeScan({ id: "gain", fromSeconds: 0, toSeconds: 27.475 }),
+        makeScan({ id: "drop-a", fromSeconds: 7.375, toSeconds: 47.375 }),
+        makeScan({ id: "drop-b", fromSeconds: 43.255, toSeconds: 83.255 }),
+      ],
+      10,
+      60,
+    )
+
+    expect(spans.every((span) => span.toSeconds - span.fromSeconds <= 60)).toBe(
+      true,
+    )
+    expect(spans).toHaveLength(2)
+    expect(spans[0]).toMatchObject({ fromSeconds: 0, toSeconds: 47.375 })
+    expect(spans[0].scans.map((scan) => scan.id)).toEqual([
+      "hook",
+      "gain",
+      "drop-a",
+    ])
+    expect(spans[1]).toMatchObject({ fromSeconds: 43.255, toSeconds: 83.255 })
+  })
+
+  it("still gives an over-length lone scan its own span (the cap only blocks merging)", () => {
+    const spans = mergeScanSpans(
+      [makeScan({ id: "a", fromSeconds: 0, toSeconds: 90 })],
+      10,
+      60,
+    )
+
+    expect(spans).toHaveLength(1)
+    expect(spans[0]).toMatchObject({ fromSeconds: 0, toSeconds: 90 })
   })
 })
 

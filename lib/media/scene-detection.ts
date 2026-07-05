@@ -148,12 +148,14 @@ export function parseSceneCues(
 // Unlike a thumbnail/audio grab (seek to one point, pull a little data), a
 // scan decodes and filters every frame across its whole range — observed in
 // practice to routinely exceed 30s for a 30-40s window. Since overlapping
-// windows are now scanned as merged spans (see mergeScanSpans in
-// lib/retention-window-media-extraction.ts) the range can cover most of a
-// video, so the budget scales with the span rather than assuming a short
-// window: a generous ~3s of wall clock per second of footage on top of a
+// windows are scanned as merged spans (see mergeScanSpans in
+// lib/retention-window-media-extraction.ts) the range can be longer than a
+// single window, so the budget scales with the span rather than assuming a
+// short window: a generous ~3s of wall clock per second of footage on top of a
 // startup floor, capped under the 300s budget the routes that trigger
-// extraction run with.
+// extraction run with. Merged spans are themselves length-capped
+// (SCAN_MERGE_MAX_SPAN_SECONDS) so the span stays inside the range this budget
+// can actually model rather than growing until it hits the cap and gambles.
 const SCENE_CUE_SCAN_TIMEOUT_FLOOR_MS = 60_000
 const SCENE_CUE_SCAN_TIMEOUT_PER_SECOND_MS = 3_000
 const SCENE_CUE_SCAN_TIMEOUT_CAP_MS = 240_000
