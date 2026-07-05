@@ -565,6 +565,17 @@ export function AnalysedVideoDetail({
   const hookWindows = retentionWindows.filter((w) => w.kind === "hook")
   const drops = retentionWindows.filter((w) => w.kind === "drop_off")
   const gains = retentionWindows.filter((w) => w.kind === "gain")
+  const pacingStretches = pacingAnalysis?.slowOrRepetitiveStretches ?? []
+  const defaultRetentionTab =
+    hookWindows.length > 0
+      ? "hook"
+      : drops.length > 0
+        ? "drop-offs"
+        : gains.length > 0
+          ? "gains"
+          : pacingStretches.length > 0
+            ? "pacing"
+            : null
 
   // Index the LLM attribution by kind + windowIndex so each hook/drop-off/gain card
   // can pick up its own explanation and tip.
@@ -772,64 +783,76 @@ export function AnalysedVideoDetail({
             }
           />
 
-          <Tabs defaultValue="hook">
-            <TabsList>
-              <TabsTrigger value="hook">
-                <GaugeIcon className="text-yellow-500 dark:text-yellow-400" />
-                Hook
-              </TabsTrigger>
-              <TabsTrigger value="drop-offs">
-                <TrendingDownIcon className="text-destructive" />
-                Drop-offs
-              </TabsTrigger>
-              <TabsTrigger value="gains">
-                <TrendingUpIcon className="text-emerald-600 dark:text-emerald-400" />
-                Gains
-              </TabsTrigger>
-              <TabsTrigger value="pacing">
-                <GaugeIcon className="text-blue-600 dark:text-blue-400" />
-                Pacing
-              </TabsTrigger>
-            </TabsList>
+          {defaultRetentionTab && (
+            <Tabs defaultValue={defaultRetentionTab}>
+              <TabsList>
+                {hookWindows.length > 0 && (
+                  <TabsTrigger value="hook">
+                    <GaugeIcon className="text-yellow-500 dark:text-yellow-400" />
+                    Hook
+                  </TabsTrigger>
+                )}
+                {drops.length > 0 && (
+                  <TabsTrigger value="drop-offs">
+                    <TrendingDownIcon className="text-destructive" />
+                    Drop-offs
+                  </TabsTrigger>
+                )}
+                {gains.length > 0 && (
+                  <TabsTrigger value="gains">
+                    <TrendingUpIcon className="text-emerald-600 dark:text-emerald-400" />
+                    Gains
+                  </TabsTrigger>
+                )}
+                {pacingStretches.length > 0 && (
+                  <TabsTrigger value="pacing">
+                    <GaugeIcon className="text-blue-600 dark:text-blue-400" />
+                    Pacing
+                  </TabsTrigger>
+                )}
+              </TabsList>
 
-            <TabsContent value="hook">
-              <RetentionWindows
-                windows={hookWindows}
-                transcript={transcript}
-                attribution={hookAttribution}
-              />
-            </TabsContent>
-
-            <TabsContent value="drop-offs">
-              <DropList
-                drops={drops}
-                transcript={transcript}
-                attribution={dropAttribution}
-              />
-            </TabsContent>
-
-            <TabsContent value="gains">
-              {gains.length === 0 ? (
-                <div className="rounded-xl border bg-muted/30 p-6 text-sm text-muted-foreground">
-                  No notable retention gains stood out for this video.
-                </div>
-              ) : (
-                <GainList
-                  gains={gains}
-                  transcript={transcript}
-                  attribution={gainAttribution}
-                />
+              {hookWindows.length > 0 && (
+                <TabsContent value="hook">
+                  <RetentionWindows
+                    windows={hookWindows}
+                    transcript={transcript}
+                    attribution={hookAttribution}
+                  />
+                </TabsContent>
               )}
-            </TabsContent>
 
-            <TabsContent value="pacing">
-              <PacingAnalysisSection
-                analysis={pacingAnalysis}
-                transcript={transcript}
-                hasTranscript={transcript.length > 0}
-              />
-            </TabsContent>
-          </Tabs>
+              {drops.length > 0 && (
+                <TabsContent value="drop-offs">
+                  <DropList
+                    drops={drops}
+                    transcript={transcript}
+                    attribution={dropAttribution}
+                  />
+                </TabsContent>
+              )}
+
+              {gains.length > 0 && (
+                <TabsContent value="gains">
+                  <GainList
+                    gains={gains}
+                    transcript={transcript}
+                    attribution={gainAttribution}
+                  />
+                </TabsContent>
+              )}
+
+              {pacingStretches.length > 0 && (
+                <TabsContent value="pacing">
+                  <PacingAnalysisSection
+                    analysis={pacingAnalysis}
+                    transcript={transcript}
+                    hasTranscript={transcript.length > 0}
+                  />
+                </TabsContent>
+              )}
+            </Tabs>
+          )}
         </section>
       </div>
     </div>
