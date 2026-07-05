@@ -102,10 +102,13 @@ function RetentionWindows({
           >
             <div className="flex items-baseline justify-between gap-2">
               <h3 className="text-sm font-medium">{window.label}</h3>
-              <span className="font-mono text-xs text-muted-foreground">
-                {formatTimestamp(window.fromSeconds)} –{" "}
-                {formatTimestamp(window.toSeconds)}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xs text-muted-foreground">
+                  {formatTimestamp(window.fromSeconds)} –{" "}
+                  {formatTimestamp(window.toSeconds)}
+                </span>
+                {said && <ScriptSegmentTooltip text={said} />}
+              </div>
             </div>
 
             {window.outOfRange ? (
@@ -113,27 +116,19 @@ function RetentionWindows({
                 This video is too short to reach this window.
               </p>
             ) : (
-              <>
-                <div className="mt-3 flex flex-wrap items-start gap-x-6 gap-y-4">
-                  <Metric label="Viewers lost" value={`${lostPercentage}%`} />
+              <div className="mt-3 flex flex-wrap items-start gap-x-6 gap-y-4">
+                <Metric label="Viewers lost" value={`${lostPercentage}%`} />
+                <Metric
+                  label="Still watching at end"
+                  value={`${endPercentage}%`}
+                />
+                {window.relativePerformance != null && (
                   <Metric
-                    label="Still watching at end"
-                    value={`${endPercentage}%`}
+                    label="vs. similar videos"
+                    value={`${Math.round(window.relativePerformance * 100)}%`}
                   />
-                  {window.relativePerformance != null && (
-                    <Metric
-                      label="vs. similar videos"
-                      value={`${Math.round(window.relativePerformance * 100)}%`}
-                    />
-                  )}
-                </div>
-
-                {said && (
-                  <p className="mt-3 text-sm text-muted-foreground">
-                    “{said.length > 240 ? `${said.slice(0, 240)}…` : said}”
-                  </p>
                 )}
-              </>
+              </div>
             )}
           </div>
         )
@@ -153,9 +148,11 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 function PacingAnalysisSection({
   analysis,
+  transcript,
   hasTranscript,
 }: {
   analysis: PacingAnalysis | null
+  transcript: TranscriptCue[]
   hasTranscript: boolean
 }) {
   return (
@@ -175,7 +172,13 @@ function PacingAnalysisSection({
         <ul className="divide-y rounded-xl border bg-card">
           {[...analysis.slowOrRepetitiveStretches]
             .sort((a, b) => a.startSeconds - b.startSeconds)
-            .map((stretch, index) => (
+            .map((stretch, index) => {
+            const said = transcriptForSegment(
+              transcript,
+              stretch.startSeconds,
+              stretch.endSeconds,
+            )
+            return (
             <li
               key={index}
               className="flex flex-col gap-2 p-4"
@@ -188,6 +191,7 @@ function PacingAnalysisSection({
                   {formatTimestamp(stretch.startSeconds)} –{" "}
                   {formatTimestamp(stretch.endSeconds)}
                 </span>
+                {said && <ScriptSegmentTooltip text={said} />}
               </div>
               <p className="pl-10 text-sm">{stretch.reason}</p>
               {stretch.suggestion && (
@@ -197,7 +201,8 @@ function PacingAnalysisSection({
                 </p>
               )}
             </li>
-          ))}
+            )
+          })}
         </ul>
       )}
     </>
@@ -796,6 +801,7 @@ export function AnalysedVideoDetail({
         <TabsContent value="pacing">
           <PacingAnalysisSection
             analysis={pacingAnalysis}
+            transcript={transcript}
             hasTranscript={transcript.length > 0}
           />
         </TabsContent>
