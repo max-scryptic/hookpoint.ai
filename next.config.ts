@@ -40,12 +40,32 @@ const nextConfig: NextConfig = {
   // traced back to a separate bug — a bundler-rewritten `require.resolve` in
   // lib/media/ocr.ts, see the comment there — but this route was still a real
   // gap in its own right once that's fixed.)
+  //
+  // The whole tesseract.js package is traced, not just its worker-script/**
+  // subtree: that worker script is spawned via a runtime-computed path
+  // (new Worker(...)), so nft never walks its require() graph — and that graph
+  // reaches back out of worker-script/ into sibling src/constants/** and
+  // src/utils/** (e.g. worker-script/utils/dump.js does
+  // `require('../../constants/imageType')`). Shipping only worker-script/**
+  // left those siblings out, surfacing as "Cannot find module
+  // '../../constants/imageType'" in production. Its worker-script's own
+  // third-party deps are invisible to nft for the same reason, so the
+  // zero-dependency leaf packages it require()s at runtime are listed too.
+  // (node-fetch is intentionally omitted: worker-script/node/index.js guards
+  // it as `global.fetch || require('node-fetch')`, and the serverless runtime
+  // provides a global fetch, so the require never executes.)
   outputFileTracingIncludes: {
     "/**/*": [
       "./node_modules/@ffmpeg-installer/**",
-      "./node_modules/tesseract.js/src/worker-script/**",
+      "./node_modules/tesseract.js/**",
       "./node_modules/tesseract.js-core/**",
       "./node_modules/@tesseract.js-data/eng/**",
+      "./node_modules/bmp-js/**",
+      "./node_modules/idb-keyval/**",
+      "./node_modules/is-url/**",
+      "./node_modules/regenerator-runtime/**",
+      "./node_modules/wasm-feature-detect/**",
+      "./node_modules/zlibjs/**",
     ],
   },
 };
