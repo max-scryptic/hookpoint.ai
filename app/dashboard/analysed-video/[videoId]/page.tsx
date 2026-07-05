@@ -10,6 +10,12 @@ import {
   saveAnalysedVideo,
 } from "@/lib/analysed-videos"
 import { getOrGeneratePacingAnalysis } from "@/lib/pacing-analyses"
+import { getOrGenerateRetentionAttribution } from "@/lib/retention-attributions"
+import type { RetentionAttribution } from "@/lib/retention-attribution"
+import { getOrGeneratePackagingAlignment } from "@/lib/packaging-alignments"
+import type { PackagingAlignment } from "@/lib/packaging-alignment"
+import { getOrBackfillVideoAnalyticsSummary } from "@/lib/video-analytics"
+import type { VideoAnalyticsSummary } from "@/lib/youtube/youtube"
 import {
   buildRetentionWindows,
   getRetentionWindows,
@@ -79,6 +85,9 @@ type AnalysisResult =
       retentionWindows: RetentionWindow[]
       transcript: TranscriptCue[]
       pacingAnalysis: PacingAnalysis | null
+      retentionAttribution: RetentionAttribution | null
+      packagingAlignment: PackagingAlignment | null
+      analyticsSummary: VideoAnalyticsSummary | null
       // The analysed_videos row's own UUID — distinct from the route's YouTube
       // video id — that retention_windows and everything derived from them are
       // keyed on. Null when the video row itself failed to save, in which case
@@ -89,6 +98,59 @@ type AnalysisResult =
   | { status: "no_data" }
   | { status: "reconnect" }
   | { status: "error" }
+
+// The surface-level analyses that hang off an already-persisted video row:
+// retention→transcript attribution and title/thumbnail/hook packaging alignment
+// (both LLM, self-claiming and cached after first run) plus the deterministic
+// analytics KPI/engagement summary (fetched once, replayed thereafter). Run in
+// parallel — they're independent — and each is best-effort so one failing never
+// hides the others or the core retention view.
+async function loadSurfaceExtras(
+  userId: string,
+  analysedVideoId: string,
+  video: VideoDetails,
+  retentionWindows: RetentionWindow[],
+  transcript: TranscriptCue[],
+): Promise<{
+  retentionAttribution: RetentionAttribution | null
+  packagingAlignment: PackagingAlignment | null
+  analyticsSummary: VideoAnalyticsSummary | null
+}> {
+  const supabase = await createClient()
+  const [retentionAttribution, packagingAlignment, analyticsSummary] =
+    await Promise.all([
+      getOrGenerateRetentionAttribution(
+        supabase,
+        userId,
+        analysedVideoId,
+        video,
+        retentionWindows,
+        transcript,
+      ).catch((error) => {
+        console.error("Failed to generate retention attribution", error)
+        return null
+      }),
+      getOrGeneratePackagingAlignment(
+        supabase,
+        userId,
+        analysedVideoId,
+        video,
+        transcript,
+      ).catch((error) => {
+        console.error("Failed to generate packaging alignment", error)
+        return null
+      }),
+      // Already best-effort internally (resolves to null on any failure).
+      getOrBackfillVideoAnalyticsSummary(
+        supabase,
+        userId,
+        analysedVideoId,
+        video,
+      ),
+    ])
+
+  return { retentionAttribution, packagingAlignment, analyticsSummary }
+}
 
 async function analyse(
   userId: string,
@@ -175,6 +237,14 @@ async function analyse(
         console.error("Failed to generate pacing analysis", pacingError)
       }
 
+      const extras = await loadSurfaceExtras(
+        userId,
+        cached.id,
+        cached.videoDetails,
+        retentionWindows,
+        transcript,
+      )
+
       return {
         status: "ok",
         video: cached.videoDetails,
@@ -182,6 +252,9 @@ async function analyse(
         retentionWindows,
         transcript,
         pacingAnalysis,
+        retentionAttribution: extras.retentionAttribution,
+        packagingAlignment: extras.packagingAlignment,
+        analyticsSummary: extras.analyticsSummary,
         analysedVideoId: cached.id,
       }
     }
@@ -291,6 +364,23 @@ async function analyse(
       }
     }
 
+    // The surface extras need a persisted row to claim/cache against. When the
+    // save failed there's nothing to attach them to, so skip them for this
+    // render — they'll be generated on the next visit once the row exists.
+    const extras = analysedVideoId
+      ? await loadSurfaceExtras(
+          userId,
+          analysedVideoId,
+          video,
+          retentionWindows,
+          transcript,
+        )
+      : {
+          retentionAttribution: null,
+          packagingAlignment: null,
+          analyticsSummary: null,
+        }
+
     return {
       status: "ok",
       video,
@@ -298,6 +388,9 @@ async function analyse(
       retentionWindows,
       transcript,
       pacingAnalysis,
+      retentionAttribution: extras.retentionAttribution,
+      packagingAlignment: extras.packagingAlignment,
+      analyticsSummary: extras.analyticsSummary,
       analysedVideoId,
     }
   } catch (error) {
@@ -421,6 +514,9 @@ export default async function Page({
               retentionWindows={result.retentionWindows}
               transcript={result.transcript}
               pacingAnalysis={result.pacingAnalysis}
+              retentionAttribution={result.retentionAttribution}
+              packagingAlignment={result.packagingAlignment}
+              analyticsSummary={result.analyticsSummary}
             />
             <SourceFileUpload
               videoId={videoId}

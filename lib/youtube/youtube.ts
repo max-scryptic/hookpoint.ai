@@ -499,6 +499,136 @@ export async function getAudienceRetention(
     .sort((a, b) => a.elapsedRatio - b.elapsedRatio)
 }
 
+// A single traffic-source bucket: where a share of the video's views came
+// from (YouTube search, suggested/related, browse, external, etc.).
+export interface TrafficSource {
+  // Raw YouTube insightTrafficSourceType code (e.g. "YT_SEARCH", "RELATED_VIDEO").
+  source: string
+  views: number
+}
+
+// Deterministic, API-only performance summary for a video: the headline watch
+// KPIs, engagement counts, and the traffic-source mix. Everything here comes
+// from the YouTube Analytics API's non-retention reports, so it needs no source
+// file. Individual fields are null when YouTube reports no data for them.
+export interface VideoAnalyticsSummary {
+  views: number | null
+  estimatedMinutesWatched: number | null
+  averageViewDurationSeconds: number | null
+  // 0..100 — the average share of the video watched.
+  averageViewPercentage: number | null
+  likes: number | null
+  comments: number | null
+  shares: number | null
+  subscribersGained: number | null
+  subscribersLost: number | null
+  // Ordered most-viewed first. Empty when YouTube reports no breakdown.
+  trafficSources: TrafficSource[]
+  fetchedAt: string
+}
+
+// Runs one YouTube Analytics report for a single owned video and returns the
+// rows keyed by column name, so callers don't depend on metric ordering. The
+// report is scoped to channel==MINE and the video's full published lifetime,
+// exactly like getAudienceRetention.
+async function runAnalyticsReport(
+  accessToken: string,
+  video: VideoDetails,
+  params: { metrics: string; dimensions?: string; sort?: string; maxResults?: number },
+): Promise<{ headers: string[]; rows: Array<Array<number | string | null>> }> {
+  const url = new URL(`${ANALYTICS_API}/reports`)
+  url.searchParams.set("ids", "channel==MINE")
+  url.searchParams.set("startDate", isoDate(video.publishedAt) ?? "2005-02-01")
+  url.searchParams.set("endDate", isoDate(new Date().toISOString())!)
+  url.searchParams.set("metrics", params.metrics)
+  if (params.dimensions) url.searchParams.set("dimensions", params.dimensions)
+  if (params.sort) url.searchParams.set("sort", params.sort)
+  if (params.maxResults != null) {
+    url.searchParams.set("maxResults", String(params.maxResults))
+  }
+  url.searchParams.set("filters", `video==${video.id}`)
+
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: "no-store",
+  })
+
+  if (!response.ok) {
+    throw new Error(
+      `YouTube Analytics API error (${response.status}): ${await response.text()}`,
+    )
+  }
+
+  const json = (await response.json()) as {
+    columnHeaders?: Array<{ name?: string }>
+    rows?: Array<Array<number | string | null>>
+  }
+
+  return {
+    headers: (json.columnHeaders ?? []).map((header) => header.name ?? ""),
+    rows: json.rows ?? [],
+  }
+}
+
+// Fetches the deterministic KPI/engagement/traffic-source summary for a video
+// the authenticated user owns. Two Analytics reports (1 quota unit each): the
+// no-dimension totals row, and the traffic-source breakdown. Traffic sources
+// are best-effort — a failure there still returns the KPI totals — because the
+// totals are the higher-value half and shouldn't be lost to a partial outage.
+export async function getVideoAnalyticsSummary(
+  accessToken: string,
+  video: VideoDetails,
+): Promise<VideoAnalyticsSummary> {
+  const totals = await runAnalyticsReport(accessToken, video, {
+    metrics:
+      "views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,likes,comments,shares,subscribersGained,subscribersLost",
+  })
+
+  const row = totals.rows[0] ?? []
+  const value = (name: string): number | null => {
+    const index = totals.headers.indexOf(name)
+    if (index === -1) return null
+    const raw = row[index]
+    return typeof raw === "number" ? raw : raw == null ? null : Number(raw)
+  }
+
+  let trafficSources: TrafficSource[] = []
+  try {
+    const traffic = await runAnalyticsReport(accessToken, video, {
+      metrics: "views",
+      dimensions: "insightTrafficSourceType",
+      sort: "-views",
+      maxResults: 25,
+    })
+    const sourceIndex = traffic.headers.indexOf("insightTrafficSourceType")
+    const viewsIndex = traffic.headers.indexOf("views")
+    if (sourceIndex !== -1 && viewsIndex !== -1) {
+      trafficSources = traffic.rows
+        .map((trafficRow) => ({
+          source: String(trafficRow[sourceIndex] ?? ""),
+          views: Number(trafficRow[viewsIndex] ?? 0),
+        }))
+        .filter((entry) => entry.source !== "" && entry.views > 0)
+    }
+  } catch (error) {
+    console.error("Failed to fetch traffic sources", error)
+  }
+
+  return {
+    views: value("views"),
+    estimatedMinutesWatched: value("estimatedMinutesWatched"),
+    averageViewDurationSeconds: value("averageViewDuration"),
+    averageViewPercentage: value("averageViewPercentage"),
+    likes: value("likes"),
+    comments: value("comments"),
+    shares: value("shares"),
+    subscribersGained: value("subscribersGained"),
+    subscribersLost: value("subscribersLost"),
+    trafficSources,
+    fetchedAt: new Date().toISOString(),
+  }
+}
+
 // Fetches the spoken-word transcript for a video the authenticated user owns,
 // as a list of timestamped cues. Returns an empty array when the video has no
 // caption track or captions are disabled.
