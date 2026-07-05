@@ -314,6 +314,7 @@ const EVENT_SYNTHESIS_INSTRUCTIONS = [
   "Identify the distinct, timestamped moments within the window that plausibly explain the retention change — a hard cut, a topic change in the transcript, a shift in pacing or energy, on-screen text or a graphic appearing/disappearing, a freeze or dead air, and so on. A single window commonly has more than one such moment.",
   "For each event, give: event_type (the best-fitting category), timestamp_seconds (must fall within the window's fromSeconds/toSeconds), a one- or two-sentence narrative tying the evidence to the retention change, and primary_evidence (which evidence source most explains it — use 'combined' only when multiple sources genuinely converge on the same moment).",
   "Only surface events actually supported by the evidence given — never invent frame content, transcript text, or audio characteristics that weren't provided. If nothing in the evidence plausibly explains the retention change, return an empty events array rather than guessing.",
+  'Never output an em dash character ("—") anywhere in your response; if you would use one, rewrite the phrase with a comma, colon, parentheses, or two separate sentences instead.',
 ].join(" ")
 
 export const openAiRetentionWindowEventSynthesizer: RetentionWindowEventSynthesizer =
@@ -321,7 +322,6 @@ export const openAiRetentionWindowEventSynthesizer: RetentionWindowEventSynthesi
     async synthesize(evidence) {
       const text = await callOpenAiResponses({
         model: getEventSynthesisModel(),
-        reasoning: { effort: "low" },
         max_output_tokens: 2000,
         input: [
           {

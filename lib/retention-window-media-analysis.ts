@@ -378,6 +378,7 @@ const SNAPSHOT_ANALYSIS_INSTRUCTIONS = [
   "Also give: notable_event (a single thing distinguishing this chunk from its neighbours — a cut, a zoom, a graphic appearing, a change of location — or null if nothing stands out), and a short free-text description of the composition and action.",
   "Base every judgment only on what's visible in that chunk's image (plus its given ocrText). Do not infer audio, speech, or viewer reaction.",
   "Return exactly one entry per supplied chunkIndex.",
+  'Never output an em dash character ("—") anywhere in your response; if you would use one, rewrite the phrase with a comma, colon, parentheses, or two separate sentences instead.',
 ].join(" ")
 
 const AUDIO_ANALYSIS_INSTRUCTIONS = [
@@ -391,6 +392,7 @@ const AUDIO_ANALYSIS_INSTRUCTIONS = [
   // instead — see callOpenAiChatCompletionsAudio for why no response_format
   // is sent at all.
   "Respond with only a single JSON object, no other text, with exactly these keys: music (boolean), music_description (string, or null when music is false), speakers (integer), tone (short string), energy (one of \"low\", \"moderate\", \"high\"), notable_events (array of strings, [] if none).",
+  'Never output an em dash character ("—") in any string value you return; if you would use one, rewrite the phrase with a comma, colon, parentheses, or two separate sentences instead.',
 ].join(" ")
 
 function extractOutputText(response: {

@@ -121,7 +121,7 @@ export function getAudioAnalysisModel(): string {
 // already-computed structured evidence, not raw media — so this can be a
 // cheaper/faster model independent of the vision/audio models above.
 export function getEventSynthesisModel(): string {
-  return process.env.OPENAI_EVENT_SYNTHESIS_MODEL || "gpt-5.4-mini"
+  return process.env.OPENAI_EVENT_SYNTHESIS_MODEL || "gpt-4.1-mini"
 }
 
 // How long the signed read URL handed to OpenAI for a harvested snapshot
