@@ -10,6 +10,7 @@ import {
   buildRetentionWindows,
   saveRetentionWindows,
 } from "@/lib/retention-windows"
+import { loadSurfaceExtras } from "@/lib/surface-extras"
 import { createPendingRetentionWindowAudio } from "@/lib/retention-window-media"
 import { saveRetentionWindowTranscripts } from "@/lib/retention-window-transcripts"
 import { triggerRetentionWindowMediaExtraction } from "@/lib/retention-window-media-trigger"
@@ -90,6 +91,18 @@ export async function POST(request: NextRequest) {
         console.error("Failed to generate pacing analysis", pacingError)
       }
 
+      await loadSurfaceExtras(
+        supabase,
+        user.id,
+        cached.id,
+        cached.videoDetails,
+        buildRetentionWindows(
+          cached.retention,
+          cached.videoDetails.durationSeconds,
+        ),
+        transcript,
+      )
+
       return NextResponse.json({
         video: cached.videoDetails,
         retention: cached.retention,
@@ -126,6 +139,10 @@ export async function POST(request: NextRequest) {
 
     const dropOffs = detectDropOffs(retention)
     const gains = detectRetentionGains(retention)
+    const retentionWindows = buildRetentionWindows(
+      retention,
+      video.durationSeconds,
+    )
     // Best-effort: a missing or caption-less transcript must not fail the
     // analysis, so swallow errors and fall back to an empty transcript.
     const transcript = await getVideoTranscript(accessToken, videoId).catch(
@@ -139,6 +156,7 @@ export async function POST(request: NextRequest) {
     // Best-effort: a DB failure shouldn't fail the analysis response.
     let pacingAnalysis: PacingAnalysis | null = null
     let videoPersisted = false
+    let analysedVideoId: string | null = null
     try {
       const savedVideo = await saveAnalysedVideo(supabase, {
         userId: user.id,
@@ -148,12 +166,13 @@ export async function POST(request: NextRequest) {
       })
       if (savedVideo) {
         videoPersisted = true
+        analysedVideoId = savedVideo.id
         try {
           const savedWindows = await saveRetentionWindows(
             supabase,
             user.id,
             savedVideo.id,
-            buildRetentionWindows(retention, video.durationSeconds),
+            retentionWindows,
           )
           await createPendingRetentionWindowAudio(
             supabase,
@@ -223,6 +242,17 @@ export async function POST(request: NextRequest) {
       } catch (pacingError) {
         console.error("Failed to generate pacing analysis", pacingError)
       }
+    }
+
+    if (analysedVideoId) {
+      await loadSurfaceExtras(
+        supabase,
+        user.id,
+        analysedVideoId,
+        video,
+        retentionWindows,
+        transcript,
+      )
     }
 
     return NextResponse.json({
