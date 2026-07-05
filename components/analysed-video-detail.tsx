@@ -98,11 +98,6 @@ function RetentionWindows({
           window.fromSeconds,
           window.toSeconds,
         )
-        const endPercentage = Math.round((window.endWatchRatio ?? 0) * 100)
-        const lostPercentage = Math.max(
-          0,
-          Math.round((window.startWatchRatio ?? 0) * 100) - endPercentage,
-        )
         return (
           <li
             key={window.windowKey ?? window.windowIndex}
@@ -114,7 +109,6 @@ function RetentionWindows({
                   {formatTimestamp(window.fromSeconds)} –{" "}
                   {formatTimestamp(window.toSeconds)}
                 </span>
-                <Badge tone="hook">{window.label}</Badge>
                 {window.relativePerformance != null && (
                   <Badge tone="warn">
                     {Math.round(window.relativePerformance * 100)}% vs. similar
@@ -122,7 +116,18 @@ function RetentionWindows({
                 )}
                 {said && <ScriptSegmentTooltip text={said} />}
               </div>
-              <h3 className="text-sm font-medium">{window.label}</h3>
+              {!window.outOfRange && (
+                <span
+                  className={`text-sm font-medium ${
+                    window.delta > 0
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-destructive"
+                  }`}
+                >
+                  {window.delta > 0 ? "+" : "−"}
+                  {(Math.abs(window.delta) * 100).toFixed(1)}%
+                </span>
+              )}
             </div>
 
             {window.outOfRange ? (
@@ -328,13 +333,11 @@ function Badge({
   tone = "muted",
 }: {
   children: React.ReactNode
-  tone?: "muted" | "warn" | "hook"
+  tone?: "muted" | "warn"
 }) {
   const cls =
     tone === "warn"
       ? "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"
-      : tone === "hook"
-        ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-300"
       : "bg-muted text-muted-foreground"
   return (
     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>
