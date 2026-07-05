@@ -2,7 +2,7 @@
 
 import { useId, useMemo, useState } from "react"
 
-import { TryCallout } from "@/components/try-callout"
+import { RecommendationCallout } from "@/components/recommendation-callout"
 import type { RetentionPoint } from "@/lib/youtube/youtube"
 
 export type RetentionChartInsight = {
@@ -14,6 +14,7 @@ export type RetentionChartInsight = {
   metric?: string
   metricLabel?: string
   details?: string[]
+  recommendation?: string
   transcript?: string
 }
 
@@ -157,12 +158,12 @@ export function RetentionChart({
     drop: {
       band: "#ef4444",
       badge: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300",
-      name: "Retention drop-off",
+      name: "Drop-offs",
     },
     gain: {
       band: "#22c55e",
       badge: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
-      name: "Retention gain",
+      name: "Gains",
     },
     pacing: {
       band: "#3b82f6",
@@ -585,6 +586,13 @@ export function RetentionChart({
                   </span>
                 ),
               )}
+            </div>
+          )}
+          {activeInsight.recommendation && (
+            <div className="mt-3">
+              <RecommendationCallout>
+                {activeInsight.recommendation}
+              </RecommendationCallout>
             </div>
           )}
           {activeInsight.transcript && (

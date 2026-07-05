@@ -6,6 +6,7 @@ import {
   GaugeIcon,
   ImageIcon,
   ListChecksIcon,
+  PackageIcon,
   QuoteIcon,
   TrendingDownIcon,
   TrendingUpIcon,
@@ -15,6 +16,7 @@ import {
   RetentionChart,
   type RetentionChartInsight,
 } from "@/components/retention-chart"
+import { RecommendationCallout } from "@/components/recommendation-callout"
 import { SourceVideoThumbnail } from "@/components/source-video-thumbnail"
 import { TryCallout } from "@/components/try-callout"
 import {
@@ -101,8 +103,7 @@ function RetentionWindows({
             key={window.windowKey ?? window.windowIndex}
             className="rounded-xl border bg-card p-4"
           >
-            <div className="flex items-baseline justify-between gap-2">
-              <h3 className="text-sm font-medium">{window.label}</h3>
+            <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <span className="font-mono text-xs text-muted-foreground">
                   {formatTimestamp(window.fromSeconds)} –{" "}
@@ -110,6 +111,7 @@ function RetentionWindows({
                 </span>
                 {said && <ScriptSegmentTooltip text={said} />}
               </div>
+              <h3 className="text-sm font-medium">{window.label}</h3>
             </div>
 
             {window.outOfRange ? (
@@ -197,7 +199,9 @@ function PacingAnalysisSection({
               <p className="pl-10 text-sm">{stretch.reason}</p>
               {stretch.suggestion && (
                 <div className="pl-10">
-                  <TryCallout>{stretch.suggestion}</TryCallout>
+                  <RecommendationCallout>
+                    {stretch.suggestion}
+                  </RecommendationCallout>
                 </div>
               )}
             </li>
@@ -656,7 +660,7 @@ export function AnalysedVideoDetail({
         label: `Pacing opportunity ${index + 1}`,
         fromSeconds: stretch.startSeconds,
         toSeconds: stretch.endSeconds,
-        details: stretch.suggestion ? [`Try: ${stretch.suggestion}`] : undefined,
+        recommendation: stretch.suggestion,
         transcript: stretch.reason,
       }),
     ),
@@ -708,6 +712,37 @@ export function AnalysedVideoDetail({
 
         <section className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
+            <PackageIcon className="size-4 text-muted-foreground" />
+            <h2 className="text-sm font-medium">Packaging</h2>
+          </div>
+
+          <Tabs defaultValue="packaging">
+            <TabsList>
+              <TabsTrigger value="packaging">
+                <ImageIcon className="text-purple-600 dark:text-purple-400" />
+                Title, Thumbnail &amp; Hook
+              </TabsTrigger>
+              <TabsTrigger value="metadata">
+                <ListChecksIcon className="text-teal-600 dark:text-teal-400" />
+                Metadata
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="packaging">
+              <PackagingAlignmentSection
+                alignment={packagingAlignment}
+                hasThumbnail={Boolean(video.thumbnailUrl)}
+              />
+            </TabsContent>
+
+            <TabsContent value="metadata">
+              <MetadataHygieneSection video={video} />
+            </TabsContent>
+          </Tabs>
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <div className="flex items-center gap-2">
             <AreaChartIcon className="size-4 text-muted-foreground" />
             <h2 className="text-sm font-medium">Audience retention</h2>
           </div>
@@ -729,82 +764,63 @@ export function AnalysedVideoDetail({
               )
             }
           />
+
+          <Tabs defaultValue="hook">
+            <TabsList>
+              <TabsTrigger value="hook">
+                <GaugeIcon className="text-yellow-500 dark:text-yellow-400" />
+                Hook
+              </TabsTrigger>
+              <TabsTrigger value="drop-offs">
+                <TrendingDownIcon className="text-destructive" />
+                Drop-offs
+              </TabsTrigger>
+              <TabsTrigger value="gains">
+                <TrendingUpIcon className="text-emerald-600 dark:text-emerald-400" />
+                Gains
+              </TabsTrigger>
+              <TabsTrigger value="pacing">
+                <GaugeIcon className="text-blue-600 dark:text-blue-400" />
+                Pacing
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="hook">
+              <RetentionWindows windows={hookWindows} transcript={transcript} />
+            </TabsContent>
+
+            <TabsContent value="drop-offs">
+              <DropList
+                drops={drops}
+                transcript={transcript}
+                attribution={dropAttribution}
+              />
+            </TabsContent>
+
+            <TabsContent value="gains">
+              {gains.length === 0 ? (
+                <div className="rounded-xl border bg-muted/30 p-6 text-sm text-muted-foreground">
+                  No notable retention gains stood out for this video.
+                </div>
+              ) : (
+                <GainList
+                  gains={gains}
+                  transcript={transcript}
+                  attribution={gainAttribution}
+                />
+              )}
+            </TabsContent>
+
+            <TabsContent value="pacing">
+              <PacingAnalysisSection
+                analysis={pacingAnalysis}
+                transcript={transcript}
+                hasTranscript={transcript.length > 0}
+              />
+            </TabsContent>
+          </Tabs>
         </section>
       </div>
-
-      <Tabs defaultValue="packaging">
-        <TabsList>
-          <TabsTrigger value="packaging">
-            <ImageIcon className="text-purple-600 dark:text-purple-400" />
-            Title, Thumbnail &amp; Hook
-          </TabsTrigger>
-          <TabsTrigger value="metadata">
-            <ListChecksIcon className="text-teal-600 dark:text-teal-400" />
-            Metadata
-          </TabsTrigger>
-          <TabsTrigger value="hook">
-            <GaugeIcon className="text-yellow-500 dark:text-yellow-400" />
-            The Hook
-          </TabsTrigger>
-          <TabsTrigger value="drop-offs">
-            <TrendingDownIcon className="text-destructive" />
-            Retention Drop Offs
-          </TabsTrigger>
-          <TabsTrigger value="gains">
-            <TrendingUpIcon className="text-emerald-600 dark:text-emerald-400" />
-            Retention Gains
-          </TabsTrigger>
-          <TabsTrigger value="pacing">
-            <GaugeIcon className="text-blue-600 dark:text-blue-400" />
-            Pacing Analysis
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="packaging">
-          <PackagingAlignmentSection
-            alignment={packagingAlignment}
-            hasThumbnail={Boolean(video.thumbnailUrl)}
-          />
-        </TabsContent>
-
-        <TabsContent value="metadata">
-          <MetadataHygieneSection video={video} />
-        </TabsContent>
-
-        <TabsContent value="hook">
-          <RetentionWindows windows={hookWindows} transcript={transcript} />
-        </TabsContent>
-
-        <TabsContent value="drop-offs">
-          <DropList
-            drops={drops}
-            transcript={transcript}
-            attribution={dropAttribution}
-          />
-        </TabsContent>
-
-        <TabsContent value="gains">
-          {gains.length === 0 ? (
-            <div className="rounded-xl border bg-muted/30 p-6 text-sm text-muted-foreground">
-              No notable retention gains stood out for this video.
-            </div>
-          ) : (
-            <GainList
-              gains={gains}
-              transcript={transcript}
-              attribution={gainAttribution}
-            />
-          )}
-        </TabsContent>
-
-        <TabsContent value="pacing">
-          <PacingAnalysisSection
-            analysis={pacingAnalysis}
-            transcript={transcript}
-            hasTranscript={transcript.length > 0}
-          />
-        </TabsContent>
-      </Tabs>
     </div>
   )
 }
