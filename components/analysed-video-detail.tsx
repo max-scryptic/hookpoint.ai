@@ -60,100 +60,6 @@ function formatCompactNumber(value: number | null): string {
   }).format(value)
 }
 
-// Minutes of total watch time, shown as hours when large enough to matter.
-function formatWatchTime(minutes: number | null): string {
-  if (minutes == null) return "—"
-  if (minutes < 60) return `${Math.round(minutes)} min`
-  const hours = minutes / 60
-  return `${formatCompactNumber(Math.round(hours))} hr`
-}
-
-// ---------------------------------------------------------------------------
-// Performance summary (deterministic YouTube Analytics KPIs + engagement)
-// ---------------------------------------------------------------------------
-
-function KpiTile({
-  label,
-  value,
-  sublabel,
-}: {
-  label: string
-  value: string
-  sublabel?: string
-}) {
-  return (
-    <div className="rounded-xl border bg-card p-4">
-      <div className="text-2xl font-semibold tabular-nums">{value}</div>
-      <div className="mt-1 text-xs font-medium text-muted-foreground">
-        {label}
-      </div>
-      {sublabel && (
-        <div className="mt-0.5 text-xs text-muted-foreground/70">{sublabel}</div>
-      )}
-    </div>
-  )
-}
-
-function AnalyticsSummarySection({
-  summary,
-}: {
-  summary: VideoAnalyticsSummary
-}) {
-  const netSubs =
-    summary.subscribersGained != null || summary.subscribersLost != null
-      ? (summary.subscribersGained ?? 0) - (summary.subscribersLost ?? 0)
-      : null
-
-  return (
-    <section className="flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <AreaChartIcon className="size-4 text-muted-foreground" />
-        <h2 className="text-sm font-medium">Performance</h2>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
-        <KpiTile label="Views" value={formatCompactNumber(summary.views)} />
-        <KpiTile
-          label="Avg. view duration"
-          value={
-            summary.averageViewDurationSeconds != null
-              ? formatTimestamp(summary.averageViewDurationSeconds)
-              : "—"
-          }
-          sublabel={
-            summary.averageViewPercentage != null
-              ? `${Math.round(summary.averageViewPercentage)}% of video`
-              : undefined
-          }
-        />
-        <KpiTile
-          label="Watch time"
-          value={formatWatchTime(summary.estimatedMinutesWatched)}
-        />
-        <KpiTile
-          label="Net subscribers"
-          value={
-            netSubs == null
-              ? "—"
-              : `${netSubs >= 0 ? "+" : "−"}${formatCompactNumber(Math.abs(netSubs))}`
-          }
-          sublabel={
-            summary.subscribersGained != null
-              ? `${formatCompactNumber(summary.subscribersGained)} gained`
-              : undefined
-          }
-        />
-        <KpiTile label="Likes" value={formatCompactNumber(summary.likes)} />
-        <KpiTile
-          label="Comments"
-          value={formatCompactNumber(summary.comments)}
-        />
-        <KpiTile label="Shares" value={formatCompactNumber(summary.shares)} />
-      </div>
-    </section>
-  )
-}
-
 // ---------------------------------------------------------------------------
 // The Hook (fixed, always-on opening windows analysed for every video)
 // ---------------------------------------------------------------------------
@@ -828,12 +734,26 @@ export function AnalysedVideoDetail({
               Audience retention across this video, with the moments where you
               lost and held the most viewers.
             </p>
+            {analyticsSummary && (
+              <div className="mt-4 flex flex-wrap items-start gap-x-8 gap-y-3">
+                <Metric
+                  label="Views"
+                  value={formatCompactNumber(analyticsSummary.views)}
+                />
+                <Metric
+                  label="Avg. view duration"
+                  value={
+                    analyticsSummary.averageViewDurationSeconds != null
+                      ? formatTimestamp(
+                          analyticsSummary.averageViewDurationSeconds,
+                        )
+                      : "—"
+                  }
+                />
+              </div>
+            )}
           </div>
         </div>
-
-        {analyticsSummary && (
-          <AnalyticsSummarySection summary={analyticsSummary} />
-        )}
 
         <section className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
