@@ -34,6 +34,30 @@ interface ModelOutput {
   whatCouldBeBetter: string[]
 }
 
+const IMPROVEMENT_PRIORITY = [
+  /\bhook\b|\bopening\b|\bintro(?:duction)?\b|\bfirst\s+\d+\s+seconds?\b/i,
+  /\btitle\b/i,
+  /\bthumbnail\b/i,
+] as const
+
+// Keep packaging advice in the product's action order. The stable fallback
+// preserves the model's order for advice that does not name one component.
+export function prioritizePackagingImprovements(points: string[]): string[] {
+  return points
+    .map((point, index) => ({
+      point,
+      index,
+      priority: IMPROVEMENT_PRIORITY.findIndex((pattern) => pattern.test(point)),
+    }))
+    .sort(
+      (a, b) =>
+        (a.priority === -1 ? IMPROVEMENT_PRIORITY.length : a.priority) -
+          (b.priority === -1 ? IMPROVEMENT_PRIORITY.length : b.priority) ||
+        a.index - b.index,
+    )
+    .map(({ point }) => point)
+}
+
 const PACKAGING_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -101,7 +125,7 @@ export async function generatePackagingAlignment(
                 "You review the packaging of a YouTube video: its title, its thumbnail image, and its spoken hook (the first ~30 seconds of transcript). You are shown the actual thumbnail image; ground everything in what you genuinely see, read and hear, never in guesses about elements that aren't there.",
                 "Write to the uploader in the second person (you, your video, your hook, your title, your thumbnail), reviewing their own packaging. Whoever is heard speaking in the hook may be the uploader, a co-host, a guest, or a voiceover, so never pin what is said on a specific or gendered person (he, she, the creator, the host); frame it as the uploader's own hook instead (say 'your hook is still laying out the context', not 'he is still laying out the context').",
                 "overall: write a one-to-two sentence alignment summary that gives an overview of how the packaging holds together and briefly comments on each component (title, thumbnail, hook). For example: 'Your packaging is cohesive but low-specificity: the title signals a casual comeback, the thumbnail reinforces a personal \"I'm back\" vibe, and your hook opens with that same energy but spends its first seconds on context instead of a sharper payoff.'",
-                "whatWorked: the top 3 concise, specific strengths of the packaging, most important first. whatCouldBeBetter: the top 3 concrete, actionable improvements, most important first. Reference the real title/thumbnail/hook, never generic advice. Return fewer than 3 only when there genuinely are fewer, and never more than 3.",
+                "whatWorked: the top 3 concise, specific strengths of the packaging, most important first. whatCouldBeBetter: give concrete, actionable improvements in this exact component order: hook first, title second, thumbnail third. Reference the real hook/title/thumbnail, never generic advice. Return fewer than 3 only when there genuinely are fewer, and never more than 3.",
                 "If the hook transcript is empty, work from the title and thumbnail alone rather than inventing what was said.",
                 'Never output an em dash character ("—") anywhere in your response; if you would use one, rewrite the phrase with a comma, colon, parentheses, or two separate sentences instead.',
               ].join(" "),
@@ -159,7 +183,9 @@ export async function generatePackagingAlignment(
   return {
     overall: parsed.overall,
     whatWorked: parsed.whatWorked.slice(0, 3),
-    whatCouldBeBetter: parsed.whatCouldBeBetter.slice(0, 3),
+    whatCouldBeBetter: prioritizePackagingImprovements(
+      parsed.whatCouldBeBetter,
+    ).slice(0, 3),
     model,
     generatedAt: new Date().toISOString(),
   }
