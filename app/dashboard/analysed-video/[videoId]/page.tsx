@@ -10,11 +10,9 @@ import {
   saveAnalysedVideo,
 } from "@/lib/analysed-videos"
 import { getOrGeneratePacingAnalysis } from "@/lib/pacing-analyses"
-import { getOrGenerateRetentionAttribution } from "@/lib/retention-attributions"
 import type { RetentionAttribution } from "@/lib/retention-attribution"
-import { getOrGeneratePackagingAlignment } from "@/lib/packaging-alignments"
 import type { PackagingAlignment } from "@/lib/packaging-alignment"
-import { getOrBackfillVideoAnalyticsSummary } from "@/lib/video-analytics"
+import { loadSurfaceExtras } from "@/lib/surface-extras"
 import type { VideoAnalyticsSummary } from "@/lib/youtube/youtube"
 import {
   buildRetentionWindows,
@@ -98,59 +96,6 @@ type AnalysisResult =
   | { status: "no_data" }
   | { status: "reconnect" }
   | { status: "error" }
-
-// The surface-level analyses that hang off an already-persisted video row:
-// retention→transcript attribution and title/thumbnail/hook packaging alignment
-// (both LLM, self-claiming and cached after first run) plus the deterministic
-// analytics KPI/engagement summary (fetched once, replayed thereafter). Run in
-// parallel — they're independent — and each is best-effort so one failing never
-// hides the others or the core retention view.
-async function loadSurfaceExtras(
-  userId: string,
-  analysedVideoId: string,
-  video: VideoDetails,
-  retentionWindows: RetentionWindow[],
-  transcript: TranscriptCue[],
-): Promise<{
-  retentionAttribution: RetentionAttribution | null
-  packagingAlignment: PackagingAlignment | null
-  analyticsSummary: VideoAnalyticsSummary | null
-}> {
-  const supabase = await createClient()
-  const [retentionAttribution, packagingAlignment, analyticsSummary] =
-    await Promise.all([
-      getOrGenerateRetentionAttribution(
-        supabase,
-        userId,
-        analysedVideoId,
-        video,
-        retentionWindows,
-        transcript,
-      ).catch((error) => {
-        console.error("Failed to generate retention attribution", error)
-        return null
-      }),
-      getOrGeneratePackagingAlignment(
-        supabase,
-        userId,
-        analysedVideoId,
-        video,
-        transcript,
-      ).catch((error) => {
-        console.error("Failed to generate packaging alignment", error)
-        return null
-      }),
-      // Already best-effort internally (resolves to null on any failure).
-      getOrBackfillVideoAnalyticsSummary(
-        supabase,
-        userId,
-        analysedVideoId,
-        video,
-      ),
-    ])
-
-  return { retentionAttribution, packagingAlignment, analyticsSummary }
-}
 
 async function analyse(
   userId: string,
@@ -238,6 +183,7 @@ async function analyse(
       }
 
       const extras = await loadSurfaceExtras(
+        supabase,
         userId,
         cached.id,
         cached.videoDetails,
@@ -369,6 +315,7 @@ async function analyse(
     // render — they'll be generated on the next visit once the row exists.
     const extras = analysedVideoId
       ? await loadSurfaceExtras(
+          supabase,
           userId,
           analysedVideoId,
           video,
