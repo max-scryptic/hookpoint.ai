@@ -2,6 +2,7 @@
 
 import { useId, useMemo, useState } from "react"
 
+import { RecommendationCallout } from "@/components/recommendation-callout"
 import type { RetentionPoint } from "@/lib/youtube/youtube"
 
 export type RetentionChartInsight = {
@@ -13,6 +14,7 @@ export type RetentionChartInsight = {
   metric?: string
   metricLabel?: string
   details?: string[]
+  recommendation?: string
   transcript?: string
 }
 
@@ -580,6 +582,13 @@ export function RetentionChart({
                   {detail}
                 </span>
               ))}
+            </div>
+          )}
+          {activeInsight.recommendation && (
+            <div className="mt-3">
+              <RecommendationCallout>
+                {activeInsight.recommendation}
+              </RecommendationCallout>
             </div>
           )}
           {activeInsight.transcript && (

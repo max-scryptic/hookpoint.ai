@@ -12,6 +12,7 @@ import {
   RetentionChart,
   type RetentionChartInsight,
 } from "@/components/retention-chart"
+import { RecommendationCallout } from "@/components/recommendation-callout"
 import { SourceVideoThumbnail } from "@/components/source-video-thumbnail"
 import {
   Tabs,
@@ -166,10 +167,11 @@ function PacingAnalysisSection({
               </div>
               <p className="pl-10 text-sm">{stretch.reason}</p>
               {stretch.suggestion && (
-                <p className="pl-10 text-sm text-muted-foreground">
-                  <span className="font-medium text-foreground">Try: </span>
-                  {stretch.suggestion}
-                </p>
+                <div className="pl-10">
+                  <RecommendationCallout>
+                    {stretch.suggestion}
+                  </RecommendationCallout>
+                </div>
               )}
             </li>
           ))}
@@ -446,7 +448,7 @@ export function AnalysedVideoDetail({
         label: `Pacing opportunity ${index + 1}`,
         fromSeconds: stretch.startSeconds,
         toSeconds: stretch.endSeconds,
-        details: stretch.suggestion ? [`Try: ${stretch.suggestion}`] : undefined,
+        recommendation: stretch.suggestion,
         transcript: stretch.reason,
       }),
     ),
