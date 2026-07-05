@@ -41,8 +41,9 @@
 // buildSnapshotTimestampsFromSceneCues in lib/retention-window-media.ts) —
 // flanking frames just before/after each real transition, instead of a blind
 // fixed-interval grid — so those rows can't be created until the scan for
-// that window has actually run. A scan that fails still creates snapshots
-// (via the same fixed-grid fallback a zero-cut window gets), so a window is
+// that window has actually run. A window with no cuts still gets a snapshot:
+// a single frame at its start when the scan confirmed it's static, or the
+// dense fixed grid when the scan *failed* (content unknown) — so a window is
 // never left with no visual evidence just because ffmpeg errored once; see
 // getPendingRetentionWindowSceneCueScans in lib/video-scene-cues.ts for how a
 // failed scan itself gets retried.
@@ -64,11 +65,9 @@ import {
 } from "@/lib/media/scene-detection"
 import { createOcrEngine, type OcrEngine } from "@/lib/media/ocr"
 import {
-  CHUNK_STEP_SECONDS,
   createRetentionWindowSnapshotsFromSceneCues,
   getPendingRetentionWindowAudio,
   getPendingRetentionWindowSnapshots,
-  STATIC_FALLBACK_STEP_SECONDS,
   updateRetentionWindowAudioStatus,
   updateRetentionWindowSnapshotStatus,
 } from "@/lib/retention-window-media"
@@ -546,10 +545,11 @@ async function scanMergedSpan(
         scan.fromSeconds,
         scan.toSeconds,
         cues,
-        // A confirmed-static window (the scan ran and returned zero cuts) can
-        // fall back sparsely; a window whose scan failed (spanCues null) keeps
-        // the denser default grid since its content is genuinely unknown.
-        spanCues ? STATIC_FALLBACK_STEP_SECONDS : CHUNK_STEP_SECONDS,
+        // A confirmed-static window (the scan ran and returned zero cuts)
+        // samples a single frame at its start; a window whose scan failed
+        // (spanCues null) keeps the dense fallback grid since its content is
+        // genuinely unknown. See buildSnapshotTimestampsFromSceneCues.
+        spanCues == null,
       )
       // The scan's own status still faithfully reports failure when the
       // ffmpeg call itself errored — snapshots existing doesn't mean cut

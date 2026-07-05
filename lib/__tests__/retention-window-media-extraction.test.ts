@@ -681,7 +681,7 @@ describe("extractPendingRetentionWindowMedia", () => {
     ).toHaveLength(2)
   })
 
-  it("uses the coarse static grid for a window whose scan ran and found no cuts", async () => {
+  it("samples a single frame at the window start for a window whose scan ran and found no cuts", async () => {
     const { supabase, updates } = makeFakeSupabase(
       [],
       [],
@@ -711,19 +711,19 @@ describe("extractPendingRetentionWindowMedia", () => {
       acquireLocalSource: async () => null,
     })
 
-    // Confirmed static => 15s grid (0, 15, 30), not the dense 5s grid a failed
-    // scan would fall back to.
+    // Confirmed static => a single frame at the window start (0), not the
+    // dense 5s grid a failed scan would fall back to.
     const grabbedTimestamps = (extractor.extractThumbnail as ReturnType<typeof vi.fn>).mock.calls
       .map((call) => call[1])
       .sort((a, b) => a - b)
-    expect(grabbedTimestamps).toEqual([0, 15, 30])
+    expect(grabbedTimestamps).toEqual([0])
     expect(
       updates.filter(
         (update) =>
           update.table === "retention_window_snapshots" &&
           (update.payload as Record<string, unknown>).status === "ready",
       ),
-    ).toHaveLength(3)
+    ).toHaveLength(1)
   })
 
   it("still derives fallback-grid snapshots when a window's scene-cue scan fails, but marks the scan itself failed", async () => {
