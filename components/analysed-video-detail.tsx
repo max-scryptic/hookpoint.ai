@@ -724,9 +724,12 @@ function MetadataHygieneSection({ video }: { video: VideoDetails }) {
         {hygiene.goodCount} of {hygiene.scoredCount} metadata checks look
         healthy. These are quick packaging basics you can fix in YouTube Studio.
       </div>
-      <ul className="divide-y overflow-hidden rounded-xl border bg-card [&>li:first-child]:rounded-t-xl [&>li:last-child]:rounded-b-xl">
+      <ul className="grid gap-3 sm:grid-cols-2">
         {hygiene.checks.map((check) => (
-          <li key={check.id} className="flex items-start gap-3 p-4">
+          <li
+            key={check.id}
+            className="flex items-start gap-3 rounded-xl border bg-card p-4"
+          >
             <span
               className={`mt-1.5 size-2 shrink-0 rounded-full ${statusStyles[check.status]}`}
             />
