@@ -159,7 +159,7 @@ function RetentionWindows({
             )}
           >
             <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
                   {index + 1}
                 </span>
@@ -536,7 +536,7 @@ function PackagingAlignmentSection({
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="grid items-start gap-4 lg:grid-cols-2">
       <div className="rounded-xl border bg-card p-4">
         <h3 className="text-sm font-medium">Alignment Summary</h3>
         <p className="mt-2 text-sm text-muted-foreground">{alignment.overall}</p>
@@ -587,7 +587,7 @@ function PackagingComponentTabs({
   components: NonNullable<PackagingAlignment["components"]>
 }) {
   return (
-    <Tabs defaultValue="title">
+    <Tabs defaultValue="title" className="w-full">
       <TabsList>
         {PACKAGING_COMPONENT_ORDER.map((key) => {
           const { label, icon: Icon } = PACKAGING_COMPONENT_META[key]
@@ -601,7 +601,7 @@ function PackagingComponentTabs({
       </TabsList>
 
       {PACKAGING_COMPONENT_ORDER.map((key) => (
-        <TabsContent key={key} value={key}>
+        <TabsContent key={key} value={key} className="w-full">
           <PackagingComponentCard
             label={PACKAGING_COMPONENT_META[key].label}
             feedback={components[key]}
@@ -620,7 +620,7 @@ function PackagingComponentCard({
   feedback: PackagingComponentFeedback
 }) {
   return (
-    <div className="flex flex-col gap-4 rounded-xl border bg-card p-4">
+    <div className="flex w-full flex-col gap-4 rounded-xl border bg-card p-4">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="rounded-md border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-sm font-semibold text-purple-700 dark:text-purple-300">
           {label}
@@ -636,7 +636,7 @@ function PackagingComponentCard({
       feedback.whatCouldBeBetter.length === 0 ? (
         <p className="text-sm text-muted-foreground">Nothing to flag.</p>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="grid gap-3 md:grid-cols-2">
           <PackagingComponentPoints
             label="Working"
             tone="good"
@@ -684,7 +684,7 @@ function PackagingComponentPoints({
         {label}
       </span>
       <ul className="mt-2 flex flex-col gap-1.5">
-        {points.map((point, index) => (
+        {points.slice(0, 1).map((point, index) => (
           <li key={index} className="text-sm">
             {point}
           </li>
