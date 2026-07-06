@@ -158,7 +158,7 @@ function RetentionWindows({
             )}
           >
             <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
                   {index + 1}
                 </span>
@@ -635,7 +635,7 @@ function PackagingComponentCard({
       feedback.whatCouldBeBetter.length === 0 ? (
         <p className="text-sm text-muted-foreground">Nothing to flag.</p>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="grid gap-3 md:grid-cols-2">
           <PackagingComponentPoints
             label="Working"
             tone="good"
@@ -683,7 +683,7 @@ function PackagingComponentPoints({
         {label}
       </span>
       <ul className="mt-2 flex flex-col gap-1.5">
-        {points.map((point, index) => (
+        {points.slice(0, 1).map((point, index) => (
           <li key={index} className="text-sm">
             {point}
           </li>
