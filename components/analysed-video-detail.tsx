@@ -535,7 +535,7 @@ function PackagingAlignmentSection({
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="grid items-start gap-4 lg:grid-cols-2">
       <div className="rounded-xl border bg-card p-4">
         <h3 className="text-sm font-medium">Alignment Summary</h3>
         <p className="mt-2 text-sm text-muted-foreground">{alignment.overall}</p>
