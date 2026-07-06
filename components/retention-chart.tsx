@@ -2,8 +2,6 @@
 
 import { useId, useMemo, useState } from "react"
 
-import { RecommendationCallout } from "@/components/recommendation-callout"
-import { TryCallout } from "@/components/try-callout"
 import type { RetentionPoint } from "@/lib/youtube/youtube"
 
 export type RetentionChartInsight = {
@@ -482,20 +480,6 @@ export function RetentionChart({
                   transition: `transform 220ms ${grow}`,
                 }}
               />
-              {/* A subtle glossy highlight for a polished, tactile finish. */}
-              <circle
-                cx={x - 1.6}
-                cy={y - 1.7}
-                r={1.5}
-                fill="#ffffff"
-                opacity={0.55}
-                pointerEvents="none"
-                style={{
-                  transformOrigin,
-                  transform: `scale(${scale})`,
-                  transition: `transform 220ms ${grow}`,
-                }}
-              />
               {/* Generous invisible hit target so the marker is easy to grab. */}
               <circle cx={x} cy={y} r={18} fill="transparent" />
             </g>
@@ -536,71 +520,9 @@ export function RetentionChart({
               </span>
             ) : null,
           )}
-          <span className="ml-auto">Click a highlight to view its insight</span>
-        </div>
-      )}
-
-      {activeInsight && (
-        <div
-          className="mt-4 rounded-lg border bg-background p-4 shadow-sm"
-          aria-live="polite"
-        >
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <span
-                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${insightTone[activeInsight.kind].badge}`}
-                >
-                  {insightTone[activeInsight.kind].name}
-                </span>
-                <span className="font-mono text-xs text-muted-foreground">
-                  {formatTimestamp(activeInsight.fromSeconds)}–
-                  {formatTimestamp(activeInsight.toSeconds)}
-                </span>
-              </div>
-              <h3 className="mt-2 font-medium">{activeInsight.label}</h3>
-            </div>
-            {activeInsight.metric && (
-              <div className="text-right">
-                <div className="text-xl font-semibold tabular-nums">
-                  {activeInsight.metric}
-                </div>
-                {activeInsight.metricLabel && (
-                  <div className="text-xs text-muted-foreground">
-                    {activeInsight.metricLabel}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-          {activeInsight.details && activeInsight.details.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {activeInsight.details.map((detail) =>
-                detail.startsWith("Try: ") ? (
-                  <TryCallout key={detail}>{detail.slice(5)}</TryCallout>
-                ) : (
-                  <span
-                    key={detail}
-                    className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground"
-                  >
-                    {detail}
-                  </span>
-                ),
-              )}
-            </div>
-          )}
-          {activeInsight.recommendation && (
-            <div className="mt-3">
-              <RecommendationCallout>
-                {activeInsight.recommendation}
-              </RecommendationCallout>
-            </div>
-          )}
-          {activeInsight.transcript && (
-            <p className="mt-3 text-sm text-muted-foreground">
-              “{activeInsight.transcript}”
-            </p>
-          )}
+          <span className="ml-auto">
+            Click a highlight to jump to its insight below
+          </span>
         </div>
       )}
     </div>
