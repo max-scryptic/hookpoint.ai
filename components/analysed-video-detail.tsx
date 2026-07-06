@@ -139,7 +139,7 @@ function RetentionWindows({
   }
 
   return (
-    <ul className="divide-y rounded-xl border bg-card">
+    <ul className="divide-y overflow-hidden rounded-xl border bg-card [&>li:first-child]:rounded-t-xl [&>li:last-child]:rounded-b-xl">
       {windows.map((window) => {
         const said = transcriptForSegment(
           transcript,
@@ -160,7 +160,7 @@ function RetentionWindows({
           >
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <span className="font-mono text-xs text-muted-foreground">
+                <span className="font-mono text-sm">
                   {formatTimestamp(window.fromSeconds)} –{" "}
                   {formatTimestamp(window.toSeconds)}
                 </span>
@@ -235,7 +235,7 @@ function PacingAnalysisSection({
           this video.
         </div>
       ) : (
-        <ul className="divide-y rounded-xl border bg-card">
+        <ul className="divide-y overflow-hidden rounded-xl border bg-card [&>li:first-child]:rounded-t-xl [&>li:last-child]:rounded-b-xl">
           {[...analysis.slowOrRepetitiveStretches]
             .sort((a, b) => a.startSeconds - b.startSeconds)
             .map((stretch, index) => {
@@ -334,7 +334,7 @@ function DropList({
   }
 
   return (
-    <ul className="divide-y rounded-xl border bg-card">
+    <ul className="divide-y overflow-hidden rounded-xl border bg-card [&>li:first-child]:rounded-t-xl [&>li:last-child]:rounded-b-xl">
       {drops.map((drop, index) => {
         const said = transcriptForSegment(
           transcript,
@@ -444,7 +444,7 @@ function GainList({
   const highlightedRef = useHighlightScroll(highlightedId)
 
   return (
-    <ul className="divide-y rounded-xl border bg-card">
+    <ul className="divide-y overflow-hidden rounded-xl border bg-card [&>li:first-child]:rounded-t-xl [&>li:last-child]:rounded-b-xl">
       {gains.map((gain, index) => {
         const said = transcriptForSegment(
           transcript,
@@ -587,7 +587,7 @@ function MetadataHygieneSection({ video }: { video: VideoDetails }) {
         {hygiene.goodCount} of {hygiene.scoredCount} metadata checks look
         healthy. These are quick packaging basics you can fix in YouTube Studio.
       </div>
-      <ul className="divide-y rounded-xl border bg-card">
+      <ul className="divide-y overflow-hidden rounded-xl border bg-card [&>li:first-child]:rounded-t-xl [&>li:last-child]:rounded-b-xl">
         {hygiene.checks.map((check) => (
           <li key={check.id} className="flex items-start gap-3 p-4">
             <span
