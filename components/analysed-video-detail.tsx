@@ -69,6 +69,50 @@ function formatCompactNumber(value: number | null): string {
   }).format(value)
 }
 
+// Maps an insight marker's kind to the retention tab that holds its list, so a
+// click on the chart can bring the matching tab forward.
+const TAB_FOR_INSIGHT_KIND: Record<
+  RetentionChartInsight["kind"],
+  string
+> = {
+  hook: "hook",
+  drop: "drop-offs",
+  gain: "gains",
+  pacing: "pacing",
+}
+
+// When a retention insight marker on the chart is selected, the matching row in
+// the list below is tinted in that insight's colour so the reader can see which
+// item the moment they clicked relates to. The tint fades out again (via the
+// always-on `transition-colors`) once the selection is cleared.
+const ROW_HIGHLIGHT: Record<"hook" | "drop" | "gain" | "pacing", string> = {
+  hook: "bg-yellow-50 ring-1 ring-inset ring-yellow-400/40 dark:bg-yellow-500/10",
+  drop: "bg-red-50 ring-1 ring-inset ring-red-400/40 dark:bg-red-500/10",
+  gain: "bg-emerald-50 ring-1 ring-inset ring-emerald-400/40 dark:bg-emerald-500/10",
+  pacing: "bg-blue-50 ring-1 ring-inset ring-blue-400/40 dark:bg-blue-500/10",
+}
+
+function rowHighlightClass(
+  kind: keyof typeof ROW_HIGHLIGHT,
+  isHighlighted: boolean,
+  base: string,
+): string {
+  return `${base} transition-colors ${isHighlighted ? ROW_HIGHLIGHT[kind] : ""}`
+}
+
+// Nudge the highlighted row into view when a chart marker is clicked, so the
+// linked item is visible even if it sits lower in a long list. `block: "nearest"`
+// keeps the scroll minimal — it only moves if the row is off-screen.
+function useHighlightScroll(highlightedId?: string | null) {
+  const ref = useRef<HTMLLIElement>(null)
+  useEffect(() => {
+    if (highlightedId) {
+      ref.current?.scrollIntoView({ block: "nearest", behavior: "smooth" })
+    }
+  }, [highlightedId])
+  return ref
+}
+
 // ---------------------------------------------------------------------------
 // The Hook (fixed, always-on opening windows analysed for every video)
 // ---------------------------------------------------------------------------
@@ -77,11 +121,15 @@ function RetentionWindows({
   windows,
   transcript,
   attribution,
+  highlightedId,
 }: {
   windows: RetentionWindow[]
   transcript: TranscriptCue[]
   attribution: Map<number, RetentionMomentAttribution>
+  highlightedId?: string | null
 }) {
+  const highlightedRef = useHighlightScroll(highlightedId)
+
   if (windows.length === 0) {
     return (
       <div className="rounded-xl border bg-muted/30 p-6 text-sm text-muted-foreground">
@@ -98,10 +146,17 @@ function RetentionWindows({
           window.fromSeconds,
           window.toSeconds,
         )
+        const rowId = `hook-${window.windowKey ?? window.windowIndex}`
+        const isHighlighted = rowId === highlightedId
         return (
           <li
             key={window.windowKey ?? window.windowIndex}
-            className="flex flex-col gap-2 p-4"
+            ref={isHighlighted ? highlightedRef : undefined}
+            className={rowHighlightClass(
+              "hook",
+              isHighlighted,
+              "flex flex-col gap-2 p-4",
+            )}
           >
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -157,11 +212,15 @@ function PacingAnalysisSection({
   analysis,
   transcript,
   hasTranscript,
+  highlightedId,
 }: {
   analysis: PacingAnalysis | null
   transcript: TranscriptCue[]
   hasTranscript: boolean
+  highlightedId?: string | null
 }) {
+  const highlightedRef = useHighlightScroll(highlightedId)
+
   return (
     <>
       {!analysis ? (
@@ -185,10 +244,17 @@ function PacingAnalysisSection({
               stretch.startSeconds,
               stretch.endSeconds,
             )
+            const rowId = `pacing-${stretch.startSeconds}-${stretch.endSeconds}`
+            const isHighlighted = rowId === highlightedId
             return (
             <li
               key={index}
-              className="flex flex-col gap-2 p-4"
+              ref={isHighlighted ? highlightedRef : undefined}
+              className={rowHighlightClass(
+                "pacing",
+                isHighlighted,
+                "flex flex-col gap-2 p-4",
+              )}
             >
               <div className="flex items-center gap-3">
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
@@ -246,6 +312,7 @@ function DropList({
   drops,
   transcript,
   attribution,
+  highlightedId,
 }: {
   // The significant *mid-video* drop-offs (kind = 'drop_off'). The Hook section
   // above already covers the opening, so these never overlap it.
@@ -253,7 +320,10 @@ function DropList({
   transcript: TranscriptCue[]
   // AI explanations/tips keyed by the drop-off's windowIndex, when generated.
   attribution: Map<number, RetentionMomentAttribution>
+  highlightedId?: string | null
 }) {
+  const highlightedRef = useHighlightScroll(highlightedId)
+
   if (drops.length === 0) {
     return (
       <div className="rounded-xl border bg-muted/30 p-6 text-sm text-muted-foreground">
@@ -271,8 +341,18 @@ function DropList({
           drop.fromSeconds,
           drop.toSeconds,
         )
+        const rowId = `drop-${drop.windowIndex}`
+        const isHighlighted = rowId === highlightedId
         return (
-          <li key={`${drop.fromSeconds}-${index}`} className="flex flex-col gap-2 p-4">
+          <li
+            key={`${drop.fromSeconds}-${index}`}
+            ref={isHighlighted ? highlightedRef : undefined}
+            className={rowHighlightClass(
+              "drop",
+              isHighlighted,
+              "flex flex-col gap-2 p-4",
+            )}
+          >
             <div className="flex items-center justify-between gap-4">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
@@ -354,11 +434,15 @@ function GainList({
   gains,
   transcript,
   attribution,
+  highlightedId,
 }: {
   gains: RetentionWindow[]
   transcript: TranscriptCue[]
   attribution: Map<number, RetentionMomentAttribution>
+  highlightedId?: string | null
 }) {
+  const highlightedRef = useHighlightScroll(highlightedId)
+
   return (
     <ul className="divide-y rounded-xl border bg-card">
       {gains.map((gain, index) => {
@@ -367,8 +451,18 @@ function GainList({
           gain.fromSeconds,
           gain.toSeconds,
         )
+        const rowId = `gain-${gain.windowIndex}`
+        const isHighlighted = rowId === highlightedId
         return (
-          <li key={`${gain.fromSeconds}-${index}`} className="flex flex-col gap-2 p-4">
+          <li
+            key={`${gain.fromSeconds}-${index}`}
+            ref={isHighlighted ? highlightedRef : undefined}
+            className={rowHighlightClass(
+              "gain",
+              isHighlighted,
+              "flex flex-col gap-2 p-4",
+            )}
+          >
             <div className="flex items-center justify-between gap-4">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
@@ -577,6 +671,12 @@ export function AnalysedVideoDetail({
             ? "pacing"
             : null
 
+  // The retention tab is controlled so that clicking an insight marker on the
+  // chart can switch to the tab holding that insight (see onInsightSelect).
+  const [retentionTab, setRetentionTab] = useState<string | null>(
+    defaultRetentionTab,
+  )
+
   // Index the LLM attribution by kind + windowIndex so each hook/drop-off/gain card
   // can pick up its own explanation and tip.
   const attributionByKind = (
@@ -673,7 +773,7 @@ export function AnalysedVideoDetail({
     }),
     ...(pacingAnalysis?.slowOrRepetitiveStretches ?? []).map(
       (stretch, index) => ({
-        id: `pacing-${stretch.startSeconds}-${index}`,
+        id: `pacing-${stretch.startSeconds}-${stretch.endSeconds}`,
         kind: "pacing" as const,
         label: `Pacing opportunity ${index + 1}`,
         fromSeconds: stretch.startSeconds,
@@ -770,7 +870,7 @@ export function AnalysedVideoDetail({
             insights={chartInsights}
             selectedInsightId={playbackWindow?.id ?? null}
             onScrubTimeChange={setPreviewTime}
-            onInsightSelect={(insight) =>
+            onInsightSelect={(insight) => {
               setPlaybackWindow(
                 insight
                   ? {
@@ -780,11 +880,17 @@ export function AnalysedVideoDetail({
                     }
                   : null,
               )
-            }
+              // Bring the tab holding this insight forward so its highlighted
+              // row is the one on show. Leave the tab as-is when clicking off.
+              if (insight) setRetentionTab(TAB_FOR_INSIGHT_KIND[insight.kind])
+            }}
           />
 
           {defaultRetentionTab && (
-            <Tabs defaultValue={defaultRetentionTab}>
+            <Tabs
+              value={retentionTab ?? defaultRetentionTab}
+              onValueChange={(value) => setRetentionTab(value as string)}
+            >
               <TabsList>
                 {hookWindows.length > 0 && (
                   <TabsTrigger value="hook">
@@ -818,6 +924,7 @@ export function AnalysedVideoDetail({
                     windows={hookWindows}
                     transcript={transcript}
                     attribution={hookAttribution}
+                    highlightedId={playbackWindow?.id ?? null}
                   />
                 </TabsContent>
               )}
@@ -828,6 +935,7 @@ export function AnalysedVideoDetail({
                     drops={drops}
                     transcript={transcript}
                     attribution={dropAttribution}
+                    highlightedId={playbackWindow?.id ?? null}
                   />
                 </TabsContent>
               )}
@@ -838,6 +946,7 @@ export function AnalysedVideoDetail({
                     gains={gains}
                     transcript={transcript}
                     attribution={gainAttribution}
+                    highlightedId={playbackWindow?.id ?? null}
                   />
                 </TabsContent>
               )}
@@ -848,6 +957,7 @@ export function AnalysedVideoDetail({
                     analysis={pacingAnalysis}
                     transcript={transcript}
                     hasTranscript={transcript.length > 0}
+                    highlightedId={playbackWindow?.id ?? null}
                   />
                 </TabsContent>
               )}
