@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import {
   AreaChartIcon,
   GaugeIcon,
+  ImageIcon,
   ListChecksIcon,
   PackageIcon,
   QuoteIcon,
