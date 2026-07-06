@@ -587,7 +587,7 @@ function PackagingComponentTabs({
   components: NonNullable<PackagingAlignment["components"]>
 }) {
   return (
-    <Tabs defaultValue="title">
+    <Tabs defaultValue="title" className="w-full">
       <TabsList>
         {PACKAGING_COMPONENT_ORDER.map((key) => {
           const { label, icon: Icon } = PACKAGING_COMPONENT_META[key]
@@ -601,7 +601,7 @@ function PackagingComponentTabs({
       </TabsList>
 
       {PACKAGING_COMPONENT_ORDER.map((key) => (
-        <TabsContent key={key} value={key}>
+        <TabsContent key={key} value={key} className="w-full">
           <PackagingComponentCard
             label={PACKAGING_COMPONENT_META[key].label}
             feedback={components[key]}
@@ -620,7 +620,7 @@ function PackagingComponentCard({
   feedback: PackagingComponentFeedback
 }) {
   return (
-    <div className="flex flex-col gap-4 rounded-xl border bg-card p-4">
+    <div className="flex w-full flex-col gap-4 rounded-xl border bg-card p-4">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="rounded-md border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-sm font-semibold text-purple-700 dark:text-purple-300">
           {label}
