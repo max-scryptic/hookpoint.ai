@@ -1,7 +1,9 @@
 "use client"
 
+import type { ComponentType } from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
+  AlignHorizontalJustifyCenterIcon,
   AreaChartIcon,
   GaugeIcon,
   ImageIcon,
@@ -568,11 +570,11 @@ function PackagingAlignmentSection({
 
 const PACKAGING_COMPONENT_META: Record<
   PackagingComponentKey,
-  { label: string; icon: typeof TypeIcon }
+  { label: string; icon: ComponentType<{ className?: string }> }
 > = {
   title: { label: "Title", icon: TypeIcon },
   thumbnail: { label: "Thumbnail", icon: ImageIcon },
-  hook: { label: "Hook", icon: QuoteIcon },
+  hook: { label: "Hook", icon: HookIcon },
 }
 
 const PACKAGING_COMPONENT_ORDER: PackagingComponentKey[] = [
@@ -960,7 +962,7 @@ export function AnalysedVideoDetail({
           <Tabs defaultValue="packaging">
             <TabsList>
               <TabsTrigger value="packaging">
-                <HookIcon className="text-purple-600 dark:text-purple-400" />
+                <AlignHorizontalJustifyCenterIcon className="text-purple-600 dark:text-purple-400" />
                 Title, Thumbnail &amp; Hook
               </TabsTrigger>
               <TabsTrigger value="metadata">
@@ -1017,7 +1019,7 @@ export function AnalysedVideoDetail({
               <TabsList>
                 {hookWindows.length > 0 && (
                   <TabsTrigger value="hook">
-                    <GaugeIcon className="text-yellow-500 dark:text-yellow-400" />
+                    <HookIcon className="text-yellow-500 dark:text-yellow-400" />
                     Hook
                   </TabsTrigger>
                 )}
