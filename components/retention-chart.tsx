@@ -480,20 +480,6 @@ export function RetentionChart({
                   transition: `transform 220ms ${grow}`,
                 }}
               />
-              {/* A subtle glossy highlight for a polished, tactile finish. */}
-              <circle
-                cx={x - 1.6}
-                cy={y - 1.7}
-                r={1.5}
-                fill="#ffffff"
-                opacity={0.55}
-                pointerEvents="none"
-                style={{
-                  transformOrigin,
-                  transform: `scale(${scale})`,
-                  transition: `transform 220ms ${grow}`,
-                }}
-              />
               {/* Generous invisible hit target so the marker is easy to grab. */}
               <circle cx={x} cy={y} r={18} fill="transparent" />
             </g>
