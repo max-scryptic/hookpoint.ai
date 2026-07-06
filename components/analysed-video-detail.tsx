@@ -92,16 +92,11 @@ function RetentionWindows({
 
   return (
     <ul className="divide-y rounded-xl border bg-card">
-      {windows.map((window) => {
+      {windows.map((window, index) => {
         const said = transcriptForSegment(
           transcript,
           window.fromSeconds,
           window.toSeconds,
-        )
-        const endPercentage = Math.round((window.endWatchRatio ?? 0) * 100)
-        const lostPercentage = Math.max(
-          0,
-          Math.round((window.startWatchRatio ?? 0) * 100) - endPercentage,
         )
         return (
           <li
@@ -109,7 +104,10 @@ function RetentionWindows({
             className="flex flex-col gap-2 p-4"
           >
             <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                  {index + 1}
+                </span>
                 <span className="font-mono text-xs text-muted-foreground">
                   {formatTimestamp(window.fromSeconds)} –{" "}
                   {formatTimestamp(window.toSeconds)}
