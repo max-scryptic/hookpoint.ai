@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import {
   AreaChartIcon,
   GaugeIcon,
-  ImageIcon,
   ListChecksIcon,
   PackageIcon,
   QuoteIcon,
@@ -12,6 +11,7 @@ import {
   TrendingUpIcon,
 } from "lucide-react"
 
+import { HookIcon } from "@/components/hook-icon"
 import {
   RetentionChart,
   type RetentionChartInsight,
@@ -723,7 +723,7 @@ export function AnalysedVideoDetail({
           <Tabs defaultValue="packaging">
             <TabsList>
               <TabsTrigger value="packaging">
-                <ImageIcon className="text-purple-600 dark:text-purple-400" />
+                <HookIcon className="text-purple-600 dark:text-purple-400" />
                 Title, Thumbnail &amp; Hook
               </TabsTrigger>
               <TabsTrigger value="metadata">
@@ -772,7 +772,7 @@ export function AnalysedVideoDetail({
           <Tabs defaultValue="hook">
             <TabsList>
               <TabsTrigger value="hook">
-                <GaugeIcon className="text-yellow-500 dark:text-yellow-400" />
+                <HookIcon className="text-yellow-500 dark:text-yellow-400" />
                 Hook
               </TabsTrigger>
               <TabsTrigger value="drop-offs">
