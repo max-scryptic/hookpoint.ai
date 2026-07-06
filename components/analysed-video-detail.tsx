@@ -638,60 +638,19 @@ function PackagingComponentCard({
       feedback.whatCouldBeBetter.length === 0 ? (
         <p className="text-sm text-muted-foreground">Nothing to flag.</p>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
-          <PackagingComponentPoints
-            label="Working"
-            tone="good"
-            points={feedback.whatWorked}
-          />
-          <PackagingComponentPoints
-            label="Worth a tweak"
-            tone="warn"
-            points={feedback.whatCouldBeBetter}
-          />
+        // Mirror the retention rows: a plain description followed by the
+        // borderless blue "Try:" callout, with no badges or coloured rules.
+        <div className="flex flex-col gap-2">
+          {feedback.whatWorked.slice(0, 1).map((point, index) => (
+            <p key={index} className="text-sm">
+              {point}
+            </p>
+          ))}
+          {feedback.whatCouldBeBetter.slice(0, 1).map((point, index) => (
+            <TryCallout key={index}>{point}</TryCallout>
+          ))}
         </div>
       )}
-    </div>
-  )
-}
-
-function PackagingComponentPoints({
-  label,
-  tone,
-  points,
-}: {
-  label: string
-  tone: "good" | "warn"
-  points: string[]
-}) {
-  if (points.length === 0) return null
-
-  const styles =
-    tone === "good"
-      ? {
-          border: "border-emerald-500/70 dark:border-emerald-400/70",
-          badge:
-            "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-        }
-      : {
-          border: "border-amber-500/70 dark:border-amber-400/70",
-          badge: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
-        }
-
-  return (
-    <div className={`border-l-2 pl-3 ${styles.border}`}>
-      <span
-        className={`inline-block rounded-md px-2 py-0.5 text-xs font-semibold ${styles.badge}`}
-      >
-        {label}
-      </span>
-      <ul className="mt-2 flex flex-col gap-1.5">
-        {points.slice(0, 1).map((point, index) => (
-          <li key={index} className="text-sm">
-            {point}
-          </li>
-        ))}
-      </ul>
     </div>
   )
 }
