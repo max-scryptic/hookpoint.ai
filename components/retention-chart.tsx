@@ -80,13 +80,21 @@ export function RetentionChart({
     const yFor = (watchRatio: number) =>
       PAD.top + (1 - watchRatio / yMax) * PLOT_H
 
-    const yAtFraction = (fraction: number) => {
-      if (sorted.length === 0) return PAD.top + PLOT_H
-      if (fraction <= sorted[0].elapsedRatio) return yFor(sorted[0].watchRatio)
+    // YouTube's first retention bucket can begin a little way into the video.
+    // Give the rendered curve an explicit baseline at 0:00 so it always starts
+    // at 100%, without adding a synthetic point to the underlying API data.
+    const curve = [
+      { elapsedRatio: 0, watchRatio: 1 },
+      ...sorted.filter((point) => point.elapsedRatio > 0),
+    ]
 
-      for (let i = 1; i < sorted.length; i++) {
-        const previous = sorted[i - 1]
-        const current = sorted[i]
+    const yAtFraction = (fraction: number) => {
+      if (curve.length === 0) return PAD.top + PLOT_H
+      if (fraction <= curve[0].elapsedRatio) return yFor(curve[0].watchRatio)
+
+      for (let i = 1; i < curve.length; i++) {
+        const previous = curve[i - 1]
+        const current = curve[i]
         if (fraction <= current.elapsedRatio) {
           const span = current.elapsedRatio - previous.elapsedRatio
           const progress = span > 0 ? (fraction - previous.elapsedRatio) / span : 0
@@ -97,7 +105,7 @@ export function RetentionChart({
         }
       }
 
-      return yFor(sorted[sorted.length - 1].watchRatio)
+      return yFor(curve[curve.length - 1].watchRatio)
     }
 
     const coords = sorted.map((p) => ({
@@ -106,14 +114,19 @@ export function RetentionChart({
       point: p,
     }))
 
-    const linePath = coords
+    const curveCoords = curve.map((point) => ({
+      x: xFor(point.elapsedRatio),
+      y: yFor(point.watchRatio),
+    }))
+
+    const linePath = curveCoords
       .map((c, i) => `${i === 0 ? "M" : "L"}${c.x.toFixed(2)},${c.y.toFixed(2)}`)
       .join(" ")
 
-    const areaPath = coords.length
-      ? `${linePath} L${coords[coords.length - 1].x.toFixed(2)},${(
+    const areaPath = curveCoords.length
+      ? `${linePath} L${curveCoords[curveCoords.length - 1].x.toFixed(2)},${(
           PAD.top + PLOT_H
-        ).toFixed(2)} L${coords[0].x.toFixed(2)},${(PAD.top + PLOT_H).toFixed(
+        ).toFixed(2)} L${curveCoords[0].x.toFixed(2)},${(PAD.top + PLOT_H).toFixed(
           2,
         )} Z`
       : ""
