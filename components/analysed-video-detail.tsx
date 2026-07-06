@@ -144,7 +144,7 @@ function RetentionWindows({
 
   return (
     <ul className="divide-y overflow-hidden rounded-xl border bg-card [&>li:first-child]:rounded-t-xl [&>li:last-child]:rounded-b-xl">
-      {windows.map((window) => {
+      {windows.map((window, index) => {
         const rowId = `hook-${window.windowKey ?? window.windowIndex}`
         const isHighlighted = rowId === highlightedId
         return (
@@ -159,6 +159,9 @@ function RetentionWindows({
           >
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                  {index + 1}
+                </span>
                 <span className="font-mono text-sm">
                   {formatTimestamp(window.fromSeconds)} –{" "}
                   {formatTimestamp(window.toSeconds)}
