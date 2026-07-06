@@ -47,6 +47,7 @@ import { computeMetadataHygiene } from "@/lib/metadata-hygiene"
 import type { RetentionWindow } from "@/lib/retention-windows"
 import {
   transcriptForSegment,
+  transcriptSegmentEdges,
   type RetentionPoint,
   type TranscriptCue,
   type VideoAnalyticsSummary,
@@ -144,11 +145,6 @@ function RetentionWindows({
   return (
     <ul className="divide-y overflow-hidden rounded-xl border bg-card [&>li:first-child]:rounded-t-xl [&>li:last-child]:rounded-b-xl">
       {windows.map((window) => {
-        const said = transcriptForSegment(
-          transcript,
-          window.fromSeconds,
-          window.toSeconds,
-        )
         const rowId = `hook-${window.windowKey ?? window.windowIndex}`
         const isHighlighted = rowId === highlightedId
         return (
@@ -172,7 +168,11 @@ function RetentionWindows({
                     {Math.round(window.relativePerformance * 100)}% vs. similar
                   </Badge>
                 )}
-                {said && <ScriptSegmentTooltip text={said} />}
+                <ScriptSegmentTooltip
+                  transcript={transcript}
+                  fromSeconds={window.fromSeconds}
+                  toSeconds={window.toSeconds}
+                />
               </div>
               {!window.outOfRange && (
                 <span
@@ -242,11 +242,6 @@ function PacingAnalysisSection({
           {[...analysis.slowOrRepetitiveStretches]
             .sort((a, b) => a.startSeconds - b.startSeconds)
             .map((stretch, index) => {
-            const said = transcriptForSegment(
-              transcript,
-              stretch.startSeconds,
-              stretch.endSeconds,
-            )
             const rowId = `pacing-${stretch.startSeconds}-${stretch.endSeconds}`
             const isHighlighted = rowId === highlightedId
             return (
@@ -267,7 +262,11 @@ function PacingAnalysisSection({
                   {formatTimestamp(stretch.startSeconds)} –{" "}
                   {formatTimestamp(stretch.endSeconds)}
                 </span>
-                {said && <ScriptSegmentTooltip text={said} />}
+                <ScriptSegmentTooltip
+                  transcript={transcript}
+                  fromSeconds={stretch.startSeconds}
+                  toSeconds={stretch.endSeconds}
+                />
               </div>
               <p className="pl-10 text-sm">{stretch.reason}</p>
               {stretch.suggestion && (
@@ -339,11 +338,6 @@ function DropList({
   return (
     <ul className="divide-y overflow-hidden rounded-xl border bg-card [&>li:first-child]:rounded-t-xl [&>li:last-child]:rounded-b-xl">
       {drops.map((drop, index) => {
-        const said = transcriptForSegment(
-          transcript,
-          drop.fromSeconds,
-          drop.toSeconds,
-        )
         const rowId = `drop-${drop.windowIndex}`
         const isHighlighted = rowId === highlightedId
         return (
@@ -375,7 +369,11 @@ function DropList({
                     {Math.round(drop.relativePerformance * 100)}% vs. similar
                   </Badge>
                 )}
-                {said && <ScriptSegmentTooltip text={said} />}
+                <ScriptSegmentTooltip
+                  transcript={transcript}
+                  fromSeconds={drop.fromSeconds}
+                  toSeconds={drop.toSeconds}
+                />
               </div>
               <span className="text-sm font-medium text-destructive">
                 −{(Math.abs(drop.delta) * 100).toFixed(1)}%
@@ -391,8 +389,27 @@ function DropList({
 }
 
 // A compact hover affordance that reveals the transcript segment for a window
-// without spending vertical space on it in the card body.
-function ScriptSegmentTooltip({ text }: { text: string }) {
+// without spending vertical space on it in the card body. Renders nothing when
+// the window has no spoken words. The excerpt is bracketed with ellipses to
+// signal it's clipped from the wider script, except at the very start or end of
+// the script, where there are no earlier/later words to stand in for.
+function ScriptSegmentTooltip({
+  transcript,
+  fromSeconds,
+  toSeconds,
+}: {
+  transcript: TranscriptCue[]
+  fromSeconds: number
+  toSeconds: number
+}) {
+  const text = transcriptForSegment(transcript, fromSeconds, toSeconds)
+  if (!text) return null
+
+  const { atStart, atEnd } = transcriptSegmentEdges(
+    transcript,
+    fromSeconds,
+    toSeconds,
+  )
   return (
     <Tooltip>
       <TooltipTrigger
@@ -406,7 +423,11 @@ function ScriptSegmentTooltip({ text }: { text: string }) {
       >
         <QuoteIcon className="size-3.5" />
       </TooltipTrigger>
-      <TooltipContent className="max-w-xs text-sm">“…{text}…”</TooltipContent>
+      <TooltipContent className="max-w-xs text-sm">
+        “{atStart ? "" : "…"}
+        {text}
+        {atEnd ? "" : "…"}”
+      </TooltipContent>
     </Tooltip>
   )
 }
@@ -449,11 +470,6 @@ function GainList({
   return (
     <ul className="divide-y overflow-hidden rounded-xl border bg-card [&>li:first-child]:rounded-t-xl [&>li:last-child]:rounded-b-xl">
       {gains.map((gain, index) => {
-        const said = transcriptForSegment(
-          transcript,
-          gain.fromSeconds,
-          gain.toSeconds,
-        )
         const rowId = `gain-${gain.windowIndex}`
         const isHighlighted = rowId === highlightedId
         return (
@@ -475,7 +491,11 @@ function GainList({
                   {formatTimestamp(gain.fromSeconds)} –{" "}
                   {formatTimestamp(gain.toSeconds)}
                 </span>
-                {said && <ScriptSegmentTooltip text={said} />}
+                <ScriptSegmentTooltip
+                  transcript={transcript}
+                  fromSeconds={gain.fromSeconds}
+                  toSeconds={gain.toSeconds}
+                />
               </div>
               <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
                 +{(gain.delta * 100).toFixed(1)}%
