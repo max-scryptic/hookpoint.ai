@@ -10,6 +10,7 @@ import {
   QuoteIcon,
   TrendingDownIcon,
   TrendingUpIcon,
+  TypeIcon,
 } from "lucide-react"
 
 import {
@@ -34,6 +35,8 @@ import type { PacingAnalysis } from "@/lib/pacing-analysis"
 import {
   prioritizePackagingImprovements,
   type PackagingAlignment,
+  type PackagingComponentFeedback,
+  type PackagingComponentKey,
 } from "@/lib/packaging-alignment"
 import type {
   RetentionAttribution,
@@ -44,6 +47,7 @@ import { computeMetadataHygiene } from "@/lib/metadata-hygiene"
 import type { RetentionWindow } from "@/lib/retention-windows"
 import {
   transcriptForSegment,
+  transcriptSegmentEdges,
   type RetentionPoint,
   type TranscriptCue,
   type VideoAnalyticsSummary,
@@ -69,6 +73,50 @@ function formatCompactNumber(value: number | null): string {
   }).format(value)
 }
 
+// Maps an insight marker's kind to the retention tab that holds its list, so a
+// click on the chart can bring the matching tab forward.
+const TAB_FOR_INSIGHT_KIND: Record<
+  RetentionChartInsight["kind"],
+  string
+> = {
+  hook: "hook",
+  drop: "drop-offs",
+  gain: "gains",
+  pacing: "pacing",
+}
+
+// When a retention insight marker on the chart is selected, the matching row in
+// the list below is tinted in that insight's colour so the reader can see which
+// item the moment they clicked relates to. The tint fades out again (via the
+// always-on `transition-colors`) once the selection is cleared.
+const ROW_HIGHLIGHT: Record<"hook" | "drop" | "gain" | "pacing", string> = {
+  hook: "bg-yellow-50 ring-1 ring-inset ring-yellow-400/40 dark:bg-yellow-500/10",
+  drop: "bg-red-50 ring-1 ring-inset ring-red-400/40 dark:bg-red-500/10",
+  gain: "bg-emerald-50 ring-1 ring-inset ring-emerald-400/40 dark:bg-emerald-500/10",
+  pacing: "bg-blue-50 ring-1 ring-inset ring-blue-400/40 dark:bg-blue-500/10",
+}
+
+function rowHighlightClass(
+  kind: keyof typeof ROW_HIGHLIGHT,
+  isHighlighted: boolean,
+  base: string,
+): string {
+  return `${base} transition-colors ${isHighlighted ? ROW_HIGHLIGHT[kind] : ""}`
+}
+
+// Nudge the highlighted row into view when a chart marker is clicked, so the
+// linked item is visible even if it sits lower in a long list. `block: "nearest"`
+// keeps the scroll minimal — it only moves if the row is off-screen.
+function useHighlightScroll(highlightedId?: string | null) {
+  const ref = useRef<HTMLLIElement>(null)
+  useEffect(() => {
+    if (highlightedId) {
+      ref.current?.scrollIntoView({ block: "nearest", behavior: "smooth" })
+    }
+  }, [highlightedId])
+  return ref
+}
+
 // ---------------------------------------------------------------------------
 // The Hook (fixed, always-on opening windows analysed for every video)
 // ---------------------------------------------------------------------------
@@ -77,11 +125,15 @@ function RetentionWindows({
   windows,
   transcript,
   attribution,
+  highlightedId,
 }: {
   windows: RetentionWindow[]
   transcript: TranscriptCue[]
   attribution: Map<number, RetentionMomentAttribution>
+  highlightedId?: string | null
 }) {
+  const highlightedRef = useHighlightScroll(highlightedId)
+
   if (windows.length === 0) {
     return (
       <div className="rounded-xl border bg-muted/30 p-6 text-sm text-muted-foreground">
@@ -91,36 +143,49 @@ function RetentionWindows({
   }
 
   return (
-    <ul className="divide-y rounded-xl border bg-card">
-      {windows.map((window, index) => {
-        const said = transcriptForSegment(
-          transcript,
-          window.fromSeconds,
-          window.toSeconds,
-        )
+    <ul className="divide-y overflow-hidden rounded-xl border bg-card [&>li:first-child]:rounded-t-xl [&>li:last-child]:rounded-b-xl">
+      {windows.map((window) => {
+        const rowId = `hook-${window.windowKey ?? window.windowIndex}`
+        const isHighlighted = rowId === highlightedId
         return (
           <li
             key={window.windowKey ?? window.windowIndex}
-            className="flex flex-col gap-2 p-4"
+            ref={isHighlighted ? highlightedRef : undefined}
+            className={rowHighlightClass(
+              "hook",
+              isHighlighted,
+              "flex flex-col gap-2 p-4",
+            )}
           >
             <div className="flex items-center justify-between gap-2">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
-                  {index + 1}
-                </span>
-                <span className="font-mono text-xs text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-sm">
                   {formatTimestamp(window.fromSeconds)} –{" "}
                   {formatTimestamp(window.toSeconds)}
                 </span>
-                <Badge tone="hook">{window.label}</Badge>
                 {window.relativePerformance != null && (
                   <Badge tone="warn">
                     {Math.round(window.relativePerformance * 100)}% vs. similar
                   </Badge>
                 )}
-                {said && <ScriptSegmentTooltip text={said} />}
+                <ScriptSegmentTooltip
+                  transcript={transcript}
+                  fromSeconds={window.fromSeconds}
+                  toSeconds={window.toSeconds}
+                />
               </div>
-              <h3 className="text-sm font-medium">{window.label}</h3>
+              {!window.outOfRange && (
+                <span
+                  className={`text-sm font-medium ${
+                    window.delta > 0
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-destructive"
+                  }`}
+                >
+                  {window.delta > 0 ? "+" : "−"}
+                  {(Math.abs(window.delta) * 100).toFixed(1)}%
+                </span>
+              )}
             </div>
 
             {window.outOfRange ? (
@@ -150,11 +215,15 @@ function PacingAnalysisSection({
   analysis,
   transcript,
   hasTranscript,
+  highlightedId,
 }: {
   analysis: PacingAnalysis | null
   transcript: TranscriptCue[]
   hasTranscript: boolean
+  highlightedId?: string | null
 }) {
+  const highlightedRef = useHighlightScroll(highlightedId)
+
   return (
     <>
       {!analysis ? (
@@ -169,19 +238,21 @@ function PacingAnalysisSection({
           this video.
         </div>
       ) : (
-        <ul className="divide-y rounded-xl border bg-card">
+        <ul className="divide-y overflow-hidden rounded-xl border bg-card [&>li:first-child]:rounded-t-xl [&>li:last-child]:rounded-b-xl">
           {[...analysis.slowOrRepetitiveStretches]
             .sort((a, b) => a.startSeconds - b.startSeconds)
             .map((stretch, index) => {
-            const said = transcriptForSegment(
-              transcript,
-              stretch.startSeconds,
-              stretch.endSeconds,
-            )
+            const rowId = `pacing-${stretch.startSeconds}-${stretch.endSeconds}`
+            const isHighlighted = rowId === highlightedId
             return (
             <li
               key={index}
-              className="flex flex-col gap-2 p-4"
+              ref={isHighlighted ? highlightedRef : undefined}
+              className={rowHighlightClass(
+                "pacing",
+                isHighlighted,
+                "flex flex-col gap-2 p-4",
+              )}
             >
               <div className="flex items-center gap-3">
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
@@ -191,7 +262,11 @@ function PacingAnalysisSection({
                   {formatTimestamp(stretch.startSeconds)} –{" "}
                   {formatTimestamp(stretch.endSeconds)}
                 </span>
-                {said && <ScriptSegmentTooltip text={said} />}
+                <ScriptSegmentTooltip
+                  transcript={transcript}
+                  fromSeconds={stretch.startSeconds}
+                  toSeconds={stretch.endSeconds}
+                />
               </div>
               <p className="pl-10 text-sm">{stretch.reason}</p>
               {stretch.suggestion && (
@@ -239,6 +314,7 @@ function DropList({
   drops,
   transcript,
   attribution,
+  highlightedId,
 }: {
   // The significant *mid-video* drop-offs (kind = 'drop_off'). The Hook section
   // above already covers the opening, so these never overlap it.
@@ -246,7 +322,10 @@ function DropList({
   transcript: TranscriptCue[]
   // AI explanations/tips keyed by the drop-off's windowIndex, when generated.
   attribution: Map<number, RetentionMomentAttribution>
+  highlightedId?: string | null
 }) {
+  const highlightedRef = useHighlightScroll(highlightedId)
+
   if (drops.length === 0) {
     return (
       <div className="rounded-xl border bg-muted/30 p-6 text-sm text-muted-foreground">
@@ -257,15 +336,20 @@ function DropList({
   }
 
   return (
-    <ul className="divide-y rounded-xl border bg-card">
+    <ul className="divide-y overflow-hidden rounded-xl border bg-card [&>li:first-child]:rounded-t-xl [&>li:last-child]:rounded-b-xl">
       {drops.map((drop, index) => {
-        const said = transcriptForSegment(
-          transcript,
-          drop.fromSeconds,
-          drop.toSeconds,
-        )
+        const rowId = `drop-${drop.windowIndex}`
+        const isHighlighted = rowId === highlightedId
         return (
-          <li key={`${drop.fromSeconds}-${index}`} className="flex flex-col gap-2 p-4">
+          <li
+            key={`${drop.fromSeconds}-${index}`}
+            ref={isHighlighted ? highlightedRef : undefined}
+            className={rowHighlightClass(
+              "drop",
+              isHighlighted,
+              "flex flex-col gap-2 p-4",
+            )}
+          >
             <div className="flex items-center justify-between gap-4">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
@@ -285,7 +369,11 @@ function DropList({
                     {Math.round(drop.relativePerformance * 100)}% vs. similar
                   </Badge>
                 )}
-                {said && <ScriptSegmentTooltip text={said} />}
+                <ScriptSegmentTooltip
+                  transcript={transcript}
+                  fromSeconds={drop.fromSeconds}
+                  toSeconds={drop.toSeconds}
+                />
               </div>
               <span className="text-sm font-medium text-destructive">
                 −{(Math.abs(drop.delta) * 100).toFixed(1)}%
@@ -301,8 +389,27 @@ function DropList({
 }
 
 // A compact hover affordance that reveals the transcript segment for a window
-// without spending vertical space on it in the card body.
-function ScriptSegmentTooltip({ text }: { text: string }) {
+// without spending vertical space on it in the card body. Renders nothing when
+// the window has no spoken words. The excerpt is bracketed with ellipses to
+// signal it's clipped from the wider script, except at the very start or end of
+// the script, where there are no earlier/later words to stand in for.
+function ScriptSegmentTooltip({
+  transcript,
+  fromSeconds,
+  toSeconds,
+}: {
+  transcript: TranscriptCue[]
+  fromSeconds: number
+  toSeconds: number
+}) {
+  const text = transcriptForSegment(transcript, fromSeconds, toSeconds)
+  if (!text) return null
+
+  const { atStart, atEnd } = transcriptSegmentEdges(
+    transcript,
+    fromSeconds,
+    toSeconds,
+  )
   return (
     <Tooltip>
       <TooltipTrigger
@@ -316,7 +423,11 @@ function ScriptSegmentTooltip({ text }: { text: string }) {
       >
         <QuoteIcon className="size-3.5" />
       </TooltipTrigger>
-      <TooltipContent className="max-w-xs text-sm">“…{text}…”</TooltipContent>
+      <TooltipContent className="max-w-xs text-sm">
+        “{atStart ? "" : "…"}
+        {text}
+        {atEnd ? "" : "…"}”
+      </TooltipContent>
     </Tooltip>
   )
 }
@@ -326,13 +437,11 @@ function Badge({
   tone = "muted",
 }: {
   children: React.ReactNode
-  tone?: "muted" | "warn" | "hook"
+  tone?: "muted" | "warn"
 }) {
   const cls =
     tone === "warn"
       ? "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"
-      : tone === "hook"
-        ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-300"
       : "bg-muted text-muted-foreground"
   return (
     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>
@@ -349,21 +458,30 @@ function GainList({
   gains,
   transcript,
   attribution,
+  highlightedId,
 }: {
   gains: RetentionWindow[]
   transcript: TranscriptCue[]
   attribution: Map<number, RetentionMomentAttribution>
+  highlightedId?: string | null
 }) {
+  const highlightedRef = useHighlightScroll(highlightedId)
+
   return (
-    <ul className="divide-y rounded-xl border bg-card">
+    <ul className="divide-y overflow-hidden rounded-xl border bg-card [&>li:first-child]:rounded-t-xl [&>li:last-child]:rounded-b-xl">
       {gains.map((gain, index) => {
-        const said = transcriptForSegment(
-          transcript,
-          gain.fromSeconds,
-          gain.toSeconds,
-        )
+        const rowId = `gain-${gain.windowIndex}`
+        const isHighlighted = rowId === highlightedId
         return (
-          <li key={`${gain.fromSeconds}-${index}`} className="flex flex-col gap-2 p-4">
+          <li
+            key={`${gain.fromSeconds}-${index}`}
+            ref={isHighlighted ? highlightedRef : undefined}
+            className={rowHighlightClass(
+              "gain",
+              isHighlighted,
+              "flex flex-col gap-2 p-4",
+            )}
+          >
             <div className="flex items-center justify-between gap-4">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
@@ -373,7 +491,11 @@ function GainList({
                   {formatTimestamp(gain.fromSeconds)} –{" "}
                   {formatTimestamp(gain.toSeconds)}
                 </span>
-                {said && <ScriptSegmentTooltip text={said} />}
+                <ScriptSegmentTooltip
+                  transcript={transcript}
+                  fromSeconds={gain.fromSeconds}
+                  toSeconds={gain.toSeconds}
+                />
               </div>
               <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
                 +{(gain.delta * 100).toFixed(1)}%
@@ -416,20 +538,154 @@ function PackagingAlignmentSection({
         <p className="mt-2 text-sm text-muted-foreground">{alignment.overall}</p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <PointsCard
-          title="What worked well"
-          tone="good"
-          points={alignment.whatWorked.slice(0, 3)}
-        />
-        <PointsCard
-          title="What could be improved"
-          tone="warn"
-          points={prioritizePackagingImprovements(
-            alignment.whatCouldBeBetter,
-          ).slice(0, 3)}
-        />
+      {alignment.components ? (
+        <PackagingComponentTabs components={alignment.components} />
+      ) : (
+        // Older alignments were stored before the per-component breakdown
+        // existed, so fall back to the flat two-column layout for them.
+        <div className="grid gap-3 sm:grid-cols-2">
+          <PointsCard
+            title="What worked well"
+            tone="good"
+            points={(alignment.whatWorked ?? []).slice(0, 3)}
+          />
+          <PointsCard
+            title="What could be improved"
+            tone="warn"
+            points={prioritizePackagingImprovements(
+              alignment.whatCouldBeBetter ?? [],
+            ).slice(0, 3)}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+const PACKAGING_COMPONENT_META: Record<
+  PackagingComponentKey,
+  { label: string; icon: typeof TypeIcon }
+> = {
+  title: { label: "Title", icon: TypeIcon },
+  thumbnail: { label: "Thumbnail", icon: ImageIcon },
+  hook: { label: "Hook", icon: QuoteIcon },
+}
+
+const PACKAGING_COMPONENT_ORDER: PackagingComponentKey[] = [
+  "title",
+  "thumbnail",
+  "hook",
+]
+
+function PackagingComponentTabs({
+  components,
+}: {
+  components: NonNullable<PackagingAlignment["components"]>
+}) {
+  return (
+    <Tabs defaultValue="title">
+      <TabsList>
+        {PACKAGING_COMPONENT_ORDER.map((key) => {
+          const { label, icon: Icon } = PACKAGING_COMPONENT_META[key]
+          return (
+            <TabsTrigger key={key} value={key}>
+              <Icon className="text-muted-foreground" />
+              {label}
+            </TabsTrigger>
+          )
+        })}
+      </TabsList>
+
+      {PACKAGING_COMPONENT_ORDER.map((key) => (
+        <TabsContent key={key} value={key}>
+          <PackagingComponentCard
+            label={PACKAGING_COMPONENT_META[key].label}
+            feedback={components[key]}
+          />
+        </TabsContent>
+      ))}
+    </Tabs>
+  )
+}
+
+function PackagingComponentCard({
+  label,
+  feedback,
+}: {
+  label: string
+  feedback: PackagingComponentFeedback
+}) {
+  return (
+    <div className="flex flex-col gap-4 rounded-xl border bg-card p-4">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="rounded-md border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-sm font-semibold text-purple-700 dark:text-purple-300">
+          {label}
+        </span>
+        {feedback.summary && (
+          <span className="text-sm text-muted-foreground">
+            {feedback.summary}
+          </span>
+        )}
       </div>
+
+      {feedback.whatWorked.length === 0 &&
+      feedback.whatCouldBeBetter.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nothing to flag.</p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <PackagingComponentPoints
+            label="Working"
+            tone="good"
+            points={feedback.whatWorked}
+          />
+          <PackagingComponentPoints
+            label="Worth a tweak"
+            tone="warn"
+            points={feedback.whatCouldBeBetter}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PackagingComponentPoints({
+  label,
+  tone,
+  points,
+}: {
+  label: string
+  tone: "good" | "warn"
+  points: string[]
+}) {
+  if (points.length === 0) return null
+
+  const styles =
+    tone === "good"
+      ? {
+          border: "border-emerald-500/70 dark:border-emerald-400/70",
+          badge:
+            "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+        }
+      : {
+          border: "border-amber-500/70 dark:border-amber-400/70",
+          badge: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+        }
+
+  return (
+    <div className={`border-l-2 pl-3 ${styles.border}`}>
+      <span
+        className={`inline-block rounded-md px-2 py-0.5 text-xs font-semibold ${styles.badge}`}
+      >
+        {label}
+      </span>
+      <ul className="mt-2 flex flex-col gap-1.5">
+        {points.map((point, index) => (
+          <li key={index} className="text-sm">
+            {point}
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }
@@ -488,9 +744,12 @@ function MetadataHygieneSection({ video }: { video: VideoDetails }) {
         {hygiene.goodCount} of {hygiene.scoredCount} metadata checks look
         healthy. These are quick packaging basics you can fix in YouTube Studio.
       </div>
-      <ul className="divide-y rounded-xl border bg-card">
+      <ul className="grid gap-3 sm:grid-cols-2">
         {hygiene.checks.map((check) => (
-          <li key={check.id} className="flex items-start gap-3 p-4">
+          <li
+            key={check.id}
+            className="flex items-start gap-3 rounded-xl border bg-card p-4"
+          >
             <span
               className={`mt-1.5 size-2 shrink-0 rounded-full ${statusStyles[check.status]}`}
             />
@@ -560,6 +819,23 @@ export function AnalysedVideoDetail({
   const hookWindows = retentionWindows.filter((w) => w.kind === "hook")
   const drops = retentionWindows.filter((w) => w.kind === "drop_off")
   const gains = retentionWindows.filter((w) => w.kind === "gain")
+  const pacingStretches = pacingAnalysis?.slowOrRepetitiveStretches ?? []
+  const defaultRetentionTab =
+    hookWindows.length > 0
+      ? "hook"
+      : drops.length > 0
+        ? "drop-offs"
+        : gains.length > 0
+          ? "gains"
+          : pacingStretches.length > 0
+            ? "pacing"
+            : null
+
+  // The retention tab is controlled so that clicking an insight marker on the
+  // chart can switch to the tab holding that insight (see onInsightSelect).
+  const [retentionTab, setRetentionTab] = useState<string | null>(
+    defaultRetentionTab,
+  )
 
   // Index the LLM attribution by kind + windowIndex so each hook/drop-off/gain card
   // can pick up its own explanation and tip.
@@ -657,7 +933,7 @@ export function AnalysedVideoDetail({
     }),
     ...(pacingAnalysis?.slowOrRepetitiveStretches ?? []).map(
       (stretch, index) => ({
-        id: `pacing-${stretch.startSeconds}-${index}`,
+        id: `pacing-${stretch.startSeconds}-${stretch.endSeconds}`,
         kind: "pacing" as const,
         label: `Pacing opportunity ${index + 1}`,
         fromSeconds: stretch.startSeconds,
@@ -754,7 +1030,7 @@ export function AnalysedVideoDetail({
             insights={chartInsights}
             selectedInsightId={playbackWindow?.id ?? null}
             onScrubTimeChange={setPreviewTime}
-            onInsightSelect={(insight) =>
+            onInsightSelect={(insight) => {
               setPlaybackWindow(
                 insight
                   ? {
@@ -764,67 +1040,89 @@ export function AnalysedVideoDetail({
                     }
                   : null,
               )
-            }
+              // Bring the tab holding this insight forward so its highlighted
+              // row is the one on show. Leave the tab as-is when clicking off.
+              if (insight) setRetentionTab(TAB_FOR_INSIGHT_KIND[insight.kind])
+            }}
           />
 
-          <Tabs defaultValue="hook">
-            <TabsList>
-              <TabsTrigger value="hook">
-                <GaugeIcon className="text-yellow-500 dark:text-yellow-400" />
-                Hook
-              </TabsTrigger>
-              <TabsTrigger value="drop-offs">
-                <TrendingDownIcon className="text-destructive" />
-                Drop-offs
-              </TabsTrigger>
-              <TabsTrigger value="gains">
-                <TrendingUpIcon className="text-emerald-600 dark:text-emerald-400" />
-                Gains
-              </TabsTrigger>
-              <TabsTrigger value="pacing">
-                <GaugeIcon className="text-blue-600 dark:text-blue-400" />
-                Pacing
-              </TabsTrigger>
-            </TabsList>
+          {defaultRetentionTab && (
+            <Tabs
+              value={retentionTab ?? defaultRetentionTab}
+              onValueChange={(value) => setRetentionTab(value as string)}
+            >
+              <TabsList>
+                {hookWindows.length > 0 && (
+                  <TabsTrigger value="hook">
+                    <GaugeIcon className="text-yellow-500 dark:text-yellow-400" />
+                    Hook
+                  </TabsTrigger>
+                )}
+                {drops.length > 0 && (
+                  <TabsTrigger value="drop-offs">
+                    <TrendingDownIcon className="text-destructive" />
+                    Drop-offs
+                  </TabsTrigger>
+                )}
+                {gains.length > 0 && (
+                  <TabsTrigger value="gains">
+                    <TrendingUpIcon className="text-emerald-600 dark:text-emerald-400" />
+                    Gains
+                  </TabsTrigger>
+                )}
+                {pacingStretches.length > 0 && (
+                  <TabsTrigger value="pacing">
+                    <GaugeIcon className="text-blue-600 dark:text-blue-400" />
+                    Pacing
+                  </TabsTrigger>
+                )}
+              </TabsList>
 
-            <TabsContent value="hook">
-              <RetentionWindows
-                windows={hookWindows}
-                transcript={transcript}
-                attribution={hookAttribution}
-              />
-            </TabsContent>
-
-            <TabsContent value="drop-offs">
-              <DropList
-                drops={drops}
-                transcript={transcript}
-                attribution={dropAttribution}
-              />
-            </TabsContent>
-
-            <TabsContent value="gains">
-              {gains.length === 0 ? (
-                <div className="rounded-xl border bg-muted/30 p-6 text-sm text-muted-foreground">
-                  No notable retention gains stood out for this video.
-                </div>
-              ) : (
-                <GainList
-                  gains={gains}
-                  transcript={transcript}
-                  attribution={gainAttribution}
-                />
+              {hookWindows.length > 0 && (
+                <TabsContent value="hook">
+                  <RetentionWindows
+                    windows={hookWindows}
+                    transcript={transcript}
+                    attribution={hookAttribution}
+                    highlightedId={playbackWindow?.id ?? null}
+                  />
+                </TabsContent>
               )}
-            </TabsContent>
 
-            <TabsContent value="pacing">
-              <PacingAnalysisSection
-                analysis={pacingAnalysis}
-                transcript={transcript}
-                hasTranscript={transcript.length > 0}
-              />
-            </TabsContent>
-          </Tabs>
+              {drops.length > 0 && (
+                <TabsContent value="drop-offs">
+                  <DropList
+                    drops={drops}
+                    transcript={transcript}
+                    attribution={dropAttribution}
+                    highlightedId={playbackWindow?.id ?? null}
+                  />
+                </TabsContent>
+              )}
+
+              {gains.length > 0 && (
+                <TabsContent value="gains">
+                  <GainList
+                    gains={gains}
+                    transcript={transcript}
+                    attribution={gainAttribution}
+                    highlightedId={playbackWindow?.id ?? null}
+                  />
+                </TabsContent>
+              )}
+
+              {pacingStretches.length > 0 && (
+                <TabsContent value="pacing">
+                  <PacingAnalysisSection
+                    analysis={pacingAnalysis}
+                    transcript={transcript}
+                    hasTranscript={transcript.length > 0}
+                    highlightedId={playbackWindow?.id ?? null}
+                  />
+                </TabsContent>
+              )}
+            </Tabs>
+          )}
         </section>
       </div>
     </div>

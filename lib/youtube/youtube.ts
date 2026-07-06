@@ -871,6 +871,27 @@ export function transcriptForSegment(
     .trim()
 }
 
+// Whether the segment spanning [from, to] reaches the very start and/or very
+// end of the transcript. Callers use this to decide if a rendered excerpt needs
+// leading/trailing ellipses: a segment at the start of the script has no earlier
+// words to elide, and one at the end has none after it.
+export function transcriptSegmentEdges(
+  cues: TranscriptCue[],
+  fromSeconds: number,
+  toSeconds: number,
+): { atStart: boolean; atEnd: boolean } {
+  const included = cues.filter(
+    (cue) => cue.endSeconds >= fromSeconds && cue.startSeconds <= toSeconds,
+  )
+  if (included.length === 0) {
+    return { atStart: false, atEnd: false }
+  }
+  return {
+    atStart: included[0] === cues[0],
+    atEnd: included[included.length - 1] === cues[cues.length - 1],
+  }
+}
+
 // Finds the segments where retention falls fastest. Walks consecutive points,
 // keeps drops larger than `minDrop` absolute watch-ratio, and returns the
 // steepest `limit` of them, ordered from earliest to latest for display.
