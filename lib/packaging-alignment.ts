@@ -21,9 +21,9 @@ export interface PackagingComponentFeedback {
   // A short (3-6 word) characterisation of the component, e.g. "Direct
   // promise, strong emphasis". Used as the tab's subtitle.
   summary: string
-  // The strengths of this component (up to 2), most important first.
+  // The strongest point about this component, when there is one.
   whatWorked: string[]
-  // The improvements worth making to this component (up to 2).
+  // The most useful improvement for this component, when there is one.
   whatCouldBeBetter: string[]
 }
 
@@ -94,8 +94,16 @@ const COMPONENT_SCHEMA = {
   required: ["summary", "whatWorked", "whatCouldBeBetter"],
   properties: {
     summary: { type: "string" },
-    whatWorked: { type: "array", items: { type: "string" } },
-    whatCouldBeBetter: { type: "array", items: { type: "string" } },
+    whatWorked: {
+      type: "array",
+      items: { type: "string" },
+      maxItems: 1,
+    },
+    whatCouldBeBetter: {
+      type: "array",
+      items: { type: "string" },
+      maxItems: 1,
+    },
   },
 } as const
 
@@ -148,8 +156,8 @@ function toComponentFeedback(
 ): PackagingComponentFeedback {
   return {
     summary: output.summary,
-    whatWorked: output.whatWorked.slice(0, 2),
-    whatCouldBeBetter: output.whatCouldBeBetter.slice(0, 2),
+    whatWorked: output.whatWorked.slice(0, 1),
+    whatCouldBeBetter: output.whatCouldBeBetter.slice(0, 1),
   }
 }
 
@@ -188,7 +196,7 @@ export async function generatePackagingAlignment(
                 "You review the packaging of a YouTube video: its title, its thumbnail image, and its spoken hook (the first ~30 seconds of transcript). You are shown the actual thumbnail image; ground everything in what you genuinely see, read and hear, never in guesses about elements that aren't there.",
                 "Write to the uploader in the second person (you, your video, your hook, your title, your thumbnail), reviewing their own packaging. Whoever is heard speaking in the hook may be the uploader, a co-host, a guest, or a voiceover, so never pin what is said on a specific or gendered person (he, she, the creator, the host); frame it as the uploader's own hook instead (say 'your hook is still laying out the context', not 'he is still laying out the context').",
                 "overall: write a one-to-two sentence alignment summary that gives an overview of how the packaging holds together and briefly comments on each component (title, thumbnail, hook). For example: 'Your packaging is cohesive but low-specificity: the title signals a casual comeback, the thumbnail reinforces a personal \"I'm back\" vibe, and your hook opens with that same energy but spends its first seconds on context instead of a sharper payoff.'",
-                "Then break the feedback down per component, returning a separate object for title, thumbnail and hook. For each component: summary is a short 3-to-6 word characterisation of that component (for example the title as 'Direct promise, strong emphasis'); whatWorked lists up to 2 concise, specific strengths of that component, most important first; whatCouldBeBetter lists up to 2 concrete, actionable improvements to that component. Keep every point about its own component only, reference the real title/thumbnail/hook, and never give generic advice. Return fewer than 2 (including an empty list) only when there genuinely are fewer, and never more than 2.",
+                "Then break the feedback down per component, returning a separate object for title, thumbnail and hook. For each component: summary is a short 3-to-6 word characterisation of that component (for example the title as 'Direct promise, strong emphasis'); whatWorked contains exactly one concise, specific strength of that component; whatCouldBeBetter contains exactly one concrete, actionable improvement to that component. Keep every point about its own component only, reference the real title/thumbnail/hook, and never give generic advice. Use an empty list only when there genuinely is no useful point to make, and never return more than one item in either list.",
                 "If the hook transcript is empty, work from the title and thumbnail alone rather than inventing what was said.",
                 'Never output an em dash character ("—") anywhere in your response; if you would use one, rewrite the phrase with a comma, colon, parentheses, or two separate sentences instead.',
               ].join(" "),
