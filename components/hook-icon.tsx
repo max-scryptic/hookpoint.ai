@@ -17,9 +17,9 @@ export function HookIcon({
       aria-hidden="true"
       {...props}
     >
-      <circle cx="16" cy="5" r="2" />
-      <path d="M16 7v8a5 5 0 0 1-10 0v-4" />
-      <path d="m3 14 3-3 3 3" />
+      <circle cx="17.5" cy="5" r="2" />
+      <path d="M17.5 7v8a5 5 0 0 1-10 0v-4" />
+      <path d="m4.5 14 3-3 3 3" />
     </svg>
   )
 }
