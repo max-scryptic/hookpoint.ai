@@ -2,10 +2,12 @@ import { describe, expect, it, vi } from "vitest"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import {
+  dedupeAdjacentVisualFrames,
   synthesizeRetentionWindowEvents,
   type RetentionWindowEventSynthesizer,
   type WindowEvidence,
 } from "@/lib/retention-window-event-synthesis"
+import type { SnapshotAnalysis } from "@/lib/retention-window-media-analysis"
 
 const WINDOW_ROW = {
   id: "rw-1",
@@ -130,6 +132,92 @@ function fakeSynthesizer(): RetentionWindowEventSynthesizer & {
 } {
   return { synthesize: vi.fn(async () => []) }
 }
+
+function visualFrame(
+  overrides: Omit<Partial<WindowEvidence["visual"][number]>, "analysis"> & {
+    analysis?: Partial<SnapshotAnalysis>
+  } = {},
+): WindowEvidence["visual"][number] {
+  const { analysis: analysisOverrides, ...rest } = overrides
+  return {
+    chunkIndex: 0,
+    timestampSeconds: 48,
+    ocrText: null,
+    analysis: {
+      scene: "talking_head",
+      face_visible: true,
+      contains_text: false,
+      contains_code: false,
+      motion: "moderate",
+      people_count: 1,
+      camera_movement: "static",
+      notable_event: null,
+      description: "a person talking to camera",
+      ...analysisOverrides,
+    },
+    ...rest,
+  }
+}
+
+describe("dedupeAdjacentVisualFrames", () => {
+  it("collapses a run of frames with identical categorical judgments", () => {
+    // The reported talking-head case: four consecutive frames whose only
+    // differences are the free-text notable_event/description narrating micro-
+    // motion. They collapse to the first frame.
+    const frames = [
+      visualFrame({
+        chunkIndex: 0,
+        timestampSeconds: 48,
+        analysis: { notable_event: "squinting", description: "eyes shut" },
+      }),
+      visualFrame({
+        chunkIndex: 1,
+        timestampSeconds: 49,
+        analysis: { notable_event: "head dips", description: "leaning in" },
+      }),
+      visualFrame({
+        chunkIndex: 2,
+        timestampSeconds: 50,
+        analysis: { notable_event: "tighter squint", description: "angled head" },
+      }),
+    ]
+
+    const deduped = dedupeAdjacentVisualFrames(frames)
+    expect(deduped).toHaveLength(1)
+    expect(deduped[0].timestampSeconds).toBe(48)
+  })
+
+  it("keeps frames that differ in a categorical field or OCR text", () => {
+    const frames = [
+      visualFrame({ chunkIndex: 0, analysis: { camera_movement: "static" } }),
+      // A real cut's far side: the model tagged the movement, so it stays.
+      visualFrame({ chunkIndex: 1, analysis: { camera_movement: "cut" } }),
+      // Back to static but now a graphic's OCR text appears — still distinct.
+      visualFrame({
+        chunkIndex: 2,
+        ocrText: "SALE 50% OFF",
+        analysis: { camera_movement: "static", contains_text: true },
+      }),
+    ]
+
+    expect(dedupeAdjacentVisualFrames(frames)).toHaveLength(3)
+  })
+
+  it("only collapses adjacent duplicates, not a later recurrence", () => {
+    const frames = [
+      visualFrame({ chunkIndex: 0, analysis: { scene: "talking_head" } }),
+      visualFrame({ chunkIndex: 1, analysis: { scene: "screen_recording" } }),
+      visualFrame({ chunkIndex: 2, analysis: { scene: "talking_head" } }),
+    ]
+
+    // The first and third match but aren't adjacent, so all three survive.
+    expect(dedupeAdjacentVisualFrames(frames)).toHaveLength(3)
+  })
+
+  it("returns an empty array unchanged", () => {
+    expect(dedupeAdjacentVisualFrames([])).toEqual([])
+  })
+})
 
 describe("synthesizeRetentionWindowEvents", () => {
   it("does nothing when there are no pending jobs", async () => {

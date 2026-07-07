@@ -28,9 +28,15 @@ import { runFfmpegCapturingOutput } from "@/lib/media/ffmpeg"
 const SCENE_DETECTION_SCALE_WIDTH = 320
 
 // ffmpeg scene-change score threshold (0-1) above which a frame transition
-// counts as a hard cut. 0.4 is the commonly-used practical threshold for
-// catching real cuts without flagging ordinary motion or panning.
-const SCENE_CUT_SCORE_THRESHOLD = 0.4
+// counts as a hard cut. Held at 0.5 rather than the commonly-cited 0.4: at 0.4
+// a static talking-head shot was tripping false cuts on the subject's own
+// motion (a head tilt, a lean, a squint), each of which then spawned a flanking
+// snapshot pair — a handful of near-duplicate frames for a shot that never
+// actually cut. 0.5 clears that ordinary within-shot motion while still
+// catching genuine hard cuts; the clustering in buildSnapshotTimestampsFromSceneCues
+// and the adjacent-frame dedup in event synthesis are the second and third
+// lines of defence for whatever still slips through.
+const SCENE_CUT_SCORE_THRESHOLD = 0.5
 
 // freezedetect: noise tolerance (dB, more negative = stricter) and the
 // minimum span before a static frame counts as a "freeze" worth flagging,

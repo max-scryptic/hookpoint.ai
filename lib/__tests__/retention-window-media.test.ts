@@ -5,6 +5,7 @@ import type { SceneCueScanResult } from "@/lib/media/scene-detection"
 import {
   buildChunkTimestamps,
   buildSnapshotTimestampsFromSceneCues,
+  collapseClusteredCuts,
   createPendingRetentionWindowAudio,
   createRetentionWindowSnapshotsFromSceneCues,
 } from "@/lib/retention-window-media"
@@ -111,18 +112,56 @@ describe("buildSnapshotTimestampsFromSceneCues", () => {
     ])
   })
 
-  it("de-duplicates overlapping flanking pairs from adjacent cuts", () => {
+  it("collapses a sub-2s cluster of cuts into a single flanking pair", () => {
     const cues: SceneCueScanResult = {
       cuts: [{ atSeconds: 10 }, { atSeconds: 11.5 }],
       freezes: [],
       blacks: [],
     }
 
-    // 10±1 => [9, 11]; 11.5±1 => [10.5, 12.5]; none of these coincide, so all
-    // four survive — this just documents dedup happens on exact overlaps.
+    // The two cuts sit 1.5s apart, below the 2s cluster separation, so the
+    // second is discarded as part of the first's cluster: only 10±1 => [9, 11]
+    // survives instead of four frames straddling a transition that (on a static
+    // shot) usually never happened.
+    expect(buildSnapshotTimestampsFromSceneCues(0, 30, cues)).toEqual([9, 11])
+  })
+
+  it("collapses the over-detected talking-head burst to two frames", () => {
+    // The reported case: a static talking head where the subject's own motion
+    // tripped cuts at 49 and 50, yielding four near-duplicate frames. Clustering
+    // keeps one cut, so the window samples one flanking pair, not a per-second
+    // grid.
+    const cues: SceneCueScanResult = {
+      cuts: [{ atSeconds: 49 }, { atSeconds: 50 }],
+      freezes: [],
+      blacks: [],
+    }
+
+    expect(buildSnapshotTimestampsFromSceneCues(45, 55, cues)).toEqual([48, 50])
+  })
+
+  it("keeps cuts spaced at least the cluster separation apart", () => {
+    const cues: SceneCueScanResult = {
+      cuts: [{ atSeconds: 10 }, { atSeconds: 12 }],
+      freezes: [],
+      blacks: [],
+    }
+
+    // Exactly 2s apart, so both survive clustering; 10±1 => [9, 11] and
+    // 12±1 => [11, 13] share the boundary frame at 11, which the Set dedupes.
     expect(buildSnapshotTimestampsFromSceneCues(0, 30, cues)).toEqual([
-      9, 10.5, 11, 12.5,
+      9, 11, 13,
     ])
+  })
+
+  it("sorts before clustering so out-of-order cuts still collapse", () => {
+    const cues: SceneCueScanResult = {
+      cuts: [{ atSeconds: 50 }, { atSeconds: 49 }],
+      freezes: [],
+      blacks: [],
+    }
+
+    expect(buildSnapshotTimestampsFromSceneCues(45, 55, cues)).toEqual([48, 50])
   })
 
   it("caps the result and spreads it evenly across a high cut-rate window", () => {
@@ -140,6 +179,43 @@ describe("buildSnapshotTimestampsFromSceneCues", () => {
     for (let i = 1; i < timestamps.length; i++) {
       expect(timestamps[i]).toBeGreaterThan(timestamps[i - 1])
     }
+  })
+})
+
+describe("collapseClusteredCuts", () => {
+  it("keeps a single cut and passes through well-spaced cuts unchanged", () => {
+    expect(collapseClusteredCuts([{ atSeconds: 12 }])).toEqual([{ atSeconds: 12 }])
+    expect(
+      collapseClusteredCuts([{ atSeconds: 0 }, { atSeconds: 5 }, { atSeconds: 12 }]),
+    ).toEqual([{ atSeconds: 0 }, { atSeconds: 5 }, { atSeconds: 12 }])
+  })
+
+  it("drops every cut within the separation of the last kept one", () => {
+    expect(
+      collapseClusteredCuts([
+        { atSeconds: 10 },
+        { atSeconds: 10.5 },
+        { atSeconds: 11 },
+      ]),
+    ).toEqual([{ atSeconds: 10 }])
+  })
+
+  it("measures separation from the last kept cut, not the previous input", () => {
+    // A steady 1s-apart run: 0 kept, 1 dropped (<2 from 0), 2 kept (>=2 from 0),
+    // 3 dropped (<2 from 2), 4 kept — thinned to a spread, not collapsed to one.
+    expect(
+      collapseClusteredCuts([
+        { atSeconds: 0 },
+        { atSeconds: 1 },
+        { atSeconds: 2 },
+        { atSeconds: 3 },
+        { atSeconds: 4 },
+      ]),
+    ).toEqual([{ atSeconds: 0 }, { atSeconds: 2 }, { atSeconds: 4 }])
+  })
+
+  it("returns an empty array for no cuts", () => {
+    expect(collapseClusteredCuts([])).toEqual([])
   })
 })
 
