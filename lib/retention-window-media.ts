@@ -16,7 +16,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import type { SceneCueScanResult } from "@/lib/media/scene-detection"
+import type { SceneCut, SceneCueScanResult } from "@/lib/media/scene-detection"
 import type { PersistedRetentionWindow } from "@/lib/retention-windows"
 
 export const CHUNK_STEP_SECONDS = 5
@@ -233,6 +233,38 @@ export async function createPendingRetentionWindowAudio(
 // without ffmpeg's seek landing on the same frame for both.
 const CUT_SNAPSHOT_OFFSET_SECONDS = 1
 
+// Minimum spacing between two detected cuts before both keep their own flanking
+// pair; cuts closer than this are collapsed to the first, contributing a single
+// pair between them. Set to twice the flanking offset so retained cuts have
+// non-overlapping flanking windows: at 2×offset, one cut's `+offset` frame and
+// the next cut's `-offset` frame no longer coincide or invert. Real edits
+// rarely arrive in sub-2s bursts, but ffmpeg's scene detector can fire two or
+// three "cuts" within a second on ordinary within-shot motion (a talking head
+// tilting or leaning), which would otherwise multiply into a wall of
+// near-duplicate frames straddling transitions that never happened. A genuine
+// fast-cut montage still survives — its cuts are thinned to one per 2s window
+// and then spread by subsampleEvenly, rather than dropped.
+const CUT_CLUSTER_MIN_SEPARATION_SECONDS = 2 * CUT_SNAPSHOT_OFFSET_SECONDS
+
+// Keeps a cut only when it is at least CUT_CLUSTER_MIN_SEPARATION_SECONDS past
+// the previous kept cut, discarding the tightly-clustered runs a slightly
+// over-sensitive scene detector produces on within-shot motion. Assumes the
+// input is sorted ascending (the caller sorts before flanking).
+export function collapseClusteredCuts(
+  cuts: SceneCut[],
+  minSeparationSeconds: number = CUT_CLUSTER_MIN_SEPARATION_SECONDS,
+): SceneCut[] {
+  const kept: SceneCut[] = []
+  let lastKept = -Infinity
+  for (const cut of cuts) {
+    if (cut.atSeconds - lastKept >= minSeparationSeconds) {
+      kept.push(cut)
+      lastKept = cut.atSeconds
+    }
+  }
+  return kept
+}
+
 // Ceiling on how many snapshots one window can produce. A window with an
 // unusually high cut rate (a fast-cut montage) would otherwise generate one
 // flanking pair per cut and blow past what's worth extracting/storing/
@@ -276,8 +308,17 @@ export function buildSnapshotTimestampsFromSceneCues(
       : [round(fromSeconds)]
   }
 
+  // Collapse tightly-clustered cuts before flanking so a burst of near-
+  // simultaneous detections (usually within-shot motion the scene detector
+  // over-read as several cuts) contributes one flanking pair, not one per
+  // detection. Sort first: collapseClusteredCuts assumes ascending order, and
+  // ffmpeg reports cuts in time order but the caller shouldn't rely on it.
+  const cuts = collapseClusteredCuts(
+    [...cues.cuts].sort((a, b) => a.atSeconds - b.atSeconds),
+  )
+
   const timestamps = new Set<number>()
-  for (const cut of cues.cuts) {
+  for (const cut of cuts) {
     timestamps.add(
       round(Math.max(fromSeconds, cut.atSeconds - CUT_SNAPSHOT_OFFSET_SECONDS)),
     )

@@ -97,12 +97,47 @@ export interface WindowEvidence {
   audio: AudioAnalysis | null
 }
 
-// The synthesized events plus the cost of the LLM call that produced them, so
-// the orchestrator can persist per-window spend without the synthesizer
-// needing a DB handle — mirrors AnalyzeSnapshotsResult on the analysis side.
-export interface SynthesizeResult {
-  events: SynthesizedEvent[]
-  cost: LlmCallCost
+type VisualFrame = WindowEvidence["visual"][number]
+
+// True when two already-analysed frames represent the same visual state: every
+// categorical judgment the vision model made matches and the deterministic OCR
+// text is identical. The free-text notable_event/description are deliberately
+// ignored — on a static talking head they narrate micro-motion ("his head dips
+// a little lower") that reads as change without being any, which is exactly the
+// redundancy this collapses. camera_movement is part of the comparison, so a
+// frame the model tagged "cut" never merges with a neighbouring "static" one:
+// a real transition's two flanking frames stay distinct while a false cut's
+// (both "static") collapse.
+function isSameVisualState(a: VisualFrame, b: VisualFrame): boolean {
+  return (
+    a.ocrText === b.ocrText &&
+    a.analysis.scene === b.analysis.scene &&
+    a.analysis.motion === b.analysis.motion &&
+    a.analysis.camera_movement === b.analysis.camera_movement &&
+    a.analysis.face_visible === b.analysis.face_visible &&
+    a.analysis.contains_text === b.analysis.contains_text &&
+    a.analysis.contains_code === b.analysis.contains_code &&
+    a.analysis.people_count === b.analysis.people_count
+  )
+}
+
+// Collapses runs of consecutive near-identical frames (see isSameVisualState)
+// down to the first frame of each run, so the synthesis call isn't paid to
+// re-read a handful of frames showing the same unchanged shot. Input must be in
+// chronological (chunkIndex) order, which getRetentionWindowSnapshotsForVideo
+// already guarantees. Only what's sent to the model is trimmed — the full set
+// of harvested frames is still surfaced in the oversight UI
+// (components/deep-analysis-evidence.tsx).
+export function dedupeAdjacentVisualFrames(
+  frames: VisualFrame[],
+): VisualFrame[] {
+  const kept: VisualFrame[] = []
+  for (const frame of frames) {
+    const prev = kept[kept.length - 1]
+    if (prev && isSameVisualState(prev, frame)) continue
+    kept.push(frame)
+  }
+  return kept
 }
 
 // Split out so tests can inject a fake synthesizer instead of hitting
@@ -283,14 +318,16 @@ export async function synthesizeRetentionWindowEvents(
       }
 
       try {
-        const visual = windowSnapshots
-          .filter((s) => s.analysisStatus === "ready" && s.analysis != null)
-          .map((s) => ({
-            chunkIndex: s.chunkIndex,
-            timestampSeconds: s.timestampSeconds,
-            ocrText: s.ocrText,
-            analysis: s.analysis as SnapshotAnalysis,
-          }))
+        const visual = dedupeAdjacentVisualFrames(
+          windowSnapshots
+            .filter((s) => s.analysisStatus === "ready" && s.analysis != null)
+            .map((s) => ({
+              chunkIndex: s.chunkIndex,
+              timestampSeconds: s.timestampSeconds,
+              ocrText: s.ocrText,
+              analysis: s.analysis as SnapshotAnalysis,
+            })),
+        )
 
         const metrics = computeSceneCueMetrics(
           cues,
