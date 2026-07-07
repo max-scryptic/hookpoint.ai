@@ -145,26 +145,8 @@ function RetentionWindows({
     )
   }
 
-  // Span the speech-mark tooltip across the whole hook (all in-range windows)
-  // so hovering the icon beside the purple "Hook" title surfaces the complete
-  // opening script, mirroring the hook quote in the packaging alignment card.
-  const spanWindows = windows.filter((w) => !w.outOfRange)
-  const hookSpan = spanWindows.length > 0 ? spanWindows : windows
-  const hookFrom = hookSpan[0].fromSeconds
-  const hookTo = hookSpan[hookSpan.length - 1].toSeconds
-
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span className="rounded-md border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-sm font-semibold text-purple-700 dark:text-purple-300">
-          Hook
-        </span>
-        <ScriptSegmentTooltip
-          transcript={transcript}
-          fromSeconds={hookFrom}
-          toSeconds={hookTo}
-        />
-      </div>
       <ul className="divide-y overflow-hidden rounded-xl border bg-card [&>li:first-child]:rounded-t-xl [&>li:last-child]:rounded-b-xl">
       {windows.map((window, index) => {
         const rowId = `hook-${window.windowKey ?? window.windowIndex}`
