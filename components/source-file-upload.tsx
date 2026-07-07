@@ -13,6 +13,14 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { DeepAnalysisProgress } from "@/components/deep-analysis-progress"
 import { notifySourceFileReady } from "@/components/source-video-thumbnail"
 import { ACCEPTED_EXTENSIONS, isAcceptedExtension } from "@/lib/source-files/config"
@@ -307,6 +315,9 @@ export function SourceFileUpload({
   // Bumped on every successful retry to remount DeepAnalysisProgress, which
   // otherwise stops polling for good once it's seen every stage settle.
   const [analysisAttempt, setAnalysisAttempt] = useState(0)
+  // Shows the "upload succeeded, analysis started in the background" dialog once
+  // a fresh upload completes validation.
+  const [showUploadedDialog, setShowUploadedDialog] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Whether a stored record is in a settled (non-in-flight) state.
@@ -493,6 +504,7 @@ export function SourceFileUpload({
 
       setSourceFile(completeData.sourceFile)
       setClient({ phase: "idle" })
+      setShowUploadedDialog(true)
       notifySourceFileReady(videoId)
     } catch (error) {
       setClient({
@@ -610,6 +622,25 @@ export function SourceFileUpload({
           analysisAttempt={analysisAttempt}
         />
       </div>
+
+      <Dialog open={showUploadedDialog} onOpenChange={setShowUploadedDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <CheckCircle2Icon className="size-5 text-emerald-600 dark:text-emerald-500" />
+              <DialogTitle>Video uploaded successfully</DialogTitle>
+            </div>
+            <DialogDescription>
+              Your video has been uploaded and analysis has now begun. This runs
+              in the background, so you’re free to leave this page. We’ll email
+              you when your video has been fully analysed.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setShowUploadedDialog(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   )
 }
