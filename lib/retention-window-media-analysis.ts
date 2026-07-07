@@ -395,6 +395,20 @@ const AUDIO_ANALYSIS_INSTRUCTIONS = [
   'Never output an em dash character ("—") in any string value you return; if you would use one, rewrite the phrase with a comma, colon, parentheses, or two separate sentences instead.',
 ].join(" ")
 
+// Sent in the *user* turn alongside the audio itself, not just the developer
+// turn above. Audio-capable chat models tend to treat the clip as something to
+// converse with (replying "It sounds like you're describing..." to whatever is
+// said) and ignore a developer-only instruction to emit JSON, so the task is
+// re-anchored right next to the audio to make the model analyse it rather than
+// answer it.
+const AUDIO_ANALYSIS_USER_PROMPT =
+  "Analyse the non-verbal audio of the attached clip. Do not reply to, answer, or converse about anything said in it. Respond with only the single JSON object described, no prose before or after and no code fences."
+
+// Blunter re-ask used for the one retry when the first response could not be
+// parsed as the required JSON — see openAiRetentionWindowMediaAnalyzer.analyzeAudio.
+const AUDIO_ANALYSIS_RETRY_PROMPT =
+  "Output ONLY the single JSON object with exactly the keys music, music_description, speakers, tone, energy, notable_events. No explanation, no prose, no code fences, no reply to the clip's contents. Analyse the attached audio and return that JSON object now."
+
 function extractOutputText(response: {
   output?: Array<{ content?: Array<{ type?: string; text?: string }> }>
 }): string | null {
@@ -479,10 +493,49 @@ async function callOpenAiChatCompletionsAudio(
   return text
 }
 
+// Pulls the first balanced {...} object out of a larger string, respecting
+// string literals so a brace inside a quoted value doesn't end it early.
+// Audio-capable chat models routinely wrap the requested JSON in a prose
+// preamble ("Thank you for sharing these details... {json}") or a ```json
+// fence despite being told not to, so the object is dug out of whatever comes
+// back rather than requiring the whole response to be JSON — a failed audio
+// row is terminal (the claim query never reclaims it), so salvaging a
+// chatty-but-correct response is worth more than rejecting it. Returns null
+// when there's no object to find at all (a purely prose reply).
+function extractJsonObject(text: string): string | null {
+  let depth = 0
+  let start = -1
+  let inString = false
+  let escaped = false
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (ch === "\\") escaped = true
+      else if (ch === '"') inString = false
+      continue
+    }
+    if (ch === '"') inString = true
+    else if (ch === "{") {
+      if (depth === 0) start = i
+      depth++
+    } else if (ch === "}" && depth > 0) {
+      depth--
+      if (depth === 0 && start !== -1) return text.slice(start, i + 1)
+    }
+  }
+  return null
+}
+
 function parseAudioAnalysis(text: string): AudioAnalysisModelOutput {
+  const json = extractJsonObject(text)
+  if (json == null) {
+    throw new Error(`OpenAI audio analysis returned non-JSON: ${text.slice(0, 500)}`)
+  }
+
   let parsed: Partial<AudioAnalysisModelOutput>
   try {
-    parsed = JSON.parse(text) as Partial<AudioAnalysisModelOutput>
+    parsed = JSON.parse(json) as Partial<AudioAnalysisModelOutput>
   } catch {
     throw new Error(`OpenAI audio analysis returned non-JSON: ${text.slice(0, 500)}`)
   }
@@ -559,18 +612,34 @@ export const openAiRetentionWindowMediaAnalyzer: RetentionWindowMediaAnalyzer = 
   },
 
   async analyzeAudio({ base64, format }) {
-    const text = await callOpenAiChatCompletionsAudio({
+    const request = (userPrompt: string) => ({
       model: getAudioAnalysisModel(),
       modalities: ["text"],
       messages: [
         { role: "developer", content: AUDIO_ANALYSIS_INSTRUCTIONS },
         {
           role: "user",
-          content: [{ type: "input_audio", input_audio: { data: base64, format } }],
+          content: [
+            { type: "text", text: userPrompt },
+            { type: "input_audio", input_audio: { data: base64, format } },
+          ],
         },
       ],
     })
 
-    return parseAudioAnalysis(text)
+    const first = await callOpenAiChatCompletionsAudio(
+      request(AUDIO_ANALYSIS_USER_PROMPT),
+    )
+    try {
+      return parseAudioAnalysis(first)
+    } catch {
+      // The model answered the clip in prose instead of emitting JSON, and a
+      // failed audio row is terminal (never reclaimed), so re-ask once with a
+      // blunter instruction before giving up on this window.
+      const second = await callOpenAiChatCompletionsAudio(
+        request(AUDIO_ANALYSIS_RETRY_PROMPT),
+      )
+      return parseAudioAnalysis(second)
+    }
   },
 }

@@ -409,10 +409,14 @@ describe("openAiRetentionWindowMediaAnalyzer.analyzeAudio", () => {
     const body = JSON.parse(fetchMock.mock.calls[0][1].body)
     expect(body.modalities).toEqual(["text"])
     expect(body.response_format).toBeUndefined()
+    // The audio is accompanied by a user-turn text part that re-anchors the
+    // task next to the clip (so the model analyses it rather than replying to
+    // it), then the audio itself.
     expect(body.messages).toContainEqual(
       expect.objectContaining({
         role: "user",
         content: [
+          { type: "text", text: expect.stringContaining("JSON") },
           { type: "input_audio", input_audio: { data: "AAAA", format: "mp3" } },
         ],
       }),
@@ -427,17 +431,110 @@ describe("openAiRetentionWindowMediaAnalyzer.analyzeAudio", () => {
     })
   })
 
-  it("throws when the model's JSON doesn't match the expected shape", async () => {
+  it("digs the JSON object out of a chatty response that wraps it in prose", async () => {
     process.env.OPENAI_API_KEY = "test-key"
+    const prose =
+      "Thank you for sharing these details. Here is the analysis:\n\n" +
+      JSON.stringify({
+        music: false,
+        music_description: null,
+        speakers: 1,
+        tone: "enthusiastic and predictive",
+        energy: "high",
+        notable_events: [],
+      }) +
+      "\n\nLet me know if you'd like to dive deeper."
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
         new Response(
+          JSON.stringify({ choices: [{ message: { content: prose } }] }),
+          { status: 200 },
+        ),
+      ),
+    )
+
+    const result = await openAiRetentionWindowMediaAnalyzer.analyzeAudio({
+      base64: "AAAA",
+      format: "mp3",
+    })
+
+    expect(result).toEqual({
+      music: false,
+      music_description: null,
+      speakers: 1,
+      tone: "enthusiastic and predictive",
+      energy: "high",
+      notable_events: [],
+    })
+  })
+
+  it("re-asks once when the first response has no JSON at all, then parses the retry", async () => {
+    process.env.OPENAI_API_KEY = "test-key"
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
           JSON.stringify({
-            choices: [{ message: { content: JSON.stringify({ music: true }) } }],
+            choices: [
+              {
+                message: {
+                  content:
+                    "It sounds like you're contemplating your crypto portfolio during a market lull.",
+                },
+              },
+            ],
           }),
           { status: 200 },
         ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    music: false,
+                    music_description: null,
+                    speakers: 1,
+                    tone: "calm",
+                    energy: "moderate",
+                    notable_events: [],
+                  }),
+                },
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      )
+    vi.stubGlobal("fetch", fetchMock)
+
+    const result = await openAiRetentionWindowMediaAnalyzer.analyzeAudio({
+      base64: "AAAA",
+      format: "mp3",
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(result.tone).toBe("calm")
+  })
+
+  it("throws when the model's JSON doesn't match the expected shape", async () => {
+    process.env.OPENAI_API_KEY = "test-key"
+    // A fresh Response per call: the retry path re-reads the body, and a
+    // wrong-shape response (valid JSON, missing keys) is retried once before
+    // giving up, so both attempts need their own consumable body.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              choices: [{ message: { content: JSON.stringify({ music: true }) } }],
+            }),
+            { status: 200 },
+          ),
       ),
     )
 
