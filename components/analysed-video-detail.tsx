@@ -490,9 +490,11 @@ function GainList({
 function PackagingAlignmentSection({
   alignment,
   hasThumbnail,
+  hookQuote = null,
 }: {
   alignment: PackagingAlignment | null
   hasThumbnail: boolean
+  hookQuote?: string | null
 }) {
   if (!alignment) {
     return (
@@ -512,7 +514,10 @@ function PackagingAlignmentSection({
       </div>
 
       {alignment.components ? (
-        <PackagingComponentTabs components={alignment.components} />
+        <PackagingComponentTabs
+          components={alignment.components}
+          hookQuote={hookQuote}
+        />
       ) : (
         // Older alignments were stored before the per-component breakdown
         // existed, so fall back to the flat two-column layout for them.
@@ -535,6 +540,25 @@ function PackagingAlignmentSection({
   )
 }
 
+// The spoken opening line for the hook window, bracketed the same way as the
+// per-window ScriptSegmentTooltip, so the Hook packaging card can surface it
+// inline instead of leaving it behind a hover affordance.
+function hookOpeningQuote(
+  transcript: TranscriptCue[],
+  fromSeconds: number,
+  toSeconds: number,
+): string | null {
+  const text = transcriptForSegment(transcript, fromSeconds, toSeconds)
+  if (!text) return null
+
+  const { atStart, atEnd } = transcriptSegmentEdges(
+    transcript,
+    fromSeconds,
+    toSeconds,
+  )
+  return `“${atStart ? "" : "…"}${text}${atEnd ? "" : "…"}”`
+}
+
 const PACKAGING_COMPONENT_META: Record<
   PackagingComponentKey,
   { label: string; icon: ComponentType<{ className?: string }> }
@@ -552,8 +576,10 @@ const PACKAGING_COMPONENT_ORDER: PackagingComponentKey[] = [
 
 function PackagingComponentTabs({
   components,
+  hookQuote = null,
 }: {
   components: NonNullable<PackagingAlignment["components"]>
+  hookQuote?: string | null
 }) {
   return (
     <Tabs defaultValue="title" className="w-full">
@@ -574,6 +600,7 @@ function PackagingComponentTabs({
           <PackagingComponentCard
             label={PACKAGING_COMPONENT_META[key].label}
             feedback={components[key]}
+            quote={key === "hook" ? hookQuote : null}
           />
         </TabsContent>
       ))}
@@ -584,20 +611,36 @@ function PackagingComponentTabs({
 function PackagingComponentCard({
   label,
   feedback,
+  quote = null,
 }: {
   label: string
   feedback: PackagingComponentFeedback
+  // The spoken opening line, shown next to the badge on the Hook card so the
+  // reader can see the actual hook without hovering the retention list below.
+  quote?: string | null
 }) {
   return (
     <div className="flex w-full flex-col gap-4 rounded-xl border bg-card p-4">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span className="rounded-md border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-sm font-semibold text-purple-700 dark:text-purple-300">
-          {label}
-        </span>
-        {feedback.summary && (
-          <span className="text-sm text-muted-foreground">
-            {feedback.summary}
+      <div className="flex flex-col gap-1">
+        <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
+          <span className="rounded-md border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-sm font-semibold text-purple-700 dark:text-purple-300">
+            {label}
           </span>
+          {quote ? (
+            <span className="inline-flex min-w-0 items-start gap-1.5 text-sm italic text-muted-foreground">
+              <QuoteIcon className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+              <span>{quote}</span>
+            </span>
+          ) : (
+            feedback.summary && (
+              <span className="text-sm text-muted-foreground">
+                {feedback.summary}
+              </span>
+            )
+          )}
+        </div>
+        {quote && feedback.summary && (
+          <p className="text-sm text-muted-foreground">{feedback.summary}</p>
         )}
       </div>
 
@@ -749,6 +792,16 @@ export function AnalysedVideoDetail({
   }, [playbackWindow])
 
   const hookWindows = retentionWindows.filter((w) => w.kind === "hook")
+  // The opening hook line, surfaced next to the purple "Hook" badge in the
+  // packaging section above so it reads without hovering the retention list.
+  const firstHookWindow = hookWindows[0]
+  const hookQuote = firstHookWindow
+    ? hookOpeningQuote(
+        transcript,
+        firstHookWindow.fromSeconds,
+        firstHookWindow.toSeconds,
+      )
+    : null
   const drops = retentionWindows.filter((w) => w.kind === "drop_off")
   const gains = retentionWindows.filter((w) => w.kind === "gain")
   const pacingStretches = pacingAnalysis?.slowOrRepetitiveStretches ?? []
@@ -942,6 +995,7 @@ export function AnalysedVideoDetail({
               <PackagingAlignmentSection
                 alignment={packagingAlignment}
                 hasThumbnail={Boolean(video.thumbnailUrl)}
+                hookQuote={hookQuote}
               />
             </TabsContent>
 
