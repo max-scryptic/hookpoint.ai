@@ -240,12 +240,14 @@ describe("replaceRetentionWindowEvents", () => {
         timestampSeconds: 160,
         narrative: "A hard cut coincides with the drop.",
         primaryEvidence: "editing",
+        confidence: 0.8,
       },
       {
         eventType: "topic_shift",
         timestampSeconds: 168,
         narrative: "The speaker changes topic right after.",
         primaryEvidence: "transcript",
+        confidence: 0.4,
       },
     ]
 
@@ -259,6 +261,7 @@ describe("replaceRetentionWindowEvents", () => {
         event_type: "scene_cut",
         timestamp_seconds: 160,
         primary_evidence: "editing",
+        confidence: 0.8,
       }),
       expect.objectContaining({
         retention_window_id: "rw-1",
@@ -266,6 +269,7 @@ describe("replaceRetentionWindowEvents", () => {
         event_type: "topic_shift",
         timestamp_seconds: 168,
         primary_evidence: "transcript",
+        confidence: 0.4,
       }),
     ])
   })
@@ -290,6 +294,7 @@ describe("getRetentionWindowEvents", () => {
         timestamp_seconds: 160,
         narrative: "A hard cut coincides with the drop.",
         primary_evidence: "editing",
+        confidence: 0.75,
       },
     ])
 
@@ -304,6 +309,7 @@ describe("getRetentionWindowEvents", () => {
         timestampSeconds: 160,
         narrative: "A hard cut coincides with the drop.",
         primaryEvidence: "editing",
+        confidence: 0.75,
       },
     ])
   })
