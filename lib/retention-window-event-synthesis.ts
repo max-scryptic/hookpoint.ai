@@ -140,6 +140,14 @@ export function dedupeAdjacentVisualFrames(
   return kept
 }
 
+// The synthesized events plus the cost of the LLM call that produced them, so
+// the orchestrator can persist per-window spend without the synthesizer
+// needing a DB handle — mirrors AnalyzeSnapshotsResult on the analysis side.
+export interface SynthesizeResult {
+  events: SynthesizedEvent[]
+  cost: LlmCallCost
+}
+
 // Split out so tests can inject a fake synthesizer instead of hitting
 // OpenAI, the same way RetentionWindowMediaAnalyzer lets analysis tests do.
 export interface RetentionWindowEventSynthesizer {

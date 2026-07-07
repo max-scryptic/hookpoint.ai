@@ -7,6 +7,7 @@ import {
   type RetentionWindowEventSynthesizer,
   type WindowEvidence,
 } from "@/lib/retention-window-event-synthesis"
+import { zeroCost } from "@/lib/llm-cost"
 import type { SnapshotAnalysis } from "@/lib/retention-window-media-analysis"
 
 const WINDOW_ROW = {
