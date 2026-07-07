@@ -10,6 +10,10 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import {
+  getRetentionWindowCostsForVideo,
+  type RetentionWindowCost,
+} from "@/lib/retention-window-costs"
 import { getRetentionWindowMediaStorageProvider } from "@/lib/retention-window-media-config"
 import {
   getRetentionWindowAudioForVideo,
@@ -46,6 +50,11 @@ export interface WindowEvidence {
   transcript: string | null
   snapshots: DeepAnalysisSnapshotView[]
   audio: DeepAnalysisAudioView | null
+  // What each of this window's LLM calls cost, and their sum. Empty/0 for a
+  // window analysed before cost tracking existed (or whose costing writes
+  // failed) — those simply render no cost figure.
+  costs: RetentionWindowCost[]
+  totalCostUsd: number
 }
 
 const KIND_ORDER: Record<PersistedRetentionWindow["kind"], number> = {
@@ -70,13 +79,14 @@ export async function getDeepAnalysisEvidence(
   userId: string,
   analysedVideoId: string,
 ): Promise<WindowEvidence[]> {
-  const [windows, events, transcripts, snapshots, audioClips] =
+  const [windows, events, transcripts, snapshots, audioClips, costs] =
     await Promise.all([
       getRetentionWindows(supabase, userId, analysedVideoId),
       getRetentionWindowEvents(supabase, userId, analysedVideoId),
       getRetentionWindowTranscripts(supabase, userId, analysedVideoId),
       getRetentionWindowSnapshotsForVideo(supabase, userId, analysedVideoId),
       getRetentionWindowAudioForVideo(supabase, userId, analysedVideoId),
+      getRetentionWindowCostsForVideo(supabase, userId, analysedVideoId),
     ])
 
   const eventsByWindow = new Map<string, RetentionWindowEvent[]>()
@@ -98,6 +108,13 @@ export async function getDeepAnalysisEvidence(
   }
 
   const audioByWindow = new Map(audioClips.map((a) => [a.retentionWindowId, a]))
+
+  const costsByWindow = new Map<string, RetentionWindowCost[]>()
+  for (const cost of costs) {
+    const group = costsByWindow.get(cost.retentionWindowId)
+    if (group) group.push(cost)
+    else costsByWindow.set(cost.retentionWindowId, [cost])
+  }
 
   const mediaStorage = getRetentionWindowMediaStorageProvider()
 
@@ -125,6 +142,7 @@ export async function getDeepAnalysisEvidence(
     const transcript = transcriptByWindow.get(window.id) ?? null
     const windowSnapshots = snapshotsByWindow.get(window.id) ?? []
     const audio = audioByWindow.get(window.id) ?? null
+    const windowCosts = costsByWindow.get(window.id) ?? []
 
     if (
       windowEvents.length === 0 &&
@@ -159,6 +177,8 @@ export async function getDeepAnalysisEvidence(
       transcript,
       snapshots: snapshotViews,
       audio: audioView,
+      costs: windowCosts,
+      totalCostUsd: windowCosts.reduce((sum, cost) => sum + cost.costUsd, 0),
     })
   }
 

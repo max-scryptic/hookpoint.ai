@@ -9,6 +9,7 @@ import {
   type RetentionWindowMediaAnalyzer,
   type SnapshotAnalysis,
 } from "@/lib/retention-window-media-analysis"
+import { zeroCost } from "@/lib/llm-cost"
 import type { StorageProvider } from "@/lib/storage"
 
 vi.mock("@/lib/media/video-extraction", () => ({
@@ -71,15 +72,18 @@ function fakeAnalyzer(
     analyzeSnapshots: vi.fn(async (images) => {
       const map = new Map<number, SnapshotAnalysis>()
       for (const image of images) map.set(image.chunkIndex, SNAPSHOT_RESULT)
-      return map
+      return { analyses: map, cost: zeroCost("fake-snapshot-model") }
     }),
     analyzeAudio: vi.fn(async () => ({
-      music: false,
-      music_description: null,
-      speakers: 1,
-      tone: "calm and conversational",
-      energy: "moderate" as const,
-      notable_events: [],
+      analysis: {
+        music: false,
+        music_description: null,
+        speakers: 1,
+        tone: "calm and conversational",
+        energy: "moderate" as const,
+        notable_events: [],
+      },
+      cost: zeroCost("fake-audio-model"),
     })),
     ...overrides,
   }
@@ -101,6 +105,7 @@ function makeFakeSupabase(tables: Record<string, Record<string, unknown>[]>) {
     id: string
     payload: Record<string, unknown>
   }[] = []
+  const upserts: { table: string; row: Record<string, unknown> }[] = []
 
   const supabase = {
     from(table: string) {
@@ -114,6 +119,10 @@ function makeFakeSupabase(tables: Record<string, Record<string, unknown>[]>) {
         update: (payload: Record<string, unknown>) => {
           builder._payload = payload
           return builder
+        },
+        upsert: (row: Record<string, unknown>) => {
+          upserts.push({ table, row })
+          return Promise.resolve({ error: null })
         },
         eq: (column: string, value: string) => {
           if (column === "id") pendingId = value
@@ -146,7 +155,7 @@ function makeFakeSupabase(tables: Record<string, Record<string, unknown>[]>) {
     },
   } as unknown as SupabaseClient
 
-  return { supabase, updates }
+  return { supabase, updates, upserts }
 }
 
 function snapshotRow(overrides: Record<string, unknown> = {}) {
@@ -210,7 +219,7 @@ describe("analyzeRetentionWindowMedia", () => {
   })
 
   it("batches a window's chunks into one call, with each chunk's OCR text, and marks them ready", async () => {
-    const { supabase, updates } = makeFakeSupabase({
+    const { supabase, updates, upserts } = makeFakeSupabase({
       retention_window_snapshots: [
         snapshotRow({ id: "snap-1", chunk_index: 0, ocr_text: "SALE 50% OFF" }),
         snapshotRow({
@@ -255,6 +264,18 @@ describe("analyzeRetentionWindowMedia", () => {
         }),
       )
     }
+
+    // The one vision call's cost is recorded once for the whole window.
+    expect(upserts).toContainEqual(
+      expect.objectContaining({
+        table: "retention_window_costs",
+        row: expect.objectContaining({
+          retention_window_id: "rw-1",
+          step: "snapshot",
+          model: "fake-snapshot-model",
+        }),
+      }),
+    )
   })
 
   it("marks every chunk in a window failed when the vision call throws", async () => {
@@ -406,6 +427,7 @@ describe("openAiRetentionWindowMediaAnalyzer.analyzeAudio", () => {
       "https://api.openai.com/v1/chat/completions",
       expect.objectContaining({ method: "POST" }),
     )
+    expect(result.cost.model).toBe("gpt-audio-mini")
     const body = JSON.parse(fetchMock.mock.calls[0][1].body)
     expect(body.modalities).toEqual(["text"])
     expect(body.response_format).toBeUndefined()
@@ -421,7 +443,7 @@ describe("openAiRetentionWindowMediaAnalyzer.analyzeAudio", () => {
         ],
       }),
     )
-    expect(result).toEqual({
+    expect(result.analysis).toEqual({
       music: true,
       music_description: "Light background synth",
       speakers: 2,
@@ -459,7 +481,7 @@ describe("openAiRetentionWindowMediaAnalyzer.analyzeAudio", () => {
       format: "mp3",
     })
 
-    expect(result).toEqual({
+    expect(result.analysis).toEqual({
       music: false,
       music_description: null,
       speakers: 1,
@@ -517,7 +539,7 @@ describe("openAiRetentionWindowMediaAnalyzer.analyzeAudio", () => {
     })
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
-    expect(result.tone).toBe("calm")
+    expect(result.analysis.tone).toBe("calm")
   })
 
   it("throws when the model's JSON doesn't match the expected shape", async () => {

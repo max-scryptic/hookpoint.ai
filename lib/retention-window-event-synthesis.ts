@@ -18,6 +18,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { runWithConcurrency } from "@/lib/concurrency"
+import { responsesCallCost, type LlmCallCost } from "@/lib/llm-cost"
+import { recordRetentionWindowCost } from "@/lib/retention-window-costs"
 import {
   getEventSynthesisModel,
   getRetentionWindowAiCallConcurrency,
@@ -138,10 +140,18 @@ export function dedupeAdjacentVisualFrames(
   return kept
 }
 
+// The synthesized events plus the cost of the LLM call that produced them, so
+// the orchestrator can persist per-window spend without the synthesizer
+// needing a DB handle — mirrors AnalyzeSnapshotsResult on the analysis side.
+export interface SynthesizeResult {
+  events: SynthesizedEvent[]
+  cost: LlmCallCost
+}
+
 // Split out so tests can inject a fake synthesizer instead of hitting
 // OpenAI, the same way RetentionWindowMediaAnalyzer lets analysis tests do.
 export interface RetentionWindowEventSynthesizer {
-  synthesize(evidence: WindowEvidence): Promise<SynthesizedEvent[]>
+  synthesize(evidence: WindowEvidence): Promise<SynthesizeResult>
 }
 
 export interface RetentionWindowEventSynthesisDeps {
@@ -359,7 +369,7 @@ export async function synthesizeRetentionWindowEvents(
               : null,
         }
 
-        const events = await deps.synthesizer.synthesize(evidence)
+        const { events, cost } = await deps.synthesizer.synthesize(evidence)
 
         await replaceRetentionWindowEvents(
           admin,
@@ -372,6 +382,15 @@ export async function synthesizeRetentionWindowEvents(
           status: "ready",
           model,
         })
+        await recordRetentionWindowCost(admin, {
+          userId,
+          analysedVideoId,
+          retentionWindowId: job.retentionWindowId,
+          step: "event_synthesis",
+          cost,
+        }).catch((error) =>
+          console.error("Failed to record event synthesis cost", error),
+        )
       } catch (error) {
         console.error("Failed to synthesize retention window events", error)
         await updateRetentionWindowEventSynthesisStatus(admin, userId, job.id, {
@@ -449,8 +468,9 @@ const EVENT_SYNTHESIS_INSTRUCTIONS = [
 export const openAiRetentionWindowEventSynthesizer: RetentionWindowEventSynthesizer =
   {
     async synthesize(evidence) {
-      const text = await callOpenAiResponses({
-        model: getEventSynthesisModel(),
+      const model = getEventSynthesisModel()
+      const { text, usage } = await callOpenAiResponses({
+        model,
         max_output_tokens: 2000,
         input: [
           {
@@ -482,12 +502,15 @@ export const openAiRetentionWindowEventSynthesizer: RetentionWindowEventSynthesi
         }>
       }
 
-      return parsed.events.map((event) => ({
-        eventType: event.event_type,
-        timestampSeconds: event.timestamp_seconds,
-        narrative: event.narrative,
-        primaryEvidence: event.primary_evidence,
-        confidence: Math.min(1, Math.max(0, event.confidence)),
-      }))
+      return {
+        events: parsed.events.map((event) => ({
+          eventType: event.event_type,
+          timestampSeconds: event.timestamp_seconds,
+          narrative: event.narrative,
+          primaryEvidence: event.primary_evidence,
+          confidence: Math.min(1, Math.max(0, event.confidence)),
+        })),
+        cost: responsesCallCost(model, usage),
+      }
     },
   }

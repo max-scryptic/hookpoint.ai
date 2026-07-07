@@ -7,6 +7,7 @@ import {
   type RetentionWindowEventSynthesizer,
   type WindowEvidence,
 } from "@/lib/retention-window-event-synthesis"
+import { zeroCost } from "@/lib/llm-cost"
 import type { SnapshotAnalysis } from "@/lib/retention-window-media-analysis"
 
 const WINDOW_ROW = {
@@ -70,6 +71,7 @@ function makeFakeSupabase(tables: Record<string, Record<string, unknown>[]>) {
     []
   const inserts: { table: string; rows: Record<string, unknown>[] }[] = []
   const deletes: { table: string }[] = []
+  const upserts: { table: string; row: Record<string, unknown> }[] = []
 
   const supabase = {
     from(table: string) {
@@ -86,6 +88,10 @@ function makeFakeSupabase(tables: Record<string, Record<string, unknown>[]>) {
         },
         insert: (rows: Record<string, unknown>[]) => {
           inserts.push({ table, rows })
+          return Promise.resolve({ error: null })
+        },
+        upsert: (row: Record<string, unknown>) => {
+          upserts.push({ table, row })
           return Promise.resolve({ error: null })
         },
         eq: (column: string, value: string) => {
@@ -124,13 +130,18 @@ function makeFakeSupabase(tables: Record<string, Record<string, unknown>[]>) {
     },
   } as unknown as SupabaseClient
 
-  return { supabase, updates, inserts, deletes }
+  return { supabase, updates, inserts, deletes, upserts }
 }
 
 function fakeSynthesizer(): RetentionWindowEventSynthesizer & {
   synthesize: ReturnType<typeof vi.fn>
 } {
-  return { synthesize: vi.fn(async () => []) }
+  return {
+    synthesize: vi.fn(async () => ({
+      events: [],
+      cost: zeroCost("fake-synth-model"),
+    })),
+  }
 }
 
 function visualFrame(
@@ -303,7 +314,7 @@ describe("synthesizeRetentionWindowEvents", () => {
   })
 
   it("synthesizes events once every prerequisite has settled, and marks the job ready", async () => {
-    const { supabase, updates, inserts, deletes } = makeFakeSupabase({
+    const { supabase, updates, inserts, deletes, upserts } = makeFakeSupabase({
       retention_window_event_synthesis: [
         { id: "job-1", retention_window_id: "rw-1", status: "pending", error: null },
       ],
@@ -335,15 +346,18 @@ describe("synthesizeRetentionWindowEvents", () => {
       ],
     })
     const synthesizer = fakeSynthesizer()
-    synthesizer.synthesize.mockResolvedValueOnce([
-      {
-        eventType: "scene_cut",
-        timestampSeconds: 154,
-        narrative: "A hard cut lands right at the drop.",
-        primaryEvidence: "editing",
-        confidence: 0.82,
-      },
-    ])
+    synthesizer.synthesize.mockResolvedValueOnce({
+      events: [
+        {
+          eventType: "scene_cut",
+          timestampSeconds: 154,
+          narrative: "A hard cut lands right at the drop.",
+          primaryEvidence: "editing",
+          confidence: 0.82,
+        },
+      ],
+      cost: zeroCost("fake-synth-model"),
+    })
 
     await synthesizeRetentionWindowEvents(supabase, "user-1", "av-1", {
       synthesizer,
@@ -380,6 +394,15 @@ describe("synthesizeRetentionWindowEvents", () => {
         table: "retention_window_event_synthesis",
         id: "job-1",
         payload: expect.objectContaining({ status: "ready" }),
+      }),
+    )
+    expect(upserts).toContainEqual(
+      expect.objectContaining({
+        table: "retention_window_costs",
+        row: expect.objectContaining({
+          retention_window_id: "rw-1",
+          step: "event_synthesis",
+        }),
       }),
     )
   })
