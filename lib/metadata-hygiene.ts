@@ -143,7 +143,7 @@ export function computeMetadataHygiene(
           label: "Chapters",
           status: "info",
           detail:
-            "No chapters detected. Adding timestamped chapters can improve navigation and retention.",
+            "No chapters detected. Adding chapters can improve navigation and retention.",
         },
   )
 
