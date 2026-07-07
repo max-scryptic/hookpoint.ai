@@ -26,7 +26,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { runWithConcurrency } from "@/lib/concurrency"
+import {
+  addLlmCallCost,
+  chatCompletionsCallCost,
+  responsesCallCost,
+  type ChatCompletionsUsage,
+  type LlmCallCost,
+  type ResponsesUsage,
+} from "@/lib/llm-cost"
 import { measureAudioClipStats } from "@/lib/media/video-extraction"
+import { recordRetentionWindowCost } from "@/lib/retention-window-costs"
 import {
   claimRetentionWindowAudioPendingAnalysis,
   claimRetentionWindowSnapshotsPendingAnalysis,
@@ -101,6 +110,21 @@ export interface AudioAnalysis extends AudioAnalysisModelOutput {
 // model call instead of hitting OpenAI, the same way
 // RetentionWindowMediaExtractionDeps lets extraction tests inject a fake
 // ffmpeg extractor.
+// Each analyzer method returns its structured result alongside the cost of the
+// LLM call that produced it, so the orchestrator can persist per-window spend
+// without the analyzer needing a DB handle. cost carries the model + token
+// counts even when its dollar figure is $0 (an unpriced model or a response
+// that omitted its usage block).
+export interface AnalyzeSnapshotsResult {
+  analyses: Map<number, SnapshotAnalysis>
+  cost: LlmCallCost
+}
+
+export interface AnalyzeAudioResult {
+  analysis: AudioAnalysisModelOutput
+  cost: LlmCallCost
+}
+
 export interface RetentionWindowMediaAnalyzer {
   // One call per window: every chunk's signed image URL in (plus its
   // deterministic OCR text, given as ground truth rather than asked of the
@@ -108,11 +132,11 @@ export interface RetentionWindowMediaAnalyzer {
   // return an entry for every chunkIndex passed in.
   analyzeSnapshots(
     images: { chunkIndex: number; imageUrl: string; ocrText: string | null }[],
-  ): Promise<Map<number, SnapshotAnalysis>>
+  ): Promise<AnalyzeSnapshotsResult>
   analyzeAudio(audio: {
     base64: string
     format: string
-  }): Promise<AudioAnalysisModelOutput>
+  }): Promise<AnalyzeAudioResult>
 }
 
 export interface RetentionWindowMediaAnalysisDeps {
@@ -198,7 +222,7 @@ export async function analyzeRetentionWindowMedia(
 
         await Promise.all(
           windowSnapshots.map((snapshot) => {
-            const analysis = results.get(snapshot.chunkIndex)
+            const analysis = results.analyses.get(snapshot.chunkIndex)
             if (!analysis) {
               throw new Error(
                 `No analysis returned for chunk ${snapshot.chunkIndex}`,
@@ -210,6 +234,19 @@ export async function analyzeRetentionWindowMedia(
               model: snapshotModel,
             })
           }),
+        )
+
+        // One vision call covers the whole window, so its cost is recorded
+        // once against the window, not per snapshot. Best-effort: never fail a
+        // successful analysis just because the costing write did.
+        await recordRetentionWindowCost(admin, {
+          userId,
+          analysedVideoId,
+          retentionWindowId: windowSnapshots[0].retentionWindowId,
+          step: "snapshot",
+          cost: results.cost,
+        }).catch((error) =>
+          console.error("Failed to record snapshot analysis cost", error),
         )
       } catch (error) {
         console.error("Failed to analyse retention window snapshots", error)
@@ -230,7 +267,7 @@ export async function analyzeRetentionWindowMedia(
   const audioModel = getAudioAnalysisModel()
   await runWithConcurrency(pendingAudio, concurrency, async (audio) => {
     try {
-      const analysis = await analyzeOneAudioClip(
+      const { analysis, cost } = await analyzeOneAudioClip(
         audio,
         transcriptsByWindow.get(audio.retentionWindowId) ?? null,
         deps,
@@ -240,6 +277,15 @@ export async function analyzeRetentionWindowMedia(
         analysis,
         model: audioModel,
       })
+      await recordRetentionWindowCost(admin, {
+        userId,
+        analysedVideoId,
+        retentionWindowId: audio.retentionWindowId,
+        step: "audio",
+        cost,
+      }).catch((error) =>
+        console.error("Failed to record audio analysis cost", error),
+      )
     } catch (error) {
       console.error("Failed to analyse retention window audio", error)
       await updateRetentionWindowAudioAnalysis(admin, userId, audio.id, {
@@ -274,7 +320,7 @@ async function analyzeOneAudioClip(
   audio: RetentionWindowAudioClip,
   transcript: string | null,
   deps: RetentionWindowMediaAnalysisDeps,
-): Promise<AudioAnalysis> {
+): Promise<{ analysis: AudioAnalysis; cost: LlmCallCost }> {
   const url = await deps.mediaStorage.createSignedReadUrl(
     audio.storagePath as string,
     getAnalysisMediaReadUrlExpirySeconds(),
@@ -287,7 +333,7 @@ async function analyzeOneAudioClip(
   }
   const bytes = Buffer.from(await response.arrayBuffer())
 
-  const [modelOutput, stats] = await Promise.all([
+  const [modelResult, stats] = await Promise.all([
     deps.analyzer.analyzeAudio({
       base64: bytes.toString("base64"),
       // Matches buildRetentionAudioObjectPath's "audio.mp3" extraction
@@ -303,10 +349,17 @@ async function analyzeOneAudioClip(
   ])
 
   return {
-    ...modelOutput,
-    speech_rate: computeSpeechRate(transcript, audio.fromSeconds, audio.toSeconds),
-    average_volume: stats.averageVolumeDb,
-    silence: stats.silenceRatio,
+    analysis: {
+      ...modelResult.analysis,
+      speech_rate: computeSpeechRate(
+        transcript,
+        audio.fromSeconds,
+        audio.toSeconds,
+      ),
+      average_volume: stats.averageVolumeDb,
+      silence: stats.silenceRatio,
+    },
+    cost: modelResult.cost,
   }
 }
 
@@ -422,10 +475,11 @@ function extractOutputText(response: {
 
 // Exported for reuse by lib/retention-window-event-synthesis.ts, which needs
 // the same OpenAI Responses wrapper for its own (text-only) structured-output
-// call rather than duplicating it.
+// call rather than duplicating it. Returns the raw `usage` block alongside the
+// text so the caller can cost the call (see lib/llm-cost.ts).
 export async function callOpenAiResponses(
   body: Record<string, unknown>,
-): Promise<string> {
+): Promise<{ text: string; usage: ResponsesUsage | null }> {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) throw new Error("OPENAI_API_KEY is not configured")
 
@@ -448,10 +502,11 @@ export async function callOpenAiResponses(
 
   const json = (await response.json()) as {
     output?: Array<{ content?: Array<{ type?: string; text?: string }> }>
+    usage?: ResponsesUsage
   }
   const text = extractOutputText(json)
   if (!text) throw new Error("OpenAI returned no analysis text")
-  return text
+  return { text, usage: json.usage ?? null }
 }
 
 // Audio input isn't accepted by the Responses API at all (only
@@ -464,7 +519,7 @@ export async function callOpenAiResponses(
 // re-checks the shape of whatever comes back instead of trusting a schema.
 async function callOpenAiChatCompletionsAudio(
   body: Record<string, unknown>,
-): Promise<string> {
+): Promise<{ text: string; usage: ChatCompletionsUsage | null }> {
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) throw new Error("OPENAI_API_KEY is not configured")
 
@@ -487,10 +542,11 @@ async function callOpenAiChatCompletionsAudio(
 
   const json = (await response.json()) as {
     choices?: Array<{ message?: { content?: string | null } }>
+    usage?: ChatCompletionsUsage
   }
   const text = json.choices?.[0]?.message?.content
   if (!text) throw new Error("OpenAI returned no analysis text")
-  return text
+  return { text, usage: json.usage ?? null }
 }
 
 // Pulls the first balanced {...} object out of a larger string, respecting
@@ -564,8 +620,9 @@ function parseAudioAnalysis(text: string): AudioAnalysisModelOutput {
 
 export const openAiRetentionWindowMediaAnalyzer: RetentionWindowMediaAnalyzer = {
   async analyzeSnapshots(images) {
-    const text = await callOpenAiResponses({
-      model: getSnapshotAnalysisModel(),
+    const model = getSnapshotAnalysisModel()
+    const { text, usage } = await callOpenAiResponses({
+      model,
       reasoning: { effort: "low" },
       max_output_tokens: Math.min(16_000, Math.max(1_000, images.length * 300)),
       input: [
@@ -606,14 +663,21 @@ export const openAiRetentionWindowMediaAnalyzer: RetentionWindowMediaAnalyzer = 
       chunks: Array<{ chunkIndex: number } & SnapshotAnalysis>
     }
 
-    return new Map(
-      parsed.chunks.map(({ chunkIndex, ...analysis }) => [chunkIndex, analysis]),
-    )
+    return {
+      analyses: new Map(
+        parsed.chunks.map(({ chunkIndex, ...analysis }) => [
+          chunkIndex,
+          analysis,
+        ]),
+      ),
+      cost: responsesCallCost(model, usage),
+    }
   },
 
   async analyzeAudio({ base64, format }) {
+    const model = getAudioAnalysisModel()
     const request = (userPrompt: string) => ({
-      model: getAudioAnalysisModel(),
+      model,
       modalities: ["text"],
       messages: [
         { role: "developer", content: AUDIO_ANALYSIS_INSTRUCTIONS },
@@ -630,16 +694,24 @@ export const openAiRetentionWindowMediaAnalyzer: RetentionWindowMediaAnalyzer = 
     const first = await callOpenAiChatCompletionsAudio(
       request(AUDIO_ANALYSIS_USER_PROMPT),
     )
+    const firstCost = chatCompletionsCallCost(model, first.usage)
     try {
-      return parseAudioAnalysis(first)
+      return { analysis: parseAudioAnalysis(first.text), cost: firstCost }
     } catch {
       // The model answered the clip in prose instead of emitting JSON, and a
       // failed audio row is terminal (never reclaimed), so re-ask once with a
-      // blunter instruction before giving up on this window.
+      // blunter instruction before giving up on this window. The first attempt
+      // was still billed, so its cost folds into the retry's.
       const second = await callOpenAiChatCompletionsAudio(
         request(AUDIO_ANALYSIS_RETRY_PROMPT),
       )
-      return parseAudioAnalysis(second)
+      return {
+        analysis: parseAudioAnalysis(second.text),
+        cost: addLlmCallCost(
+          firstCost,
+          chatCompletionsCallCost(model, second.usage),
+        ),
+      }
     }
   },
 }

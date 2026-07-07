@@ -1,5 +1,6 @@
 import {
   AudioLinesIcon,
+  CoinsIcon,
   FileTextIcon,
   GaugeIcon,
   ImageIcon,
@@ -50,6 +51,22 @@ function formatLabel(value: string): string {
 
 function formatBoolean(value: boolean): string {
   return value ? "Yes" : "No"
+}
+
+// Deep-analysis costs are small (fractions of a cent to a few cents), so a
+// fixed 4 decimal places keeps sub-cent figures legible rather than rounding
+// them to "$0.00". Anything smaller than the smallest representable figure but
+// still non-zero is shown as a floor rather than "$0".
+function formatUsd(value: number): string {
+  if (value <= 0) return "$0"
+  if (value < 0.0001) return "<$0.0001"
+  return `$${value.toFixed(4)}`
+}
+
+const COST_STEP_LABELS: Record<string, string> = {
+  snapshot: "Snapshots (vision)",
+  audio: "Audio",
+  event_synthesis: "Event synthesis",
 }
 
 const KIND_LABELS: Record<WindowEvidence["window"]["kind"], string> = {
@@ -111,6 +128,7 @@ function WindowEvidenceCard({ item }: { item: WindowEvidence }) {
           {item.snapshots.length} snapshot{item.snapshots.length === 1 ? "" : "s"}
           {item.audio ? " · audio" : ""}
           {item.transcript ? " · transcript" : ""}
+          {item.costs.length > 0 ? ` · ${formatUsd(item.totalCostUsd)}` : ""}
         </span>
       </CollapsibleTrigger>
 
@@ -120,6 +138,7 @@ function WindowEvidenceCard({ item }: { item: WindowEvidence }) {
         <TranscriptSection transcript={item.transcript} />
         <SnapshotsSection snapshots={item.snapshots} />
         <AudioSection audio={item.audio} />
+        <CostSection costs={item.costs} totalCostUsd={item.totalCostUsd} />
       </CollapsibleContent>
     </Collapsible>
   )
@@ -483,6 +502,80 @@ function AudioSection({ audio }: { audio: WindowEvidence["audio"] }) {
           </p>
         )
       )}
+    </div>
+  )
+}
+
+function CostSection({
+  costs,
+  totalCostUsd,
+}: {
+  costs: WindowEvidence["costs"]
+  totalCostUsd: number
+}) {
+  if (costs.length === 0) {
+    return (
+      <div className="flex flex-col gap-2">
+        <SubsectionHeader
+          icon={<CoinsIcon className="size-3.5 text-muted-foreground" />}
+          label="Cost"
+        />
+        <p className="text-sm text-muted-foreground">
+          No cost has been recorded for this window yet.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <SubsectionHeader
+        icon={<CoinsIcon className="size-3.5 text-muted-foreground" />}
+        label="Cost"
+      />
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Step</TableHead>
+            <TableHead>Model</TableHead>
+            <TableHead className="text-right">Input tokens</TableHead>
+            <TableHead className="text-right">Output tokens</TableHead>
+            <TableHead className="text-right">Cost</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {costs.map((cost) => (
+            <TableRow key={cost.step}>
+              <TableCell>{COST_STEP_LABELS[cost.step] ?? formatLabel(cost.step)}</TableCell>
+              <TableCell className="font-mono text-xs text-muted-foreground">
+                {cost.model}
+              </TableCell>
+              <TableCell className="text-right font-mono text-xs tabular-nums">
+                {cost.inputTokens.toLocaleString()}
+              </TableCell>
+              <TableCell className="text-right font-mono text-xs tabular-nums">
+                {cost.outputTokens.toLocaleString()}
+              </TableCell>
+              <TableCell className="text-right font-mono text-xs tabular-nums">
+                {formatUsd(cost.costUsd)}
+              </TableCell>
+            </TableRow>
+          ))}
+          <TableRow>
+            <TableCell className="font-medium">Total</TableCell>
+            <TableCell />
+            <TableCell />
+            <TableCell />
+            <TableCell className="text-right font-mono text-xs font-medium tabular-nums">
+              {formatUsd(totalCostUsd)}
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+      <p className="text-xs text-muted-foreground">
+        Estimated from token usage and per-model rates; actual billing may
+        differ.
+      </p>
     </div>
   )
 }

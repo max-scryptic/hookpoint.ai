@@ -30,6 +30,7 @@ const DEEP_ANALYSIS_TABLES = [
   "retention_window_scene_cue_scans",
   "retention_window_event_synthesis",
   "retention_window_events",
+  "retention_window_costs",
 ] as const
 
 export async function resetDeepAnalysis(
