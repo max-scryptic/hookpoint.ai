@@ -632,7 +632,7 @@ export function SourceFileUpload({
             </div>
             <DialogDescription>
               Your video has been uploaded and analysis has now begun. This runs
-              in the background, so you’re free to leave this page — we’ll email
+              in the background, so you’re free to leave this page. We’ll email
               you when your video has been fully analysed.
             </DialogDescription>
           </DialogHeader>
