@@ -190,12 +190,22 @@ export interface SynthesizedEvent {
   timestampSeconds: number
   narrative: string
   primaryEvidence: RetentionWindowEventPrimaryEvidence
+  // How strongly the supplied evidence supports both that this moment happened
+  // and that it plausibly moved retention, 0..1. Lets the product surface and
+  // rank the events worth raising instead of every plausible one — the same
+  // 0..1 confidence the script-only retention attribution already carries.
+  confidence: number
 }
 
-export interface RetentionWindowEvent extends SynthesizedEvent {
+// A persisted event. confidence is nullable rather than `number` because rows
+// written before the column existed read back as "unranked" (null); a re-run
+// of the window's synthesis repopulates it.
+export interface RetentionWindowEvent
+  extends Omit<SynthesizedEvent, "confidence"> {
   id: string
   retentionWindowId: string
   eventIndex: number
+  confidence: number | null
 }
 
 interface RetentionWindowEventRow {
@@ -206,10 +216,11 @@ interface RetentionWindowEventRow {
   timestamp_seconds: number
   narrative: string
   primary_evidence: RetentionWindowEventPrimaryEvidence
+  confidence: number | null
 }
 
 const EVENT_COLUMNS =
-  "id, retention_window_id, event_index, event_type, timestamp_seconds, narrative, primary_evidence"
+  "id, retention_window_id, event_index, event_type, timestamp_seconds, narrative, primary_evidence, confidence"
 
 function mapEventRow(row: RetentionWindowEventRow): RetentionWindowEvent {
   return {
@@ -220,6 +231,7 @@ function mapEventRow(row: RetentionWindowEventRow): RetentionWindowEvent {
     timestampSeconds: row.timestamp_seconds,
     narrative: row.narrative,
     primaryEvidence: row.primary_evidence,
+    confidence: row.confidence ?? null,
   }
 }
 
@@ -243,6 +255,7 @@ export async function replaceRetentionWindowEvents(
     timestamp_seconds: event.timestampSeconds,
     narrative: event.narrative,
     primary_evidence: event.primaryEvidence,
+    confidence: event.confidence,
   }))
 
   const { error: deleteError } = await supabase

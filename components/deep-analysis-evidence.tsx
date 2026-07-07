@@ -179,6 +179,7 @@ function EventsSection({ events }: { events: WindowEvidence["events"] }) {
             <TableHead>Time</TableHead>
             <TableHead>Type</TableHead>
             <TableHead>Evidence</TableHead>
+            <TableHead>Conf.</TableHead>
             <TableHead className="whitespace-normal">Narrative</TableHead>
           </TableRow>
         </TableHeader>
@@ -197,6 +198,11 @@ function EventsSection({ events }: { events: WindowEvidence["events"] }) {
               </TableCell>
               <TableCell className="text-xs text-muted-foreground">
                 {formatLabel(event.primaryEvidence)}
+              </TableCell>
+              <TableCell className="font-mono text-xs tabular-nums text-muted-foreground">
+                {event.confidence != null
+                  ? `${Math.round(event.confidence * 100)}%`
+                  : "—"}
               </TableCell>
               <TableCell className="max-w-md min-w-64 text-wrap whitespace-normal">
                 {event.narrative}

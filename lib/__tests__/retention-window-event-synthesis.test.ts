@@ -90,6 +90,11 @@ function makeFakeSupabase(tables: Record<string, Record<string, unknown>[]>) {
           if (column === "id") pendingId = value
           return builder
         },
+        // getRetentionAttribution reads a single analysed_videos row; there's
+        // no seeded retention_attribution here, so it resolves to null and the
+        // synthesizer just runs without a script-explanation dedup reference.
+        maybeSingle: () =>
+          Promise.resolve({ data: tables[table]?.[0] ?? null, error: null }),
         or: () => builder,
         order: () => builder,
         then: (resolve: (v: unknown) => unknown) => {
@@ -248,6 +253,7 @@ describe("synthesizeRetentionWindowEvents", () => {
         timestampSeconds: 154,
         narrative: "A hard cut lands right at the drop.",
         primaryEvidence: "editing",
+        confidence: 0.82,
       },
     ])
 
