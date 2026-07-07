@@ -169,11 +169,6 @@ function RetentionWindows({
                   {formatTimestamp(window.fromSeconds)} –{" "}
                   {formatTimestamp(window.toSeconds)}
                 </span>
-                {window.relativePerformance != null && (
-                  <Badge tone="warn">
-                    {Math.round(window.relativePerformance * 100)}% vs. similar
-                  </Badge>
-                )}
                 <ScriptSegmentTooltip
                   transcript={transcript}
                   fromSeconds={window.fromSeconds}
@@ -365,16 +360,6 @@ function DropList({
                   {formatTimestamp(drop.fromSeconds)} –{" "}
                   {formatTimestamp(drop.toSeconds)}
                 </span>
-                {drop.isAbnormallySteep && (
-                  <Badge>
-                    {(drop.steepness ?? 0).toFixed(1)}× steeper than normal
-                  </Badge>
-                )}
-                {drop.relativePerformance != null && (
-                  <Badge tone={drop.relativePerformance < 0.5 ? "warn" : "muted"}>
-                    {Math.round(drop.relativePerformance * 100)}% vs. similar
-                  </Badge>
-                )}
                 <ScriptSegmentTooltip
                   transcript={transcript}
                   fromSeconds={drop.fromSeconds}
@@ -435,24 +420,6 @@ function ScriptSegmentTooltip({
         {atEnd ? "" : "…"}”
       </TooltipContent>
     </Tooltip>
-  )
-}
-
-function Badge({
-  children,
-  tone = "muted",
-}: {
-  children: React.ReactNode
-  tone?: "muted" | "warn"
-}) {
-  const cls =
-    tone === "warn"
-      ? "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"
-      : "bg-muted text-muted-foreground"
-  return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>
-      {children}
-    </span>
   )
 }
 
