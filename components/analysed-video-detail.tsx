@@ -635,33 +635,42 @@ function PackagingComponentCard({
 }: {
   label: string
   feedback: PackagingComponentFeedback
-  // The spoken opening line, shown next to the badge on the Hook card so the
-  // reader can see the actual hook without hovering the retention list below.
+  // The spoken opening line for the Hook card. Rather than spending vertical
+  // space on it in the card body, it's revealed in a tooltip when hovering the
+  // speech-mark icon beside the badge.
   quote?: string | null
 }) {
   return (
     <div className="flex w-full flex-col gap-4 rounded-xl border bg-card p-4">
       <div className="flex flex-col gap-1">
-        <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <span className="rounded-md border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-sm font-semibold text-purple-700 dark:text-purple-300">
             {label}
           </span>
-          {quote ? (
-            <span className="inline-flex min-w-0 items-start gap-1.5 text-sm italic text-muted-foreground">
-              <QuoteIcon className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-              <span>{quote}</span>
+          {quote && (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    className="inline-flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none"
+                    aria-label="Show the spoken hook"
+                  />
+                }
+              >
+                <QuoteIcon className="size-3.5" />
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs text-sm italic">
+                {quote}
+              </TooltipContent>
+            </Tooltip>
+          )}
+          {feedback.summary && (
+            <span className="text-sm text-muted-foreground">
+              {feedback.summary}
             </span>
-          ) : (
-            feedback.summary && (
-              <span className="text-sm text-muted-foreground">
-                {feedback.summary}
-              </span>
-            )
           )}
         </div>
-        {quote && feedback.summary && (
-          <p className="text-sm text-muted-foreground">{feedback.summary}</p>
-        )}
       </div>
 
       {feedback.whatWorked.length === 0 &&
