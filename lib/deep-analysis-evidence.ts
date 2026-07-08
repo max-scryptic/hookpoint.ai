@@ -15,6 +15,7 @@ import {
   type RetentionWindowCost,
 } from "@/lib/retention-window-costs"
 import { getRetentionWindowMediaStorageProvider } from "@/lib/retention-window-media-config"
+import type { AudioAnalysis } from "@/lib/retention-window-media-analysis"
 import {
   getRetentionWindowAudioForVideo,
   getRetentionWindowSnapshotsForVideo,
@@ -30,6 +31,12 @@ import {
   getRetentionWindows,
   type PersistedRetentionWindow,
 } from "@/lib/retention-windows"
+import {
+  computeAverageSceneCueMetrics,
+  computeSceneCueMetrics,
+  getVideoSceneCues,
+  type SceneCueMetrics,
+} from "@/lib/video-scene-cues"
 
 // Long enough to cover a single page view without needing to be refreshed,
 // the same reasoning the source-file playback URL (60 minutes) already uses.
@@ -43,6 +50,18 @@ export interface DeepAnalysisAudioView extends RetentionWindowAudioClip {
   audioUrl: string | null
 }
 
+// This video's own averages across every scanned/analysed window, so each
+// window's editing and pacing can be read as a deviation from the creator's
+// norm rather than in absolute terms — the same baseline the event
+// synthesizer is handed (lib/retention-window-event-synthesis.ts). Fields are
+// null when nothing has been scanned/measured to average yet.
+export interface DeepAnalysisBaseline {
+  cutsPerMinute: number | null
+  freezeCoverage: number | null
+  blackCoverage: number | null
+  speechRate: number | null
+}
+
 export interface WindowEvidence {
   window: PersistedRetentionWindow
   displayLabel: string
@@ -50,6 +69,13 @@ export interface WindowEvidence {
   transcript: string | null
   snapshots: DeepAnalysisSnapshotView[]
   audio: DeepAnalysisAudioView | null
+  // Deterministic cut/freeze/black metrics for this window's analysis range
+  // (lib/media/scene-detection.ts via video_scene_cues). Null when the window
+  // has no analysis range to scan over.
+  editing: SceneCueMetrics | null
+  // Shared video-wide baseline (identical on every window) so editing/pacing
+  // can be shown as a deviation from the creator's norm.
+  baseline: DeepAnalysisBaseline
   // What each of this window's LLM calls cost, and their sum. Empty/0 for a
   // window analysed before cost tracking existed (or whose costing writes
   // failed) — those simply render no cost figure.
@@ -79,7 +105,7 @@ export async function getDeepAnalysisEvidence(
   userId: string,
   analysedVideoId: string,
 ): Promise<WindowEvidence[]> {
-  const [windows, events, transcripts, snapshots, audioClips, costs] =
+  const [windows, events, transcripts, snapshots, audioClips, costs, cues] =
     await Promise.all([
       getRetentionWindows(supabase, userId, analysedVideoId),
       getRetentionWindowEvents(supabase, userId, analysedVideoId),
@@ -87,7 +113,35 @@ export async function getDeepAnalysisEvidence(
       getRetentionWindowSnapshotsForVideo(supabase, userId, analysedVideoId),
       getRetentionWindowAudioForVideo(supabase, userId, analysedVideoId),
       getRetentionWindowCostsForVideo(supabase, userId, analysedVideoId),
+      getVideoSceneCues(supabase, userId, analysedVideoId),
     ])
+
+  // The video-wide baseline, computed once and shared by every window — the
+  // same averaging the synthesizer uses: editing over each analysed window's
+  // own metrics, speech rate over whatever audio clips have analysed.
+  const analysisRanges = windows
+    .filter((w) => w.analysisFromSeconds != null && w.analysisToSeconds != null)
+    .map((w) => ({
+      fromSeconds: w.analysisFromSeconds as number,
+      toSeconds: w.analysisToSeconds as number,
+    }))
+  const editingBaseline = computeAverageSceneCueMetrics(cues, analysisRanges)
+  const speechRates = audioClips
+    .filter((a) => a.analysisStatus === "ready" && a.analysis != null)
+    .map((a) => (a.analysis as AudioAnalysis).speech_rate)
+    .filter((rate): rate is number => rate != null)
+  const speechRateBaseline =
+    speechRates.length > 0
+      ? Math.round(
+          speechRates.reduce((sum, rate) => sum + rate, 0) / speechRates.length,
+        )
+      : null
+  const baseline: DeepAnalysisBaseline = {
+    cutsPerMinute: editingBaseline?.cutsPerMinute ?? null,
+    freezeCoverage: editingBaseline?.freezeCoverage ?? null,
+    blackCoverage: editingBaseline?.blackCoverage ?? null,
+    speechRate: speechRateBaseline,
+  }
 
   const eventsByWindow = new Map<string, RetentionWindowEvent[]>()
   for (const event of events) {
@@ -170,6 +224,15 @@ export async function getDeepAnalysisEvidence(
         }
       : null
 
+    const editing =
+      window.analysisFromSeconds != null && window.analysisToSeconds != null
+        ? computeSceneCueMetrics(
+            cues,
+            window.analysisFromSeconds,
+            window.analysisToSeconds,
+          )
+        : null
+
     result.push({
       window,
       displayLabel: windowDisplayLabel(window),
@@ -177,6 +240,8 @@ export async function getDeepAnalysisEvidence(
       transcript,
       snapshots: snapshotViews,
       audio: audioView,
+      editing,
+      baseline,
       costs: windowCosts,
       totalCostUsd: windowCosts.reduce((sum, cost) => sum + cost.costUsd, 0),
     })

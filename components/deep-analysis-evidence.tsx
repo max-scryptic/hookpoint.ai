@@ -6,6 +6,7 @@ import {
   GaugeIcon,
   ImageIcon,
   LightbulbIcon,
+  ScissorsIcon,
   SparklesIcon,
 } from "lucide-react"
 
@@ -139,9 +140,10 @@ function WindowEvidenceCard({ item }: { item: WindowEvidence }) {
         <CardInsightDraft item={item} />
         <div className="flex flex-col divide-y rounded-lg border">
           <RetentionSection window={window} />
+          <EditingSection editing={item.editing} baseline={item.baseline} />
           <TranscriptSection transcript={item.transcript} />
           <SnapshotsSection snapshots={item.snapshots} />
-          <AudioSection audio={item.audio} />
+          <AudioSection audio={item.audio} baseline={item.baseline} />
           <CostSection costs={item.costs} totalCostUsd={item.totalCostUsd} />
         </div>
       </CollapsibleContent>
@@ -390,24 +392,32 @@ function dominantEvent(
 // attribution already surfaces.
 function takeawayFor(
   dominant: WindowEvidence["events"][number] | null,
+  editSignals: string[],
 ): string {
-  if (!dominant) {
-    return "No strong non-verbal driver isolated. The cause is likely in what is said, so the transcript insight already covers it."
+  // A non-verbal event leads when there is one.
+  if (dominant && dominant.primaryEvidence !== "transcript") {
+    switch (dominant.primaryEvidence) {
+      case "editing":
+        return "The edit, not the script, is where viewers disengage. Tighten or re-pace this stretch."
+      case "visual":
+        return "The frame holds too long or shifts abruptly here. Consider a b-roll insert or graphic to refresh it."
+      case "audio":
+        return "Energy or sound is what shifts here. Lift the delivery or trim dead air rather than rewriting the words."
+      case "combined":
+        return "Several signals converge. The edit and delivery reinforce this moment, not the words alone."
+      default:
+        return "Review this moment against the surrounding evidence."
+    }
   }
-  switch (dominant.primaryEvidence) {
-    case "editing":
-      return "The edit, not the script, is where viewers disengage. Tighten or re-pace this stretch."
-    case "visual":
-      return "The frame holds too long or shifts abruptly here. Consider a b-roll insert or graphic to refresh it."
-    case "audio":
-      return "Energy or sound is what shifts here. Lift the delivery or trim dead air rather than rewriting the words."
-    case "combined":
-      return "Several signals converge. The edit and delivery reinforce this moment, not the words alone."
-    case "transcript":
-      return "This moment is carried by what is said, so the transcript insight covers it. The combined evidence adds little here."
-    default:
-      return "Review this moment against the surrounding evidence."
+  // No non-verbal event, but the editing departs from this video's norm — the
+  // baseline is doing the work the events couldn't.
+  if (editSignals.length > 0) {
+    return "No single non-verbal event stands out, but the edit departs from your norm here (see the pacing signals). Check whether the cut rate or a freeze stalls viewers independently of the script."
   }
+  if (dominant) {
+    return "This moment is carried by what is said, so the transcript insight covers it. The combined evidence adds little here."
+  }
+  return "No strong non-verbal driver isolated. The cause is likely in what is said, so the transcript insight already covers it."
 }
 
 function severityLine(window: WindowEvidence["window"]): string {
@@ -457,6 +467,8 @@ function CardInsightDraft({ item }: { item: WindowEvidence }) {
 
   const audioAnalysis =
     audio?.analysisStatus === "ready" ? (audio.analysis as AudioAnalysis) : null
+
+  const editSignals = editingSignals(item.editing, item.baseline)
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-dashed bg-muted/30 p-3">
@@ -510,6 +522,9 @@ function CardInsightDraft({ item }: { item: WindowEvidence }) {
                 {count > 1 ? ` ×${count}` : ""}
               </InsightChip>
             ))}
+            {editSignals.map((signal) => (
+              <InsightChip key={signal}>{signal}</InsightChip>
+            ))}
             {visual && (
               <>
                 <InsightChip>
@@ -542,11 +557,14 @@ function CardInsightDraft({ item }: { item: WindowEvidence }) {
                 {audioAnalysis.music && <InsightChip>Music present</InsightChip>}
               </>
             )}
-            {events.length === 0 && !visual && !audioAnalysis && (
-              <span className="text-xs text-muted-foreground">
-                No non-transcript signals settled for this window yet.
-              </span>
-            )}
+            {events.length === 0 &&
+              !visual &&
+              !audioAnalysis &&
+              editSignals.length === 0 && (
+                <span className="text-xs text-muted-foreground">
+                  No non-transcript signals settled for this window yet.
+                </span>
+              )}
           </div>
         </div>
 
@@ -554,10 +572,144 @@ function CardInsightDraft({ item }: { item: WindowEvidence }) {
           <span className="text-xs text-muted-foreground">
             Non-verbal takeaway
           </span>
-          <span>{takeawayFor(dominant)}</span>
+          <span>{takeawayFor(dominant, editSignals)}</span>
         </div>
       </div>
     </div>
+  )
+}
+
+// --- Baseline comparison -----------------------------------------------------
+// Shared formatters + a field that renders a window metric against this video's
+// own average, with a plain-language deviation ("5.2× below norm"). Deviation
+// is stated neutrally: it reports how far the window sits from the creator's
+// norm, without asserting the deviation caused the retention change.
+
+const formatPerMinute = (value: number): string => `${value.toFixed(1)}/min`
+const formatCoverage = (value: number): string => `${(value * 100).toFixed(0)}%`
+const formatWpm = (value: number): string => `${Math.round(value)} wpm`
+
+function deviationSuffix(value: number, baseline: number): string {
+  if (baseline <= 0) return ""
+  const ratio = value / baseline
+  if (ratio >= 1.15) return ` · ${ratio.toFixed(1)}× above norm`
+  if (ratio <= 0.85) {
+    if (value <= 0) return " · none vs norm"
+    return ` · ${(1 / ratio).toFixed(1)}× below norm`
+  }
+  return " · near norm"
+}
+
+function BaselineField({
+  label,
+  value,
+  baseline,
+  format,
+}: {
+  label: string
+  value: number | null
+  baseline: number | null
+  format: (value: number) => string
+}) {
+  return (
+    <div className="flex flex-col">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="font-medium tabular-nums">
+        {value != null ? format(value) : "—"}
+        {value != null && baseline != null && (
+          <span className="ml-2 text-xs font-normal text-muted-foreground">
+            avg {format(baseline)}
+            {deviationSuffix(value, baseline)}
+          </span>
+        )}
+      </dd>
+    </div>
+  )
+}
+
+// Compact deviation chips for the card-insight draft: only the editing signals
+// that actually depart from this video's norm (or are notable on their own),
+// so an at-norm stretch adds no noise.
+function editingSignals(
+  editing: WindowEvidence["editing"],
+  baseline: WindowEvidence["baseline"],
+): string[] {
+  if (!editing) return []
+  const out: string[] = []
+
+  if (
+    editing.cutsPerMinute != null &&
+    baseline.cutsPerMinute != null &&
+    baseline.cutsPerMinute > 0
+  ) {
+    const ratio = editing.cutsPerMinute / baseline.cutsPerMinute
+    if (ratio >= 1.3) out.push(`Cuts ${ratio.toFixed(1)}× above norm`)
+    else if (ratio <= 0.7)
+      out.push(
+        editing.cutsPerMinute <= 0
+          ? "No cuts vs norm"
+          : `Cuts ${(1 / ratio).toFixed(1)}× below norm`,
+      )
+  }
+  if (editing.freezeCoverage > 0.05)
+    out.push(`${(editing.freezeCoverage * 100).toFixed(0)}% frozen`)
+  if (editing.blackCoverage > 0.05)
+    out.push(`${(editing.blackCoverage * 100).toFixed(0)}% black`)
+
+  return out
+}
+
+function EditingSection({
+  editing,
+  baseline,
+}: {
+  editing: WindowEvidence["editing"]
+  baseline: WindowEvidence["baseline"]
+}) {
+  if (!editing) {
+    return (
+      <AccordionSection
+        icon={<ScissorsIcon className="size-3.5 text-muted-foreground" />}
+        label="Editing & pacing"
+      >
+        <p className="text-sm text-muted-foreground">
+          No scene-cue scan is available for this window.
+        </p>
+      </AccordionSection>
+    )
+  }
+
+  return (
+    <AccordionSection
+      icon={<ScissorsIcon className="size-3.5 text-muted-foreground" />}
+      label="Editing & pacing"
+    >
+      <dl className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
+        <BaselineField
+          label="Cuts / min"
+          value={editing.cutsPerMinute}
+          baseline={baseline.cutsPerMinute}
+          format={formatPerMinute}
+        />
+        <Field label="Cut count" value={String(editing.cutCount)} />
+        <BaselineField
+          label="Freeze coverage"
+          value={editing.freezeCoverage}
+          baseline={baseline.freezeCoverage}
+          format={formatCoverage}
+        />
+        <BaselineField
+          label="Black coverage"
+          value={editing.blackCoverage}
+          baseline={baseline.blackCoverage}
+          format={formatCoverage}
+        />
+      </dl>
+      <p className="text-xs text-muted-foreground">
+        Cut/freeze/black metrics for this window, each shown against this
+        video&apos;s own average across every analysed window.
+      </p>
+    </AccordionSection>
   )
 }
 
@@ -757,7 +909,13 @@ function SnapshotsSection({
   )
 }
 
-function AudioSection({ audio }: { audio: WindowEvidence["audio"] }) {
+function AudioSection({
+  audio,
+  baseline,
+}: {
+  audio: WindowEvidence["audio"]
+  baseline: WindowEvidence["baseline"]
+}) {
   if (!audio) {
     return (
       <AccordionSection
@@ -796,9 +954,11 @@ function AudioSection({ audio }: { audio: WindowEvidence["audio"] }) {
           <Field label="Speakers" value={String(analysis.speakers)} />
           <Field label="Tone" value={analysis.tone} />
           <Field label="Energy" value={formatLabel(analysis.energy)} />
-          <Field
+          <BaselineField
             label="Speech rate"
-            value={analysis.speech_rate != null ? `${analysis.speech_rate} wpm` : "—"}
+            value={analysis.speech_rate}
+            baseline={baseline.speechRate}
+            format={formatWpm}
           />
           <Field
             label="Average volume"
