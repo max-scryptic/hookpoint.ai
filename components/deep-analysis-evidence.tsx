@@ -15,6 +15,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
+import { TryCallout } from "@/components/try-callout"
 import {
   Table,
   TableBody,
@@ -387,37 +388,76 @@ function dominantEvent(
   })[0]
 }
 
-// The non-verbal, editing/pacing/visual/audio-oriented recommendation the card
-// would carry — deliberately distinct from the script tip the transcript
-// attribution already surfaces.
+// The non-verbal takeaway the card would carry, split to read like the rest of
+// the retention cards: an evidence observation (what the combined signals show)
+// followed by an optional "Try:" tip (something concrete to change). Both are
+// deliberately distinct from the script tip the transcript attribution already
+// surfaces; the tip is null when the moment is carried by the words, so the
+// card doesn't invent a non-verbal fix that wouldn't move it.
+interface Takeaway {
+  observation: string
+  tip: string | null
+}
+
 function takeawayFor(
   dominant: WindowEvidence["events"][number] | null,
   editSignals: string[],
-): string {
+): Takeaway {
   // A non-verbal event leads when there is one.
   if (dominant && dominant.primaryEvidence !== "transcript") {
     switch (dominant.primaryEvidence) {
       case "editing":
-        return "The edit, not the script, is where viewers disengage. Tighten or re-pace this stretch."
+        return {
+          observation:
+            "The edit, not the script, is where viewers disengage at this moment.",
+          tip: "Tighten or re-pace this stretch so the cut rhythm keeps carrying attention through it.",
+        }
       case "visual":
-        return "The frame holds too long or shifts abruptly here. Consider a b-roll insert or graphic to refresh it."
+        return {
+          observation:
+            "The frame holds too long or shifts abruptly here, so the visual is doing the work.",
+          tip: "Drop in a b-roll insert or graphic to refresh the shot before viewers slip away.",
+        }
       case "audio":
-        return "Energy or sound is what shifts here. Lift the delivery or trim dead air rather than rewriting the words."
+        return {
+          observation:
+            "Energy or sound is what shifts here, not the words themselves.",
+          tip: "Lift the delivery or trim the dead air through this stretch rather than rewriting the script.",
+        }
       case "combined":
-        return "Several signals converge. The edit and delivery reinforce this moment, not the words alone."
+        return {
+          observation:
+            "Several signals converge — the edit and delivery reinforce this moment, not the words alone.",
+          tip: "Address the cut and the delivery together; reworking the script on its own is unlikely to move it.",
+        }
       default:
-        return "Review this moment against the surrounding evidence."
+        return {
+          observation: "This moment stands out against the surrounding evidence.",
+          tip: "Review the frames, audio and pacing above to see which one is carrying it.",
+        }
     }
   }
   // No non-verbal event, but the editing departs from this video's norm — the
   // baseline is doing the work the events couldn't.
   if (editSignals.length > 0) {
-    return "No single non-verbal event stands out, but the edit departs from your norm here (see the pacing signals). Check whether the cut rate or a freeze stalls viewers independently of the script."
+    return {
+      observation:
+        "No single non-verbal event stands out, but the edit departs from your norm here (see the pacing signals).",
+      tip: "Check whether the cut rate or a freeze is stalling viewers independently of the script, and bring it back toward your usual pace.",
+    }
   }
   if (dominant) {
-    return "This moment is carried by what is said, so the transcript insight covers it. The combined evidence adds little here."
+    return {
+      observation:
+        "This moment is carried by what is said, so the transcript insight already covers it. The combined evidence adds little beyond the script here.",
+      tip: null,
+    }
   }
-  return "No strong non-verbal driver isolated. The cause is likely in what is said, so the transcript insight already covers it."
+  return {
+    observation:
+      "No strong non-verbal driver isolated. The cause is likely in what is said, so the transcript insight already covers it.",
+    tip: null,
+  }
 }
 
 function severityLine(window: WindowEvidence["window"]): string {
@@ -568,11 +608,23 @@ function CardInsightDraft({ item }: { item: WindowEvidence }) {
           </div>
         </div>
 
-        <div className="flex flex-col gap-0.5">
+        <div className="flex flex-col gap-1">
           <span className="text-xs text-muted-foreground">
             Non-verbal takeaway
           </span>
-          <span>{takeawayFor(dominant, editSignals)}</span>
+          {(() => {
+            const takeaway = takeawayFor(dominant, editSignals)
+            return (
+              <>
+                <p className="text-sm">{takeaway.observation}</p>
+                {takeaway.tip && (
+                  <div className="mt-1">
+                    <TryCallout>{takeaway.tip}</TryCallout>
+                  </div>
+                )}
+              </>
+            )
+          })()}
         </div>
       </div>
     </div>
