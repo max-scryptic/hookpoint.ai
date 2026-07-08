@@ -409,8 +409,8 @@ function takeawayFor(
       case "editing":
         return {
           observation:
-            "The edit, not the script, is where viewers disengage at this moment.",
-          tip: "Tighten or re-pace this stretch so the cut rhythm keeps carrying attention through it.",
+            "The cut rhythm is where viewers start slipping at this moment.",
+          tip: "Tighten or re-pace this stretch so the cuts keep carrying attention through it.",
         }
       case "visual":
         return {
@@ -421,14 +421,14 @@ function takeawayFor(
       case "audio":
         return {
           observation:
-            "Energy or sound is what shifts here, not the words themselves.",
-          tip: "Lift the delivery or trim the dead air through this stretch rather than rewriting the script.",
+            "Energy and sound are what shift here.",
+          tip: "Lift the delivery or trim the dead air through this stretch to keep viewers with you.",
         }
       case "combined":
         return {
           observation:
-            "Several signals converge — the edit and delivery reinforce this moment, not the words alone.",
-          tip: "Address the cut and the delivery together; reworking the script on its own is unlikely to move it.",
+            "Several signals converge here, with the edit and delivery reinforcing each other at this moment.",
+          tip: "Address the cut and the delivery together, since either one on its own is unlikely to move it.",
         }
       default:
         return {
@@ -442,20 +442,20 @@ function takeawayFor(
   if (editSignals.length > 0) {
     return {
       observation:
-        "No single non-verbal event stands out, but the edit departs from your norm here (see the pacing signals).",
-      tip: "Check whether the cut rate or a freeze is stalling viewers independently of the script, and bring it back toward your usual pace.",
+        "No single event stands out, but the edit departs from your norm here (see the pacing signals).",
+      tip: "Check whether the cut rate or a freeze is stalling viewers here, and bring it back toward your usual pace.",
     }
   }
   if (dominant) {
     return {
       observation:
-        "This moment is carried by what is said, so the transcript insight already covers it. The combined evidence adds little beyond the script here.",
+        "Nothing in the edit, delivery or visuals stands out here; the drop tracks the content of the moment itself.",
       tip: null,
     }
   }
   return {
     observation:
-      "No strong non-verbal driver isolated. The cause is likely in what is said, so the transcript insight already covers it.",
+      "No strong non-verbal driver stands out here. The cause sits in the content of the moment itself.",
     tip: null,
   }
 }
