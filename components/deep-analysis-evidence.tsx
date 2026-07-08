@@ -1,5 +1,6 @@
 import {
   AudioLinesIcon,
+  ChevronDownIcon,
   CoinsIcon,
   FileTextIcon,
   GaugeIcon,
@@ -134,11 +135,13 @@ function WindowEvidenceCard({ item }: { item: WindowEvidence }) {
 
       <CollapsibleContent className="flex flex-col gap-5 border-t p-4">
         <EventsSection events={item.events} />
-        <RetentionSection window={window} />
-        <TranscriptSection transcript={item.transcript} />
-        <SnapshotsSection snapshots={item.snapshots} />
-        <AudioSection audio={item.audio} />
-        <CostSection costs={item.costs} totalCostUsd={item.totalCostUsd} />
+        <div className="flex flex-col divide-y rounded-lg border">
+          <RetentionSection window={window} />
+          <TranscriptSection transcript={item.transcript} />
+          <SnapshotsSection snapshots={item.snapshots} />
+          <AudioSection audio={item.audio} />
+          <CostSection costs={item.costs} totalCostUsd={item.totalCostUsd} />
+        </div>
       </CollapsibleContent>
     </Collapsible>
   )
@@ -158,6 +161,37 @@ function SubsectionHeader({
         {label}
       </h4>
     </div>
+  )
+}
+
+// A single collapsible subsection within the window card. The trigger reuses
+// the SubsectionHeader look (icon + uppercase label) and adds a chevron that
+// flips when the panel opens. All subsections below the synthesized events are
+// rendered through this so each block can be expanded on demand.
+function AccordionSection({
+  icon,
+  label,
+  defaultOpen = false,
+  children,
+}: {
+  icon: React.ReactNode
+  label: string
+  defaultOpen?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <Collapsible defaultOpen={defaultOpen} className="flex flex-col">
+      <CollapsibleTrigger className="group flex w-full items-center gap-2 p-3 text-left">
+        {icon}
+        <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          {label}
+        </h4>
+        <ChevronDownIcon className="ml-auto size-4 text-muted-foreground transition-transform duration-200 group-data-[panel-open]:rotate-180" />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="flex flex-col gap-2 px-3 pb-3">
+        {children}
+      </CollapsibleContent>
+    </Collapsible>
   )
 }
 
@@ -236,11 +270,10 @@ function EventsSection({ events }: { events: WindowEvidence["events"] }) {
 
 function RetentionSection({ window }: { window: WindowEvidence["window"] }) {
   return (
-    <div className="flex flex-col gap-2">
-      <SubsectionHeader
-        icon={<GaugeIcon className="size-3.5 text-muted-foreground" />}
-        label="Retention"
-      />
+    <AccordionSection
+      icon={<GaugeIcon className="size-3.5 text-muted-foreground" />}
+      label="Retention"
+    >
       <dl className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
         <Field label="Change" value={formatSignedPercent(window.delta)} />
         {window.startWatchRatio != null && (
@@ -281,7 +314,7 @@ function RetentionSection({ window }: { window: WindowEvidence["window"] }) {
           />
         )}
       </dl>
-    </div>
+    </AccordionSection>
   )
 }
 
@@ -296,11 +329,10 @@ function Field({ label, value }: { label: string; value: string }) {
 
 function TranscriptSection({ transcript }: { transcript: string | null }) {
   return (
-    <div className="flex flex-col gap-2">
-      <SubsectionHeader
-        icon={<FileTextIcon className="size-3.5 text-muted-foreground" />}
-        label="Transcript"
-      />
+    <AccordionSection
+      icon={<FileTextIcon className="size-3.5 text-muted-foreground" />}
+      label="Transcript"
+    >
       {transcript ? (
         <p className="rounded-lg bg-muted/40 p-3 text-sm whitespace-pre-wrap">
           …{transcript}…
@@ -310,7 +342,7 @@ function TranscriptSection({ transcript }: { transcript: string | null }) {
           No transcript is available for this window.
         </p>
       )}
-    </div>
+    </AccordionSection>
   )
 }
 
@@ -336,24 +368,22 @@ function SnapshotsSection({
 }) {
   if (snapshots.length === 0) {
     return (
-      <div className="flex flex-col gap-2">
-        <SubsectionHeader
-          icon={<ImageIcon className="size-3.5 text-muted-foreground" />}
-          label="Snapshots"
-        />
+      <AccordionSection
+        icon={<ImageIcon className="size-3.5 text-muted-foreground" />}
+        label="Snapshots"
+      >
         <p className="text-sm text-muted-foreground">
           No snapshots have been harvested for this window yet.
         </p>
-      </div>
+      </AccordionSection>
     )
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <SubsectionHeader
-        icon={<ImageIcon className="size-3.5 text-muted-foreground" />}
-        label={`Snapshots (${snapshots.length})`}
-      />
+    <AccordionSection
+      icon={<ImageIcon className="size-3.5 text-muted-foreground" />}
+      label={`Snapshots (${snapshots.length})`}
+    >
       <Table>
         <TableHeader>
           <TableRow>
@@ -430,22 +460,21 @@ function SnapshotsSection({
           })}
         </TableBody>
       </Table>
-    </div>
+    </AccordionSection>
   )
 }
 
 function AudioSection({ audio }: { audio: WindowEvidence["audio"] }) {
   if (!audio) {
     return (
-      <div className="flex flex-col gap-2">
-        <SubsectionHeader
-          icon={<AudioLinesIcon className="size-3.5 text-muted-foreground" />}
-          label="Audio"
-        />
+      <AccordionSection
+        icon={<AudioLinesIcon className="size-3.5 text-muted-foreground" />}
+        label="Audio"
+      >
         <p className="text-sm text-muted-foreground">
           No audio clip has been harvested for this window.
         </p>
-      </div>
+      </AccordionSection>
     )
   }
 
@@ -453,11 +482,10 @@ function AudioSection({ audio }: { audio: WindowEvidence["audio"] }) {
     audio.analysisStatus === "ready" ? (audio.analysis as AudioAnalysis) : null
 
   return (
-    <div className="flex flex-col gap-2">
-      <SubsectionHeader
-        icon={<AudioLinesIcon className="size-3.5 text-muted-foreground" />}
-        label="Audio"
-      />
+    <AccordionSection
+      icon={<AudioLinesIcon className="size-3.5 text-muted-foreground" />}
+      label="Audio"
+    >
       {audio.audioUrl ? (
         <audio controls preload="none" src={audio.audioUrl} className="h-9 w-full max-w-md" />
       ) : (
@@ -502,7 +530,7 @@ function AudioSection({ audio }: { audio: WindowEvidence["audio"] }) {
           </p>
         )
       )}
-    </div>
+    </AccordionSection>
   )
 }
 
@@ -515,24 +543,22 @@ function CostSection({
 }) {
   if (costs.length === 0) {
     return (
-      <div className="flex flex-col gap-2">
-        <SubsectionHeader
-          icon={<CoinsIcon className="size-3.5 text-muted-foreground" />}
-          label="Cost"
-        />
+      <AccordionSection
+        icon={<CoinsIcon className="size-3.5 text-muted-foreground" />}
+        label="Cost"
+      >
         <p className="text-sm text-muted-foreground">
           No cost has been recorded for this window yet.
         </p>
-      </div>
+      </AccordionSection>
     )
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <SubsectionHeader
-        icon={<CoinsIcon className="size-3.5 text-muted-foreground" />}
-        label="Cost"
-      />
+    <AccordionSection
+      icon={<CoinsIcon className="size-3.5 text-muted-foreground" />}
+      label="Cost"
+    >
       <Table>
         <TableHeader>
           <TableRow>
@@ -576,6 +602,6 @@ function CostSection({
         Estimated from token usage and per-model rates; actual billing may
         differ.
       </p>
-    </div>
+    </AccordionSection>
   )
 }
