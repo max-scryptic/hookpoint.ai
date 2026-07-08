@@ -5,6 +5,8 @@ import {
   FileTextIcon,
   GaugeIcon,
   ImageIcon,
+  LightbulbIcon,
+  ScissorsIcon,
   SparklesIcon,
 } from "lucide-react"
 
@@ -135,11 +137,13 @@ function WindowEvidenceCard({ item }: { item: WindowEvidence }) {
 
       <CollapsibleContent className="flex flex-col gap-5 border-t p-4">
         <EventsSection events={item.events} />
+        <CardInsightDraft item={item} />
         <div className="flex flex-col divide-y rounded-lg border">
           <RetentionSection window={window} />
+          <EditingSection editing={item.editing} baseline={item.baseline} />
           <TranscriptSection transcript={item.transcript} />
           <SnapshotsSection snapshots={item.snapshots} />
-          <AudioSection audio={item.audio} />
+          <AudioSection audio={item.audio} baseline={item.baseline} />
           <CostSection costs={item.costs} totalCostUsd={item.totalCostUsd} />
         </div>
       </CollapsibleContent>
@@ -265,6 +269,447 @@ function EventsSection({ events }: { events: WindowEvidence["events"] }) {
         </TableBody>
       </Table>
     </div>
+  )
+}
+
+// --- TEMPORARY: retention-card insight preview -------------------------------
+// A draft of the EXTRA, non-transcript insight this window's combined evidence
+// would eventually add to its retention card (drop-off / hook / gain), rendered
+// here underneath the events purely so the process can be tuned before any of
+// it is wired into the user-facing cards. Everything below is derived
+// deterministically from evidence already loaded for the window (the
+// synthesized events, the per-frame vision analysis, the audio analysis and the
+// retention metrics), so it adds no LLM call and can be removed wholesale once
+// the shape of the card insight is settled. It deliberately avoids the
+// transcript so it never restates the script-only attribution the card already
+// shows.
+
+type ReadySnapshot = WindowEvidence["snapshots"][number] & {
+  analysis: SnapshotAnalysis
+}
+
+function readySnapshots(
+  snapshots: WindowEvidence["snapshots"],
+): ReadySnapshot[] {
+  return snapshots
+    .filter(
+      (s): s is ReadySnapshot =>
+        s.analysisStatus === "ready" && s.analysis != null,
+    )
+    .slice()
+    .sort((a, b) => a.timestampSeconds - b.timestampSeconds)
+}
+
+// Two analysed frames share a visual state when every categorical judgment and
+// the deterministic OCR text match — the same collapse the synthesizer uses to
+// avoid re-reading an unchanged shot (isSameVisualState there). Replicated
+// locally so this preview stays self-contained and easy to delete.
+function sameVisualState(a: ReadySnapshot, b: ReadySnapshot): boolean {
+  return (
+    a.ocrText === b.ocrText &&
+    a.analysis.scene === b.analysis.scene &&
+    a.analysis.motion === b.analysis.motion &&
+    a.analysis.camera_movement === b.analysis.camera_movement &&
+    a.analysis.face_visible === b.analysis.face_visible &&
+    a.analysis.contains_text === b.analysis.contains_text &&
+    a.analysis.contains_code === b.analysis.contains_code &&
+    a.analysis.people_count === b.analysis.people_count
+  )
+}
+
+type TextPresence = "none" | "appears" | "leaves" | "throughout" | "mixed"
+
+interface VisualSummary {
+  distinctShots: number
+  longestStaticSeconds: number
+  textPresence: TextPresence
+}
+
+function summariseVisual(snaps: ReadySnapshot[]): VisualSummary | null {
+  if (snaps.length === 0) return null
+
+  let distinctShots = 1
+  let longestStatic = 0
+  let runStart = snaps[0]
+  for (let i = 1; i < snaps.length; i++) {
+    if (!sameVisualState(snaps[i - 1], snaps[i])) {
+      longestStatic = Math.max(
+        longestStatic,
+        snaps[i - 1].timestampSeconds - runStart.timestampSeconds,
+      )
+      distinctShots++
+      runStart = snaps[i]
+    }
+  }
+  longestStatic = Math.max(
+    longestStatic,
+    snaps[snaps.length - 1].timestampSeconds - runStart.timestampSeconds,
+  )
+
+  const anyText = snaps.some((s) => s.analysis.contains_text)
+  const firstText = snaps[0].analysis.contains_text
+  const lastText = snaps[snaps.length - 1].analysis.contains_text
+  const textPresence: TextPresence = !anyText
+    ? "none"
+    : firstText && lastText
+      ? "throughout"
+      : !firstText && lastText
+        ? "appears"
+        : firstText && !lastText
+          ? "leaves"
+          : "mixed"
+
+  return { distinctShots, longestStaticSeconds: longestStatic, textPresence }
+}
+
+const TEXT_PRESENCE_LABELS: Record<TextPresence, string> = {
+  none: "No on-screen text",
+  appears: "Graphic/text appears",
+  leaves: "Graphic/text leaves",
+  throughout: "Text on-screen throughout",
+  mixed: "On-screen text changes",
+}
+
+// The single event whose evidence most explains the window, preferring higher
+// confidence and, on a tie, a non-verbal cause over a transcript one — this is
+// what the card's headline would lead with.
+function dominantEvent(
+  events: WindowEvidence["events"],
+): WindowEvidence["events"][number] | null {
+  if (events.length === 0) return null
+  return events.slice().sort((a, b) => {
+    const ca = a.confidence ?? 0
+    const cb = b.confidence ?? 0
+    if (cb !== ca) return cb - ca
+    const ta = a.primaryEvidence === "transcript" ? 1 : 0
+    const tb = b.primaryEvidence === "transcript" ? 1 : 0
+    return ta - tb
+  })[0]
+}
+
+// The non-verbal, editing/pacing/visual/audio-oriented recommendation the card
+// would carry — deliberately distinct from the script tip the transcript
+// attribution already surfaces.
+function takeawayFor(
+  dominant: WindowEvidence["events"][number] | null,
+  editSignals: string[],
+): string {
+  // A non-verbal event leads when there is one.
+  if (dominant && dominant.primaryEvidence !== "transcript") {
+    switch (dominant.primaryEvidence) {
+      case "editing":
+        return "The edit, not the script, is where viewers disengage. Tighten or re-pace this stretch."
+      case "visual":
+        return "The frame holds too long or shifts abruptly here. Consider a b-roll insert or graphic to refresh it."
+      case "audio":
+        return "Energy or sound is what shifts here. Lift the delivery or trim dead air rather than rewriting the words."
+      case "combined":
+        return "Several signals converge. The edit and delivery reinforce this moment, not the words alone."
+      default:
+        return "Review this moment against the surrounding evidence."
+    }
+  }
+  // No non-verbal event, but the editing departs from this video's norm — the
+  // baseline is doing the work the events couldn't.
+  if (editSignals.length > 0) {
+    return "No single non-verbal event stands out, but the edit departs from your norm here (see the pacing signals). Check whether the cut rate or a freeze stalls viewers independently of the script."
+  }
+  if (dominant) {
+    return "This moment is carried by what is said, so the transcript insight covers it. The combined evidence adds little here."
+  }
+  return "No strong non-verbal driver isolated. The cause is likely in what is said, so the transcript insight already covers it."
+}
+
+function severityLine(window: WindowEvidence["window"]): string {
+  const parts = [`${formatSignedPercent(window.delta)} retention`]
+  if (window.isAbnormallySteep) parts.push("abnormally steep")
+  else if (window.steepness != null)
+    parts.push(`steepness ${window.steepness.toFixed(2)}`)
+  if (window.relativePerformance != null) {
+    const rp = window.relativePerformance
+    parts.push(
+      `${rp >= 0 ? "+" : ""}${(rp * 100).toFixed(1)}% vs similar videos`,
+    )
+  }
+  return parts.join(" · ")
+}
+
+function InsightChip({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="rounded-md bg-background px-2 py-0.5 text-xs text-muted-foreground ring-1 ring-border">
+      {children}
+    </span>
+  )
+}
+
+function CardInsightDraft({ item }: { item: WindowEvidence }) {
+  const { window, events, audio } = item
+  const snaps = readySnapshots(item.snapshots)
+  const visual = summariseVisual(snaps)
+  const dominant = dominantEvent(events)
+
+  const confidences = events
+    .map((e) => e.confidence)
+    .filter((c): c is number => c != null)
+  const peakConfidence =
+    confidences.length > 0 ? Math.max(...confidences) : null
+
+  // Which evidence sources actually fired, so the card can show where its
+  // non-transcript conviction comes from.
+  const modalityCounts = new Map<string, number>()
+  for (const event of events) {
+    modalityCounts.set(
+      event.primaryEvidence,
+      (modalityCounts.get(event.primaryEvidence) ?? 0) + 1,
+    )
+  }
+  const modalities = [...modalityCounts.entries()].sort((a, b) => b[1] - a[1])
+
+  const audioAnalysis =
+    audio?.analysisStatus === "ready" ? (audio.analysis as AudioAnalysis) : null
+
+  const editSignals = editingSignals(item.editing, item.baseline)
+
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-dashed bg-muted/30 p-3">
+      <div className="flex flex-col gap-1">
+        <SubsectionHeader
+          icon={<LightbulbIcon className="size-3.5 text-muted-foreground" />}
+          label="Card insight · draft (not shown to users)"
+        />
+        <p className="text-xs text-muted-foreground">
+          Preview of the extra, non-transcript insight this window&apos;s
+          combined evidence would add to its retention card. Temporary, for
+          tuning the process.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2 text-sm">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-xs text-muted-foreground">
+            Dominant non-verbal driver
+          </span>
+          <span className="font-medium">
+            {dominant
+              ? `${formatLabel(dominant.eventType)} · ${formatLabel(dominant.primaryEvidence)} evidence`
+              : "None isolated from frames, audio or editing"}
+            {peakConfidence != null
+              ? ` · ${Math.round(peakConfidence * 100)}% peak confidence`
+              : ""}
+          </span>
+        </div>
+
+        <div className="flex flex-col gap-0.5">
+          <span className="text-xs text-muted-foreground">
+            Severity in context
+          </span>
+          <span className="font-medium tabular-nums">
+            {severityLine(window)}
+          </span>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-muted-foreground">Contributing signals</span>
+          <div className="flex flex-wrap gap-1.5">
+            {events.length > 0 && (
+              <InsightChip>
+                {events.length} event{events.length === 1 ? "" : "s"}
+              </InsightChip>
+            )}
+            {modalities.map(([source, count]) => (
+              <InsightChip key={source}>
+                {formatLabel(source)}
+                {count > 1 ? ` ×${count}` : ""}
+              </InsightChip>
+            ))}
+            {editSignals.map((signal) => (
+              <InsightChip key={signal}>{signal}</InsightChip>
+            ))}
+            {visual && (
+              <>
+                <InsightChip>
+                  {visual.distinctShots} distinct shot
+                  {visual.distinctShots === 1 ? "" : "s"}
+                </InsightChip>
+                {visual.longestStaticSeconds >= 1 && (
+                  <InsightChip>
+                    Static shot held ~{Math.round(visual.longestStaticSeconds)}s
+                  </InsightChip>
+                )}
+                {visual.textPresence !== "none" && (
+                  <InsightChip>
+                    {TEXT_PRESENCE_LABELS[visual.textPresence]}
+                  </InsightChip>
+                )}
+              </>
+            )}
+            {audioAnalysis && (
+              <>
+                <InsightChip>{formatLabel(audioAnalysis.energy)} energy</InsightChip>
+                {audioAnalysis.speech_rate != null && (
+                  <InsightChip>{audioAnalysis.speech_rate} wpm</InsightChip>
+                )}
+                {audioAnalysis.silence != null && audioAnalysis.silence > 0 && (
+                  <InsightChip>
+                    {(audioAnalysis.silence * 100).toFixed(0)}% silence
+                  </InsightChip>
+                )}
+                {audioAnalysis.music && <InsightChip>Music present</InsightChip>}
+              </>
+            )}
+            {events.length === 0 &&
+              !visual &&
+              !audioAnalysis &&
+              editSignals.length === 0 && (
+                <span className="text-xs text-muted-foreground">
+                  No non-transcript signals settled for this window yet.
+                </span>
+              )}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-0.5">
+          <span className="text-xs text-muted-foreground">
+            Non-verbal takeaway
+          </span>
+          <span>{takeawayFor(dominant, editSignals)}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// --- Baseline comparison -----------------------------------------------------
+// Shared formatters + a field that renders a window metric against this video's
+// own average, with a plain-language deviation ("5.2× below norm"). Deviation
+// is stated neutrally: it reports how far the window sits from the creator's
+// norm, without asserting the deviation caused the retention change.
+
+const formatPerMinute = (value: number): string => `${value.toFixed(1)}/min`
+const formatCoverage = (value: number): string => `${(value * 100).toFixed(0)}%`
+const formatWpm = (value: number): string => `${Math.round(value)} wpm`
+
+function deviationSuffix(value: number, baseline: number): string {
+  if (baseline <= 0) return ""
+  const ratio = value / baseline
+  if (ratio >= 1.15) return ` · ${ratio.toFixed(1)}× above norm`
+  if (ratio <= 0.85) {
+    if (value <= 0) return " · none vs norm"
+    return ` · ${(1 / ratio).toFixed(1)}× below norm`
+  }
+  return " · near norm"
+}
+
+function BaselineField({
+  label,
+  value,
+  baseline,
+  format,
+}: {
+  label: string
+  value: number | null
+  baseline: number | null
+  format: (value: number) => string
+}) {
+  return (
+    <div className="flex flex-col">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="font-medium tabular-nums">
+        {value != null ? format(value) : "—"}
+        {value != null && baseline != null && (
+          <span className="ml-2 text-xs font-normal text-muted-foreground">
+            avg {format(baseline)}
+            {deviationSuffix(value, baseline)}
+          </span>
+        )}
+      </dd>
+    </div>
+  )
+}
+
+// Compact deviation chips for the card-insight draft: only the editing signals
+// that actually depart from this video's norm (or are notable on their own),
+// so an at-norm stretch adds no noise.
+function editingSignals(
+  editing: WindowEvidence["editing"],
+  baseline: WindowEvidence["baseline"],
+): string[] {
+  if (!editing) return []
+  const out: string[] = []
+
+  if (
+    editing.cutsPerMinute != null &&
+    baseline.cutsPerMinute != null &&
+    baseline.cutsPerMinute > 0
+  ) {
+    const ratio = editing.cutsPerMinute / baseline.cutsPerMinute
+    if (ratio >= 1.3) out.push(`Cuts ${ratio.toFixed(1)}× above norm`)
+    else if (ratio <= 0.7)
+      out.push(
+        editing.cutsPerMinute <= 0
+          ? "No cuts vs norm"
+          : `Cuts ${(1 / ratio).toFixed(1)}× below norm`,
+      )
+  }
+  if (editing.freezeCoverage > 0.05)
+    out.push(`${(editing.freezeCoverage * 100).toFixed(0)}% frozen`)
+  if (editing.blackCoverage > 0.05)
+    out.push(`${(editing.blackCoverage * 100).toFixed(0)}% black`)
+
+  return out
+}
+
+function EditingSection({
+  editing,
+  baseline,
+}: {
+  editing: WindowEvidence["editing"]
+  baseline: WindowEvidence["baseline"]
+}) {
+  if (!editing) {
+    return (
+      <AccordionSection
+        icon={<ScissorsIcon className="size-3.5 text-muted-foreground" />}
+        label="Editing & pacing"
+      >
+        <p className="text-sm text-muted-foreground">
+          No scene-cue scan is available for this window.
+        </p>
+      </AccordionSection>
+    )
+  }
+
+  return (
+    <AccordionSection
+      icon={<ScissorsIcon className="size-3.5 text-muted-foreground" />}
+      label="Editing & pacing"
+    >
+      <dl className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
+        <BaselineField
+          label="Cuts / min"
+          value={editing.cutsPerMinute}
+          baseline={baseline.cutsPerMinute}
+          format={formatPerMinute}
+        />
+        <Field label="Cut count" value={String(editing.cutCount)} />
+        <BaselineField
+          label="Freeze coverage"
+          value={editing.freezeCoverage}
+          baseline={baseline.freezeCoverage}
+          format={formatCoverage}
+        />
+        <BaselineField
+          label="Black coverage"
+          value={editing.blackCoverage}
+          baseline={baseline.blackCoverage}
+          format={formatCoverage}
+        />
+      </dl>
+      <p className="text-xs text-muted-foreground">
+        Cut/freeze/black metrics for this window, each shown against this
+        video&apos;s own average across every analysed window.
+      </p>
+    </AccordionSection>
   )
 }
 
@@ -464,7 +909,13 @@ function SnapshotsSection({
   )
 }
 
-function AudioSection({ audio }: { audio: WindowEvidence["audio"] }) {
+function AudioSection({
+  audio,
+  baseline,
+}: {
+  audio: WindowEvidence["audio"]
+  baseline: WindowEvidence["baseline"]
+}) {
   if (!audio) {
     return (
       <AccordionSection
@@ -503,9 +954,11 @@ function AudioSection({ audio }: { audio: WindowEvidence["audio"] }) {
           <Field label="Speakers" value={String(analysis.speakers)} />
           <Field label="Tone" value={analysis.tone} />
           <Field label="Energy" value={formatLabel(analysis.energy)} />
-          <Field
+          <BaselineField
             label="Speech rate"
-            value={analysis.speech_rate != null ? `${analysis.speech_rate} wpm` : "—"}
+            value={analysis.speech_rate}
+            baseline={baseline.speechRate}
+            format={formatWpm}
           />
           <Field
             label="Average volume"
