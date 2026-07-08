@@ -400,7 +400,9 @@ export default async function Page({
   // harvested and analysed, and events have been synthesized from all of it.
   // Showing it any earlier just flashes an empty-looking "0 events" card
   // before there's anything to actually show.
-  let deepAnalysisEvidence: Awaited<ReturnType<typeof getDeepAnalysisEvidence>> = []
+  let deepAnalysisEvidence: Awaited<
+    ReturnType<typeof getDeepAnalysisEvidence>
+  > | null = null
   if (result.status === "ok" && result.analysedVideoId && readySourceFile) {
     try {
       const supabase = await createClient()
@@ -411,10 +413,18 @@ export default async function Page({
         readySourceFile,
       )
       if (progress.complete) {
+        // Only charge transcoding when the source was actually transcoded by
+        // Qencode; when normalisation was skipped/disabled the original is used
+        // as-is, so there's no transcoding cost to attribute.
+        const transcodedDurationSeconds =
+          readySourceFile.normalisationStatus === "ready"
+            ? result.video.durationSeconds
+            : null
         deepAnalysisEvidence = await getDeepAnalysisEvidence(
           supabase,
           user.id,
           result.analysedVideoId,
+          transcodedDurationSeconds,
         )
       }
     } catch (error) {
@@ -473,7 +483,9 @@ export default async function Page({
               filenameSimilarityThreshold={getFilenameSimilarityThreshold()}
               initialSourceFile={initialSourceFile}
             />
-            <DeepAnalysisEvidence evidence={deepAnalysisEvidence} />
+            {deepAnalysisEvidence && (
+              <DeepAnalysisEvidence evidence={deepAnalysisEvidence} />
+            )}
           </>
         )}
 
