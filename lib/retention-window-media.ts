@@ -283,10 +283,21 @@ function subsampleEvenly(values: number[], max: number): number[] {
 }
 
 // Derives a window's snapshot timestamps from its scene-cue scan instead of
-// a blind uniform grid: two flanking frames — just before and just after —
-// per detected hard cut, so the harvested images actually straddle a real
-// transition instead of landing at an arbitrary 5-second mark that might
-// miss every cut in the window entirely.
+// a blind uniform grid: one frame per *scene segment* the cuts carve the
+// window into, each placed just off a real transition rather than at an
+// arbitrary 5-second mark that might miss every cut entirely.
+//
+// N detected cuts split the window into N+1 segments, and each segment is a
+// single shot (no cut falls inside it, by definition), so one frame is enough
+// visual evidence for it — a second would just hand the vision model a
+// near-duplicate. That's why we don't flank *every* cut with a before-and-
+// after pair: doing so double-samples each interior segment, because the frame
+// just after cut i and the frame just before cut i+1 both land in the same
+// static stretch between them (the shot that cut i opened). Instead: one
+// leading frame just before the first cut for the head segment, then one frame
+// just after each cut for the segment that cut opens. A lone cut still yields
+// a true flanking pair (before it and after it); the dedup only trims the
+// redundant mid-segment twins that appear once there are two or more cuts.
 //
 // How a window with *no* detected cuts is sampled depends on why it has none:
 //   • The scan ran and confidently found no cuts — a genuinely static shot (a
@@ -308,20 +319,24 @@ export function buildSnapshotTimestampsFromSceneCues(
       : [round(fromSeconds)]
   }
 
-  // Collapse tightly-clustered cuts before flanking so a burst of near-
+  // Collapse tightly-clustered cuts before sampling so a burst of near-
   // simultaneous detections (usually within-shot motion the scene detector
-  // over-read as several cuts) contributes one flanking pair, not one per
+  // over-read as several cuts) contributes one segment boundary, not one per
   // detection. Sort first: collapseClusteredCuts assumes ascending order, and
   // ffmpeg reports cuts in time order but the caller shouldn't rely on it.
   const cuts = collapseClusteredCuts(
     [...cues.cuts].sort((a, b) => a.atSeconds - b.atSeconds),
   )
 
+  // One frame per segment: a leading frame just before the first cut (the head
+  // segment), then one frame just after each cut (the segment that cut opens).
+  // A Set still dedupes the boundary frame shared by two cuts exactly
+  // 2×offset apart.
   const timestamps = new Set<number>()
+  timestamps.add(
+    round(Math.max(fromSeconds, cuts[0].atSeconds - CUT_SNAPSHOT_OFFSET_SECONDS)),
+  )
   for (const cut of cuts) {
-    timestamps.add(
-      round(Math.max(fromSeconds, cut.atSeconds - CUT_SNAPSHOT_OFFSET_SECONDS)),
-    )
     timestamps.add(
       round(Math.min(toSeconds, cut.atSeconds + CUT_SNAPSHOT_OFFSET_SECONDS)),
     )

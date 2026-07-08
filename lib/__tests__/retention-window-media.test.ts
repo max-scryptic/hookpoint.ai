@@ -100,15 +100,36 @@ describe("buildSnapshotTimestampsFromSceneCues", () => {
     expect(buildSnapshotTimestampsFromSceneCues(0, 30, cues)).toEqual([14, 16])
   })
 
-  it("clamps flanking offsets to the window's own bounds", () => {
+  it("clamps segment frames to the window's own bounds", () => {
     const cues: SceneCueScanResult = {
       cuts: [{ atSeconds: 0.5 }, { atSeconds: 29.5 }],
       freezes: [],
       blacks: [],
     }
 
+    // Leading frame 0.5-1 clamps up to the window start (0), the trailing
+    // 29.5+1 clamps down to the end (30); the interior segment between the two
+    // cuts is sampled once at 0.5+1 => 1.5.
     expect(buildSnapshotTimestampsFromSceneCues(0, 30, cues)).toEqual([
-      0, 1.5, 28.5, 30,
+      0, 1.5, 30,
+    ])
+  })
+
+  it("samples each scene segment once instead of double-sampling the middle", () => {
+    // The reported case: two sequential cuts (facecam -> screen -> facecam)
+    // carve the window into three segments. Flanking every cut would yield four
+    // frames — 6, 8 and 22, 24 — but 8 and 22 both sit inside the same middle
+    // (screen) segment, a near-duplicate pair. One frame per segment keeps the
+    // head frame (6), the middle screen frame (8), and the trailing facecam
+    // frame (24): three snapshots, not four.
+    const cues: SceneCueScanResult = {
+      cuts: [{ atSeconds: 7 }, { atSeconds: 23 }],
+      freezes: [],
+      blacks: [],
+    }
+
+    expect(buildSnapshotTimestampsFromSceneCues(0, 30, cues)).toEqual([
+      6, 8, 24,
     ])
   })
 
@@ -147,8 +168,9 @@ describe("buildSnapshotTimestampsFromSceneCues", () => {
       blacks: [],
     }
 
-    // Exactly 2s apart, so both survive clustering; 10±1 => [9, 11] and
-    // 12±1 => [11, 13] share the boundary frame at 11, which the Set dedupes.
+    // Exactly 2s apart, so both survive clustering: a leading frame at 10-1=9,
+    // then one per cut at 10+1=11 and 12+1=13 — one frame for each of the three
+    // segments the two cuts carve out.
     expect(buildSnapshotTimestampsFromSceneCues(0, 30, cues)).toEqual([
       9, 11, 13,
     ])
