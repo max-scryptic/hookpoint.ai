@@ -14,6 +14,7 @@ import {
   getRetentionWindowCostsForVideo,
   type RetentionWindowCost,
 } from "@/lib/retention-window-costs"
+import { transcodingCostUsd } from "@/lib/transcoding-cost"
 import { getRetentionWindowMediaStorageProvider } from "@/lib/retention-window-media-config"
 import type { AudioAnalysis } from "@/lib/retention-window-media-analysis"
 import {
@@ -83,6 +84,23 @@ export interface WindowEvidence {
   totalCostUsd: number
 }
 
+// A video's full deep-analysis evidence plus the video-level cost roll-up: the
+// per-window evidence, the one-time Qencode transcoding cost, the summed LLM
+// spend across every window, and their grand total. The transcoding cost sits
+// at the video level (not per window) because it's charged once to produce the
+// proxies every window is then analysed from.
+export interface DeepAnalysisEvidence {
+  windows: WindowEvidence[]
+  // One-time Qencode transcoding cost for this video's proxies, derived from
+  // its duration. 0 when the source wasn't transcoded (the original was kept)
+  // or its duration is unknown.
+  transcodingCostUsd: number
+  // Sum of every window's LLM spend.
+  llmCostUsd: number
+  // transcodingCostUsd + llmCostUsd — the full cost of deep-analysing the video.
+  totalCostUsd: number
+}
+
 const KIND_ORDER: Record<PersistedRetentionWindow["kind"], number> = {
   hook: 0,
   drop_off: 1,
@@ -100,11 +118,16 @@ function windowDisplayLabel(window: PersistedRetentionWindow): string {
 // window with no analysis range, or a window whose media is still pending).
 // Windows are ordered hook, then drop-off, then gain — each by windowIndex —
 // matching the order the rest of the detail page presents them in.
+//
+// `transcodedDurationSeconds` is the duration of the video Qencode transcoded,
+// used to derive the one-time transcoding cost; pass null when the source
+// wasn't transcoded (the original was kept) so no transcoding cost is charged.
 export async function getDeepAnalysisEvidence(
   supabase: SupabaseClient,
   userId: string,
   analysedVideoId: string,
-): Promise<WindowEvidence[]> {
+  transcodedDurationSeconds: number | null = null,
+): Promise<DeepAnalysisEvidence> {
   const [windows, events, transcripts, snapshots, audioClips, costs, cues] =
     await Promise.all([
       getRetentionWindows(supabase, userId, analysedVideoId),
@@ -247,5 +270,13 @@ export async function getDeepAnalysisEvidence(
     })
   }
 
-  return result
+  const llmCostUsd = result.reduce((sum, w) => sum + w.totalCostUsd, 0)
+  const transcodingCost = transcodingCostUsd(transcodedDurationSeconds)
+
+  return {
+    windows: result,
+    transcodingCostUsd: transcodingCost,
+    llmCostUsd,
+    totalCostUsd: transcodingCost + llmCostUsd,
+  }
 }

@@ -28,7 +28,10 @@ import type {
   AudioAnalysis,
   SnapshotAnalysis,
 } from "@/lib/retention-window-media-analysis"
-import type { WindowEvidence } from "@/lib/deep-analysis-evidence"
+import type {
+  DeepAnalysisEvidence as DeepAnalysisEvidenceData,
+  WindowEvidence,
+} from "@/lib/deep-analysis-evidence"
 import type { RetentionWindowEventType } from "@/lib/retention-window-events"
 
 function formatTimestamp(totalSeconds: number): string {
@@ -87,9 +90,9 @@ const KIND_LABELS: Record<WindowEvidence["window"]["kind"], string> = {
 export function DeepAnalysisEvidence({
   evidence,
 }: {
-  evidence: WindowEvidence[]
+  evidence: DeepAnalysisEvidenceData
 }) {
-  if (evidence.length === 0) return null
+  if (evidence.windows.length === 0) return null
 
   return (
     <section className="flex flex-col gap-3">
@@ -98,12 +101,56 @@ export function DeepAnalysisEvidence({
         <h2 className="text-sm font-medium">Deep analysis evidence</h2>
       </div>
 
+      <VideoCostSummary evidence={evidence} />
+
       <div className="flex flex-col gap-3">
-        {evidence.map((item) => (
+        {evidence.windows.map((item) => (
           <WindowEvidenceCard key={item.window.id} item={item} />
         ))}
       </div>
     </section>
+  )
+}
+
+// The whole-video cost roll-up: the one-time Qencode transcoding cost plus the
+// LLM spend summed across every window, and their grand total. Transcoding sits
+// at the video level rather than in any single window's cost table because it's
+// charged once to produce the proxies every window is then analysed from.
+// Rendered only when there is some cost to show, so an analysis run before cost
+// tracking (or with transcoding disabled and no recorded LLM spend) adds no
+// empty card.
+function VideoCostSummary({
+  evidence,
+}: {
+  evidence: DeepAnalysisEvidenceData
+}) {
+  const { transcodingCostUsd, llmCostUsd, totalCostUsd } = evidence
+  if (totalCostUsd <= 0) return null
+
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <div className="flex flex-col gap-3">
+        <SubsectionHeader
+          icon={<CoinsIcon className="size-3.5 text-muted-foreground" />}
+          label="Total cost"
+        />
+        <dl className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
+          {transcodingCostUsd > 0 && (
+            <Field
+              label="Transcoding (Qencode)"
+              value={formatUsd(transcodingCostUsd)}
+            />
+          )}
+          <Field label="LLM analysis" value={formatUsd(llmCostUsd)} />
+          <Field label="Total" value={formatUsd(totalCostUsd)} />
+        </dl>
+        <p className="text-xs text-muted-foreground">
+          Transcoding is a one-time cost for producing this video&apos;s proxies;
+          LLM analysis is the sum across every window below. Estimated — actual
+          billing may differ.
+        </p>
+      </div>
+    </div>
   )
 }
 
