@@ -624,20 +624,29 @@ export function SourceFileUpload({
       </div>
 
       <Dialog open={showUploadedDialog} onOpenChange={setShowUploadedDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <div className="flex items-center gap-2">
-              <CheckCircle2Icon className="size-5 text-emerald-600 dark:text-emerald-500" />
-              <DialogTitle>Video uploaded successfully</DialogTitle>
+        <DialogContent className="gap-6 p-8">
+          <DialogHeader className="items-center gap-4 text-center">
+            <div className="flex size-14 items-center justify-center rounded-full bg-emerald-500/10 ring-1 ring-emerald-500/20 dark:bg-emerald-500/15">
+              <CheckCircle2Icon className="size-7 text-emerald-600 dark:text-emerald-500" />
             </div>
-            <DialogDescription>
-              Your video has been uploaded and analysis has now begun. This runs
-              in the background, so you’re free to leave this page. We’ll email
-              you when your video has been fully analysed.
-            </DialogDescription>
+            <div className="flex flex-col gap-2.5">
+              <DialogTitle className="text-lg">
+                Video uploaded successfully
+              </DialogTitle>
+              <DialogDescription className="text-balance leading-relaxed">
+                Your video has been uploaded and analysis has now begun. This
+                runs in the background, so you’re free to leave this page — we’ll
+                email you once it’s been fully analysed.
+              </DialogDescription>
+            </div>
           </DialogHeader>
-          <DialogFooter>
-            <Button onClick={() => setShowUploadedDialog(false)}>Close</Button>
+          <DialogFooter className="sm:justify-center">
+            <Button
+              className="w-full sm:w-auto sm:min-w-36"
+              onClick={() => setShowUploadedDialog(false)}
+            >
+              Close
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
