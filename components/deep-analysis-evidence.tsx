@@ -446,57 +446,136 @@ interface Takeaway {
   tip: string | null
 }
 
-function takeawayFor(
-  dominant: WindowEvidence["events"][number] | null,
-  editSignals: string[],
-): Takeaway {
-  // A non-verbal event leads when there is one.
+// Concrete, window-specific phrases built from evidence the card already
+// computed, so two windows driven by the same modality don't read identically:
+// the numbers (how long a shot holds, the cut deviation, the energy/silence)
+// differ window to window and carry the distinction the old fixed templates
+// couldn't. Each returns null when its modality has nothing notable to say.
+function visualPhrase(visual: VisualSummary | null): string | null {
+  if (!visual) return null
+  const held = Math.round(visual.longestStaticSeconds)
+  if (visual.distinctShots <= 1) {
+    return held >= 3
+      ? `the shot holds on one frame for about ${held}s without cutting`
+      : "the framing stays on a single shot"
+  }
+  if (visual.distinctShots >= 4) {
+    return `the frame jumps through ${visual.distinctShots} shots in quick succession`
+  }
+  return `the frame moves through ${visual.distinctShots} shots`
+}
+
+function audioPhrase(audio: AudioAnalysis | null): string | null {
+  if (!audio) return null
+  const parts: string[] = []
+  if (audio.energy === "low") parts.push("the delivery reads low-energy")
+  else if (audio.energy === "high") parts.push("the delivery is high-energy")
+  if (audio.silence != null && audio.silence >= 0.15)
+    parts.push(`about ${Math.round(audio.silence * 100)}% of it is dead air`)
+  if (parts.length === 0 && audio.speech_rate != null)
+    parts.push(`the pace sits around ${audio.speech_rate} wpm`)
+  return parts.length > 0 ? parts.join(" and ") : null
+}
+
+function editPhrase(editSignals: string[]): string | null {
+  if (editSignals.length === 0) return null
+  return editSignals.join(", ").toLowerCase()
+}
+
+function takeawayFor({
+  dominant,
+  visual,
+  audio,
+  editSignals,
+}: {
+  dominant: WindowEvidence["events"][number] | null
+  visual: VisualSummary | null
+  audio: AudioAnalysis | null
+  editSignals: string[]
+}): Takeaway {
+  const at = dominant
+    ? ` around ${formatTimestamp(dominant.timestampSeconds)}`
+    : ""
+
+  // A non-verbal event leads when there is one, grounded in the concrete
+  // signal for its modality so each window reads differently.
   if (dominant && dominant.primaryEvidence !== "transcript") {
     switch (dominant.primaryEvidence) {
-      case "editing":
+      case "editing": {
+        const phrase = editPhrase(editSignals)
+        return {
+          observation: phrase
+            ? `Your cut rhythm is where viewers slip here: ${phrase}.`
+            : "The cut rhythm is where viewers start slipping at this moment.",
+          tip: `Re-pace this stretch${at} so the cuts keep carrying attention through it.`,
+        }
+      }
+      case "visual": {
+        const phrase = visualPhrase(visual)
+        const holdsStill =
+          visual != null &&
+          visual.distinctShots <= 1 &&
+          visual.longestStaticSeconds >= 3
+        return {
+          observation: phrase
+            ? `Here ${phrase}, so the picture stops carrying the moment.`
+            : "The frame holds too long or shifts abruptly here, so the visual is doing the work.",
+          tip: holdsStill
+            ? `Drop in a b-roll insert or graphic${at} to refresh the shot before viewers slip away.`
+            : `Vary the framing${at} to refresh the shot before viewers slip away.`,
+        }
+      }
+      case "audio": {
+        const phrase = audioPhrase(audio)
+        return {
+          observation: phrase
+            ? `The sound is what shifts here: ${phrase}.`
+            : "Energy and sound are what shift here.",
+          tip: `Lift the delivery or trim the dead air${at} to keep viewers with you.`,
+        }
+      }
+      case "combined": {
+        const phrases = [
+          visualPhrase(visual),
+          audioPhrase(audio),
+          editPhrase(editSignals),
+        ].filter((p): p is string => p != null)
         return {
           observation:
-            "The cut rhythm is where viewers start slipping at this moment.",
-          tip: "Tighten or re-pace this stretch so the cuts keep carrying attention through it.",
+            phrases.length > 0
+              ? `Several signals converge here: ${phrases.join("; ")}.`
+              : "Several signals converge here, with the edit and delivery reinforcing each other at this moment.",
+          tip: `Address these together${at}, since any one on its own is unlikely to move it.`,
         }
-      case "visual":
-        return {
-          observation:
-            "The frame holds too long or shifts abruptly here, so the visual is doing the work.",
-          tip: "Drop in a b-roll insert or graphic to refresh the shot before viewers slip away.",
-        }
-      case "audio":
-        return {
-          observation:
-            "Energy and sound are what shift here.",
-          tip: "Lift the delivery or trim the dead air through this stretch to keep viewers with you.",
-        }
-      case "combined":
-        return {
-          observation:
-            "Several signals converge here, with the edit and delivery reinforcing each other at this moment.",
-          tip: "Address the cut and the delivery together, since either one on its own is unlikely to move it.",
-        }
+      }
       default:
         return {
-          observation: "This moment stands out against the surrounding evidence.",
+          observation:
+            "This moment stands out against the surrounding evidence.",
           tip: "Review the frames, audio and pacing above to see which one is carrying it.",
         }
     }
   }
-  // No non-verbal event, but the editing departs from this video's norm — the
-  // baseline is doing the work the events couldn't.
-  if (editSignals.length > 0) {
+
+  // No non-verbal event led, but the editing departs from this video's norm —
+  // the baseline is doing the work the events couldn't.
+  const edit = editPhrase(editSignals)
+  if (edit) {
     return {
-      observation:
-        "No single event stands out, but the edit departs from your norm here (see the pacing signals).",
+      observation: `No single event stands out, but the edit departs from your norm here (${edit}).`,
       tip: "Check whether the cut rate or a freeze is stalling viewers here, and bring it back toward your usual pace.",
     }
   }
-  if (dominant) {
+
+  // Nothing in the edit deviates either. Surface the observed-but-unremarkable
+  // state so two quiet windows still read differently, then point back at the
+  // content itself rather than inventing a non-verbal fix that wouldn't move it.
+  const state = [visualPhrase(visual), audioPhrase(audio)].filter(
+    (p): p is string => p != null,
+  )
+  if (state.length > 0) {
     return {
-      observation:
-        "Nothing in the edit, delivery or visuals stands out here; the drop tracks the content of the moment itself.",
+      observation: `Nothing in the edit, delivery or visuals breaks from your norm here (${state.join("; ")}); the change tracks the content of the moment itself.`,
       tip: null,
     }
   }
@@ -660,7 +739,12 @@ function CardInsightDraft({ item }: { item: WindowEvidence }) {
             Non-verbal takeaway
           </span>
           {(() => {
-            const takeaway = takeawayFor(dominant, editSignals)
+            const takeaway = takeawayFor({
+              dominant,
+              visual,
+              audio: audioAnalysis,
+              editSignals,
+            })
             return (
               <>
                 <p className="text-sm">{takeaway.observation}</p>
