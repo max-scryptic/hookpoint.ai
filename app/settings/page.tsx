@@ -122,11 +122,6 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     requireAuthenticatedUser(),
   ])
   await syncBillingReturn(user.id, searchParams)
-  const [billingSnapshot, connectedAccount, paymentCard] = await Promise.all([
-    loadBillingSnapshot(user.id),
-    loadConnectedAccount(user.id),
-    loadPaymentCard(user.id),
-  ])
   const [billingSnapshot, connectedAccount, paymentCard, invoices] =
     await Promise.all([
       loadBillingSnapshot(user.id),

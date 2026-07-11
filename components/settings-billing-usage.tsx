@@ -138,33 +138,30 @@ export function SettingsBillingUsage({
               </Button>
             </CardAction>
           </CardHeader>
-<CardContent
-  className={cn(
-    "grid gap-3 sm:grid-cols-2",
-    includesDeepDives ? "lg:grid-cols-4" : "lg:grid-cols-3",
-  )}
->
-  {isCancelling ? (
-    <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 sm:col-span-2 lg:col-span-4 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
-      Cancellation scheduled. Paid features remain available until{" "}
-      {renewsLabel}; after that, your plan will revert to Free.
-    </div>
-  ) : null}
+          <CardContent
+            className={cn(
+              "grid gap-3 sm:grid-cols-2",
+              includesDeepDives ? "lg:grid-cols-4" : "lg:grid-cols-3",
+            )}
+          >
+            {isCancelling ? (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 sm:col-span-2 lg:col-span-4 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+                Cancellation scheduled. Paid features remain available until{" "}
+                {renewsLabel}; after that, your plan will revert to Free.
+              </div>
+            ) : null}
 
-  {planStats.map((stat) => (
-    <div key={stat.label} className="rounded-lg border bg-muted/30 p-3">
-      <div className="text-xs text-muted-foreground">{stat.label}</div>
-      <div
-        className={cn(
-          "mt-1 font-heading text-lg font-semibold",
-          stat.tabular && "tabular-nums",
-        )}
-      >
-        {stat.value}
-      </div>
-    </div>
-  ))}
-</CardContent>
+            {planStats.map((stat) => (
+              <div key={stat.label} className="rounded-lg border bg-muted/30 p-3">
+                <div className="text-xs text-muted-foreground">{stat.label}</div>
+                <div
+                  className={cn(
+                    "mt-1 font-heading text-lg font-semibold",
+                    stat.tabular && "tabular-nums",
+                  )}
+                >
+                  {stat.value}
+                </div>
               </div>
             ))}
           </CardContent>
