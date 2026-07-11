@@ -21,35 +21,12 @@ import { getSubscriptionForUser } from "@/lib/billing/subscriptions"
 // cancels, at which point the projection row is deleted).
 const ENTITLING_STATUSES = new Set(["active", "trialing", "past_due"])
 
-function utcMonthsBetween(start: Date, end: Date): number {
-  return (
-    (end.getUTCFullYear() - start.getUTCFullYear()) * 12 +
-    end.getUTCMonth() -
-    start.getUTCMonth()
-  )
-}
-
-function daysInUtcMonth(year: number, month: number): number {
-  return new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
-}
-
-function addUtcMonths(date: Date, monthsToAdd: number): Date {
-  const rawMonth = date.getUTCMonth() + monthsToAdd
-  const year = date.getUTCFullYear() + Math.floor(rawMonth / 12)
-  const month = ((rawMonth % 12) + 12) % 12
-  const day = Math.min(date.getUTCDate(), daysInUtcMonth(year, month))
-
-  return new Date(
-    Date.UTC(
-      year,
-      month,
-      day,
-      date.getUTCHours(),
-      date.getUTCMinutes(),
-      date.getUTCSeconds(),
-      date.getUTCMilliseconds(),
-    ),
-  )
+export function subscriptionGrantsPaidAccess(
+  subscription: { status: string; currentPeriodEnd: string | Date },
+  now: Date,
+): boolean {
+  if (!ENTITLING_STATUSES.has(subscription.status)) return false
+  return new Date(subscription.currentPeriodEnd).getTime() > now.getTime()
 }
 
 export type Entitlement = {
@@ -70,19 +47,51 @@ export type Entitlement = {
   cancelAtPeriodEnd: boolean
 }
 
-// Computes the current monthly usage window from an anchor date. Pure and total:
-// for any `now >= anchor` it returns the window [start, end) that contains
-// `now`, with start/end landing on the same day-of-month as the anchor
-// (date-fns clamps short months, e.g. a 31st anchor falls to the 30th/28th).
-// Free users anchor to account creation; annual paid users anchor to the Stripe
-// subscription start so their monthly credits roll inside the yearly payment.
+function daysInUtcMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
+}
+
+function addUtcMonths(date: Date, months: number): Date {
+  const targetMonth = date.getUTCMonth() + months
+  const targetYear = date.getUTCFullYear() + Math.floor(targetMonth / 12)
+  const normalizedMonth = ((targetMonth % 12) + 12) % 12
+  const targetDay = Math.min(
+    date.getUTCDate(),
+    daysInUtcMonth(targetYear, normalizedMonth),
+  )
+
+  return new Date(
+    Date.UTC(
+      targetYear,
+      normalizedMonth,
+      targetDay,
+      date.getUTCHours(),
+      date.getUTCMinutes(),
+      date.getUTCSeconds(),
+      date.getUTCMilliseconds(),
+    ),
+  )
+}
+
+function differenceInUtcMonths(from: Date, to: Date): number {
+  return (
+    (to.getUTCFullYear() - from.getUTCFullYear()) * 12 +
+    (to.getUTCMonth() - from.getUTCMonth())
+  )
+}
+
+// Computes the current monthly window for a Free user, anchored to the day their
+// account was created. Pure and total: for any `now >= anchor` it returns the
+// window [start, end) that contains `now`, with start/end landing on the same
+// day-of-month as the anchor (clamped in short months, e.g. a 31st anchor falls
+// to the 30th/28th). Exported for direct unit testing.
 export function computeMonthlyUsageWindow(
   anchor: Date,
   now: Date,
 ): { start: Date; end: Date } {
-  // UTC month arithmetic avoids daylight-saving drift in persisted
-  // timestamptz keys, while the loops below handle partial months and clamping.
-  let months = Math.max(0, utcMonthsBetween(anchor, now))
+  // The database stores UTC timestamps, so do the month math in UTC. Local-time
+  // month helpers can shift billing windows by an hour across DST boundaries.
+  let months = Math.max(0, differenceInUtcMonths(anchor, now))
   let start = addUtcMonths(anchor, months)
   while (start.getTime() > now.getTime() && months > 0) {
     months -= 1
@@ -147,7 +156,7 @@ export async function getEntitlement(
 ): Promise<Entitlement> {
   const subscription = await getSubscriptionForUser(userId)
 
-  if (subscription && ENTITLING_STATUSES.has(subscription.status)) {
+  if (subscription && subscriptionGrantsPaidAccess(subscription, now)) {
     const subscriptionStart = new Date(subscription.currentPeriodStart)
     const subscriptionEnd = new Date(subscription.currentPeriodEnd)
     const usageWindow =

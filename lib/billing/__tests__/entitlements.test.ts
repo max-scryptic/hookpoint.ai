@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest"
 
 import {
-  computeAnnualUsageWindow,
   computeFreePeriodWindow,
+  subscriptionGrantsPaidAccess,
 } from "@/lib/billing/entitlements"
 
 // The Free plan's monthly reset is anchored to the account creation date, so
@@ -58,43 +58,40 @@ describe("computeFreePeriodWindow", () => {
   })
 })
 
-describe("computeAnnualUsageWindow", () => {
-  it("returns the monthly usage slice inside an annual subscription", () => {
-    const subscriptionStart = new Date("2026-01-10T09:00:00Z")
-    const subscriptionEnd = new Date("2027-01-10T09:00:00Z")
-    const now = new Date("2026-04-15T00:00:00Z")
-    const { start, end } = computeAnnualUsageWindow(
-      subscriptionStart,
-      subscriptionEnd,
-      now,
-    )
-    expect(start.toISOString()).toBe("2026-04-10T09:00:00.000Z")
-    expect(end.toISOString()).toBe("2026-05-10T09:00:00.000Z")
+describe("subscriptionGrantsPaidAccess", () => {
+  it("keeps paid access during a scheduled cancellation window", () => {
+    expect(
+      subscriptionGrantsPaidAccess(
+        {
+          status: "active",
+          currentPeriodEnd: "2026-08-11T10:00:00.000Z",
+        },
+        new Date("2026-07-20T10:00:00.000Z"),
+      ),
+    ).toBe(true)
   })
 
-  it("starts a fresh usage window on each monthly anchor date", () => {
-    const subscriptionStart = new Date("2026-01-10T09:00:00Z")
-    const subscriptionEnd = new Date("2027-01-10T09:00:00Z")
-    const now = new Date("2026-05-10T09:00:00Z")
-    const { start, end } = computeAnnualUsageWindow(
-      subscriptionStart,
-      subscriptionEnd,
-      now,
-    )
-    expect(start.toISOString()).toBe("2026-05-10T09:00:00.000Z")
-    expect(end.toISOString()).toBe("2026-06-10T09:00:00.000Z")
+  it("does not grant paid access once the paid billing period has ended", () => {
+    expect(
+      subscriptionGrantsPaidAccess(
+        {
+          status: "active",
+          currentPeriodEnd: "2026-08-11T10:00:00.000Z",
+        },
+        new Date("2026-08-11T10:00:00.000Z"),
+      ),
+    ).toBe(false)
   })
 
-  it("caps the final usage window at the annual paid-through date", () => {
-    const subscriptionStart = new Date("2026-01-31T00:00:00Z")
-    const subscriptionEnd = new Date("2027-01-31T00:00:00Z")
-    const now = new Date("2027-01-15T00:00:00Z")
-    const { start, end } = computeAnnualUsageWindow(
-      subscriptionStart,
-      subscriptionEnd,
-      now,
-    )
-    expect(start.toISOString()).toBe("2026-12-31T00:00:00.000Z")
-    expect(end.toISOString()).toBe("2027-01-31T00:00:00.000Z")
+  it("does not grant paid access for non-entitling subscription statuses", () => {
+    expect(
+      subscriptionGrantsPaidAccess(
+        {
+          status: "canceled",
+          currentPeriodEnd: "2026-08-11T10:00:00.000Z",
+        },
+        new Date("2026-07-20T10:00:00.000Z"),
+      ),
+    ).toBe(false)
   })
 })
