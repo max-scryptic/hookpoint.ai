@@ -5,8 +5,6 @@
 // service-role admin client because the billing/usage tables are locked down to
 // server-side access only.
 
-import { addMonths, differenceInMonths } from "date-fns"
-
 import { createAdminClient } from "@/lib/supabase/admin"
 import {
   creditsForDurationSeconds,
@@ -23,13 +21,48 @@ import { getSubscriptionForUser } from "@/lib/billing/subscriptions"
 // cancels, at which point the projection row is deleted).
 const ENTITLING_STATUSES = new Set(["active", "trialing", "past_due"])
 
+function utcMonthsBetween(start: Date, end: Date): number {
+  return (
+    (end.getUTCFullYear() - start.getUTCFullYear()) * 12 +
+    end.getUTCMonth() -
+    start.getUTCMonth()
+  )
+}
+
+function daysInUtcMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
+}
+
+function addUtcMonths(date: Date, monthsToAdd: number): Date {
+  const rawMonth = date.getUTCMonth() + monthsToAdd
+  const year = date.getUTCFullYear() + Math.floor(rawMonth / 12)
+  const month = ((rawMonth % 12) + 12) % 12
+  const day = Math.min(date.getUTCDate(), daysInUtcMonth(year, month))
+
+  return new Date(
+    Date.UTC(
+      year,
+      month,
+      day,
+      date.getUTCHours(),
+      date.getUTCMinutes(),
+      date.getUTCSeconds(),
+      date.getUTCMilliseconds(),
+    ),
+  )
+}
+
 export type Entitlement = {
   planId: PlanId
   plan: Plan
-  // The active billing window. Usage counters are keyed on periodStart, so a new
+  // The active usage window. Usage counters are keyed on periodStart, so a new
   // window automatically starts every tally at zero.
   periodStart: Date
   periodEnd: Date
+  // The Stripe subscription period for paid users. Annual plans use this for
+  // paid-through/cancellation display while usage still rolls monthly.
+  subscriptionPeriodStart: Date | null
+  subscriptionPeriodEnd: Date | null
   // "paid" when a Stripe subscription is driving the window, "free" when it is
   // anchored to the account creation date.
   source: "paid" | "free"
@@ -37,31 +70,52 @@ export type Entitlement = {
   cancelAtPeriodEnd: boolean
 }
 
-// Computes the current monthly window for a Free user, anchored to the day their
-// account was created. Pure and total: for any `now >= anchor` it returns the
-// window [start, end) that contains `now`, with start/end landing on the same
-// day-of-month as the anchor (date-fns clamps short months, e.g. a 31st anchor
-// falls to the 30th/28th). Exported for direct unit testing.
-export function computeFreePeriodWindow(
+// Computes the current monthly usage window from an anchor date. Pure and total:
+// for any `now >= anchor` it returns the window [start, end) that contains
+// `now`, with start/end landing on the same day-of-month as the anchor
+// (date-fns clamps short months, e.g. a 31st anchor falls to the 30th/28th).
+// Free users anchor to account creation; annual paid users anchor to the Stripe
+// subscription start so their monthly credits roll inside the yearly payment.
+export function computeMonthlyUsageWindow(
   anchor: Date,
   now: Date,
 ): { start: Date; end: Date } {
-  // differenceInMonths truncates partial months, so this is a good first guess
-  // for how many whole cycles have elapsed; the loops below correct any
-  // month-length clamping edge cases so the invariant start <= now < end holds.
-  let months = Math.max(0, differenceInMonths(now, anchor))
-  let start = addMonths(anchor, months)
+  // UTC month arithmetic avoids daylight-saving drift in persisted
+  // timestamptz keys, while the loops below handle partial months and clamping.
+  let months = Math.max(0, utcMonthsBetween(anchor, now))
+  let start = addUtcMonths(anchor, months)
   while (start.getTime() > now.getTime() && months > 0) {
     months -= 1
-    start = addMonths(anchor, months)
+    start = addUtcMonths(anchor, months)
   }
-  let end = addMonths(anchor, months + 1)
+  let end = addUtcMonths(anchor, months + 1)
   while (end.getTime() <= now.getTime()) {
     months += 1
-    start = addMonths(anchor, months)
-    end = addMonths(anchor, months + 1)
+    start = addUtcMonths(anchor, months)
+    end = addUtcMonths(anchor, months + 1)
   }
   return { start, end }
+}
+
+// Backwards-compatible test/export name for the Free plan's monthly cycle.
+export const computeFreePeriodWindow = computeMonthlyUsageWindow
+
+// Annual subscriptions are paid yearly in Stripe, but the product allowance is
+// still monthly. The final usage month is capped at Stripe's paid-through date
+// so a cancellation/renewal boundary cannot leak into the next annual period.
+export function computeAnnualUsageWindow(
+  subscriptionStart: Date,
+  subscriptionEnd: Date,
+  now: Date,
+): { start: Date; end: Date } {
+  const window = computeMonthlyUsageWindow(subscriptionStart, now)
+  return {
+    start: window.start,
+    end:
+      window.end.getTime() > subscriptionEnd.getTime()
+        ? subscriptionEnd
+        : window.end,
+  }
 }
 
 // Reads the timestamp a user's account was created, the anchor for the Free
@@ -82,9 +136,11 @@ async function getAccountCreatedAt(userId: string): Promise<Date> {
   return created ? new Date(created) : new Date()
 }
 
-// Resolves the user's effective plan and billing window. A live, entitling
-// subscription drives the plan and window from Stripe's period; otherwise the
-// user is Free with a window anchored to their account creation date.
+// Resolves the user's effective plan and usage window. Monthly paid
+// subscriptions use Stripe's monthly period directly; annual paid subscriptions
+// derive a monthly usage window inside Stripe's yearly paid-through period.
+// Otherwise the user is Free with a window anchored to their account creation
+// date.
 export async function getEntitlement(
   userId: string,
   now: Date = new Date(),
@@ -92,11 +148,20 @@ export async function getEntitlement(
   const subscription = await getSubscriptionForUser(userId)
 
   if (subscription && ENTITLING_STATUSES.has(subscription.status)) {
+    const subscriptionStart = new Date(subscription.currentPeriodStart)
+    const subscriptionEnd = new Date(subscription.currentPeriodEnd)
+    const usageWindow =
+      subscription.billingPeriod === "annual"
+        ? computeAnnualUsageWindow(subscriptionStart, subscriptionEnd, now)
+        : { start: subscriptionStart, end: subscriptionEnd }
+
     return {
       planId: subscription.planId,
       plan: getPlan(subscription.planId),
-      periodStart: new Date(subscription.currentPeriodStart),
-      periodEnd: new Date(subscription.currentPeriodEnd),
+      periodStart: usageWindow.start,
+      periodEnd: usageWindow.end,
+      subscriptionPeriodStart: subscriptionStart,
+      subscriptionPeriodEnd: subscriptionEnd,
       source: "paid",
       billingPeriod: subscription.billingPeriod,
       cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
@@ -104,12 +169,14 @@ export async function getEntitlement(
   }
 
   const anchor = await getAccountCreatedAt(userId)
-  const { start, end } = computeFreePeriodWindow(anchor, now)
+  const { start, end } = computeMonthlyUsageWindow(anchor, now)
   return {
     planId: "free",
     plan: getPlan("free"),
     periodStart: start,
     periodEnd: end,
+    subscriptionPeriodStart: null,
+    subscriptionPeriodEnd: null,
     source: "free",
     billingPeriod: null,
     cancelAtPeriodEnd: false,

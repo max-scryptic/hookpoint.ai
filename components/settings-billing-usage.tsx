@@ -84,11 +84,14 @@ export function SettingsBillingUsage({
 
   const planName = snapshot?.plan.name ?? "Free"
   const isFree = (snapshot?.planId ?? "free") === "free"
-  const renewsLabel = snapshot ? formatDate(snapshot.periodEnd.toISOString()) : "—"
+  const periodDate = snapshot?.cancelAtPeriodEnd
+    ? (snapshot.subscriptionPeriodEnd ?? snapshot.periodEnd)
+    : snapshot?.periodEnd
+  const renewsLabel = periodDate ? formatDate(periodDate.toISOString()) : "—"
   const renewsCaption = snapshot?.cancelAtPeriodEnd
-    ? "Cancels on"
-    : isFree
-      ? "Resets"
+    ? "Access ends"
+    : isFree || snapshot?.billingPeriod === "annual"
+      ? "Usage resets"
       : "Renews"
 
   return (
