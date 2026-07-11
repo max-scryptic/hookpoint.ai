@@ -97,7 +97,7 @@ export default async function SettingsPage() {
                 Manage workspace preferences and display settings.
               </p>
             </div>
-            <Tabs defaultValue="account" className="gap-6">
+            <Tabs defaultValue="billing" className="gap-6">
               <TabsList>
                 <TabsTrigger value="billing">Billing &amp; Usage</TabsTrigger>
                 <TabsTrigger value="account">Account &amp; Settings</TabsTrigger>
