@@ -1,5 +1,6 @@
-import { CreditCardIcon, FileTextIcon } from "lucide-react"
+import { FileTextIcon } from "lucide-react"
 
+import { BillingPaymentMethod } from "@/components/billing-payment-method"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -17,6 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import type { BillingCard } from "@/lib/stripe/customers"
 
 // A single invoice row. There is no billing backend wired up yet, so the list
 // is empty for now and the table renders its empty state.
@@ -53,8 +55,12 @@ function SettingsSection({
 // video count; plan and payment details are placeholders until billing is live.
 export function SettingsBillingUsage({
   videosAnalysed,
+  paymentCard,
+  billingEnabled,
 }: {
   videosAnalysed: number
+  paymentCard: BillingCard | null
+  billingEnabled: boolean
 }) {
   const invoices: Invoice[] = []
 
@@ -105,27 +111,7 @@ export function SettingsBillingUsage({
         title="Payments & Invoices"
         description="Manage your payment method and review past invoices."
       >
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CreditCardIcon className="size-4" />
-              Payment method
-            </CardTitle>
-            <CardDescription>
-              No payment method on file.
-            </CardDescription>
-            <CardAction>
-              <Button variant="outline" size="sm" disabled>
-                Add payment method
-              </Button>
-            </CardAction>
-          </CardHeader>
-          <CardContent>
-            <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
-              Add a card to upgrade your plan and unlock paid features.
-            </div>
-          </CardContent>
-        </Card>
+        <BillingPaymentMethod card={paymentCard} enabled={billingEnabled} />
 
         <Card>
           <CardHeader>
