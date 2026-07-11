@@ -1,6 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import {
+  checkVideoAnalysisAllowed,
+  incrementUsage,
+} from "@/lib/billing/entitlements"
+import {
   getAnalysedVideo,
   healCachedTranscript,
   saveAnalysedVideo,
@@ -114,6 +118,19 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // This is a genuinely new analysis (nothing cached to replay), so it counts
+    // against the plan's monthly allowance. Replaying a cached video above never
+    // reaches here, so re-opening a report is always free. Block before spending
+    // any YouTube quota when the user is out of analyses.
+    const analysisCheck = await checkVideoAnalysisAllowed(user.id)
+    if (!analysisCheck.allowed) {
+      return NextResponse.json(
+        { error: "plan_limit_reached", message: analysisCheck.message },
+        { status: 402 },
+      )
+    }
+    const analysisPeriodStart = analysisCheck.entitlement.periodStart
+
     const accessToken = await getGoogleAccessToken(user.id)
 
     const video = await getVideoDetails(accessToken, videoId)
@@ -167,6 +184,16 @@ export async function POST(request: NextRequest) {
       if (savedVideo) {
         videoPersisted = true
         analysedVideoId = savedVideo.id
+        // Tally this new analysis against the plan's monthly allowance. Best
+        // effort: a counter hiccup must not fail an analysis the user can use,
+        // and the pre-flight check above is the real gate.
+        try {
+          await incrementUsage(user.id, analysisPeriodStart, {
+            videoAnalyses: 1,
+          })
+        } catch (usageError) {
+          console.error("Failed to record video-analysis usage", usageError)
+        }
         try {
           const savedWindows = await saveRetentionWindows(
             supabase,

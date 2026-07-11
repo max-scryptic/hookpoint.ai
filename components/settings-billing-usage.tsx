@@ -19,6 +19,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import type { BillingCard } from "@/lib/stripe/customers"
+import type { BillingSnapshot, MeterStatus } from "@/lib/billing/entitlements"
 
 // A single invoice row. There is no billing backend wired up yet, so the list
 // is empty for now and the table renders its empty state.
@@ -50,19 +51,45 @@ function SettingsSection({
   )
 }
 
+// Formats a meter as "used / limit" (or "used / ∞" for unlimited tiers).
+function formatMeter(meter: MeterStatus): string {
+  const used = meter.used.toLocaleString()
+  if (meter.unlimited) return `${used} / ∞`
+  return `${used} / ${(meter.limit as number).toLocaleString()}`
+}
+
+// Formats the billing-window end date for display, e.g. "11 Aug 2026".
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  })
+}
+
 // Renders the "Billing & Usage" tab: the current plan / usage summary, plus the
-// payment method and invoice history. Usage reflects the user's real analysed
-// video count; plan and payment details are placeholders until billing is live.
+// payment method and invoice history. The plan, usage meters and renewal date
+// all come from the live billing snapshot; a null snapshot degrades to the Free
+// defaults so the page still renders if the lookup failed.
 export function SettingsBillingUsage({
-  videosAnalysed,
+  snapshot,
   paymentCard,
   billingEnabled,
 }: {
-  videosAnalysed: number
+  snapshot: BillingSnapshot | null
   paymentCard: BillingCard | null
   billingEnabled: boolean
 }) {
   const invoices: Invoice[] = []
+
+  const planName = snapshot?.plan.name ?? "Free"
+  const isFree = (snapshot?.planId ?? "free") === "free"
+  const renewsLabel = snapshot ? formatDate(snapshot.periodEnd.toISOString()) : "—"
+  const renewsCaption = snapshot?.cancelAtPeriodEnd
+    ? "Cancels on"
+    : isFree
+      ? "Resets"
+      : "Renews"
 
   return (
     <div className="space-y-8">
@@ -74,7 +101,13 @@ export function SettingsBillingUsage({
           <CardHeader>
             <CardTitle>Current plan</CardTitle>
             <CardDescription>
-              You&rsquo;re on the Free plan.
+              {isFree
+                ? "You’re on the Free plan."
+                : `You’re on the ${planName} plan${
+                    snapshot?.billingPeriod === "annual"
+                      ? ", billed annually."
+                      : "."
+                  }`}
             </CardDescription>
             <CardAction>
               <Button
@@ -86,25 +119,33 @@ export function SettingsBillingUsage({
               </Button>
             </CardAction>
           </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-3">
+          <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-lg border bg-muted/30 p-3">
               <div className="text-xs text-muted-foreground">Plan</div>
               <div className="mt-1 font-heading text-lg font-semibold">
-                Free
+                {planName}
               </div>
             </div>
             <div className="rounded-lg border bg-muted/30 p-3">
               <div className="text-xs text-muted-foreground">
-                Videos analysed
+                Video analyses
               </div>
               <div className="mt-1 font-heading text-lg font-semibold tabular-nums">
-                {videosAnalysed.toLocaleString()}
+                {snapshot ? formatMeter(snapshot.videoAnalyses) : "—"}
               </div>
             </div>
             <div className="rounded-lg border bg-muted/30 p-3">
-              <div className="text-xs text-muted-foreground">Renews</div>
+              <div className="text-xs text-muted-foreground">
+                Deep-dive credits
+              </div>
+              <div className="mt-1 font-heading text-lg font-semibold tabular-nums">
+                {snapshot ? formatMeter(snapshot.deepCredits) : "—"}
+              </div>
+            </div>
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <div className="text-xs text-muted-foreground">{renewsCaption}</div>
               <div className="mt-1 font-heading text-lg font-semibold">
-                &mdash;
+                {renewsLabel}
               </div>
             </div>
           </CardContent>

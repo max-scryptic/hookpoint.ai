@@ -1,6 +1,11 @@
+import { Suspense } from "react"
+
 import { AppSidebar } from "@/components/app-sidebar"
-import { PricingPlans } from "@/components/pricing-plans"
+import { PricingPlansCheckout } from "@/components/pricing-plans-checkout"
 import { getSidebarDefaultOpen } from "@/lib/sidebar-state"
+import { isStripeEnabled } from "@/lib/stripe/config"
+import { getEntitlement } from "@/lib/billing/entitlements"
+import type { PlanId } from "@/lib/plans"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -17,11 +22,25 @@ import {
 } from "@/components/ui/sidebar"
 import { requireAuthenticatedUser } from "@/lib/auth"
 
+// The user's plan drives which card shows "Current plan"; a lookup failure just
+// falls back to Free so the page always renders.
+async function loadCurrentPlan(userId: string): Promise<PlanId> {
+  try {
+    const entitlement = await getEntitlement(userId)
+    return entitlement.planId
+  } catch (error) {
+    console.error("Failed to resolve current plan for pricing", error)
+    return "free"
+  }
+}
+
 export default async function PricingPage() {
-  const [defaultOpen] = await Promise.all([
+  const [defaultOpen, user] = await Promise.all([
     getSidebarDefaultOpen(),
     requireAuthenticatedUser(),
   ])
+  const currentPlanId = await loadCurrentPlan(user.id)
+  const billingEnabled = isStripeEnabled()
 
   return (
     <SidebarProvider defaultOpen={defaultOpen}>
@@ -59,7 +78,12 @@ export default async function PricingPage() {
                 downgrade whenever you like.
               </p>
             </div>
-            <PricingPlans currentPlanId="free" />
+            <Suspense>
+              <PricingPlansCheckout
+                currentPlanId={currentPlanId}
+                billingEnabled={billingEnabled}
+              />
+            </Suspense>
           </div>
         </main>
       </SidebarInset>

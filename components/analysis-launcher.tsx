@@ -81,7 +81,7 @@ export function AnalysisLauncherProvider({
           setError(
             data.error === "reconnect_required"
               ? (data.message ?? "Please reconnect your YouTube account.")
-              : (data.error ?? "We couldn't analyse that video."),
+              : (data.message ?? data.error ?? "We couldn't analyse that video."),
           )
           setPhase("error")
           activeRef.current = false

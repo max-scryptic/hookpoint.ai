@@ -60,6 +60,10 @@ export interface InitiateUploadParams {
   // Client-claimed size, used only for an early UX-level reject. The real size
   // is read from storage at completion and is the value we persist.
   declaredSizeBytes?: number | null
+  // Upload size cap in bytes for this user's plan. Falls back to the global
+  // storage cap when omitted, so callers without plan context still get the
+  // hard bucket limit. The route resolves this from the user's entitlement.
+  maxUploadBytes?: number | null
 }
 
 export interface InitiateUploadResult {
@@ -103,7 +107,7 @@ export async function initiateSourceFileUpload(
     )
   }
 
-  const maxBytes = getMaxUploadBytes()
+  const maxBytes = params.maxUploadBytes ?? getMaxUploadBytes()
   if (
     typeof params.declaredSizeBytes === "number" &&
     params.declaredSizeBytes > maxBytes
@@ -221,6 +225,8 @@ export interface CompleteUploadParams {
     uploadId: string
     parts: CompletedPart[]
   }
+  // Upload size cap in bytes for this user's plan (see InitiateUploadParams).
+  maxUploadBytes?: number | null
 }
 
 // Confirms a direct upload actually landed: verifies the object exists, reads its
@@ -287,7 +293,7 @@ export async function completeSourceFileUpload(
   }
 
   // Enforce the size cap against the real, storage-reported size.
-  const maxBytes = getMaxUploadBytes()
+  const maxBytes = params.maxUploadBytes ?? getMaxUploadBytes()
   if (info.sizeBytes != null && info.sizeBytes > maxBytes) {
     await storage.deleteObject(sourceFile.storagePath).catch(() => {})
     await updateSourceFile(supabase, params.userId, sourceFile.id, {

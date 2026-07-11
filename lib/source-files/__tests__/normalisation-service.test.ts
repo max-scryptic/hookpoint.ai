@@ -46,6 +46,7 @@ function makeSourceFile(overrides: Partial<SourceFile> = {}): SourceFile {
     normalisationTaskToken: null,
     normalisationError: null,
     originalDeletedAt: null,
+    deepCreditsCharged: null,
     createdAt: "2026-06-30T00:00:00Z",
     updatedAt: "2026-06-30T00:00:00Z",
     ...overrides,
