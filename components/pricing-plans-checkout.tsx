@@ -9,8 +9,8 @@ import type { BillingPeriod, PlanId } from "@/lib/plans"
 // Client wrapper that turns the presentational PricingPlans cards into a working
 // purchase flow: picking a paid plan starts a Stripe Checkout session and
 // redirects to it; picking Free opens the billing portal so a subscriber can
-// cancel. Also surfaces the post-checkout result banner from the `?checkout`
-// query param Stripe redirects back with.
+// cancel. Also surfaces the successful post-checkout banner from the
+// `?checkout` query param Stripe redirects back with.
 export function PricingPlansCheckout({
   currentPlanId,
   billingEnabled,
@@ -78,10 +78,6 @@ export function PricingPlansCheckout({
           You&rsquo;re all set — your new plan is active. It can take a moment to
           appear here while we confirm the payment.
         </Banner>
-      ) : checkoutStatus === "cancelled" ? (
-        <Banner tone="muted">
-          Checkout cancelled. You haven&rsquo;t been charged.
-        </Banner>
       ) : null}
 
       {error ? <Banner tone="error">{error}</Banner> : null}
@@ -99,15 +95,13 @@ function Banner({
   tone,
   children,
 }: {
-  tone: "success" | "error" | "muted"
+  tone: "success" | "error"
   children: React.ReactNode
 }) {
   const toneClass =
     tone === "success"
       ? "border-primary/30 bg-primary/10 text-foreground"
-      : tone === "error"
-        ? "border-destructive/30 bg-destructive/10 text-foreground"
-        : "border-border bg-muted/40 text-muted-foreground"
+      : "border-destructive/30 bg-destructive/10 text-foreground"
   return (
     <div
       className={`mx-auto max-w-2xl rounded-lg border px-4 py-3 text-center text-sm ${toneClass}`}
