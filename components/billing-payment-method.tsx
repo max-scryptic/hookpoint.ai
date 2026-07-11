@@ -8,10 +8,10 @@ import {
   Card,
   CardAction,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { CardBrandLogo } from "@/components/ui/card-brand-logo"
 import type { BillingCard } from "@/lib/stripe/customers"
 
 // Formats "visa" → "Visa" for display; brands arrive from Stripe lowercased.
@@ -55,6 +55,11 @@ export function BillingPaymentMethod({
   const actionLabel = card ? "Manage payment method" : "Add payment method"
   const endpoint = card ? "portal" : "setup-session"
 
+  const expiry =
+    card?.expMonth && card.expYear
+      ? `Expires ${String(card.expMonth).padStart(2, "0")}/${card.expYear}`
+      : null
+
   return (
     <Card>
       <CardHeader>
@@ -62,11 +67,6 @@ export function BillingPaymentMethod({
           <CreditCardIcon className="size-4" />
           Payment method
         </CardTitle>
-        <CardDescription>
-          {card
-            ? `${formatBrand(card.brand)} ending in ${card.last4}`
-            : "No payment method on file."}
-        </CardDescription>
         <CardAction>
           <Button
             variant="outline"
@@ -79,15 +79,29 @@ export function BillingPaymentMethod({
         </CardAction>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
-          {!enabled
-            ? "Card payments aren’t enabled yet."
-            : card
-              ? card.expMonth && card.expYear
-                ? `Expires ${String(card.expMonth).padStart(2, "0")}/${card.expYear}`
-                : "Your card is on file."
+        {card ? (
+          <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-3">
+            <CardBrandLogo brand={card.brand} className="h-6 w-9" />
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 text-sm font-medium">
+                <span>{formatBrand(card.brand)}</span>
+                <span aria-hidden="true" className="text-muted-foreground">
+                  •••• {card.last4}
+                </span>
+                <span className="sr-only">ending in {card.last4}</span>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {expiry ?? "On file"}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+            {!enabled
+              ? "Card payments aren’t enabled yet."
               : "Add a card to upgrade your plan and unlock paid features."}
-        </div>
+          </div>
+        )}
         {error ? (
           <p className="text-sm text-destructive" role="alert">
             {error}
