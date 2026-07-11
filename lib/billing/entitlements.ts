@@ -5,8 +5,6 @@
 // service-role admin client because the billing/usage tables are locked down to
 // server-side access only.
 
-import { addMonths, differenceInMonths } from "date-fns"
-
 import { createAdminClient } from "@/lib/supabase/admin"
 import {
   creditsForDurationSeconds,
@@ -23,6 +21,14 @@ import { getSubscriptionForUser } from "@/lib/billing/subscriptions"
 // cancels, at which point the projection row is deleted).
 const ENTITLING_STATUSES = new Set(["active", "trialing", "past_due"])
 
+export function subscriptionGrantsPaidAccess(
+  subscription: { status: string; currentPeriodEnd: string | Date },
+  now: Date,
+): boolean {
+  if (!ENTITLING_STATUSES.has(subscription.status)) return false
+  return new Date(subscription.currentPeriodEnd).getTime() > now.getTime()
+}
+
 export type Entitlement = {
   planId: PlanId
   plan: Plan
@@ -37,29 +43,61 @@ export type Entitlement = {
   cancelAtPeriodEnd: boolean
 }
 
+function daysInUtcMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
+}
+
+function addUtcMonths(date: Date, months: number): Date {
+  const targetMonth = date.getUTCMonth() + months
+  const targetYear = date.getUTCFullYear() + Math.floor(targetMonth / 12)
+  const normalizedMonth = ((targetMonth % 12) + 12) % 12
+  const targetDay = Math.min(
+    date.getUTCDate(),
+    daysInUtcMonth(targetYear, normalizedMonth),
+  )
+
+  return new Date(
+    Date.UTC(
+      targetYear,
+      normalizedMonth,
+      targetDay,
+      date.getUTCHours(),
+      date.getUTCMinutes(),
+      date.getUTCSeconds(),
+      date.getUTCMilliseconds(),
+    ),
+  )
+}
+
+function differenceInUtcMonths(from: Date, to: Date): number {
+  return (
+    (to.getUTCFullYear() - from.getUTCFullYear()) * 12 +
+    (to.getUTCMonth() - from.getUTCMonth())
+  )
+}
+
 // Computes the current monthly window for a Free user, anchored to the day their
 // account was created. Pure and total: for any `now >= anchor` it returns the
 // window [start, end) that contains `now`, with start/end landing on the same
-// day-of-month as the anchor (date-fns clamps short months, e.g. a 31st anchor
-// falls to the 30th/28th). Exported for direct unit testing.
+// day-of-month as the anchor (clamped in short months, e.g. a 31st anchor falls
+// to the 30th/28th). Exported for direct unit testing.
 export function computeFreePeriodWindow(
   anchor: Date,
   now: Date,
 ): { start: Date; end: Date } {
-  // differenceInMonths truncates partial months, so this is a good first guess
-  // for how many whole cycles have elapsed; the loops below correct any
-  // month-length clamping edge cases so the invariant start <= now < end holds.
-  let months = Math.max(0, differenceInMonths(now, anchor))
-  let start = addMonths(anchor, months)
+  // The database stores UTC timestamps, so do the month math in UTC. Local-time
+  // month helpers can shift billing windows by an hour across DST boundaries.
+  let months = Math.max(0, differenceInUtcMonths(anchor, now))
+  let start = addUtcMonths(anchor, months)
   while (start.getTime() > now.getTime() && months > 0) {
     months -= 1
-    start = addMonths(anchor, months)
+    start = addUtcMonths(anchor, months)
   }
-  let end = addMonths(anchor, months + 1)
+  let end = addUtcMonths(anchor, months + 1)
   while (end.getTime() <= now.getTime()) {
     months += 1
-    start = addMonths(anchor, months)
-    end = addMonths(anchor, months + 1)
+    start = addUtcMonths(anchor, months)
+    end = addUtcMonths(anchor, months + 1)
   }
   return { start, end }
 }
@@ -91,7 +129,7 @@ export async function getEntitlement(
 ): Promise<Entitlement> {
   const subscription = await getSubscriptionForUser(userId)
 
-  if (subscription && ENTITLING_STATUSES.has(subscription.status)) {
+  if (subscription && subscriptionGrantsPaidAccess(subscription, now)) {
     return {
       planId: subscription.planId,
       plan: getPlan(subscription.planId),
