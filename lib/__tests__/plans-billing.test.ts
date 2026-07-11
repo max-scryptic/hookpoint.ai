@@ -72,23 +72,23 @@ describe("resolvePlanFromPriceId", () => {
 })
 
 describe("getSubscriptionReturnUrl", () => {
-  it("adds a checkout flag for successful subscription checkout", () => {
-    process.env.APP_BASE_URL = "https://app.example.com"
+  it("routes successful checkouts through sync before the dashboard", () => {
+    const previousBaseUrl = process.env.APP_BASE_URL
+    process.env.APP_BASE_URL = "https://hookpoint.test"
 
-    expect(getSubscriptionReturnUrl("success")).toBe(
-      "https://app.example.com/pricing?checkout=success",
-    )
-
-    delete process.env.APP_BASE_URL
-  })
-
-  it("returns to pricing without a checkout flag when checkout is cancelled", () => {
-    process.env.APP_BASE_URL = "https://app.example.com"
-
-    expect(getSubscriptionReturnUrl("cancelled")).toBe(
-      "https://app.example.com/pricing",
-    )
-
-    delete process.env.APP_BASE_URL
+    try {
+      expect(getSubscriptionReturnUrl("success")).toBe(
+        "https://hookpoint.test/api/billing/checkout/success?checkout=success&session_id=%7BCHECKOUT_SESSION_ID%7D",
+      )
+      expect(getSubscriptionReturnUrl("cancelled")).toBe(
+        "https://hookpoint.test/pricing?checkout=cancelled",
+      )
+    } finally {
+      if (previousBaseUrl) {
+        process.env.APP_BASE_URL = previousBaseUrl
+      } else {
+        delete process.env.APP_BASE_URL
+      }
+    }
   })
 })
