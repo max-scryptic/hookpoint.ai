@@ -85,7 +85,7 @@ function differenceInUtcMonths(from: Date, to: Date): number {
 // window [start, end) that contains `now`, with start/end landing on the same
 // day-of-month as the anchor (clamped in short months, e.g. a 31st anchor falls
 // to the 30th/28th). Exported for direct unit testing.
-export function computeFreePeriodWindow(
+export function computeMonthlyUsageWindow(
   anchor: Date,
   now: Date,
 ): { start: Date; end: Date } {
@@ -157,6 +157,13 @@ export async function getEntitlement(
   const subscription = await getSubscriptionForUser(userId)
 
   if (subscription && subscriptionGrantsPaidAccess(subscription, now)) {
+    const subscriptionStart = new Date(subscription.currentPeriodStart)
+    const subscriptionEnd = new Date(subscription.currentPeriodEnd)
+    const usageWindow =
+      subscription.billingPeriod === "annual"
+        ? computeAnnualUsageWindow(subscriptionStart, subscriptionEnd, now)
+        : { start: subscriptionStart, end: subscriptionEnd }
+
     return {
       planId: subscription.planId,
       plan: getPlan(subscription.planId),
