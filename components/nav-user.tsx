@@ -1,6 +1,5 @@
 "use client"
 
-import { useRouter } from "next/navigation"
 import {
   Avatar,
   AvatarFallback,
@@ -21,8 +20,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { createClient } from "@/lib/supabase/client"
-import { ChevronsUpDownIcon, SparklesIcon, BadgeCheckIcon, CreditCardIcon, BellIcon, Settings2Icon, LogOutIcon } from "lucide-react"
+import { ChevronsUpDownIcon, SparklesIcon, BellIcon, Settings2Icon } from "lucide-react"
 
 export function NavUser({
   user,
@@ -33,16 +31,8 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
-  const router = useRouter()
   const displayEmail = user.email || "Signed in"
   const avatarFallback = displayEmail.slice(0, 2).toUpperCase()
-
-  async function handleLogout() {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    router.replace("/login")
-    router.refresh()
-  }
 
   return (
     <SidebarMenu>
@@ -96,16 +86,6 @@ export function NavUser({
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem>
-                <BadgeCheckIcon
-                />
-                Account
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <CreditCardIcon
-                />
-                Billing
-              </DropdownMenuItem>
-              <DropdownMenuItem>
                 <BellIcon
                 />
                 Notifications
@@ -116,12 +96,6 @@ export function NavUser({
                 Settings
               </DropdownMenuItem>
             </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleLogout}>
-              <LogOutIcon
-              />
-              Log out
-            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>
