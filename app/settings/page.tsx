@@ -19,6 +19,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { requireAuthenticatedUser } from "@/lib/auth"
 import { createClient } from "@/lib/supabase/server"
+import { isStripeEnabled } from "@/lib/stripe/config"
+import { getBillingCard, type BillingCard } from "@/lib/stripe/customers"
 import { getDashboardKpis } from "@/lib/dashboard/kpis"
 import { getGoogleAccessToken } from "@/lib/youtube/google-auth"
 import {
@@ -36,6 +38,19 @@ async function loadVideosAnalysed(userId: string): Promise<number> {
   } catch (error) {
     console.error("Failed to load usage for settings", error)
     return 0
+  }
+}
+
+// Best-effort load of the user's saved card. Billing being unconfigured, or a
+// Stripe/DB hiccup, must not take down the settings page — fall back to "no card
+// on file", which is also the correct state before a card is ever added.
+async function loadPaymentCard(userId: string): Promise<BillingCard | null> {
+  if (!isStripeEnabled()) return null
+  try {
+    return await getBillingCard(userId)
+  } catch (error) {
+    console.error("Failed to load payment method for settings", error)
+    return null
   }
 }
 
@@ -58,10 +73,12 @@ export default async function SettingsPage() {
     getSidebarDefaultOpen(),
     requireAuthenticatedUser(),
   ])
-  const [videosAnalysed, connectedAccount] = await Promise.all([
+  const [videosAnalysed, connectedAccount, paymentCard] = await Promise.all([
     loadVideosAnalysed(user.id),
     loadConnectedAccount(user.id),
+    loadPaymentCard(user.id),
   ])
+  const billingEnabled = isStripeEnabled()
 
   return (
     <SidebarProvider defaultOpen={defaultOpen}>
@@ -103,7 +120,11 @@ export default async function SettingsPage() {
                 <TabsTrigger value="account">Account &amp; Settings</TabsTrigger>
               </TabsList>
               <TabsContent value="billing">
-                <SettingsBillingUsage videosAnalysed={videosAnalysed} />
+                <SettingsBillingUsage
+                  videosAnalysed={videosAnalysed}
+                  paymentCard={paymentCard}
+                  billingEnabled={billingEnabled}
+                />
               </TabsContent>
               <TabsContent value="account">
                 <SettingsAccount
