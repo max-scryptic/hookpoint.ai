@@ -58,7 +58,7 @@ export const PLANS: Plan[] = [
     name: "Starter",
     tagline: "Triage your catalogue, then dig into what matters.",
     priceMonthlyPence: 1500,
-    priceAnnualPence: 12000,
+    priceAnnualPence: 15000,
     videoAnalysesPerMonth: 30,
     deepCreditsPerMonth: 140,
     maxUploadGb: 10,
