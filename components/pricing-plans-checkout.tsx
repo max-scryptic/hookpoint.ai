@@ -20,12 +20,12 @@ export function PricingPlansCheckout({
 }) {
   const searchParams = useSearchParams()
   const [error, setError] = useState<string | null>(null)
-  const [pending, setPending] = useState(false)
+  const [pendingPlanId, setPendingPlanId] = useState<PlanId | null>(null)
 
   const checkoutStatus = searchParams.get("checkout")
 
   async function handleSelect(planId: PlanId, period: BillingPeriod) {
-    if (pending) return
+    if (pendingPlanId) return
     setError(null)
 
     if (!billingEnabled) {
@@ -36,18 +36,19 @@ export function PricingPlansCheckout({
     // Downgrading to Free means cancelling the current subscription, which the
     // user does from the Stripe billing portal.
     if (planId === "free") {
-      await redirectTo("/api/billing/portal")
+      await redirectTo(planId, "/api/billing/portal")
       return
     }
 
-    await redirectTo("/api/billing/checkout", { planId, period })
+    await redirectTo(planId, "/api/billing/checkout", { planId, period })
   }
 
   async function redirectTo(
+    planId: PlanId,
     endpoint: string,
     body?: Record<string, unknown>,
   ) {
-    setPending(true)
+    setPendingPlanId(planId)
     try {
       const response = await fetch(endpoint, {
         method: "POST",
@@ -60,13 +61,13 @@ export function PricingPlansCheckout({
       }
       if (!response.ok || !data.url) {
         setError(data.error ?? "Something went wrong. Please try again.")
-        setPending(false)
+        setPendingPlanId(null)
         return
       }
       window.location.href = data.url
     } catch {
       setError("Something went wrong. Please try again.")
-      setPending(false)
+      setPendingPlanId(null)
     }
   }
 
@@ -87,6 +88,7 @@ export function PricingPlansCheckout({
 
       <PricingPlans
         currentPlanId={currentPlanId}
+        loadingPlanId={pendingPlanId}
         onSelectPlan={handleSelect}
       />
     </div>
