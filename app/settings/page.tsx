@@ -1,5 +1,6 @@
 import { AppSidebar } from "@/components/app-sidebar"
-import { ModeToggle } from "@/components/mode-toggle"
+import { SettingsAccount } from "@/components/settings-account"
+import { SettingsBillingUsage } from "@/components/settings-billing-usage"
 import { getSidebarDefaultOpen } from "@/lib/sidebar-state"
 import {
   Breadcrumb,
@@ -9,23 +10,58 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { requireAuthenticatedUser } from "@/lib/auth"
+import { createClient } from "@/lib/supabase/server"
+import { getDashboardKpis } from "@/lib/dashboard/kpis"
+import { getGoogleAccessToken } from "@/lib/youtube/google-auth"
+import {
+  getMyChannelDetails,
+  type YouTubeChannelDetails,
+} from "@/lib/youtube/youtube"
+
+// Best-effort usage load: a failure here should not take down the settings
+// page, so fall back to zero analysed videos.
+async function loadVideosAnalysed(userId: string): Promise<number> {
+  try {
+    const supabase = await createClient()
+    const kpis = await getDashboardKpis(supabase, userId)
+    return kpis.videosAnalysed
+  } catch (error) {
+    console.error("Failed to load usage for settings", error)
+    return 0
+  }
+}
+
+// The connected account is helpful context but optional; degrade gracefully to
+// the "connect" prompt if YouTube is unavailable or needs reconnecting.
+async function loadConnectedAccount(
+  userId: string,
+): Promise<YouTubeChannelDetails | null> {
+  try {
+    const accessToken = await getGoogleAccessToken(userId)
+    return await getMyChannelDetails(accessToken)
+  } catch (error) {
+    console.error("Failed to load connected YouTube account", error)
+    return null
+  }
+}
 
 export default async function SettingsPage() {
-  const defaultOpen = await getSidebarDefaultOpen()
+  const [defaultOpen, user] = await Promise.all([
+    getSidebarDefaultOpen(),
+    requireAuthenticatedUser(),
+  ])
+  const [videosAnalysed, connectedAccount] = await Promise.all([
+    loadVideosAnalysed(user.id),
+    loadConnectedAccount(user.id),
+  ])
 
   return (
     <SidebarProvider defaultOpen={defaultOpen}>
@@ -61,22 +97,21 @@ export default async function SettingsPage() {
                 Manage workspace preferences and display settings.
               </p>
             </div>
-            <Card>
-              <CardHeader>
-                <CardTitle>Appearance</CardTitle>
-                <CardDescription>
-                  Choose how Hookpoint.ai looks on this device.
-                </CardDescription>
-                <CardAction>
-                  <ModeToggle />
-                </CardAction>
-              </CardHeader>
-              <CardContent>
-                <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
-                  Theme changes are saved in this browser.
-                </div>
-              </CardContent>
-            </Card>
+            <Tabs defaultValue="account" className="gap-6">
+              <TabsList>
+                <TabsTrigger value="billing">Billing &amp; Usage</TabsTrigger>
+                <TabsTrigger value="account">Account &amp; Settings</TabsTrigger>
+              </TabsList>
+              <TabsContent value="billing">
+                <SettingsBillingUsage videosAnalysed={videosAnalysed} />
+              </TabsContent>
+              <TabsContent value="account">
+                <SettingsAccount
+                  email={user.email}
+                  connectedAccount={connectedAccount}
+                />
+              </TabsContent>
+            </Tabs>
           </div>
         </main>
       </SidebarInset>
