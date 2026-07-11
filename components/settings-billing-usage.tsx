@@ -21,6 +21,7 @@ import {
 import type { BillingCard } from "@/lib/stripe/customers"
 import type { BillingSnapshot, MeterStatus } from "@/lib/billing/entitlements"
 import type { BillingInvoice } from "@/lib/stripe/invoices"
+import { cn } from "@/lib/utils"
 
 function SettingsSection({
   title,
