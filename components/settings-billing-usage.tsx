@@ -88,9 +88,9 @@ export function SettingsBillingUsage({
   const includesDeepDives = (snapshot?.plan.deepCreditsPerMonth ?? 0) > 0
   const renewsLabel = snapshot ? formatDate(snapshot.periodEnd.toISOString()) : "—"
   const renewsCaption = snapshot?.cancelAtPeriodEnd
-    ? "Cancels on"
-    : isFree
-      ? "Resets"
+    ? "Access ends"
+    : isFree || snapshot?.billingPeriod === "annual"
+      ? "Usage resets"
       : "Renews"
   const planStats = [
     {

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest"
 
-import { computeFreePeriodWindow } from "@/lib/billing/entitlements"
+import {
+  computeAnnualUsageWindow,
+  computeFreePeriodWindow,
+} from "@/lib/billing/entitlements"
 
 // The Free plan's monthly reset is anchored to the account creation date, so
 // this pure window computation is the heart of "when do limits reset". It must
@@ -52,5 +55,46 @@ describe("computeFreePeriodWindow", () => {
     const { start, end } = computeFreePeriodWindow(anchor, anchor)
     expect(start.toISOString()).toBe(anchor.toISOString())
     expect(end.toISOString()).toBe("2026-06-05T10:00:00.000Z")
+  })
+})
+
+describe("computeAnnualUsageWindow", () => {
+  it("returns the monthly usage slice inside an annual subscription", () => {
+    const subscriptionStart = new Date("2026-01-10T09:00:00Z")
+    const subscriptionEnd = new Date("2027-01-10T09:00:00Z")
+    const now = new Date("2026-04-15T00:00:00Z")
+    const { start, end } = computeAnnualUsageWindow(
+      subscriptionStart,
+      subscriptionEnd,
+      now,
+    )
+    expect(start.toISOString()).toBe("2026-04-10T09:00:00.000Z")
+    expect(end.toISOString()).toBe("2026-05-10T09:00:00.000Z")
+  })
+
+  it("starts a fresh usage window on each monthly anchor date", () => {
+    const subscriptionStart = new Date("2026-01-10T09:00:00Z")
+    const subscriptionEnd = new Date("2027-01-10T09:00:00Z")
+    const now = new Date("2026-05-10T09:00:00Z")
+    const { start, end } = computeAnnualUsageWindow(
+      subscriptionStart,
+      subscriptionEnd,
+      now,
+    )
+    expect(start.toISOString()).toBe("2026-05-10T09:00:00.000Z")
+    expect(end.toISOString()).toBe("2026-06-10T09:00:00.000Z")
+  })
+
+  it("caps the final usage window at the annual paid-through date", () => {
+    const subscriptionStart = new Date("2026-01-31T00:00:00Z")
+    const subscriptionEnd = new Date("2027-01-31T00:00:00Z")
+    const now = new Date("2027-01-15T00:00:00Z")
+    const { start, end } = computeAnnualUsageWindow(
+      subscriptionStart,
+      subscriptionEnd,
+      now,
+    )
+    expect(start.toISOString()).toBe("2026-12-31T00:00:00.000Z")
+    expect(end.toISOString()).toBe("2027-01-31T00:00:00.000Z")
   })
 })
