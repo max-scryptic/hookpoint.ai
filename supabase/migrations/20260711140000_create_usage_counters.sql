@@ -1,8 +1,10 @@
 -- Per-billing-window usage tallies. Each row counts one user's consumption
--- within a single billing window, identified by (user_id, period_start). The
--- period_start is the start of the window the app computed at consumption time:
---   • paid plans → billing_subscriptions.current_period_start
---   • Free plan  → the monthly window anchored to the user's account creation
+-- within a single usage window, identified by (user_id, period_start). The
+-- period_start is the start of the monthly window the app computed at
+-- consumption time:
+--   • monthly paid plans → billing_subscriptions.current_period_start
+--   • annual paid plans  → monthly slice anchored to current_period_start
+--   • Free plan          → monthly window anchored to account creation
 -- Because the window start is part of the key, a new window simply lands on a
 -- new row that starts at zero — that is how limits "reset" on the billing date
 -- without any scheduled job to clear counters.

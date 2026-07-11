@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation"
 import { BrandLogo } from "@/components/brand-logo"
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
-import { createClient } from "@/lib/supabase/client"
 import {
   Sidebar,
   SidebarContent,
@@ -51,9 +50,20 @@ function SidebarBrand() {
   )
 }
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
+  showUpgradeToPro?: boolean
+  user?: {
+    email: string | null
+  }
+}
+
+export function AppSidebar({
+  showUpgradeToPro = false,
+  user,
+  ...props
+}: AppSidebarProps) {
   const pathname = usePathname()
-  const [userEmail, setUserEmail] = React.useState("")
+  const userEmail = user?.email ?? ""
 
   const items = navMain.map((item) => {
     const matchPrefix = "match" in item ? item.match : undefined
@@ -68,24 +78,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }
   })
 
-  React.useEffect(() => {
-    const supabase = createClient()
-
-    supabase.auth.getUser().then(({ data }) => {
-      setUserEmail(data.user?.email ?? "")
-    })
-
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setUserEmail(session?.user.email ?? "")
-      },
-    )
-
-    return () => {
-      authListener.subscription.unsubscribe()
-    }
-  }, [])
-
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
@@ -95,7 +87,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavMain items={items} />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={{ email: userEmail }} />
+        <NavUser
+          showUpgradeToPro={showUpgradeToPro}
+          user={{ email: userEmail }}
+        />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

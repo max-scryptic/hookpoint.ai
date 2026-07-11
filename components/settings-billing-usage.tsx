@@ -1,4 +1,4 @@
-import { FileTextIcon } from "lucide-react"
+import { DownloadIcon, ExternalLinkIcon, FileTextIcon } from "lucide-react"
 
 import { BillingPaymentMethod } from "@/components/billing-payment-method"
 import { Button } from "@/components/ui/button"
@@ -20,16 +20,8 @@ import {
 } from "@/components/ui/table"
 import type { BillingCard } from "@/lib/stripe/customers"
 import type { BillingSnapshot, MeterStatus } from "@/lib/billing/entitlements"
-
-// A single invoice row. There is no billing backend wired up yet, so the list
-// is empty for now and the table renders its empty state.
-type Invoice = {
-  id: string
-  date: string
-  description: string
-  amount: string
-  status: string
-}
+import type { BillingInvoice } from "@/lib/stripe/invoices"
+import { cn } from "@/lib/utils"
 
 function SettingsSection({
   title,
@@ -74,22 +66,49 @@ function formatDate(iso: string): string {
 export function SettingsBillingUsage({
   snapshot,
   paymentCard,
+  invoices,
   billingEnabled,
 }: {
   snapshot: BillingSnapshot | null
   paymentCard: BillingCard | null
+  invoices: BillingInvoice[]
   billingEnabled: boolean
 }) {
-  const invoices: Invoice[] = []
-
   const planName = snapshot?.plan.name ?? "Free"
   const isFree = (snapshot?.planId ?? "free") === "free"
+  const includesDeepDives = (snapshot?.plan.deepCreditsPerMonth ?? 0) > 0
   const renewsLabel = snapshot ? formatDate(snapshot.periodEnd.toISOString()) : "—"
   const renewsCaption = snapshot?.cancelAtPeriodEnd
-    ? "Cancels on"
-    : isFree
-      ? "Resets"
+    ? "Access ends"
+    : isFree || snapshot?.billingPeriod === "annual"
+      ? "Usage resets"
       : "Renews"
+  const planStats = [
+    {
+      label: "Plan",
+      value: planName,
+      tabular: false,
+    },
+    {
+      label: "Video analyses",
+      value: snapshot ? formatMeter(snapshot.videoAnalyses) : "—",
+      tabular: true,
+    },
+    ...(includesDeepDives
+      ? [
+          {
+            label: "Deep-dive credits",
+            value: snapshot ? formatMeter(snapshot.deepCredits) : "—",
+            tabular: true,
+          },
+        ]
+      : []),
+    {
+      label: renewsCaption,
+      value: renewsLabel,
+      tabular: false,
+    },
+  ]
 
   return (
     <div className="space-y-8">
@@ -119,35 +138,25 @@ export function SettingsBillingUsage({
               </Button>
             </CardAction>
           </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-lg border bg-muted/30 p-3">
-              <div className="text-xs text-muted-foreground">Plan</div>
-              <div className="mt-1 font-heading text-lg font-semibold">
-                {planName}
+          <CardContent
+            className={cn(
+              "grid gap-3 sm:grid-cols-2",
+              includesDeepDives ? "lg:grid-cols-4" : "lg:grid-cols-3",
+            )}
+          >
+            {planStats.map((stat) => (
+              <div key={stat.label} className="rounded-lg border bg-muted/30 p-3">
+                <div className="text-xs text-muted-foreground">{stat.label}</div>
+                <div
+                  className={cn(
+                    "mt-1 font-heading text-lg font-semibold",
+                    stat.tabular && "tabular-nums",
+                  )}
+                >
+                  {stat.value}
+                </div>
               </div>
-            </div>
-            <div className="rounded-lg border bg-muted/30 p-3">
-              <div className="text-xs text-muted-foreground">
-                Video analyses
-              </div>
-              <div className="mt-1 font-heading text-lg font-semibold tabular-nums">
-                {snapshot ? formatMeter(snapshot.videoAnalyses) : "—"}
-              </div>
-            </div>
-            <div className="rounded-lg border bg-muted/30 p-3">
-              <div className="text-xs text-muted-foreground">
-                Deep-dive credits
-              </div>
-              <div className="mt-1 font-heading text-lg font-semibold tabular-nums">
-                {snapshot ? formatMeter(snapshot.deepCredits) : "—"}
-              </div>
-            </div>
-            <div className="rounded-lg border bg-muted/30 p-3">
-              <div className="text-xs text-muted-foreground">{renewsCaption}</div>
-              <div className="mt-1 font-heading text-lg font-semibold">
-                {renewsLabel}
-              </div>
-            </div>
+            ))}
           </CardContent>
         </Card>
       </SettingsSection>
@@ -182,6 +191,7 @@ export function SettingsBillingUsage({
                     <TableHead>Description</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
+                    <TableHead className="text-right">Invoice</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -192,6 +202,32 @@ export function SettingsBillingUsage({
                       <TableCell>{invoice.status}</TableCell>
                       <TableCell className="text-right tabular-nums">
                         {invoice.amount}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {invoice.url ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            render={
+                              <a
+                                href={invoice.url}
+                                target="_blank"
+                                rel="noreferrer"
+                              />
+                            }
+                          >
+                            {invoice.actionLabel === "Download" ? (
+                              <DownloadIcon data-icon="inline-start" />
+                            ) : (
+                              <ExternalLinkIcon data-icon="inline-start" />
+                            )}
+                            {invoice.actionLabel}
+                          </Button>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">
+                            Unavailable
+                          </span>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

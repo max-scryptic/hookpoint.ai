@@ -32,10 +32,14 @@ export function subscriptionGrantsPaidAccess(
 export type Entitlement = {
   planId: PlanId
   plan: Plan
-  // The active billing window. Usage counters are keyed on periodStart, so a new
+  // The active usage window. Usage counters are keyed on periodStart, so a new
   // window automatically starts every tally at zero.
   periodStart: Date
   periodEnd: Date
+  // The Stripe subscription period for paid users. Annual plans use this for
+  // paid-through/cancellation display while usage still rolls monthly.
+  subscriptionPeriodStart: Date | null
+  subscriptionPeriodEnd: Date | null
   // "paid" when a Stripe subscription is driving the window, "free" when it is
   // anchored to the account creation date.
   source: "paid" | "free"
@@ -102,6 +106,27 @@ export function computeFreePeriodWindow(
   return { start, end }
 }
 
+// Backwards-compatible test/export name for the Free plan's monthly cycle.
+export const computeFreePeriodWindow = computeMonthlyUsageWindow
+
+// Annual subscriptions are paid yearly in Stripe, but the product allowance is
+// still monthly. The final usage month is capped at Stripe's paid-through date
+// so a cancellation/renewal boundary cannot leak into the next annual period.
+export function computeAnnualUsageWindow(
+  subscriptionStart: Date,
+  subscriptionEnd: Date,
+  now: Date,
+): { start: Date; end: Date } {
+  const window = computeMonthlyUsageWindow(subscriptionStart, now)
+  return {
+    start: window.start,
+    end:
+      window.end.getTime() > subscriptionEnd.getTime()
+        ? subscriptionEnd
+        : window.end,
+  }
+}
+
 // Reads the timestamp a user's account was created, the anchor for the Free
 // plan's monthly cycle. Falls back to "now" if the row is somehow missing, which
 // simply starts a fresh cycle rather than failing the request.
@@ -120,9 +145,11 @@ async function getAccountCreatedAt(userId: string): Promise<Date> {
   return created ? new Date(created) : new Date()
 }
 
-// Resolves the user's effective plan and billing window. A live, entitling
-// subscription drives the plan and window from Stripe's period; otherwise the
-// user is Free with a window anchored to their account creation date.
+// Resolves the user's effective plan and usage window. Monthly paid
+// subscriptions use Stripe's monthly period directly; annual paid subscriptions
+// derive a monthly usage window inside Stripe's yearly paid-through period.
+// Otherwise the user is Free with a window anchored to their account creation
+// date.
 export async function getEntitlement(
   userId: string,
   now: Date = new Date(),
@@ -133,8 +160,10 @@ export async function getEntitlement(
     return {
       planId: subscription.planId,
       plan: getPlan(subscription.planId),
-      periodStart: new Date(subscription.currentPeriodStart),
-      periodEnd: new Date(subscription.currentPeriodEnd),
+      periodStart: usageWindow.start,
+      periodEnd: usageWindow.end,
+      subscriptionPeriodStart: subscriptionStart,
+      subscriptionPeriodEnd: subscriptionEnd,
       source: "paid",
       billingPeriod: subscription.billingPeriod,
       cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
@@ -142,12 +171,14 @@ export async function getEntitlement(
   }
 
   const anchor = await getAccountCreatedAt(userId)
-  const { start, end } = computeFreePeriodWindow(anchor, now)
+  const { start, end } = computeMonthlyUsageWindow(anchor, now)
   return {
     planId: "free",
     plan: getPlan("free"),
     periodStart: start,
     periodEnd: end,
+    subscriptionPeriodStart: null,
+    subscriptionPeriodEnd: null,
     source: "free",
     billingPeriod: null,
     cancelAtPeriodEnd: false,
