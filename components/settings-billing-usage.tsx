@@ -84,12 +84,20 @@ export function SettingsBillingUsage({
 
   const planName = snapshot?.plan.name ?? "Free"
   const isFree = (snapshot?.planId ?? "free") === "free"
+  const isCancelling = Boolean(snapshot?.cancelAtPeriodEnd && !isFree)
   const renewsLabel = snapshot ? formatDate(snapshot.periodEnd.toISOString()) : "—"
   const renewsCaption = snapshot?.cancelAtPeriodEnd
     ? "Cancels on"
     : isFree
       ? "Resets"
       : "Renews"
+  const planDescription = isCancelling
+    ? `Your ${planName} plan has been cancelled. You keep access until ${renewsLabel}, then your account moves to Free.`
+    : isFree
+      ? "You’re on the Free plan."
+      : `You’re on the ${planName} plan${
+          snapshot?.billingPeriod === "annual" ? ", billed annually." : "."
+        }`
 
   return (
     <div className="space-y-8">
@@ -100,15 +108,7 @@ export function SettingsBillingUsage({
         <Card>
           <CardHeader>
             <CardTitle>Current plan</CardTitle>
-            <CardDescription>
-              {isFree
-                ? "You’re on the Free plan."
-                : `You’re on the ${planName} plan${
-                    snapshot?.billingPeriod === "annual"
-                      ? ", billed annually."
-                      : "."
-                  }`}
-            </CardDescription>
+            <CardDescription>{planDescription}</CardDescription>
             <CardAction>
               <Button
                 variant="outline"
@@ -120,6 +120,12 @@ export function SettingsBillingUsage({
             </CardAction>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {isCancelling ? (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 sm:col-span-2 lg:col-span-4 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+                Cancellation scheduled. Paid features remain available until{" "}
+                {renewsLabel}; after that, your plan will revert to Free.
+              </div>
+            ) : null}
             <div className="rounded-lg border bg-muted/30 p-3">
               <div className="text-xs text-muted-foreground">Plan</div>
               <div className="mt-1 font-heading text-lg font-semibold">

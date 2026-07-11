@@ -66,6 +66,17 @@ export async function getSubscriptionForUser(
   return data ? mapRow(data as SubscriptionRow) : null
 }
 
+// Best-effort reconciliation for return redirects from Stripe-hosted flows.
+// Webhooks remain the source of truth, but syncing before render prevents a
+// successful portal cancellation from looking stale while the webhook catches up.
+export async function syncCurrentSubscriptionForUser(
+  userId: string,
+): Promise<void> {
+  const subscription = await getSubscriptionForUser(userId)
+  if (!subscription) return
+  await syncSubscriptionFromStripe(subscription.stripeSubscriptionId)
+}
+
 // Maps a Stripe customer id back to our app user via the billing_customers
 // mapping written when the customer was created. Returns null if we've never
 // seen that customer (e.g. a subscription created directly in the dashboard).
