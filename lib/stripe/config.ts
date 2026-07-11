@@ -49,7 +49,9 @@ export function getBillingReturnUrl(status?: "added" | "cancelled"): string {
 export function getSubscriptionReturnUrl(status: "success" | "cancelled"): string {
   const base = getAppBaseUrl() ?? ""
   const url = new URL("/pricing", base || "http://localhost:3000")
-  url.searchParams.set("checkout", status)
+  if (status === "success") {
+    url.searchParams.set("checkout", status)
+  }
   return url.toString()
 }
 

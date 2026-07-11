@@ -7,7 +7,10 @@ import {
   maxUploadBytesForPlan,
   PLAN_BY_ID,
 } from "@/lib/plans"
-import { resolvePlanFromPriceId } from "@/lib/stripe/config"
+import {
+  getSubscriptionReturnUrl,
+  resolvePlanFromPriceId,
+} from "@/lib/stripe/config"
 
 describe("creditsForDurationSeconds", () => {
   it("rounds any started minute up to a whole credit", () => {
@@ -65,5 +68,27 @@ describe("resolvePlanFromPriceId", () => {
 
   it("returns null for an unknown price id", () => {
     expect(resolvePlanFromPriceId("price_unknown")).toBeNull()
+  })
+})
+
+describe("getSubscriptionReturnUrl", () => {
+  it("adds a checkout flag for successful subscription checkout", () => {
+    process.env.APP_BASE_URL = "https://app.example.com"
+
+    expect(getSubscriptionReturnUrl("success")).toBe(
+      "https://app.example.com/pricing?checkout=success",
+    )
+
+    delete process.env.APP_BASE_URL
+  })
+
+  it("returns to pricing without a checkout flag when checkout is cancelled", () => {
+    process.env.APP_BASE_URL = "https://app.example.com"
+
+    expect(getSubscriptionReturnUrl("cancelled")).toBe(
+      "https://app.example.com/pricing",
+    )
+
+    delete process.env.APP_BASE_URL
   })
 })
