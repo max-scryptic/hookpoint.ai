@@ -49,7 +49,6 @@ export const PLANS: Plan[] = [
     maxUploadGb: null,
     features: [
       { label: "10 video analyses / month" },
-      { label: "Retention curve & drop-off detection" },
       { label: "Basic hookpoint analysis" },
     ],
   },
