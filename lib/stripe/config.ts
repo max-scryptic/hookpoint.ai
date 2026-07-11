@@ -43,13 +43,19 @@ export function getBillingReturnUrl(status?: "added" | "cancelled"): string {
   return url.toString()
 }
 
-// Where Stripe returns the user after a subscription Checkout. Success lands on
-// the pricing page with a flag the UI uses to show a confirmation; cancel comes
-// back to the same page untouched.
+// Where Stripe returns the user after a subscription Checkout. Success first
+// lands on a route that syncs the subscription, then redirects to the dashboard
+// with a flag the UI uses to show a confirmation. Cancel comes back to pricing.
 export function getSubscriptionReturnUrl(status: "success" | "cancelled"): string {
   const base = getAppBaseUrl() ?? ""
-  const url = new URL("/pricing", base || "http://localhost:3000")
+  const url = new URL(
+    status === "success" ? "/api/billing/checkout/success" : "/pricing",
+    base || "http://localhost:3000",
+  )
   url.searchParams.set("checkout", status)
+  if (status === "success") {
+    url.searchParams.set("session_id", "{CHECKOUT_SESSION_ID}")
+  }
   return url.toString()
 }
 

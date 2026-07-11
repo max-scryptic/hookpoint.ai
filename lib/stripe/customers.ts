@@ -39,6 +39,15 @@ async function loadBillingCustomer(
   return (data as BillingCustomerRow | null) ?? null
 }
 
+// Returns the existing Stripe Customer id for a user without creating one.
+// Useful for read-only views such as invoice history.
+export async function getStripeCustomerIdForUser(
+  userId: string,
+): Promise<string | null> {
+  const existing = await loadBillingCustomer(userId)
+  return existing?.stripe_customer_id ?? null
+}
+
 // Returns the Stripe Customer id for a user, creating the Customer (and the
 // mapping row) on first use. `email` is attached so the customer is
 // recognisable in the Stripe dashboard. Concurrent first-time calls are made

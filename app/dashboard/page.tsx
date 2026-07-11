@@ -10,8 +10,10 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { DashboardKpiCards } from "@/components/dashboard-kpi-cards"
+import { DashboardUpgradeSuccessDialog } from "@/components/dashboard-upgrade-success-dialog"
 import { ConnectedYouTubeAccountCard } from "@/components/connected-youtube-account-card"
 import { requireAuthenticatedUser } from "@/lib/auth"
+import { getEntitlement } from "@/lib/billing/entitlements"
 import { createClient } from "@/lib/supabase/server"
 import { getDashboardKpis, type DashboardKpis } from "@/lib/dashboard/kpis"
 import { getGoogleAccessToken } from "@/lib/youtube/google-auth"
@@ -46,18 +48,39 @@ async function loadConnectedAccount(
   }
 }
 
-export default async function Page() {
+async function loadCurrentPlan(userId: string) {
+  try {
+    const entitlement = await getEntitlement(userId)
+    return entitlement.plan
+  } catch (error) {
+    console.error("Failed to load current plan for dashboard", error)
+    return null
+  }
+}
+
+export default async function Page({
+  searchParams,
+}: {
+  searchParams?: Promise<{ checkout?: string }>
+}) {
   const user = await requireAuthenticatedUser()
-  const [kpis, connectedAccount] = await Promise.all([
+  const resolvedSearchParams = await searchParams
+  const [kpis, connectedAccount, currentPlan] = await Promise.all([
     loadKpis(user.id),
     loadConnectedAccount(user.id),
+    loadCurrentPlan(user.id),
   ])
   // Show KPI cards once the user has analysed at least one video; otherwise keep
   // the blank-slate prompt to analyse their first one.
   const hasAnalysed = (kpis?.videosAnalysed ?? 0) > 0
+  const showUpgradeSuccess =
+    resolvedSearchParams?.checkout === "success" && currentPlan?.id !== "free"
 
   return (
     <>
+      {showUpgradeSuccess && currentPlan ? (
+        <DashboardUpgradeSuccessDialog open plan={currentPlan} />
+      ) : null}
       <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
         <div className="flex items-center gap-2 px-4">
           <SidebarTrigger className="-ml-1" />

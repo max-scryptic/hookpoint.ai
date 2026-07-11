@@ -7,7 +7,10 @@ import {
   maxUploadBytesForPlan,
   PLAN_BY_ID,
 } from "@/lib/plans"
-import { resolvePlanFromPriceId } from "@/lib/stripe/config"
+import {
+  getSubscriptionReturnUrl,
+  resolvePlanFromPriceId,
+} from "@/lib/stripe/config"
 
 describe("creditsForDurationSeconds", () => {
   it("rounds any started minute up to a whole credit", () => {
@@ -65,5 +68,27 @@ describe("resolvePlanFromPriceId", () => {
 
   it("returns null for an unknown price id", () => {
     expect(resolvePlanFromPriceId("price_unknown")).toBeNull()
+  })
+})
+
+describe("getSubscriptionReturnUrl", () => {
+  it("routes successful checkouts through sync before the dashboard", () => {
+    const previousBaseUrl = process.env.APP_BASE_URL
+    process.env.APP_BASE_URL = "https://hookpoint.test"
+
+    try {
+      expect(getSubscriptionReturnUrl("success")).toBe(
+        "https://hookpoint.test/api/billing/checkout/success?checkout=success&session_id=%7BCHECKOUT_SESSION_ID%7D",
+      )
+      expect(getSubscriptionReturnUrl("cancelled")).toBe(
+        "https://hookpoint.test/pricing?checkout=cancelled",
+      )
+    } finally {
+      if (previousBaseUrl) {
+        process.env.APP_BASE_URL = previousBaseUrl
+      } else {
+        delete process.env.APP_BASE_URL
+      }
+    }
   })
 })

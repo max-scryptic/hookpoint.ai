@@ -25,8 +25,10 @@ import { createClient } from "@/lib/supabase/client"
 import { ChevronsUpDownIcon, SparklesIcon, BellIcon, Settings2Icon, LogOutIcon } from "lucide-react"
 
 export function NavUser({
+  showUpgradeToPro,
   user,
 }: {
+  showUpgradeToPro: boolean
   user: {
     email: string
     avatar?: string
@@ -85,14 +87,17 @@ export function NavUser({
                 </div>
               </DropdownMenuLabel>
             </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem render={<a href="/pricing" />}>
-                <SparklesIcon
-                />
-                Upgrade to Pro
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
+            {showUpgradeToPro ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuItem render={<a href="/pricing" />}>
+                    <SparklesIcon />
+                    Upgrade to Pro
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </>
+            ) : null}
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem>
