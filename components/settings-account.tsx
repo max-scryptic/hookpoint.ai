@@ -1,5 +1,7 @@
 import { ConnectYouTubeButton } from "@/components/connect-youtube-button"
-import { ConnectedYouTubeAccountCard } from "@/components/connected-youtube-account-card"
+import {
+  ConnectedYouTubeChannel,
+} from "@/components/connected-youtube-account-card"
 import { ModeToggle } from "@/components/mode-toggle"
 import {
   Card,
@@ -11,8 +13,8 @@ import {
 } from "@/components/ui/card"
 import type { YouTubeChannelDetails } from "@/lib/youtube/youtube"
 
-// Renders the "Account & Settings" tab: the signed-in account, appearance
-// (dark mode) controls, and the connected YouTube channel.
+// Renders the "Account & Settings" tab: the signed-in account together with its
+// connected YouTube channel, and the appearance (dark mode) controls.
 export function SettingsAccount({
   email,
   connectedAccount,
@@ -25,13 +27,35 @@ export function SettingsAccount({
       <Card>
         <CardHeader>
           <CardTitle>Account</CardTitle>
-          <CardDescription>The account you&rsquo;re signed in with.</CardDescription>
+          <CardDescription>
+            The account you&rsquo;re signed in with and its connected YouTube
+            channel.
+          </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="rounded-lg border bg-muted/30 p-3">
-            <div className="text-xs text-muted-foreground">Email</div>
-            <div className="mt-1 text-sm font-medium">
-              {email ?? "Unknown"}
+        <CardContent className="space-y-6">
+          <div>
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <div className="text-xs text-muted-foreground">Email</div>
+              <div className="mt-1 text-sm font-medium">
+                {email ?? "Unknown"}
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t pt-6">
+            <div className="text-sm font-medium">Connected YouTube channel</div>
+            <div className="mt-4">
+              {connectedAccount ? (
+                <ConnectedYouTubeChannel channel={connectedAccount} />
+              ) : (
+                <div className="flex flex-col items-start gap-3">
+                  <div className="w-full rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+                    No YouTube account is connected. Connect one to analyse your
+                    videos.
+                  </div>
+                  <ConnectYouTubeButton />
+                </div>
+              )}
             </div>
           </div>
         </CardContent>
@@ -47,30 +71,7 @@ export function SettingsAccount({
             <ModeToggle />
           </CardAction>
         </CardHeader>
-        <CardContent>
-          <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
-            Theme changes are saved in this browser.
-          </div>
-        </CardContent>
       </Card>
-
-      {connectedAccount ? (
-        <ConnectedYouTubeAccountCard channel={connectedAccount} />
-      ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>Connected Account</CardTitle>
-            <CardDescription>Your linked YouTube channel</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col items-start gap-3 rounded-lg">
-            <div className="w-full rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
-              No YouTube account is connected. Connect one to analyse your
-              videos.
-            </div>
-            <ConnectYouTubeButton />
-          </CardContent>
-        </Card>
-      )}
     </div>
   )
 }
