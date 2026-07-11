@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { CheckIcon } from "lucide-react"
+import { CheckIcon, Loader2Icon } from "lucide-react"
 
 import {
   annualSavingPercent,
@@ -23,16 +23,23 @@ import { CreditsTooltip } from "@/components/credits-tooltip"
 // selection is a no-op placeholder.
 export function PricingPlans({
   currentPlanId = "free",
+  loadingPlanId = null,
   onSelectPlan,
 }: {
   currentPlanId?: PlanId
+  loadingPlanId?: PlanId | null
   onSelectPlan?: (planId: PlanId, period: BillingPeriod) => void
 }) {
   const [period, setPeriod] = useState<BillingPeriod>("annual")
+  const isLoading = loadingPlanId != null
 
   return (
     <div className="space-y-8">
-      <BillingToggle period={period} onChange={setPeriod} />
+      <BillingToggle
+        period={period}
+        disabled={isLoading}
+        onChange={setPeriod}
+      />
       <div className="grid gap-4 lg:grid-cols-3">
         {PLANS.map((plan) => (
           <PlanCard
@@ -40,6 +47,8 @@ export function PricingPlans({
             plan={plan}
             period={period}
             isCurrent={plan.id === currentPlanId}
+            isLoading={loadingPlanId === plan.id}
+            isDisabled={isLoading && loadingPlanId !== plan.id}
             onSelect={() => onSelectPlan?.(plan.id, period)}
           />
         ))}
@@ -54,9 +63,11 @@ export function PricingPlans({
 
 function BillingToggle({
   period,
+  disabled,
   onChange,
 }: {
   period: BillingPeriod
+  disabled: boolean
   onChange: (period: BillingPeriod) => void
 }) {
   return (
@@ -68,12 +79,14 @@ function BillingToggle({
       >
         <ToggleOption
           selected={period === "monthly"}
+          disabled={disabled}
           onClick={() => onChange("monthly")}
         >
           Monthly
         </ToggleOption>
         <ToggleOption
           selected={period === "annual"}
+          disabled={disabled}
           onClick={() => onChange("annual")}
         >
           Annual
@@ -88,10 +101,12 @@ function BillingToggle({
 
 function ToggleOption({
   selected,
+  disabled,
   onClick,
   children,
 }: {
   selected: boolean
+  disabled: boolean
   onClick: () => void
   children: React.ReactNode
 }) {
@@ -100,9 +115,11 @@ function ToggleOption({
       type="button"
       role="tab"
       aria-selected={selected}
+      disabled={disabled}
       onClick={onClick}
       className={cn(
         "inline-flex h-8 items-center rounded-md px-3 text-sm font-medium transition-colors",
+        "disabled:pointer-events-none disabled:opacity-60",
         selected
           ? "bg-background text-foreground shadow-sm"
           : "text-muted-foreground hover:text-foreground",
@@ -117,11 +134,15 @@ function PlanCard({
   plan,
   period,
   isCurrent,
+  isLoading,
+  isDisabled,
   onSelect,
 }: {
   plan: Plan
   period: BillingPeriod
   isCurrent: boolean
+  isLoading: boolean
+  isDisabled: boolean
   onSelect: () => void
 }) {
   const perMonth = monthlyEquivalentPence(plan, period)
@@ -170,14 +191,22 @@ function PlanCard({
       <Button
         className="mt-6 w-full"
         variant={plan.featured ? "default" : "outline"}
-        disabled={isCurrent}
+        disabled={isCurrent || isLoading || isDisabled}
+        aria-busy={isLoading}
         onClick={onSelect}
       >
-        {isCurrent
-          ? "Current plan"
-          : isFree
-            ? "Downgrade to Free"
-            : `Choose ${plan.name}`}
+        {isLoading ? (
+          <>
+            <Loader2Icon className="size-4 animate-spin" aria-hidden="true" />
+            Redirecting...
+          </>
+        ) : isCurrent ? (
+          "Current plan"
+        ) : isFree ? (
+          "Downgrade to Free"
+        ) : (
+          `Choose ${plan.name}`
+        )}
       </Button>
 
       <ul className="mt-6 space-y-3 text-sm">
