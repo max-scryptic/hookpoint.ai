@@ -71,7 +71,11 @@ export function SettingsBillingUsage({
               You&rsquo;re on the Free plan.
             </CardDescription>
             <CardAction>
-              <Button variant="outline" size="sm" disabled>
+              <Button
+                variant="outline"
+                size="sm"
+                render={<a href="/pricing" />}
+              >
                 Manage plan
               </Button>
             </CardAction>
