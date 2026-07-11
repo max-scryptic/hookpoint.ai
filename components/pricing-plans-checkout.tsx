@@ -36,7 +36,7 @@ export function PricingPlansCheckout({
     // Downgrading to Free means cancelling the current subscription, which the
     // user does from the Stripe billing portal.
     if (planId === "free") {
-      await redirectTo(planId, "/api/billing/portal")
+      await redirectTo(planId, "/api/billing/portal", { action: "cancel" })
       return
     }
 

@@ -28,11 +28,40 @@ import {
   getBillingSnapshot,
   type BillingSnapshot,
 } from "@/lib/billing/entitlements"
+import { syncCurrentSubscriptionForUser } from "@/lib/billing/subscriptions"
 import { getGoogleAccessToken } from "@/lib/youtube/google-auth"
 import {
   getMyChannelDetails,
   type YouTubeChannelDetails,
 } from "@/lib/youtube/youtube"
+
+type SettingsPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>
+}
+
+function firstSearchParam(value: string | string[] | undefined): string | null {
+  if (Array.isArray(value)) return value[0] ?? null
+  return value ?? null
+}
+
+// If Stripe redirects back after a portal cancellation, reconcile immediately
+// before rendering. The webhook still handles eventual consistency for every
+// other visit.
+async function syncBillingReturn(
+  userId: string,
+  searchParams: SettingsPageProps["searchParams"],
+): Promise<void> {
+  const params = searchParams ? await searchParams : {}
+  if (firstSearchParam(params.billing) !== "cancelled" || !isStripeEnabled()) {
+    return
+  }
+
+  try {
+    await syncCurrentSubscriptionForUser(userId)
+  } catch (error) {
+    console.error("Failed to sync billing return from Stripe", error)
+  }
+}
 
 // Best-effort billing snapshot: plan, usage meters and billing window. A failure
 // here should not take down the settings page, so fall back to null and let the
@@ -87,11 +116,12 @@ async function loadConnectedAccount(
   }
 }
 
-export default async function SettingsPage() {
+export default async function SettingsPage({ searchParams }: SettingsPageProps) {
   const [defaultOpen, user] = await Promise.all([
     getSidebarDefaultOpen(),
     requireAuthenticatedUser(),
   ])
+  await syncBillingReturn(user.id, searchParams)
   const [billingSnapshot, connectedAccount, paymentCard, invoices] =
     await Promise.all([
       loadBillingSnapshot(user.id),
