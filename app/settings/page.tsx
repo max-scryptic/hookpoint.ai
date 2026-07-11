@@ -21,6 +21,10 @@ import { requireAuthenticatedUser } from "@/lib/auth"
 import { isStripeEnabled } from "@/lib/stripe/config"
 import { getBillingCard, type BillingCard } from "@/lib/stripe/customers"
 import {
+  getBillingInvoices,
+  type BillingInvoice,
+} from "@/lib/stripe/invoices"
+import {
   getBillingSnapshot,
   type BillingSnapshot,
 } from "@/lib/billing/entitlements"
@@ -57,6 +61,18 @@ async function loadPaymentCard(userId: string): Promise<BillingCard | null> {
   }
 }
 
+// Best-effort read of recent Stripe invoices for the billing table. Stripe
+// remains the source of truth; the app only maps a small list for display.
+async function loadBillingInvoices(userId: string): Promise<BillingInvoice[]> {
+  if (!isStripeEnabled()) return []
+  try {
+    return await getBillingInvoices(userId)
+  } catch (error) {
+    console.error("Failed to load invoices for settings", error)
+    return []
+  }
+}
+
 // The connected account is helpful context but optional; degrade gracefully to
 // the "connect" prompt if YouTube is unavailable or needs reconnecting.
 async function loadConnectedAccount(
@@ -76,11 +92,13 @@ export default async function SettingsPage() {
     getSidebarDefaultOpen(),
     requireAuthenticatedUser(),
   ])
-  const [billingSnapshot, connectedAccount, paymentCard] = await Promise.all([
-    loadBillingSnapshot(user.id),
-    loadConnectedAccount(user.id),
-    loadPaymentCard(user.id),
-  ])
+  const [billingSnapshot, connectedAccount, paymentCard, invoices] =
+    await Promise.all([
+      loadBillingSnapshot(user.id),
+      loadConnectedAccount(user.id),
+      loadPaymentCard(user.id),
+      loadBillingInvoices(user.id),
+    ])
   const billingEnabled = isStripeEnabled()
 
   return (
@@ -126,6 +144,7 @@ export default async function SettingsPage() {
                 <SettingsBillingUsage
                   snapshot={billingSnapshot}
                   paymentCard={paymentCard}
+                  invoices={invoices}
                   billingEnabled={billingEnabled}
                 />
               </TabsContent>
