@@ -5,6 +5,9 @@ import { getStorageProvider } from "@/lib/storage/provider"
 import { completeSourceFileUpload } from "@/lib/source-files/upload-service"
 import { errorResponse, serialiseSourceFile } from "@/lib/source-files/http"
 import { triggerRetentionWindowMediaExtraction } from "@/lib/retention-window-media-trigger"
+import { getEntitlement, incrementUsage } from "@/lib/billing/entitlements"
+import { creditsForDurationSeconds, maxUploadBytesForPlan } from "@/lib/plans"
+import { updateSourceFile, type SourceFile } from "@/lib/source-files/source-files"
 import type { CompletedPart } from "@/lib/storage"
 
 // Extraction runs in the background via after() once the response is sent, but
@@ -51,8 +54,12 @@ export async function POST(
   // The single-PUT path sends no part list; only multipart uploads post one.
   const multipart = parseMultipartBody(body)
 
+  // Resolve the user's plan once: its size cap gates completion, and its window
+  // is where the deep-dive credit charge lands below.
+  const entitlement = await getEntitlement(user.id)
+
   try {
-    const sourceFile = await completeSourceFileUpload(
+    let sourceFile = await completeSourceFileUpload(
       supabase,
       getStorageProvider(),
       {
@@ -60,7 +67,19 @@ export async function POST(
         sourceFileId,
         clientDurationSeconds,
         multipart,
+        maxUploadBytes: maxUploadBytesForPlan(entitlement.plan),
       },
+    )
+
+    // Charge deep-dive credits for the footage now that it's really landed, once
+    // per file (deepCreditsCharged guards re-completions and later retries).
+    // Best-effort: a metering hiccup must not fail a good upload — the upload was
+    // already gated on available credits at initiate time.
+    sourceFile = await chargeDeepCreditsIfNeeded(
+      supabase,
+      user.id,
+      entitlement.periodStart,
+      sourceFile,
     )
     // Deep analysis can start decoding the just-uploaded original right now,
     // in parallel with the 1080p/360p proxy transcode that was kicked off
@@ -73,6 +92,33 @@ export async function POST(
     return NextResponse.json({ sourceFile: serialiseSourceFile(sourceFile) })
   } catch (error) {
     return errorResponse(error)
+  }
+}
+
+// Charges the deep-dive credits a ready source file's deep analysis costs
+// (~1 credit per minute of footage), exactly once. Returns the file with its
+// deep_credits_charged stamp so re-completions and retries don't recharge. A
+// non-ready file, or one already charged, is returned unchanged.
+async function chargeDeepCreditsIfNeeded(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  periodStart: Date,
+  sourceFile: SourceFile,
+): Promise<SourceFile> {
+  if (sourceFile.uploadStatus !== "ready" || sourceFile.deepCreditsCharged != null) {
+    return sourceFile
+  }
+  const cost = creditsForDurationSeconds(sourceFile.youtubeDurationSeconds ?? 0)
+  try {
+    if (cost > 0) {
+      await incrementUsage(userId, periodStart, { deepCredits: cost })
+    }
+    return await updateSourceFile(supabase, userId, sourceFile.id, {
+      deepCreditsCharged: cost,
+    })
+  } catch (error) {
+    console.error("Failed to charge deep-dive credits", error)
+    return sourceFile
   }
 }
 

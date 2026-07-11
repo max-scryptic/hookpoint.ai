@@ -4,6 +4,9 @@ import { createClient } from "@/lib/supabase/server"
 import { getStorageProvider } from "@/lib/storage/provider"
 import { initiateSourceFileUpload } from "@/lib/source-files/upload-service"
 import { errorResponse, serialiseSourceFile } from "@/lib/source-files/http"
+import { getAnalysedVideo } from "@/lib/analysed-videos"
+import { checkUploadAllowed } from "@/lib/billing/entitlements"
+import { maxUploadBytesForPlan } from "@/lib/plans"
 
 // POST /api/videos/:videoId/source-file/initiate-upload
 // Body: { filename: string, mimeType?: string, fileSizeBytes?: number }
@@ -35,7 +38,28 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
   }
 
+  const declaredSizeBytes =
+    typeof body.fileSizeBytes === "number" ? body.fileSizeBytes : null
+
   try {
+    // Gate the upload on the user's plan before minting an upload target:
+    // uploads must be included in the plan, the file must fit the plan's size
+    // cap, and there must be enough deep-dive credits for the footage's runtime.
+    // The credits are charged later, when the upload lands (complete-upload).
+    const analysed = await getAnalysedVideo(supabase, user.id, videoId)
+    const durationSeconds = analysed?.videoDetails?.durationSeconds ?? 0
+    const uploadCheck = await checkUploadAllowed(user.id, {
+      sizeBytes: declaredSizeBytes,
+      durationSeconds,
+    })
+    if (!uploadCheck.allowed) {
+      const status = uploadCheck.reason === "file_too_large" ? 413 : 402
+      return NextResponse.json(
+        { error: uploadCheck.reason, message: uploadCheck.message },
+        { status },
+      )
+    }
+
     const { sourceFile, upload, multipartUpload } = await initiateSourceFileUpload(
       supabase,
       getStorageProvider(),
@@ -44,8 +68,8 @@ export async function POST(
         youtubeVideoId: videoId,
         originalFilename: body.filename ?? "",
         mimeType: body.mimeType ?? null,
-        declaredSizeBytes:
-          typeof body.fileSizeBytes === "number" ? body.fileSizeBytes : null,
+        declaredSizeBytes,
+        maxUploadBytes: maxUploadBytesForPlan(uploadCheck.entitlement.plan),
       },
     )
 

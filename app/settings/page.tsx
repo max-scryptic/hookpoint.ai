@@ -18,26 +18,29 @@ import {
 } from "@/components/ui/sidebar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { requireAuthenticatedUser } from "@/lib/auth"
-import { createClient } from "@/lib/supabase/server"
 import { isStripeEnabled } from "@/lib/stripe/config"
 import { getBillingCard, type BillingCard } from "@/lib/stripe/customers"
-import { getDashboardKpis } from "@/lib/dashboard/kpis"
+import {
+  getBillingSnapshot,
+  type BillingSnapshot,
+} from "@/lib/billing/entitlements"
 import { getGoogleAccessToken } from "@/lib/youtube/google-auth"
 import {
   getMyChannelDetails,
   type YouTubeChannelDetails,
 } from "@/lib/youtube/youtube"
 
-// Best-effort usage load: a failure here should not take down the settings
-// page, so fall back to zero analysed videos.
-async function loadVideosAnalysed(userId: string): Promise<number> {
+// Best-effort billing snapshot: plan, usage meters and billing window. A failure
+// here should not take down the settings page, so fall back to null and let the
+// component render its "unknown" state.
+async function loadBillingSnapshot(
+  userId: string,
+): Promise<BillingSnapshot | null> {
   try {
-    const supabase = await createClient()
-    const kpis = await getDashboardKpis(supabase, userId)
-    return kpis.videosAnalysed
+    return await getBillingSnapshot(userId)
   } catch (error) {
-    console.error("Failed to load usage for settings", error)
-    return 0
+    console.error("Failed to load billing snapshot for settings", error)
+    return null
   }
 }
 
@@ -73,8 +76,8 @@ export default async function SettingsPage() {
     getSidebarDefaultOpen(),
     requireAuthenticatedUser(),
   ])
-  const [videosAnalysed, connectedAccount, paymentCard] = await Promise.all([
-    loadVideosAnalysed(user.id),
+  const [billingSnapshot, connectedAccount, paymentCard] = await Promise.all([
+    loadBillingSnapshot(user.id),
     loadConnectedAccount(user.id),
     loadPaymentCard(user.id),
   ])
@@ -121,7 +124,7 @@ export default async function SettingsPage() {
               </TabsList>
               <TabsContent value="billing">
                 <SettingsBillingUsage
-                  videosAnalysed={videosAnalysed}
+                  snapshot={billingSnapshot}
                   paymentCard={paymentCard}
                   billingEnabled={billingEnabled}
                 />

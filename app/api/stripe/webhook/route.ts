@@ -4,6 +4,7 @@ import type Stripe from "stripe"
 import { getStripeWebhookSecret, isStripeEnabled } from "@/lib/stripe/config"
 import { getStripe } from "@/lib/stripe/stripe"
 import { updateCachedCard } from "@/lib/stripe/customers"
+import { syncSubscriptionFromStripe } from "@/lib/billing/subscriptions"
 
 // Stripe needs the raw, unparsed request body to verify the event signature, so
 // this route reads request.text() directly and must not run on a runtime that
@@ -69,9 +70,23 @@ export async function POST(request: NextRequest) {
   try {
     switch (event.type) {
       case "checkout.session.completed": {
+        const session = event.data.object
+
+        // A "subscription mode" Checkout finished: the subscription now exists.
+        // Persist our projection of it so the user's plan + billing window take
+        // effect immediately, without waiting for the separate
+        // customer.subscription.created event.
+        if (session.mode === "subscription" && session.subscription) {
+          const subscriptionId =
+            typeof session.subscription === "string"
+              ? session.subscription
+              : session.subscription.id
+          await syncSubscriptionFromStripe(subscriptionId)
+          break
+        }
+
         // A "setup mode" Checkout finished: the card is saved to the customer
         // but not yet their default. Promote it, then cache it.
-        const session = event.data.object
         if (session.mode !== "setup" || !session.setup_intent) break
 
         const setupIntentId =
@@ -101,6 +116,18 @@ export async function POST(request: NextRequest) {
       // The default payment method may have changed in the Customer Portal.
       case "customer.updated": {
         await syncDefaultCard(stripe, event.data.object.id)
+        break
+      }
+
+      // Subscription lifecycle: created on first purchase, updated at each
+      // renewal (advancing current_period_start/end, which resets usage) and on
+      // plan changes/cancellation-scheduling, deleted when it finally ends. All
+      // three re-read Stripe and reconcile our projection, so they're safe to
+      // process in any order and idempotent on retries.
+      case "customer.subscription.created":
+      case "customer.subscription.updated":
+      case "customer.subscription.deleted": {
+        await syncSubscriptionFromStripe(event.data.object.id)
         break
       }
 

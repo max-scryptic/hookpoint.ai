@@ -60,6 +60,9 @@ export interface SourceFile {
   normalisationTaskToken: string | null
   normalisationError: string | null
   originalDeletedAt: string | null
+  // How many deep-dive credits were charged for this file's deep analysis, or
+  // null when it hasn't been charged yet. Charged once, when the upload lands.
+  deepCreditsCharged: number | null
   createdAt: string
   updatedAt: string
 }
@@ -93,12 +96,13 @@ interface SourceFileRow {
   normalisation_task_token: string | null
   normalisation_error: string | null
   original_deleted_at: string | null
+  deep_credits_charged: number | null
   created_at: string
   updated_at: string
 }
 
 const COLUMNS =
-  "id, user_id, analysed_video_id, youtube_video_id, original_filename, storage_provider, storage_path, file_size_bytes, mime_type, uploaded_duration_seconds, youtube_duration_seconds, duration_difference_seconds, duration_validation_status, filename_validation_status, filename_similarity_score, validation_status, upload_status, failure_reason, delete_after, proxy_storage_path, proxy_size_bytes, analysis_proxy_storage_path, analysis_proxy_size_bytes, normalisation_status, normalisation_provider, normalisation_task_token, normalisation_error, original_deleted_at, created_at, updated_at"
+  "id, user_id, analysed_video_id, youtube_video_id, original_filename, storage_provider, storage_path, file_size_bytes, mime_type, uploaded_duration_seconds, youtube_duration_seconds, duration_difference_seconds, duration_validation_status, filename_validation_status, filename_similarity_score, validation_status, upload_status, failure_reason, delete_after, proxy_storage_path, proxy_size_bytes, analysis_proxy_storage_path, analysis_proxy_size_bytes, normalisation_status, normalisation_provider, normalisation_task_token, normalisation_error, original_deleted_at, deep_credits_charged, created_at, updated_at"
 
 export function mapSourceFileRow(row: SourceFileRow): SourceFile {
   return {
@@ -130,6 +134,7 @@ export function mapSourceFileRow(row: SourceFileRow): SourceFile {
     normalisationTaskToken: row.normalisation_task_token,
     normalisationError: row.normalisation_error,
     originalDeletedAt: row.original_deleted_at,
+    deepCreditsCharged: row.deep_credits_charged,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -359,6 +364,7 @@ export interface UpdateSourceFileInput {
   normalisationTaskToken?: string | null
   normalisationError?: string | null
   originalDeletedAt?: string | null
+  deepCreditsCharged?: number | null
 }
 
 function toRow(input: UpdateSourceFileInput): Record<string, unknown> {
@@ -398,6 +404,8 @@ function toRow(input: UpdateSourceFileInput): Record<string, unknown> {
     row.normalisation_error = input.normalisationError
   if ("originalDeletedAt" in input)
     row.original_deleted_at = input.originalDeletedAt
+  if ("deepCreditsCharged" in input)
+    row.deep_credits_charged = input.deepCreditsCharged
   return row
 }
 

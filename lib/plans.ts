@@ -88,6 +88,43 @@ export const PLANS: Plan[] = [
   },
 ]
 
+// Fast lookup of a plan by id. Every PlanId is present, so callers that already
+// have a valid id can treat the result as non-null.
+export const PLAN_BY_ID: Record<PlanId, Plan> = Object.fromEntries(
+  PLANS.map((plan) => [plan.id, plan]),
+) as Record<PlanId, Plan>
+
+// The paid tiers, in the order they appear on the pricing page. Free is excluded
+// because it has no Stripe price and is never "purchased".
+export const PAID_PLAN_IDS: readonly PlanId[] = ["starter", "pro"] as const
+
+export function isPaidPlanId(value: string): value is "starter" | "pro" {
+  return value === "starter" || value === "pro"
+}
+
+// Returns the plan for an id, defaulting to Free for anything unrecognised so a
+// stale/invalid stored plan can never grant more than the free tier.
+export function getPlan(planId: string | null | undefined): Plan {
+  if (planId && planId in PLAN_BY_ID) return PLAN_BY_ID[planId as PlanId]
+  return PLAN_BY_ID.free
+}
+
+// Converts a source-video runtime (seconds) into the deep-dive credits its deep
+// analysis costs: 1 credit = 1 minute, rounded up so any started minute counts.
+// A non-positive/garbage duration costs a single credit floor of 0 so it can
+// never be free-but-negative.
+export function creditsForDurationSeconds(seconds: number): number {
+  if (!Number.isFinite(seconds) || seconds <= 0) return 0
+  return Math.ceil(seconds / 60)
+}
+
+// The upload size cap for a plan, in bytes, or null when the plan includes no
+// uploads at all (the Free tier). Built from the human-facing maxUploadGb.
+export function maxUploadBytesForPlan(plan: Plan): number | null {
+  if (plan.maxUploadGb == null) return null
+  return plan.maxUploadGb * 1024 * 1024 * 1024
+}
+
 // The explanatory copy shown wherever "credits" appears in the product.
 export const CREDITS_TOOLTIP =
   "1 credit = 1 minute of raw source video analysed."

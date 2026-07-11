@@ -42,3 +42,65 @@ export function getBillingReturnUrl(status?: "added" | "cancelled"): string {
   if (status) url.searchParams.set("billing", status)
   return url.toString()
 }
+
+// Where Stripe returns the user after a subscription Checkout. Success lands on
+// the pricing page with a flag the UI uses to show a confirmation; cancel comes
+// back to the same page untouched.
+export function getSubscriptionReturnUrl(status: "success" | "cancelled"): string {
+  const base = getAppBaseUrl() ?? ""
+  const url = new URL("/pricing", base || "http://localhost:3000")
+  url.searchParams.set("checkout", status)
+  return url.toString()
+}
+
+// --- Plan ↔ Stripe Price mapping -------------------------------------------
+// Stripe Prices are created in the Stripe Dashboard (one per plan × billing
+// period) and their ids supplied via env, so nothing here is hard-coded to a
+// particular Stripe account. The Free plan has no price. A missing env var means
+// that plan/period simply can't be purchased yet (the checkout route 400s).
+
+import type { BillingPeriod, PlanId } from "@/lib/plans"
+
+type PaidPlanId = "starter" | "pro"
+
+const PRICE_ENV_VARS: Record<PaidPlanId, Record<BillingPeriod, string>> = {
+  starter: {
+    monthly: "STRIPE_PRICE_STARTER_MONTHLY",
+    annual: "STRIPE_PRICE_STARTER_ANNUAL",
+  },
+  pro: {
+    monthly: "STRIPE_PRICE_PRO_MONTHLY",
+    annual: "STRIPE_PRICE_PRO_ANNUAL",
+  },
+}
+
+// The configured Stripe Price id for a paid plan + period, or null when that
+// combination hasn't been wired up in the environment.
+export function getStripePriceId(
+  planId: PaidPlanId,
+  period: BillingPeriod,
+): string | null {
+  return process.env[PRICE_ENV_VARS[planId][period]] || null
+}
+
+// The reverse lookup used by the webhook: given a Stripe Price id from an
+// incoming subscription, which plan + period does it represent? Returns null for
+// an unrecognised price so the webhook can fall back to the subscription's
+// checkout metadata.
+export function resolvePlanFromPriceId(
+  priceId: string,
+): { planId: PaidPlanId; period: BillingPeriod } | null {
+  for (const planId of ["starter", "pro"] as PaidPlanId[]) {
+    for (const period of ["monthly", "annual"] as BillingPeriod[]) {
+      if (getStripePriceId(planId, period) === priceId) {
+        return { planId, period }
+      }
+    }
+  }
+  return null
+}
+
+// True when a plan id refers to a purchasable paid tier.
+export function isPurchasablePlan(planId: PlanId): planId is PaidPlanId {
+  return planId === "starter" || planId === "pro"
+}
