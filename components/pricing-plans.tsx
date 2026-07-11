@@ -28,7 +28,7 @@ export function PricingPlans({
   currentPlanId?: PlanId
   onSelectPlan?: (planId: PlanId, period: BillingPeriod) => void
 }) {
-  const [period, setPeriod] = useState<BillingPeriod>("monthly")
+  const [period, setPeriod] = useState<BillingPeriod>("annual")
 
   return (
     <div className="space-y-8">
@@ -136,7 +136,7 @@ function PlanCard({
       )}
     >
       {plan.featured ? (
-        <span className="absolute -top-3 left-6 rounded-full bg-primary px-2.5 py-0.5 text-xs font-semibold text-primary-foreground">
+        <span className="absolute right-6 top-6 rounded-full bg-primary px-2.5 py-0.5 text-xs font-semibold text-primary-foreground">
           Most popular
         </span>
       ) : null}
