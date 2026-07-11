@@ -40,13 +40,6 @@ export function ConnectedYouTubeAccountCard({
 }: {
   channel: YouTubeChannelDetails
 }) {
-  const initial = channel.title.trim().charAt(0).toUpperCase() || "Y"
-  const stats = [
-    { label: "Subscribers", value: formatCount(channel.subscriberCount) },
-    { label: "Total views", value: formatCount(channel.viewCount) },
-    { label: "Videos", value: formatCount(channel.videoCount) },
-  ]
-
   return (
     <Card>
       <CardHeader className="border-b">
@@ -56,8 +49,30 @@ export function ConnectedYouTubeAccountCard({
         </CardTitle>
         <CardDescription>Your linked YouTube channel</CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-5 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
-        <div className="flex min-w-0 items-start gap-4">
+      <CardContent>
+        <ConnectedYouTubeChannel channel={channel} />
+      </CardContent>
+    </Card>
+  )
+}
+
+// The channel avatar, title, description and stats, without a Card wrapper so
+// it can be embedded inside other cards (e.g. the account settings card).
+export function ConnectedYouTubeChannel({
+  channel,
+}: {
+  channel: YouTubeChannelDetails
+}) {
+  const initial = channel.title.trim().charAt(0).toUpperCase() || "Y"
+  const stats = [
+    { label: "Subscribers", value: formatCount(channel.subscriberCount) },
+    { label: "Total views", value: formatCount(channel.viewCount) },
+    { label: "Videos", value: formatCount(channel.videoCount) },
+  ]
+
+  return (
+    <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+      <div className="flex min-w-0 items-start gap-4">
           <Avatar
             className="size-16"
             aria-label={`${channel.title} profile photo`}
@@ -98,7 +113,6 @@ export function ConnectedYouTubeAccountCard({
             </div>
           ))}
         </dl>
-      </CardContent>
-    </Card>
+    </div>
   )
 }
