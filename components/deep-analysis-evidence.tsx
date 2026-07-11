@@ -446,52 +446,131 @@ interface Takeaway {
   tip: string | null
 }
 
-// Concrete, window-specific phrases built from evidence the card already
-// computed, so two windows driven by the same modality don't read identically:
-// the numbers (how long a shot holds, the cut deviation, the energy/silence)
-// differ window to window and carry the distinction the old fixed templates
-// couldn't. Each returns null when its modality has nothing notable to say.
+// Joins clauses into one readable sentence fragment with an Oxford "and", so a
+// takeaway built from two or three signals reads the way a person would say it
+// rather than as a list stitched together with semicolons.
+function joinClauses(parts: string[]): string {
+  if (parts.length <= 1) return parts.join("")
+  if (parts.length === 2) return `${parts[0]} and ${parts[1]}`
+  return `${parts.slice(0, -1).join(", ")}, and ${parts[parts.length - 1]}`
+}
+
+// Plain-language, number-free descriptions of what each modality is doing,
+// stated relative to the rest of the video where there's a baseline to compare
+// against. Deliberately no raw figures (wpm, ×-norm, %) — those read like a
+// metrics dump; the reader wants to know a signal moved and in which direction,
+// not the underlying value. Each returns null when its modality has nothing
+// notable to say, and each stays window-specific through the direction and
+// combination of signals rather than through quoted numbers.
 function visualPhrase(visual: VisualSummary | null): string | null {
   if (!visual) return null
-  const held = Math.round(visual.longestStaticSeconds)
   if (visual.distinctShots <= 1) {
-    return held >= 3
-      ? `the shot holds on one frame for about ${held}s without cutting`
-      : "the framing stays on a single shot"
+    return visual.longestStaticSeconds >= 3
+      ? "the shot holds on a single frame without cutting"
+      : "the framing stays on one shot"
   }
   if (visual.distinctShots >= 4) {
-    return `the frame jumps through ${visual.distinctShots} shots in quick succession`
+    return "the frame cuts quickly between several shots"
   }
   return `the frame moves through ${visual.distinctShots} shots`
 }
 
-function audioPhrase(audio: AudioAnalysis | null): string | null {
+function audioPhrase(
+  audio: AudioAnalysis | null,
+  baselineSpeechRate: number | null,
+): string | null {
   if (!audio) return null
   const parts: string[] = []
-  if (audio.energy === "low") parts.push("the delivery reads low-energy")
-  else if (audio.energy === "high") parts.push("the delivery is high-energy")
+  if (audio.energy === "low") parts.push("the delivery drops in energy")
+  else if (audio.energy === "high") parts.push("the delivery runs high-energy")
   if (audio.silence != null && audio.silence >= 0.15)
-    parts.push(`about ${Math.round(audio.silence * 100)}% of it is dead air`)
-  if (parts.length === 0 && audio.speech_rate != null)
-    parts.push(`the pace sits around ${audio.speech_rate} wpm`)
-  return parts.length > 0 ? parts.join(" and ") : null
+    parts.push("noticeable dead air breaks up the audio")
+  // Describe the pace as a move against the creator's own norm rather than
+  // quoting a words-per-minute figure the reader can't calibrate.
+  if (
+    audio.speech_rate != null &&
+    baselineSpeechRate != null &&
+    baselineSpeechRate > 0
+  ) {
+    const ratio = audio.speech_rate / baselineSpeechRate
+    if (ratio >= 1.15) parts.push("the delivery speeds up past its usual pace")
+    else if (ratio <= 0.85)
+      parts.push("the pacing drops below the rest of the video")
+  }
+  return parts.length > 0 ? joinClauses(parts) : null
 }
 
-function editPhrase(editSignals: string[]): string | null {
-  if (editSignals.length === 0) return null
-  return editSignals.join(", ").toLowerCase()
+// Whether this window's cut rate departs from the video's norm, and which way,
+// so both the description and the tip can speak to the actual direction of the
+// change rather than a generic "re-pace this".
+type CutTrend = "faster" | "slower" | null
+
+function cutTrend(
+  editing: WindowEvidence["editing"],
+  baseline: WindowEvidence["baseline"],
+): CutTrend {
+  if (
+    !editing ||
+    editing.cutsPerMinute == null ||
+    baseline.cutsPerMinute == null ||
+    baseline.cutsPerMinute <= 0
+  )
+    return null
+  const ratio = editing.cutsPerMinute / baseline.cutsPerMinute
+  if (ratio >= 1.3) return "faster"
+  if (ratio <= 0.7) return "slower"
+  return null
+}
+
+function editPhrase(
+  editing: WindowEvidence["editing"],
+  baseline: WindowEvidence["baseline"],
+): string | null {
+  if (!editing) return null
+  const parts: string[] = []
+  const trend = cutTrend(editing, baseline)
+  if (trend === "faster")
+    parts.push("the cuts come faster than the rest of the video")
+  else if (trend === "slower")
+    parts.push(
+      editing.cutsPerMinute != null && editing.cutsPerMinute <= 0
+        ? "the cutting stops almost entirely"
+        : "the cutting slows below the rest of the video",
+    )
+  if (editing.freezeCoverage > 0.05)
+    parts.push("the picture freezes for part of it")
+  if (editing.blackCoverage > 0.05)
+    parts.push("the screen drops to black for a stretch")
+  return parts.length > 0 ? joinClauses(parts) : null
+}
+
+// A concrete, direction-aware pacing tip: too few cuts wants more, too many
+// wants room to breathe, and an unknown direction falls back to smoothing.
+function editTip(
+  editing: WindowEvidence["editing"],
+  baseline: WindowEvidence["baseline"],
+  at: string,
+): string {
+  const trend = cutTrend(editing, baseline)
+  if (trend === "slower")
+    return `Add a few more cuts or a b-roll insert${at} to lift the pace before viewers drop off.`
+  if (trend === "faster")
+    return `Let a shot or two breathe${at} so the fast cutting doesn't tire viewers out.`
+  return `Even out the pacing${at} so the cuts keep carrying attention through it.`
 }
 
 function takeawayFor({
   dominant,
   visual,
   audio,
-  editSignals,
+  editing,
+  baseline,
 }: {
   dominant: WindowEvidence["events"][number] | null
   visual: VisualSummary | null
   audio: AudioAnalysis | null
-  editSignals: string[]
+  editing: WindowEvidence["editing"]
+  baseline: WindowEvidence["baseline"]
 }): Takeaway {
   const at = dominant
     ? ` around ${formatTimestamp(dominant.timestampSeconds)}`
@@ -502,12 +581,12 @@ function takeawayFor({
   if (dominant && dominant.primaryEvidence !== "transcript") {
     switch (dominant.primaryEvidence) {
       case "editing": {
-        const phrase = editPhrase(editSignals)
+        const phrase = editPhrase(editing, baseline)
         return {
           observation: phrase
-            ? `Your cut rhythm is where viewers slip here: ${phrase}.`
+            ? `The editing is what loses viewers here — ${phrase}.`
             : "The cut rhythm is where viewers start slipping at this moment.",
-          tip: `Re-pace this stretch${at} so the cuts keep carrying attention through it.`,
+          tip: editTip(editing, baseline, at),
         }
       }
       case "visual": {
@@ -526,10 +605,10 @@ function takeawayFor({
         }
       }
       case "audio": {
-        const phrase = audioPhrase(audio)
+        const phrase = audioPhrase(audio, baseline.speechRate)
         return {
           observation: phrase
-            ? `The sound is what shifts here: ${phrase}.`
+            ? `The sound is what shifts here — ${phrase}.`
             : "Energy and sound are what shift here.",
           tip: `Lift the delivery or trim the dead air${at} to keep viewers with you.`,
         }
@@ -537,15 +616,15 @@ function takeawayFor({
       case "combined": {
         const phrases = [
           visualPhrase(visual),
-          audioPhrase(audio),
-          editPhrase(editSignals),
+          audioPhrase(audio, baseline.speechRate),
+          editPhrase(editing, baseline),
         ].filter((p): p is string => p != null)
         return {
           observation:
             phrases.length > 0
-              ? `Several signals converge here: ${phrases.join("; ")}.`
-              : "Several signals converge here, with the edit and delivery reinforcing each other at this moment.",
-          tip: `Address these together${at}, since any one on its own is unlikely to move it.`,
+              ? `A few things stack up at this moment: ${joinClauses(phrases)}.`
+              : "A few signals reinforce each other here, with the edit and delivery both working against attention at once.",
+          tip: `Tighten the pacing and delivery through this stretch${at} — no single change on its own is likely to move it.`,
         }
       }
       default:
@@ -559,23 +638,24 @@ function takeawayFor({
 
   // No non-verbal event led, but the editing departs from this video's norm —
   // the baseline is doing the work the events couldn't.
-  const edit = editPhrase(editSignals)
+  const edit = editPhrase(editing, baseline)
   if (edit) {
     return {
-      observation: `No single event stands out, but the edit departs from your norm here (${edit}).`,
-      tip: "Check whether the cut rate or a freeze is stalling viewers here, and bring it back toward your usual pace.",
+      observation: `No single event stands out, but the editing breaks from the rest of the video here — ${edit}.`,
+      tip: editTip(editing, baseline, at),
     }
   }
 
   // Nothing in the edit deviates either. Surface the observed-but-unremarkable
   // state so two quiet windows still read differently, then point back at the
   // content itself rather than inventing a non-verbal fix that wouldn't move it.
-  const state = [visualPhrase(visual), audioPhrase(audio)].filter(
-    (p): p is string => p != null,
-  )
+  const state = [
+    visualPhrase(visual),
+    audioPhrase(audio, baseline.speechRate),
+  ].filter((p): p is string => p != null)
   if (state.length > 0) {
     return {
-      observation: `Nothing in the edit, delivery or visuals breaks from your norm here (${state.join("; ")}); the change tracks the content of the moment itself.`,
+      observation: `Nothing in the edit, delivery or visuals breaks from the rest of the video here — ${joinClauses(state)} — so the change tracks the content of the moment itself.`,
       tip: null,
     }
   }
@@ -743,7 +823,8 @@ function CardInsightDraft({ item }: { item: WindowEvidence }) {
               dominant,
               visual,
               audio: audioAnalysis,
-              editSignals,
+              editing: item.editing,
+              baseline: item.baseline,
             })
             return (
               <>
