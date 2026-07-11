@@ -1,5 +1,6 @@
 import { AppSidebar } from "@/components/app-sidebar"
 import { requireAuthenticatedUser } from "@/lib/auth"
+import { getEntitlement } from "@/lib/billing/entitlements"
 import { getSidebarDefaultOpen } from "@/lib/sidebar-state"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 
@@ -14,12 +15,21 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  await requireAuthenticatedUser()
-  const defaultOpen = await getSidebarDefaultOpen()
+  const [defaultOpen, user] = await Promise.all([
+    getSidebarDefaultOpen(),
+    requireAuthenticatedUser(),
+  ])
+  let showUpgradeToPro = false
+  try {
+    const entitlement = await getEntitlement(user.id)
+    showUpgradeToPro = entitlement.planId === "free"
+  } catch (error) {
+    console.error("Failed to resolve sidebar plan", error)
+  }
 
   return (
     <SidebarProvider defaultOpen={defaultOpen}>
-      <AppSidebar />
+      <AppSidebar showUpgradeToPro={showUpgradeToPro} user={user} />
       <SidebarInset>{children}</SidebarInset>
     </SidebarProvider>
   )

@@ -24,13 +24,13 @@ import { requireAuthenticatedUser } from "@/lib/auth"
 
 // The user's plan drives which card shows "Current plan"; a lookup failure just
 // falls back to Free so the page always renders.
-async function loadCurrentPlan(userId: string): Promise<PlanId> {
+async function loadCurrentPlan(userId: string): Promise<PlanId | null> {
   try {
     const entitlement = await getEntitlement(userId)
     return entitlement.planId
   } catch (error) {
     console.error("Failed to resolve current plan for pricing", error)
-    return "free"
+    return null
   }
 }
 
@@ -44,7 +44,10 @@ export default async function PricingPage() {
 
   return (
     <SidebarProvider defaultOpen={defaultOpen}>
-      <AppSidebar />
+      <AppSidebar
+        showUpgradeToPro={currentPlanId === "free"}
+        user={user}
+      />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
           <div className="flex items-center gap-2 px-4">
@@ -80,7 +83,7 @@ export default async function PricingPage() {
             </div>
             <Suspense>
               <PricingPlansCheckout
-                currentPlanId={currentPlanId}
+                currentPlanId={currentPlanId ?? "free"}
                 billingEnabled={billingEnabled}
               />
             </Suspense>
