@@ -1,4 +1,4 @@
-import { FileTextIcon } from "lucide-react"
+import { DownloadIcon, ExternalLinkIcon, FileTextIcon } from "lucide-react"
 
 import { BillingPaymentMethod } from "@/components/billing-payment-method"
 import { Button } from "@/components/ui/button"
@@ -20,16 +20,7 @@ import {
 } from "@/components/ui/table"
 import type { BillingCard } from "@/lib/stripe/customers"
 import type { BillingSnapshot, MeterStatus } from "@/lib/billing/entitlements"
-
-// A single invoice row. There is no billing backend wired up yet, so the list
-// is empty for now and the table renders its empty state.
-type Invoice = {
-  id: string
-  date: string
-  description: string
-  amount: string
-  status: string
-}
+import type { BillingInvoice } from "@/lib/stripe/invoices"
 
 function SettingsSection({
   title,
@@ -74,14 +65,14 @@ function formatDate(iso: string): string {
 export function SettingsBillingUsage({
   snapshot,
   paymentCard,
+  invoices,
   billingEnabled,
 }: {
   snapshot: BillingSnapshot | null
   paymentCard: BillingCard | null
+  invoices: BillingInvoice[]
   billingEnabled: boolean
 }) {
-  const invoices: Invoice[] = []
-
   const planName = snapshot?.plan.name ?? "Free"
   const isFree = (snapshot?.planId ?? "free") === "free"
   const renewsLabel = snapshot ? formatDate(snapshot.periodEnd.toISOString()) : "—"
@@ -182,6 +173,7 @@ export function SettingsBillingUsage({
                     <TableHead>Description</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
+                    <TableHead className="text-right">Invoice</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -192,6 +184,32 @@ export function SettingsBillingUsage({
                       <TableCell>{invoice.status}</TableCell>
                       <TableCell className="text-right tabular-nums">
                         {invoice.amount}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {invoice.url ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            render={
+                              <a
+                                href={invoice.url}
+                                target="_blank"
+                                rel="noreferrer"
+                              />
+                            }
+                          >
+                            {invoice.actionLabel === "Download" ? (
+                              <DownloadIcon data-icon="inline-start" />
+                            ) : (
+                              <ExternalLinkIcon data-icon="inline-start" />
+                            )}
+                            {invoice.actionLabel}
+                          </Button>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">
+                            Unavailable
+                          </span>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
