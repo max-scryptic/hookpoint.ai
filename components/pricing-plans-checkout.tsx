@@ -13,9 +13,11 @@ import type { BillingPeriod, PlanId } from "@/lib/plans"
 // `?checkout` query param Stripe redirects back with.
 export function PricingPlansCheckout({
   currentPlanId,
+  cancelAtPeriodEnd = false,
   billingEnabled,
 }: {
   currentPlanId: PlanId
+  cancelAtPeriodEnd?: boolean
   billingEnabled: boolean
 }) {
   const searchParams = useSearchParams()
@@ -34,8 +36,16 @@ export function PricingPlansCheckout({
     }
 
     // Downgrading to Free means cancelling the current subscription, which the
-    // user does from the Stripe billing portal.
+    // user does from the Stripe billing portal. If cancellation is already
+    // scheduled, Stripe would reject a second cancel flow, so surface the
+    // already-scheduled state instead of opening the portal.
     if (planId === "free") {
+      if (cancelAtPeriodEnd) {
+        setError(
+          "Your plan is already scheduled to move to Free at the end of the current billing period.",
+        )
+        return
+      }
       await redirectTo(planId, "/api/billing/portal", { action: "cancel" })
       return
     }
@@ -84,6 +94,7 @@ export function PricingPlansCheckout({
 
       <PricingPlans
         currentPlanId={currentPlanId}
+        cancelAtPeriodEnd={cancelAtPeriodEnd}
         loadingPlanId={pendingPlanId}
         onSelectPlan={handleSelect}
       />

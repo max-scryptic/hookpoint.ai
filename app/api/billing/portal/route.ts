@@ -47,6 +47,20 @@ export async function POST(request: Request) {
         )
       }
 
+      // Stripe rejects a subscription_cancel flow for a subscription already
+      // scheduled to cancel at period end, which otherwise surfaces as the
+      // generic "Could not open the billing portal" error. Short-circuit with a
+      // clear message so a user who already downgraded isn't left confused.
+      if (subscription.cancelAtPeriodEnd) {
+        return NextResponse.json(
+          {
+            error:
+              "Your subscription is already scheduled to move to Free at the end of the current billing period.",
+          },
+          { status: 400 },
+        )
+      }
+
       const session = await stripe.billingPortal.sessions.create({
         customer: customerId,
         return_url: getBillingReturnUrl(),

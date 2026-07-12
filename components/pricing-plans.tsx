@@ -23,10 +23,12 @@ import { CreditsTooltip } from "@/components/credits-tooltip"
 // selection is a no-op placeholder.
 export function PricingPlans({
   currentPlanId = "free",
+  cancelAtPeriodEnd = false,
   loadingPlanId = null,
   onSelectPlan,
 }: {
   currentPlanId?: PlanId
+  cancelAtPeriodEnd?: boolean
   loadingPlanId?: PlanId | null
   onSelectPlan?: (planId: PlanId, period: BillingPeriod) => void
 }) {
@@ -47,6 +49,7 @@ export function PricingPlans({
             plan={plan}
             period={period}
             isCurrent={plan.id === currentPlanId}
+            isScheduledDowngrade={plan.id === "free" && cancelAtPeriodEnd}
             isLoading={loadingPlanId === plan.id}
             isDisabled={isLoading && loadingPlanId !== plan.id}
             onSelect={() => onSelectPlan?.(plan.id, period)}
@@ -134,6 +137,7 @@ function PlanCard({
   plan,
   period,
   isCurrent,
+  isScheduledDowngrade,
   isLoading,
   isDisabled,
   onSelect,
@@ -141,6 +145,7 @@ function PlanCard({
   plan: Plan
   period: BillingPeriod
   isCurrent: boolean
+  isScheduledDowngrade: boolean
   isLoading: boolean
   isDisabled: boolean
   onSelect: () => void
@@ -191,7 +196,7 @@ function PlanCard({
       <Button
         className="mt-6 w-full"
         variant={plan.featured ? "default" : "outline"}
-        disabled={isCurrent || isLoading || isDisabled}
+        disabled={isCurrent || isScheduledDowngrade || isLoading || isDisabled}
         aria-busy={isLoading}
         onClick={onSelect}
       >
@@ -202,6 +207,8 @@ function PlanCard({
           </>
         ) : isCurrent ? (
           "Current plan"
+        ) : isScheduledDowngrade ? (
+          "Cancellation scheduled"
         ) : isFree ? (
           "Downgrade to Free"
         ) : (
