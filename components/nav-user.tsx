@@ -101,22 +101,18 @@ export function NavUser({
             ) : null}
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem
-                render={<Link href="/dashboard/notifications" />}
-              >
+              <DropdownMenuItem render={<a href="/notifications" />}>
                 <BellIcon />
                 Notifications
               </DropdownMenuItem>
               <DropdownMenuItem render={<a href="/settings" />}>
-                <Settings2Icon
-                />
+                <Settings2Icon />
                 Settings
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout}>
-              <LogOutIcon
-              />
+              <LogOutIcon />
               Log out
             </DropdownMenuItem>
           </DropdownMenuContent>

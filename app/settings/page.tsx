@@ -5,10 +5,8 @@ import { getSidebarDefaultOpen } from "@/lib/sidebar-state"
 import {
   Breadcrumb,
   BreadcrumbItem,
-  BreadcrumbLink,
   BreadcrumbList,
   BreadcrumbPage,
-  BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { Separator } from "@/components/ui/separator"
 import {
@@ -147,10 +145,6 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             />
             <Breadcrumb>
               <BreadcrumbList>
-                <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="/dashboard">Hookpoint.ai</BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden md:block" />
                 <BreadcrumbItem>
                   <BreadcrumbPage>Settings</BreadcrumbPage>
                 </BreadcrumbItem>
