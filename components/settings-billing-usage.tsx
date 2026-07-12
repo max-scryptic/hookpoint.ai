@@ -85,13 +85,19 @@ export function SettingsBillingUsage({
     : isFree || snapshot?.billingPeriod === "annual"
       ? "Usage resets"
       : "Renews"
-  const planDescription = isCancelling
-    ? `Your ${planName} plan has been cancelled. You keep access until ${renewsLabel}, then your account moves to Free.`
-    : isFree
-      ? "You’re on the Free plan."
-      : `You’re on the ${planName} plan${
-          snapshot?.billingPeriod === "annual" ? ", billed annually." : "."
-        }`
+  const planDescription = isCancelling ? (
+    <>
+      Your {planName} plan has been{" "}
+      <span className="underline">cancelled</span>. You keep access until{" "}
+      {renewsLabel}, then your account moves to Free.
+    </>
+  ) : isFree ? (
+    "You’re on the Free plan."
+  ) : (
+    `You’re on the ${planName} plan${
+      snapshot?.billingPeriod === "annual" ? ", billed annually." : "."
+    }`
+  )
   const planStats = [
     {
       label: "Plan",
@@ -146,9 +152,7 @@ export function SettingsBillingUsage({
             )}
           >
             {isCancelling ? (
-              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 sm:col-span-2 lg:col-span-4 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
-                Cancellation scheduled. Paid features remain available until{" "}
-                {renewsLabel}; after that, your plan will revert to Free.
+              <div className="sm:col-span-2 lg:col-span-4">
                 <BillingResumeButton enabled={billingEnabled} />
               </div>
             ) : null}
