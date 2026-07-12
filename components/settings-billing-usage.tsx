@@ -1,7 +1,6 @@
 import { DownloadIcon, ExternalLinkIcon, FileTextIcon } from "lucide-react"
 
 import { BillingPaymentMethod } from "@/components/billing-payment-method"
-import { BillingResumeButton } from "@/components/billing-resume-button"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -151,12 +150,6 @@ export function SettingsBillingUsage({
               includesDeepDives ? "lg:grid-cols-4" : "lg:grid-cols-3",
             )}
           >
-            {isCancelling ? (
-              <div className="sm:col-span-2 lg:col-span-4">
-                <BillingResumeButton enabled={billingEnabled} />
-              </div>
-            ) : null}
-
             {planStats.map((stat) => (
               <div key={stat.label} className="rounded-lg border bg-muted/30 p-3">
                 <div className="text-xs text-muted-foreground">{stat.label}</div>
