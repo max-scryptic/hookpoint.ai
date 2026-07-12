@@ -100,7 +100,7 @@ export function NavUser({
             ) : null}
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
+              <DropdownMenuItem render={<a href="/dashboard/notifications" />}>
                 <BellIcon
                 />
                 Notifications
