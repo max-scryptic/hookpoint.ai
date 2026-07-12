@@ -5,6 +5,7 @@ import { PricingPlansCheckout } from "@/components/pricing-plans-checkout"
 import { getSidebarDefaultOpen } from "@/lib/sidebar-state"
 import { isStripeEnabled } from "@/lib/stripe/config"
 import { getEntitlement } from "@/lib/billing/entitlements"
+import { syncCurrentSubscriptionForUser } from "@/lib/billing/subscriptions"
 import type { PlanId } from "@/lib/plans"
 import {
   Breadcrumb,
@@ -21,6 +22,23 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { requireAuthenticatedUser } from "@/lib/auth"
+
+// Reconcile the stored subscription against Stripe before we resolve the plan.
+// Webhooks are the primary path for keeping the projection fresh, but a missed
+// customer.subscription.updated event leaves the pricing cards showing stale
+// state — e.g. offering "Downgrade to Free" for a plan Stripe has already
+// scheduled to cancel, which then dead-ends in the portal. This is the one
+// surface a subscriber lands on to change plans, so reconcile on load. No-op
+// for Free users (no subscription to sync) and best-effort: a Stripe/DB hiccup
+// must not take the page down.
+async function reconcileSubscription(userId: string): Promise<void> {
+  if (!isStripeEnabled()) return
+  try {
+    await syncCurrentSubscriptionForUser(userId)
+  } catch (error) {
+    console.error("Failed to reconcile subscription for pricing", error)
+  }
+}
 
 // The user's plan drives which card shows "Current plan", and whether the plan
 // is already scheduled to revert to Free drives the Free card's state. A lookup
@@ -45,6 +63,7 @@ export default async function PricingPage() {
     getSidebarDefaultOpen(),
     requireAuthenticatedUser(),
   ])
+  await reconcileSubscription(user.id)
   const { planId: currentPlanId, cancelAtPeriodEnd } = await loadCurrentPlan(
     user.id,
   )
