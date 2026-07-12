@@ -6,7 +6,7 @@ import { getSidebarDefaultOpen } from "@/lib/sidebar-state"
 import { isStripeEnabled } from "@/lib/stripe/config"
 import { getEntitlement } from "@/lib/billing/entitlements"
 import { syncCurrentSubscriptionForUser } from "@/lib/billing/subscriptions"
-import type { PlanId } from "@/lib/plans"
+import type { BillingPeriod, PlanId } from "@/lib/plans"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -45,16 +45,28 @@ async function reconcileSubscription(userId: string): Promise<void> {
 // failure just falls back to Free so the page always renders.
 async function loadCurrentPlan(
   userId: string,
-): Promise<{ planId: PlanId | null; cancelAtPeriodEnd: boolean }> {
+): Promise<{
+  planId: PlanId | null
+  billingPeriod: BillingPeriod | null
+  periodEnd: string | null
+  cancelAtPeriodEnd: boolean
+}> {
   try {
     const entitlement = await getEntitlement(userId)
     return {
       planId: entitlement.planId,
+      billingPeriod: entitlement.billingPeriod,
+      periodEnd: entitlement.subscriptionPeriodEnd?.toISOString() ?? null,
       cancelAtPeriodEnd: entitlement.cancelAtPeriodEnd,
     }
   } catch (error) {
     console.error("Failed to resolve current plan for pricing", error)
-    return { planId: null, cancelAtPeriodEnd: false }
+    return {
+      planId: null,
+      billingPeriod: null,
+      periodEnd: null,
+      cancelAtPeriodEnd: false,
+    }
   }
 }
 
@@ -64,9 +76,12 @@ export default async function PricingPage() {
     requireAuthenticatedUser(),
   ])
   await reconcileSubscription(user.id)
-  const { planId: currentPlanId, cancelAtPeriodEnd } = await loadCurrentPlan(
-    user.id,
-  )
+  const {
+    planId: currentPlanId,
+    billingPeriod: currentBillingPeriod,
+    periodEnd: currentPeriodEnd,
+    cancelAtPeriodEnd,
+  } = await loadCurrentPlan(user.id)
   const billingEnabled = isStripeEnabled()
 
   return (
@@ -111,6 +126,8 @@ export default async function PricingPage() {
             <Suspense>
               <PricingPlansCheckout
                 currentPlanId={currentPlanId ?? "free"}
+                currentBillingPeriod={currentBillingPeriod}
+                currentPeriodEnd={currentPeriodEnd}
                 cancelAtPeriodEnd={cancelAtPeriodEnd}
                 billingEnabled={billingEnabled}
               />

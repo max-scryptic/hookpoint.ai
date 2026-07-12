@@ -15,6 +15,15 @@ import {
 import { CancelSurveyDialog } from "@/components/cancel-survey-dialog"
 import { getPlan, type BillingPeriod, type PlanId } from "@/lib/plans"
 import type { CancellationReason } from "@/lib/billing/cancellation-reasons"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 // Client wrapper that turns the presentational PricingPlans cards into a working
 // purchase flow: picking a paid plan starts a Stripe Checkout session and
@@ -23,16 +32,22 @@ import type { CancellationReason } from "@/lib/billing/cancellation-reasons"
 // `?checkout` query param Stripe redirects back with.
 export function PricingPlansCheckout({
   currentPlanId,
+  currentBillingPeriod,
+  currentPeriodEnd,
   cancelAtPeriodEnd = false,
   billingEnabled,
 }: {
   currentPlanId: PlanId
+  currentBillingPeriod: BillingPeriod | null
+  currentPeriodEnd: string | null
   cancelAtPeriodEnd?: boolean
   billingEnabled: boolean
 }) {
   const searchParams = useSearchParams()
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
+  const [periodChange, setPeriodChange] = useState<BillingPeriod | null>(null)
+  const [changeConfirmation, setChangeConfirmation] = useState<string | null>(null)
   const [pendingPlanId, setPendingPlanId] = useState<PlanId | null>(null)
   const [isResuming, setIsResuming] = useState(false)
   const [cancelledDetails, setCancelledDetails] =
@@ -107,7 +122,51 @@ export function PricingPlansCheckout({
       return
     }
 
+    if (
+      planId === currentPlanId &&
+      currentBillingPeriod &&
+      period !== currentBillingPeriod
+    ) {
+      setPeriodChange(period)
+      return
+    }
+
     await redirectTo(planId, "/api/billing/checkout", { planId, period })
+  }
+
+  async function confirmPeriodChange() {
+    if (!periodChange || pendingPlanId) return
+    const targetPeriod = periodChange
+    setError(null)
+    setPendingPlanId(currentPlanId)
+    try {
+      const response = await fetch("/api/billing/change-period", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ period: targetPeriod }),
+      })
+      const data = (await response.json().catch(() => ({}))) as {
+        error?: string
+        effectiveAt?: string
+      }
+      if (!response.ok) {
+        setError(data.error ?? "Could not schedule the billing change.")
+        return
+      }
+      setPeriodChange(null)
+      const effectiveAt = data.effectiveAt
+        ? new Intl.DateTimeFormat("en-GB", { dateStyle: "long" }).format(
+            new Date(data.effectiveAt),
+          )
+        : "the end of your current billing period"
+      setChangeConfirmation(
+        `Your switch to ${targetPeriod} billing is scheduled for ${effectiveAt}.`,
+      )
+    } catch {
+      setError("Could not schedule the billing change. Please try again.")
+    } finally {
+      setPendingPlanId(null)
+    }
   }
 
   // Runs the actual cancellation once the survey is submitted. Schedules the
@@ -200,15 +259,54 @@ export function PricingPlansCheckout({
       ) : null}
 
       {error ? <Banner tone="error">{error}</Banner> : null}
+      {changeConfirmation ? (
+        <Banner tone="success">{changeConfirmation}</Banner>
+      ) : null}
 
       <PricingPlans
         currentPlanId={currentPlanId}
+        currentBillingPeriod={currentBillingPeriod}
         cancelAtPeriodEnd={cancelAtPeriodEnd}
         loadingPlanId={pendingPlanId}
         resumingPlan={isResuming}
         onSelectPlan={handleSelect}
         onResumePlan={handleResume}
       />
+
+      <Dialog
+        open={periodChange != null}
+        onOpenChange={(open) => {
+          if (!open && !pendingPlanId) setPeriodChange(null)
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              Switch to {periodChange === "annual" ? "annual" : "monthly"} billing?
+            </DialogTitle>
+            <DialogDescription>
+              Your current {currentBillingPeriod} plan stays active until
+              {currentPeriodEnd
+                ? ` ${new Intl.DateTimeFormat("en-GB", { dateStyle: "long" }).format(new Date(currentPeriodEnd))}`
+                : " the end of its billing period"}
+              . After that, your {currentPlanName} membership switches
+              automatically and the new billing cycle begins.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={pendingPlanId != null}
+              onClick={() => setPeriodChange(null)}
+            >
+              Keep current billing
+            </Button>
+            <Button disabled={pendingPlanId != null} onClick={confirmPeriodChange}>
+              Confirm switch
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {surveyOpen ? (
         <CancelSurveyDialog
