@@ -58,12 +58,12 @@ describe("buildRetentionWindows", () => {
 
     expect(drops).toHaveLength(1)
     expect(drops[0]).toMatchObject({
-      fromSeconds: 40,
+      fromSeconds: 30,
       toSeconds: 50,
       relativePerformance: 0.3,
       isAbnormallySteep: false,
     })
-    expect(drops[0].delta).toBeCloseTo(-0.18)
+    expect(drops[0].delta).toBeCloseTo(-0.2)
     expect(drops[0].steepness).not.toBeNull()
   })
 
@@ -110,9 +110,10 @@ describe("buildRetentionWindows", () => {
     const drop = windows.find((w) => w.kind === "drop_off")!
     const gain = windows.find((w) => w.kind === "gain")!
 
-    // drop-off step is 40 -> 50, midpoint 45; padded -30/+10.
-    expect(drop.analysisFromSeconds).toBeCloseTo(15)
-    expect(drop.analysisToSeconds).toBeCloseTo(55)
+    // Adjacent downward steps form one 30 -> 50 episode, midpoint 40;
+    // padded -30/+10.
+    expect(drop.analysisFromSeconds).toBeCloseTo(10)
+    expect(drop.analysisToSeconds).toBeCloseTo(50)
 
     // gain step is 50 -> 60, midpoint 55; padded -10/+20, clamped to duration.
     expect(gain.analysisFromSeconds).toBeCloseTo(45)

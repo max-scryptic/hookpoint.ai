@@ -16,8 +16,11 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import { selectDeepAnalysisWindows } from "@/lib/deep-analysis-window-selection"
 import type { SceneCueScanResult } from "@/lib/media/scene-detection"
+import type { MotionBucket } from "@/lib/media/scene-detection"
 import type { PersistedRetentionWindow } from "@/lib/retention-windows"
+import { getDeepAnalysisMaxWindows } from "@/lib/retention-window-media-config"
 
 export type SceneCueScanStatus = "pending" | "ready" | "failed"
 
@@ -67,8 +70,13 @@ export async function createPendingRetentionWindowSceneCueScans(
 ): Promise<void> {
   const rows: Record<string, unknown>[] = []
   const windowIdsWithoutAnalysisWindow: string[] = []
+  const selectedWindows = selectDeepAnalysisWindows(
+    windows,
+    getDeepAnalysisMaxWindows(),
+  )
+  const selectedIds = new Set(selectedWindows.map((window) => window.id))
 
-  for (const window of windows) {
+  for (const window of selectedWindows) {
     if (window.analysisFromSeconds == null || window.analysisToSeconds == null) {
       windowIdsWithoutAnalysisWindow.push(window.id)
       continue
@@ -84,6 +92,12 @@ export async function createPendingRetentionWindowSceneCueScans(
       error: null,
     })
   }
+
+  windowIdsWithoutAnalysisWindow.push(
+    ...windows
+      .filter((window) => !selectedIds.has(window.id))
+      .map((window) => window.id),
+  )
 
   if (rows.length > 0) {
     const { error } = await supabase
@@ -156,6 +170,7 @@ export async function getPendingRetentionWindowSceneCueScans(
 export interface RetentionWindowSceneCueScanStatusRow {
   retentionWindowId: string
   status: SceneCueScanStatus
+  motionBuckets: MotionBucket[]
 }
 
 // Loads just the status of every window's scene-cue scan for a video — used
@@ -169,7 +184,7 @@ export async function getRetentionWindowSceneCueScanStatuses(
 ): Promise<RetentionWindowSceneCueScanStatusRow[]> {
   const { data, error } = await supabase
     .from("retention_window_scene_cue_scans")
-    .select("retention_window_id, status")
+    .select("retention_window_id, status, motion_buckets")
     .eq("user_id", userId)
     .eq("analysed_video_id", analysedVideoId)
 
@@ -178,10 +193,15 @@ export async function getRetentionWindowSceneCueScanStatuses(
   }
 
   return (
-    (data ?? []) as { retention_window_id: string; status: SceneCueScanStatus }[]
+    (data ?? []) as {
+      retention_window_id: string
+      status: SceneCueScanStatus
+      motion_buckets: MotionBucket[] | null
+    }[]
   ).map((row) => ({
     retentionWindowId: row.retention_window_id,
     status: row.status,
+    motionBuckets: row.motion_buckets ?? [],
   }))
 }
 
@@ -189,11 +209,17 @@ export async function updateRetentionWindowSceneCueScanStatus(
   supabase: SupabaseClient,
   userId: string,
   id: string,
-  outcome: { status: "ready" } | { status: "failed"; error: string },
+  outcome:
+    | { status: "ready"; motionBuckets?: MotionBucket[] }
+    | { status: "failed"; error: string },
 ): Promise<void> {
   const payload =
     outcome.status === "ready"
-      ? { status: "ready", error: null }
+      ? {
+          status: "ready",
+          error: null,
+          motion_buckets: outcome.motionBuckets ?? [],
+        }
       : { status: "failed", error: outcome.error }
 
   const { error } = await supabase
@@ -211,6 +237,7 @@ export type VideoSceneCueKind = "cut" | "freeze" | "black"
 
 export interface VideoSceneCue {
   id: string
+  retentionWindowId: string
   kind: VideoSceneCueKind
   fromSeconds: number
   toSeconds: number
@@ -219,17 +246,20 @@ export interface VideoSceneCue {
 
 interface VideoSceneCueRow {
   id: string
+  retention_window_id: string
   kind: VideoSceneCueKind
   from_seconds: number
   to_seconds: number
   score: number | null
 }
 
-const CUE_COLUMNS = "id, kind, from_seconds, to_seconds, score"
+const CUE_COLUMNS =
+  "id, retention_window_id, kind, from_seconds, to_seconds, score"
 
 function mapCueRow(row: VideoSceneCueRow): VideoSceneCue {
   return {
     id: row.id,
+    retentionWindowId: row.retention_window_id,
     kind: row.kind,
     fromSeconds: row.from_seconds,
     toSeconds: row.to_seconds,

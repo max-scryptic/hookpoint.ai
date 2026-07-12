@@ -37,16 +37,17 @@ describe("retention insight ordering", () => {
     const retention = [
       point(0, 0.6),
       point(10, 0.64),
-      point(20, 0.74),
-      point(30, 0.8),
-      point(40, 0.92),
+      point(20, 0.63),
+      point(30, 0.73),
+      point(40, 0.72),
+      point(50, 0.84),
     ]
 
     expect(
       detectRetentionGains(retention, { limit: 3 }).map(
         (gain) => gain.fromTimestampSeconds,
       ),
-    ).toEqual([10, 20, 30])
+    ).toEqual([0, 20, 40])
   })
 
   it("orders selected significant losses chronologically", () => {
@@ -56,9 +57,10 @@ describe("retention insight ordering", () => {
       point(20, 0.98),
       point(30, 0.97),
       point(40, 0.93),
-      point(50, 0.83),
-      point(60, 0.77),
-      point(70, 0.65),
+      point(50, 0.94),
+      point(60, 0.84),
+      point(70, 0.85),
+      point(80, 0.73),
     ]
 
     expect(
@@ -67,7 +69,45 @@ describe("retention insight ordering", () => {
         steepnessFactor: 1,
         limit: 3,
       }).map((drop) => drop.fromTimestampSeconds),
-    ).toEqual([40, 50, 60])
+    ).toEqual([30, 50, 70])
+  })
+
+  it("groups adjacent gains into one cumulative episode", () => {
+    const retention = [
+      point(0, 0.6),
+      point(10, 0.62),
+      point(20, 0.64),
+      point(30, 0.63),
+    ]
+
+    expect(detectRetentionGains(retention)).toEqual([
+      {
+        fromTimestampSeconds: 0,
+        toTimestampSeconds: 20,
+        watchRatioGain: 0.040000000000000036,
+      },
+    ])
+  })
+
+  it("groups adjacent significant losses into one episode", () => {
+    const retention = [
+      point(0, 1),
+      point(10, 0.995),
+      point(20, 0.99),
+      point(30, 0.985),
+      point(40, 0.965),
+      point(50, 0.945),
+      point(60, 0.94),
+    ]
+
+    const drops = detectSignificantDropOffs(retention, {
+      ignoreBeforeSeconds: 0,
+    })
+
+    expect(drops).toHaveLength(1)
+    expect(drops[0].fromTimestampSeconds).toBe(30)
+    expect(drops[0].toTimestampSeconds).toBe(50)
+    expect(drops[0].watchRatioDrop).toBeCloseTo(0.04)
   })
 
   it("never surfaces a drop-off whose window starts inside the hook", () => {

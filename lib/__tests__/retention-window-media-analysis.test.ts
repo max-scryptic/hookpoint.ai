@@ -5,18 +5,24 @@ import {
   analyzeRetentionWindowMedia,
   computeSpeechRate,
   openAiRetentionWindowMediaAnalyzer,
+  shouldRunPaidAudioAnalysis,
   type AudioAnalysis,
   type RetentionWindowMediaAnalyzer,
   type SnapshotAnalysis,
 } from "@/lib/retention-window-media-analysis"
 import { zeroCost } from "@/lib/llm-cost"
+import { measureAudioSignalBuckets } from "@/lib/media/video-extraction"
 import type { StorageProvider } from "@/lib/storage"
 
 vi.mock("@/lib/media/video-extraction", () => ({
-  measureAudioClipStats: vi.fn(async () => ({
-    averageVolumeDb: -18,
-    silenceRatio: 0.05,
-  })),
+  measureAudioSignalBuckets: vi.fn(async () => [
+    {
+      fromSeconds: 0,
+      toSeconds: 5,
+      averageVolumeDb: -16,
+      silenceRatio: 0.1,
+    },
+  ]),
 }))
 
 afterEach(() => {
@@ -37,6 +43,44 @@ describe("computeSpeechRate", () => {
 
   it("is null for a zero-length window", () => {
     expect(computeSpeechRate("some words", 10, 10)).toBeNull()
+  })
+})
+
+describe("shouldRunPaidAudioAnalysis", () => {
+  const stable = {
+    averageVolumeDeltaDb: 0.8,
+    silenceDelta: 0.02,
+    speechRateDelta: 12,
+  }
+
+  it("always listens to hooks and gains", () => {
+    expect(shouldRunPaidAudioAnalysis("hook", stable)).toBe(true)
+    expect(shouldRunPaidAudioAnalysis("gain", stable)).toBe(true)
+  })
+
+  it("skips a drop-off whose deterministic audio is stable", () => {
+    expect(shouldRunPaidAudioAnalysis("drop_off", stable)).toBe(false)
+  })
+
+  it("escalates meaningful or missing audio changes", () => {
+    expect(
+      shouldRunPaidAudioAnalysis("drop_off", {
+        ...stable,
+        averageVolumeDeltaDb: -4,
+      }),
+    ).toBe(true)
+    expect(
+      shouldRunPaidAudioAnalysis("drop_off", {
+        ...stable,
+        silenceDelta: 0.15,
+      }),
+    ).toBe(true)
+    expect(
+      shouldRunPaidAudioAnalysis("drop_off", {
+        ...stable,
+        averageVolumeDeltaDb: null,
+      }),
+    ).toBe(true)
   })
 })
 
@@ -333,9 +377,18 @@ describe("analyzeRetentionWindowMedia", () => {
       tone: "calm and conversational",
       energy: "moderate",
       notable_events: [],
+      model_analysis_status: "ready",
       speech_rate: 120,
-      average_volume: -18,
-      silence: 0.05,
+      average_volume: -16,
+      silence: 0.1,
+      signal_timeline: [
+        {
+          from_seconds: 0,
+          to_seconds: 5,
+          average_volume: -16,
+          silence: 0.1,
+        },
+      ],
     }
 
     expect(updates).toContainEqual(
@@ -348,6 +401,72 @@ describe("analyzeRetentionWindowMedia", () => {
         }),
       }),
     )
+  })
+
+  it("skips the paid audio model for a drop-off with stable deterministic audio", async () => {
+    vi.mocked(measureAudioSignalBuckets).mockResolvedValueOnce(
+      Array.from({ length: 6 }, (_, index) => ({
+        fromSeconds: index * 5,
+        toSeconds: (index + 1) * 5,
+        averageVolumeDb: -18,
+        silenceRatio: 0.02,
+      })),
+    )
+    const { supabase, updates, upserts } = makeFakeSupabase({
+      retention_window_snapshots: [],
+      retention_window_audio: [audioRow()],
+      retention_window_transcripts: [transcriptRow()],
+      retention_windows: [
+        {
+          id: "rw-1",
+          kind: "drop_off",
+          window_index: 0,
+          window_key: null,
+          label: null,
+          from_seconds: 10,
+          to_seconds: 20,
+          start_watch_ratio: null,
+          end_watch_ratio: null,
+          delta: -0.08,
+          relative_performance: 0.4,
+          steepness: 2,
+          is_abnormally_steep: true,
+          out_of_range: false,
+          analysis_from_seconds: 0,
+          analysis_to_seconds: 30,
+        },
+      ],
+    })
+    const analyzer = fakeAnalyzer()
+
+    await analyzeRetentionWindowMedia(supabase, "user-1", "av-1", {
+      mediaStorage: fakeStorage(),
+      analyzer,
+    })
+
+    expect(analyzer.analyzeAudio).not.toHaveBeenCalled()
+    expect(updates).toContainEqual(
+      expect.objectContaining({
+        table: "retention_window_audio",
+        id: "aud-1",
+        payload: expect.objectContaining({
+          analysis_status: "ready",
+          analysis_model: "deterministic-only",
+          analysis: expect.objectContaining({
+            model_analysis_status: "skipped",
+            music: null,
+            average_volume: expect.closeTo(-18),
+          }),
+        }),
+      }),
+    )
+    expect(
+      upserts.some(
+        (entry) =>
+          entry.table === "retention_window_costs" &&
+          entry.row.step === "audio",
+      ),
+    ).toBe(false)
   })
 
   it("marks the audio row failed when the model call throws, without needing ffmpeg stats to fail too", async () => {

@@ -15,6 +15,7 @@ import {
 function cue(overrides: Partial<VideoSceneCue>): VideoSceneCue {
   return {
     id: "cue-1",
+    retentionWindowId: "rw-1",
     kind: "cut",
     fromSeconds: 0,
     toSeconds: 0,
@@ -279,7 +280,7 @@ describe("updateRetentionWindowSceneCueScanStatus", () => {
     expect(updates).toContainEqual({
       table: "retention_window_scene_cue_scans",
       id: "scan-1",
-      payload: { status: "ready", error: null },
+      payload: { status: "ready", error: null, motion_buckets: [] },
     })
   })
 

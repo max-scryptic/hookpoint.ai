@@ -920,31 +920,85 @@ export function detectDropOffs(
     .sort((a, b) => a.fromTimestampSeconds - b.fromTimestampSeconds)
 }
 
-// The mirror image of detectDropOffs: finds the segments where retention rises
-// fastest. A rising curve means viewers re-watched or skipped back to a moment,
-// so these are the points that held or grew the audience. Walks consecutive
-// points, keeps gains larger than `minGain` absolute watch-ratio, and returns
-// the largest `limit` of them, ordered from earliest to latest for display.
+interface DirectionalRetentionEpisode {
+  fromPoint: RetentionPoint
+  toPoint: RetentionPoint
+  totalChange: number
+  stepCount: number
+}
+
+const RETENTION_COMPARISON_EPSILON = 1e-9
+
+// Groups adjacent curve steps moving in the same direction into one episode.
+// YouTube's retention curve is sampled, so one real audience reaction often
+// arrives as two or three consecutive steps rather than one perfectly aligned
+// point. `minStepChange` prevents ordinary sub-threshold curve noise from
+// chaining into a long false episode; the caller applies its threshold to the
+// episode's total after grouping.
+function buildDirectionalRetentionEpisodes(
+  points: RetentionPoint[],
+  direction: "drop" | "gain",
+  minStepChange: number,
+  ignoreBeforeSeconds = 0,
+): DirectionalRetentionEpisode[] {
+  const episodes: DirectionalRetentionEpisode[] = []
+  let current: DirectionalRetentionEpisode | null = null
+
+  for (let i = 1; i < points.length; i++) {
+    const prev = points[i - 1]
+    const next = points[i]
+    const signedChange = next.watchRatio - prev.watchRatio
+    const change = direction === "gain" ? signedChange : -signedChange
+    const eligible =
+      prev.timestampSeconds >= ignoreBeforeSeconds &&
+      change > minStepChange + RETENTION_COMPARISON_EPSILON
+
+    if (!eligible) {
+      if (current) episodes.push(current)
+      current = null
+      continue
+    }
+
+    if (current && current.toPoint === prev) {
+      current.toPoint = next
+      current.totalChange += change
+      current.stepCount += 1
+    } else {
+      if (current) episodes.push(current)
+      current = {
+        fromPoint: prev,
+        toPoint: next,
+        totalChange: change,
+        stepCount: 1,
+      }
+    }
+  }
+
+  if (current) episodes.push(current)
+  return episodes
+}
+
+// Finds meaningful rising episodes. A gain spread across adjacent Analytics
+// samples is returned once with its full range and cumulative magnitude,
+// instead of being reported as several competing insights for the same viewer
+// reaction. Results are ranked by total gain, capped, then displayed in time
+// order. A gain can mean positive replay, confusion, or navigation; downstream
+// analysis is responsible for distinguishing those hypotheses.
 export function detectRetentionGains(
   points: RetentionPoint[],
   { minGain = 0.03, limit = 5 }: { minGain?: number; limit?: number } = {},
 ): RetentionGain[] {
-  const gains: RetentionGain[] = []
-
-  for (let i = 1; i < points.length; i++) {
-    const prev = points[i - 1]
-    const curr = points[i]
-    const delta = curr.watchRatio - prev.watchRatio
-    if (delta >= minGain) {
-      gains.push({
-        fromTimestampSeconds: prev.timestampSeconds,
-        toTimestampSeconds: curr.timestampSeconds,
-        watchRatioGain: delta,
-      })
-    }
-  }
-
-  return gains
+  const minStepChange = minGain / 2
+  return buildDirectionalRetentionEpisodes(points, "gain", minStepChange)
+    .filter(
+      (episode) =>
+        episode.totalChange + RETENTION_COMPARISON_EPSILON >= minGain,
+    )
+    .map((episode) => ({
+      fromTimestampSeconds: episode.fromPoint.timestampSeconds,
+      toTimestampSeconds: episode.toPoint.timestampSeconds,
+      watchRatioGain: episode.totalChange,
+    }))
     .sort((a, b) => b.watchRatioGain - a.watchRatioGain)
     .slice(0, limit)
     .sort((a, b) => a.fromTimestampSeconds - b.fromTimestampSeconds)
@@ -976,9 +1030,11 @@ function median(values: number[]): number {
     : sorted[mid]
 }
 
-// Finds the drop-offs that are actually worth a creator's attention, as opposed
-// to the natural decay every video shows. A point is surfaced when EITHER:
-//   • its drop is meaningfully steeper than the video's own median step drop
+// Finds the drop-off episodes that are actually worth a creator's attention,
+// as opposed to the natural decay every video shows. Adjacent meaningful
+// downward steps are grouped before qualification, so one audience reaction
+// produces one analysis window. An episode is surfaced when EITHER:
+//   • its average step is meaningfully steeper than the median step drop
 //     (steepness >= steepnessFactor), OR
 //   • viewers were underperforming similar videos there (relativePerformance
 //     below `underperformBelow`) while still losing a non-trivial share.
@@ -1014,39 +1070,45 @@ export function detectSignificantDropOffs(
   }
   const baseline = median(stepDrops) || minDrop
 
-  const drops: SignificantDropOff[] = []
-  for (let i = 1; i < points.length; i++) {
-    const prev = points[i - 1]
-    const curr = points[i]
-    // Skip any window that begins inside the opening already covered by The
-    // Hook windows. We gate on the window's start (`prev`) rather than its end
-    // (`curr`): a step that straddles the boundary (e.g. 25s -> 35s) would
-    // otherwise be kept and stored as a drop-off starting at 25s, overlapping
-    // the hook section.
-    if (prev.timestampSeconds < ignoreBeforeSeconds) continue
-    const delta = prev.watchRatio - curr.watchRatio
-    if (delta < minDrop) continue
+  const drops = buildDirectionalRetentionEpisodes(
+    points,
+    "drop",
+    minDrop / 2,
+    ignoreBeforeSeconds,
+  ).flatMap((episode): SignificantDropOff[] => {
+    if (episode.totalChange + RETENTION_COMPARISON_EPSILON < minDrop) return []
 
-    const steepness = delta / baseline
-    const relativePerformance = curr.relativePerformance
-    const isAbnormallySteep = steepness >= steepnessFactor
+    // Compare the episode's average step with the curve's normal step. Using
+    // total change directly would make any long, ordinary decline look
+    // abnormally steep merely because it covered more samples.
+    const steepness = episode.totalChange / episode.stepCount / baseline
+    const relativePerformance = episode.toPoint.relativePerformance
+    const isAbnormallySteep =
+      steepness + RETENTION_COMPARISON_EPSILON >= steepnessFactor
     const underperforms =
       relativePerformance != null && relativePerformance < underperformBelow
 
-    if (!isAbnormallySteep && !underperforms) continue
+    if (!isAbnormallySteep && !underperforms) return []
 
-    drops.push({
-      fromTimestampSeconds: prev.timestampSeconds,
-      toTimestampSeconds: curr.timestampSeconds,
-      watchRatioDrop: delta,
+    return [{
+      fromTimestampSeconds: episode.fromPoint.timestampSeconds,
+      toTimestampSeconds: episode.toPoint.timestampSeconds,
+      watchRatioDrop: episode.totalChange,
       relativePerformance,
       steepness,
       isAbnormallySteep,
-    })
-  }
+    }]
+  })
 
   return drops
-    .sort((a, b) => b.watchRatioDrop - a.watchRatioDrop)
+    // Total impact matters, but an equally sized abrupt loss is more
+    // diagnostic than a gentler one. This ranking only selects the top N;
+    // presentation remains chronological below.
+    .sort(
+      (a, b) =>
+        b.watchRatioDrop * Math.max(1, b.steepness) -
+        a.watchRatioDrop * Math.max(1, a.steepness),
+    )
     .slice(0, limit)
     .sort((a, b) => a.fromTimestampSeconds - b.fromTimestampSeconds)
 }

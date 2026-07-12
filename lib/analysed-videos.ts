@@ -192,3 +192,27 @@ export async function getAnalysedVideo(
 
   return data ? mapRow(data as AnalysedVideoRow) : null
 }
+
+// Lightweight lookup for workers that already have the analysed_videos UUID
+// rather than YouTube's video id. Event synthesis uses the timestamped cues to
+// compare speech rate inside a retention episode with its preceding control.
+export async function getAnalysedVideoTranscriptById(
+  supabase: SupabaseClient,
+  userId: string,
+  analysedVideoId: string,
+): Promise<TranscriptCue[]> {
+  const { data, error } = await supabase
+    .from("analysed_videos")
+    .select("transcript")
+    .eq("user_id", userId)
+    .eq("id", analysedVideoId)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(`Failed to load analysed video transcript: ${error.message}`)
+  }
+
+  return cleanTranscriptCues(
+    ((data as { transcript?: TranscriptCue[] | null } | null)?.transcript ?? []),
+  )
+}

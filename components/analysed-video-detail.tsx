@@ -10,12 +10,16 @@ import {
   ListChecksIcon,
   PackageIcon,
   QuoteIcon,
+  SparklesIcon,
   TrendingDownIcon,
   TrendingUpIcon,
   TypeIcon,
 } from "lucide-react"
 
 import { HookIcon } from "@/components/hook-icon"
+import type { DeepAnalysisEvidence } from "@/lib/deep-analysis-evidence"
+import type { RankedRetentionWindowEvent } from "@/lib/deep-analysis-insight-ranking"
+import type { DeepAnalysisRecommendation } from "@/lib/deep-analysis-recommendations"
 import {
   RetentionChart,
   type RetentionChartInsight,
@@ -128,11 +132,15 @@ function RetentionWindows({
   windows,
   transcript,
   attribution,
+  deepInsights,
+  recommendations,
   highlightedId,
 }: {
   windows: RetentionWindow[]
   transcript: TranscriptCue[]
   attribution: Map<number, RetentionMomentAttribution>
+  deepInsights: Map<number, RankedRetentionWindowEvent>
+  recommendations: Map<number, DeepAnalysisRecommendation>
   highlightedId?: string | null
 }) {
   const highlightedRef = useHighlightScroll(highlightedId)
@@ -196,6 +204,14 @@ function RetentionWindows({
               </p>
             ) : (
               <AttributionNote attribution={attribution.get(window.windowIndex)} />
+            )}
+            {!window.outOfRange && (
+              <MultimodalInsight insight={deepInsights.get(window.windowIndex)} />
+            )}
+            {!window.outOfRange && (
+              <ActionableRecommendation
+                recommendation={recommendations.get(window.windowIndex)}
+              />
             )}
           </li>
         )
@@ -313,10 +329,47 @@ function AttributionNote({
   )
 }
 
+function MultimodalInsight({
+  insight,
+}: {
+  insight: RankedRetentionWindowEvent | undefined
+}) {
+  if (!insight) return null
+  return (
+    <div className="ml-10 flex gap-2 rounded-lg border bg-muted/30 p-3 text-sm">
+      <SparklesIcon className="mt-0.5 size-4 shrink-0 text-violet-500" />
+      <div>
+        <p>{insight.narrative}</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Multimodal evidence · {insight.evidenceQuality} confidence
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function ActionableRecommendation({
+  recommendation,
+}: {
+  recommendation: DeepAnalysisRecommendation | undefined
+}) {
+  if (!recommendation) return null
+  return (
+    <div className="ml-10">
+      <TryCallout>{recommendation.action}</TryCallout>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {recommendation.expectedPurpose}
+      </p>
+    </div>
+  )
+}
+
 function DropList({
   drops,
   transcript,
   attribution,
+  deepInsights,
+  recommendations,
   highlightedId,
 }: {
   // The significant *mid-video* drop-offs (kind = 'drop_off'). The Hook section
@@ -325,6 +378,8 @@ function DropList({
   transcript: TranscriptCue[]
   // AI explanations/tips keyed by the drop-off's windowIndex, when generated.
   attribution: Map<number, RetentionMomentAttribution>
+  deepInsights: Map<number, RankedRetentionWindowEvent>
+  recommendations: Map<number, DeepAnalysisRecommendation>
   highlightedId?: string | null
 }) {
   const highlightedRef = useHighlightScroll(highlightedId)
@@ -374,6 +429,10 @@ function DropList({
             </div>
 
             <AttributionNote attribution={attribution.get(drop.windowIndex)} />
+            <MultimodalInsight insight={deepInsights.get(drop.windowIndex)} />
+            <ActionableRecommendation
+              recommendation={recommendations.get(drop.windowIndex)}
+            />
           </li>
         )
       })}
@@ -433,11 +492,15 @@ function GainList({
   gains,
   transcript,
   attribution,
+  deepInsights,
+  recommendations,
   highlightedId,
 }: {
   gains: RetentionWindow[]
   transcript: TranscriptCue[]
   attribution: Map<number, RetentionMomentAttribution>
+  deepInsights: Map<number, RankedRetentionWindowEvent>
+  recommendations: Map<number, DeepAnalysisRecommendation>
   highlightedId?: string | null
 }) {
   const highlightedRef = useHighlightScroll(highlightedId)
@@ -478,6 +541,10 @@ function GainList({
             </div>
 
             <AttributionNote attribution={attribution.get(gain.windowIndex)} />
+            <MultimodalInsight insight={deepInsights.get(gain.windowIndex)} />
+            <ActionableRecommendation
+              recommendation={recommendations.get(gain.windowIndex)}
+            />
           </li>
         )
       })}
@@ -765,6 +832,8 @@ export function AnalysedVideoDetail({
   retentionAttribution = null,
   packagingAlignment = null,
   analyticsSummary = null,
+  deepAnalysisEvidence = null,
+  showDeepRecommendations = true,
 }: {
   video: VideoDetails
   retention: RetentionPoint[]
@@ -774,6 +843,8 @@ export function AnalysedVideoDetail({
   retentionAttribution?: RetentionAttribution | null
   packagingAlignment?: PackagingAlignment | null
   analyticsSummary?: VideoAnalyticsSummary | null
+  deepAnalysisEvidence?: DeepAnalysisEvidence | null
+  showDeepRecommendations?: boolean
 }) {
   const [previewTime, setPreviewTime] = useState<number | null>(null)
   const [playbackWindow, setPlaybackWindow] = useState<{
@@ -847,6 +918,38 @@ export function AnalysedVideoDetail({
   const dropAttribution = attributionByKind("drop_off")
   const gainAttribution = attributionByKind("gain")
   const hookAttribution = attributionByKind("hook")
+  const deepInsightsByKind = (
+    kind: RetentionMomentKind,
+  ): Map<number, RankedRetentionWindowEvent> => {
+    const map = new Map<number, RankedRetentionWindowEvent>()
+    for (const evidence of deepAnalysisEvidence?.windows ?? []) {
+      if (evidence.window.kind === kind && evidence.events[0]) {
+        map.set(evidence.window.windowIndex, evidence.events[0])
+      }
+    }
+    return map
+  }
+  const hookDeepInsights = deepInsightsByKind("hook")
+  const dropDeepInsights = deepInsightsByKind("drop_off")
+  const gainDeepInsights = deepInsightsByKind("gain")
+  const recommendationsByKind = (
+    kind: RetentionMomentKind,
+  ): Map<number, DeepAnalysisRecommendation> => {
+    const map = new Map<number, DeepAnalysisRecommendation>()
+    for (const evidence of deepAnalysisEvidence?.windows ?? []) {
+      if (
+        showDeepRecommendations &&
+        evidence.window.kind === kind &&
+        evidence.recommendations[0]
+      ) {
+        map.set(evidence.window.windowIndex, evidence.recommendations[0])
+      }
+    }
+    return map
+  }
+  const hookRecommendations = recommendationsByKind("hook")
+  const dropRecommendations = recommendationsByKind("drop_off")
+  const gainRecommendations = recommendationsByKind("gain")
   const chartInsights: RetentionChartInsight[] = [
     ...hookWindows
       .filter((window) => !window.outOfRange)
@@ -1081,6 +1184,8 @@ export function AnalysedVideoDetail({
                     windows={hookWindows}
                     transcript={transcript}
                     attribution={hookAttribution}
+                    deepInsights={hookDeepInsights}
+                    recommendations={hookRecommendations}
                     highlightedId={playbackWindow?.id ?? null}
                   />
                 </TabsContent>
@@ -1092,6 +1197,8 @@ export function AnalysedVideoDetail({
                     drops={drops}
                     transcript={transcript}
                     attribution={dropAttribution}
+                    deepInsights={dropDeepInsights}
+                    recommendations={dropRecommendations}
                     highlightedId={playbackWindow?.id ?? null}
                   />
                 </TabsContent>
@@ -1103,6 +1210,8 @@ export function AnalysedVideoDetail({
                     gains={gains}
                     transcript={transcript}
                     attribution={gainAttribution}
+                    deepInsights={gainDeepInsights}
+                    recommendations={gainRecommendations}
                     highlightedId={playbackWindow?.id ?? null}
                   />
                 </TabsContent>

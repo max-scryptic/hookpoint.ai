@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import {
+  buildWindowContrastRanges,
   dedupeAdjacentVisualFrames,
   synthesizeRetentionWindowEvents,
   type RetentionWindowEventSynthesizer,
@@ -230,6 +231,50 @@ describe("dedupeAdjacentVisualFrames", () => {
   })
 })
 
+describe("buildWindowContrastRanges", () => {
+  it("uses an equally sized preceding control for a longer episode", () => {
+    expect(
+      buildWindowContrastRanges({
+        kind: "drop_off",
+        eventFromSeconds: 100,
+        eventToSeconds: 120,
+        analysisFromSeconds: 70,
+        analysisToSeconds: 130,
+      }),
+    ).toEqual({
+      controlRange: { fromSeconds: 80, toSeconds: 100 },
+      targetRange: { fromSeconds: 100, toSeconds: 120 },
+    })
+  })
+
+  it("uses a ten-second minimum control and clamps it to harvested footage", () => {
+    expect(
+      buildWindowContrastRanges({
+        kind: "gain",
+        eventFromSeconds: 8,
+        eventToSeconds: 10,
+        analysisFromSeconds: 3,
+        analysisToSeconds: 30,
+      }),
+    ).toEqual({
+      controlRange: { fromSeconds: 3, toSeconds: 8 },
+      targetRange: { fromSeconds: 8, toSeconds: 10 },
+    })
+  })
+
+  it("does not invent a control for the opening hook", () => {
+    expect(
+      buildWindowContrastRanges({
+        kind: "hook",
+        eventFromSeconds: 0,
+        eventToSeconds: 10,
+        analysisFromSeconds: 0,
+        analysisToSeconds: 30,
+      }),
+    ).toBeNull()
+  })
+})
+
 describe("synthesizeRetentionWindowEvents", () => {
   it("does nothing when there are no pending jobs", async () => {
     const { supabase } = makeFakeSupabase({})
@@ -328,12 +373,48 @@ describe("synthesizeRetentionWindowEvents", () => {
         }),
         snapshotRow({ id: "snap-2", chunk_index: 1, timestamp_seconds: 158 }),
       ],
-      retention_window_audio: [audioRow()],
+      retention_window_audio: [
+        audioRow({
+          analysis: {
+            tone: "excited",
+            energy: "high",
+            speech_rate: 148,
+            signal_timeline: [
+              {
+                from_seconds: 149,
+                to_seconds: 154,
+                average_volume: -22,
+                silence: 0.2,
+              },
+              {
+                from_seconds: 154,
+                to_seconds: 159,
+                average_volume: -16,
+                silence: 0,
+              },
+            ],
+          },
+        }),
+      ],
       retention_window_scene_cue_scans: [
-        { retention_window_id: "rw-1", status: "ready" },
+        {
+          retention_window_id: "rw-1",
+          status: "ready",
+          motion_buckets: [
+            { fromSeconds: 149, toSeconds: 154, score: 0.05 },
+            { fromSeconds: 154, toSeconds: 159, score: 0.2 },
+          ],
+        },
       ],
       video_scene_cues: [
-        { id: "cue-1", kind: "cut", from_seconds: 154, to_seconds: 154, score: null },
+        {
+          id: "cue-1",
+          retention_window_id: "rw-1",
+          kind: "cut",
+          from_seconds: 154,
+          to_seconds: 154,
+          score: null,
+        },
       ],
       retention_window_transcripts: [
         {
@@ -342,6 +423,18 @@ describe("synthesizeRetentionWindowEvents", () => {
           from_seconds: 124,
           to_seconds: 186,
           transcript: "we made five thousand dollars last month",
+        },
+      ],
+      analysed_videos: [
+        {
+          transcript: [
+            { startSeconds: 149, endSeconds: 153, text: "slow setup here" },
+            {
+              startSeconds: 155,
+              endSeconds: 159,
+              text: "now several much faster words arrive together",
+            },
+          ],
         },
       ],
     })
@@ -375,6 +468,26 @@ describe("synthesizeRetentionWindowEvents", () => {
     expect(evidence.visual[0].ocrText).toBe("SALE 50% OFF")
     expect(evidence.visual[1].ocrText).toBeNull()
     expect(evidence.audio).toMatchObject({ tone: "excited", speech_rate: 148 })
+    expect(evidence.contrast).toMatchObject({
+      controlRange: { fromSeconds: 132, toSeconds: 154 },
+      targetRange: { fromSeconds: 154, toSeconds: 176 },
+      controlEditing: { cutCount: 0, cutsPerMinute: 0 },
+      targetEditing: { cutCount: 1 },
+    })
+    expect(evidence.contrast?.controlVisualChunkIndexes).toEqual([0])
+    expect(evidence.contrast?.targetVisualChunkIndexes).toEqual([1])
+    expect(evidence.contrast?.controlAudio).toMatchObject({
+      averageVolumeDb: -22,
+      silence: 0.2,
+    })
+    expect(evidence.contrast?.targetAudio).toMatchObject({
+      averageVolumeDb: -16,
+      silence: 0,
+    })
+    expect(evidence.contrast?.audioDelta.averageVolumeDb).toBe(6)
+    expect(evidence.contrast?.controlMotion).toBeCloseTo(0.05)
+    expect(evidence.contrast?.targetMotion).toBeCloseTo(0.2)
+    expect(evidence.contrast?.motionDelta).toBeCloseTo(0.15)
 
     expect(deletes).toContainEqual({ table: "retention_window_events" })
     expect(inserts).toContainEqual(
