@@ -116,7 +116,11 @@ export function PricingPlansCheckout({
   // sends the survey reason + notes along to be recorded. On success we close
   // the survey, show the confirmation dialog, and refresh so the cards flip to
   // the "Cancellation scheduled" state.
-  async function handleCancelSubmit(reason: CancellationReason, notes: string) {
+  async function handleCancelSubmit(
+    reason: CancellationReason,
+    notes: string,
+    otherReason: string,
+  ) {
     if (cancelSubmitting) return
     setSurveyError(null)
 
@@ -131,7 +135,7 @@ export function PricingPlansCheckout({
       const response = await fetch("/api/billing/cancel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason, notes }),
+        body: JSON.stringify({ reason, notes, otherReason }),
       })
       const data = (await response.json().catch(() => ({}))) as {
         error?: string

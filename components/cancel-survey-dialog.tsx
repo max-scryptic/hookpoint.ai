@@ -34,14 +34,22 @@ export function CancelSurveyDialog({
   submitting: boolean
   error: string | null
   onOpenChange: (open: boolean) => void
-  onSubmit: (reason: CancellationReason, notes: string) => void
+  onSubmit: (
+    reason: CancellationReason,
+    notes: string,
+    otherReason: string,
+  ) => void
 }) {
   const [reason, setReason] = useState<CancellationReason | null>(null)
+  const [otherReason, setOtherReason] = useState("")
   const [notes, setNotes] = useState("")
+  const otherReasonRequired = reason === "other"
+  const canSubmit =
+    reason !== null && (!otherReasonRequired || otherReason.trim().length > 0)
 
   function handleSubmit() {
-    if (!reason || submitting) return
-    onSubmit(reason, notes)
+    if (!reason || !canSubmit || submitting) return
+    onSubmit(reason, notes, otherReason)
   }
 
   return (
@@ -93,6 +101,28 @@ export function CancelSurveyDialog({
           })}
         </fieldset>
 
+        {otherReasonRequired ? (
+          <div className="flex flex-col gap-1.5">
+            <label
+              htmlFor="cancel-other-reason"
+              className="text-sm font-medium text-foreground"
+            >
+              Please tell us why <span aria-hidden="true">*</span>
+            </label>
+            <input
+              id="cancel-other-reason"
+              value={otherReason}
+              disabled={submitting}
+              required
+              autoFocus
+              maxLength={500}
+              placeholder="What made you decide to cancel?"
+              onChange={(event) => setOtherReason(event.target.value)}
+              className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 dark:bg-input/30"
+            />
+          </div>
+        ) : null}
+
         <div className="flex flex-col gap-1.5">
           <label
             htmlFor="cancel-notes"
@@ -128,7 +158,7 @@ export function CancelSurveyDialog({
           </Button>
           <Button
             variant="destructive"
-            disabled={!reason || submitting}
+            disabled={!canSubmit || submitting}
             aria-busy={submitting}
             onClick={handleSubmit}
           >
