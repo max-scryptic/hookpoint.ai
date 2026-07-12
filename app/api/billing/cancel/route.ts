@@ -42,6 +42,7 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as {
     reason?: unknown
     notes?: unknown
+    otherReason?: unknown
   }
   if (!isCancellationReason(body.reason)) {
     return NextResponse.json(
@@ -51,6 +52,20 @@ export async function POST(request: Request) {
   }
   const reason = body.reason
   const notes = typeof body.notes === "string" ? body.notes : null
+  const otherReason =
+    typeof body.otherReason === "string" ? body.otherReason.trim() : ""
+  if (reason === "other" && !otherReason) {
+    return NextResponse.json(
+      { error: "Please tell us why you're cancelling." },
+      { status: 400 },
+    )
+  }
+  const feedbackNotes =
+    reason === "other"
+      ? [`Other reason: ${otherReason}`, notes?.trim()]
+          .filter(Boolean)
+          .join("\n\n")
+      : notes
 
   try {
     const scheduled = await scheduleCancellationForUser(user.id)
@@ -67,7 +82,7 @@ export async function POST(request: Request) {
       await saveCancellationFeedback({
         userId: user.id,
         reason,
-        notes,
+        notes: feedbackNotes,
         subscription: scheduled,
       })
     } catch (feedbackError) {
