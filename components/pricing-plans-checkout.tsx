@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 
 import { PricingPlans } from "@/components/pricing-plans"
 import type { BillingPeriod, PlanId } from "@/lib/plans"
@@ -21,14 +21,55 @@ export function PricingPlansCheckout({
   billingEnabled: boolean
 }) {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [pendingPlanId, setPendingPlanId] = useState<PlanId | null>(null)
+  const [isResuming, setIsResuming] = useState(false)
 
   const checkoutStatus = searchParams.get("checkout")
+
+  // Clears a scheduled cancellation so the current paid plan keeps running.
+  // Refreshes on success so the server re-resolves the (no-longer-cancelling)
+  // plan state and the cards flip back to their normal labels.
+  async function handleResume() {
+    if (isResuming || pendingPlanId) return
+    setError(null)
+    setNotice(null)
+
+    if (!billingEnabled) {
+      setError("Billing isn't available yet. Please try again later.")
+      return
+    }
+
+    setIsResuming(true)
+    try {
+      const response = await fetch("/api/billing/resume", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      })
+      const data = (await response.json().catch(() => ({}))) as {
+        error?: string
+      }
+      if (!response.ok) {
+        setError(data.error ?? "Something went wrong. Please try again.")
+        setIsResuming(false)
+        return
+      }
+      setNotice("Your plan will continue — the scheduled cancellation is off.")
+      router.refresh()
+    } catch {
+      setError("Something went wrong. Please try again.")
+    } finally {
+      setIsResuming(false)
+    }
+  }
 
   async function handleSelect(planId: PlanId, period: BillingPeriod) {
     if (pendingPlanId) return
     setError(null)
+    setNotice(null)
 
     if (!billingEnabled) {
       setError("Billing isn't available yet. Please try again later.")
@@ -90,13 +131,17 @@ export function PricingPlansCheckout({
         </Banner>
       ) : null}
 
+      {notice ? <Banner tone="success">{notice}</Banner> : null}
+
       {error ? <Banner tone="error">{error}</Banner> : null}
 
       <PricingPlans
         currentPlanId={currentPlanId}
         cancelAtPeriodEnd={cancelAtPeriodEnd}
         loadingPlanId={pendingPlanId}
+        resumingPlan={isResuming}
         onSelectPlan={handleSelect}
+        onResumePlan={handleResume}
       />
     </div>
   )
