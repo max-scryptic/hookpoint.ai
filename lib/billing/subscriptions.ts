@@ -3,6 +3,7 @@ import type Stripe from "stripe"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getStripe } from "@/lib/stripe/stripe"
 import { resolvePlanFromPriceId } from "@/lib/stripe/config"
+import { getStripePriceId } from "@/lib/stripe/config"
 import type { BillingPeriod } from "@/lib/plans"
 import type { CancellationReason } from "@/lib/billing/cancellation-reasons"
 
@@ -116,6 +117,70 @@ export async function scheduleCancellationForUser(
   })
   await syncSubscriptionFromStripe(subscription.stripeSubscriptionId)
   return getSubscriptionForUser(userId)
+}
+
+// Keeps the current price in place through its paid-through date, then changes
+// the same Stripe subscription to the other billing interval. A Subscription
+// Schedule avoids creating a second subscription and avoids charging (or
+// discarding prepaid time) part-way through the current month/year.
+export async function scheduleBillingPeriodChangeForUser(
+  userId: string,
+  targetPeriod: BillingPeriod,
+): Promise<SubscriptionRecord | null> {
+  const current = await getSubscriptionForUser(userId)
+  if (!current) return null
+  if (current.billingPeriod === targetPeriod) return current
+  if (current.cancelAtPeriodEnd) {
+    throw new Error("CANCELLATION_SCHEDULED")
+  }
+
+  const targetPriceId = getStripePriceId(current.planId, targetPeriod)
+  if (!targetPriceId) throw new Error("TARGET_PRICE_UNAVAILABLE")
+
+  const stripe = getStripe()
+  const subscription = await stripe.subscriptions.retrieve(
+    current.stripeSubscriptionId,
+  )
+  const item = subscription.items.data[0]
+  if (!item?.price.id) throw new Error("SUBSCRIPTION_PRICE_MISSING")
+
+  const existingScheduleId =
+    typeof subscription.schedule === "string"
+      ? subscription.schedule
+      : subscription.schedule?.id
+  const schedule = existingScheduleId
+    ? await stripe.subscriptionSchedules.retrieve(existingScheduleId)
+    : await stripe.subscriptionSchedules.create({
+        from_subscription: subscription.id,
+      })
+
+  const period = readPeriod(subscription)
+  if (!period) throw new Error("SUBSCRIPTION_PERIOD_MISSING")
+
+  await stripe.subscriptionSchedules.update(schedule.id, {
+    end_behavior: "release",
+    phases: [
+      {
+        start_date: schedule.current_phase?.start_date ?? period.start,
+        end_date: period.end,
+        items: [{ price: item.price.id, quantity: item.quantity ?? 1 }],
+        metadata: subscription.metadata,
+        proration_behavior: "none",
+      },
+      {
+        start_date: period.end,
+        items: [{ price: targetPriceId, quantity: item.quantity ?? 1 }],
+        metadata: {
+          ...subscription.metadata,
+          plan_id: current.planId,
+          period: targetPeriod,
+        },
+        proration_behavior: "none",
+      },
+    ],
+  })
+
+  return current
 }
 
 // Records why a user cancelled, alongside the subscription they were on. This is
