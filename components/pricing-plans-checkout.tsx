@@ -8,6 +8,10 @@ import {
   PlanCancelledDialog,
   type PlanCancelledDetails,
 } from "@/components/plan-cancelled-dialog"
+import {
+  PlanResumedDialog,
+  type PlanResumedDetails,
+} from "@/components/plan-resumed-dialog"
 import { CancelSurveyDialog } from "@/components/cancel-survey-dialog"
 import { getPlan, type BillingPeriod, type PlanId } from "@/lib/plans"
 import type { CancellationReason } from "@/lib/billing/cancellation-reasons"
@@ -29,11 +33,12 @@ export function PricingPlansCheckout({
   const searchParams = useSearchParams()
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
   const [pendingPlanId, setPendingPlanId] = useState<PlanId | null>(null)
   const [isResuming, setIsResuming] = useState(false)
   const [cancelledDetails, setCancelledDetails] =
     useState<PlanCancelledDetails | null>(null)
+  const [resumedDetails, setResumedDetails] =
+    useState<PlanResumedDetails | null>(null)
   // The cancellation survey shown before a downgrade actually goes through.
   const [surveyOpen, setSurveyOpen] = useState(false)
   const [cancelSubmitting, setCancelSubmitting] = useState(false)
@@ -48,7 +53,6 @@ export function PricingPlansCheckout({
   async function handleResume() {
     if (isResuming || pendingPlanId) return
     setError(null)
-    setNotice(null)
 
     if (!billingEnabled) {
       setError("Billing isn't available yet. Please try again later.")
@@ -70,7 +74,7 @@ export function PricingPlansCheckout({
         setIsResuming(false)
         return
       }
-      setNotice("Your plan will continue — the scheduled cancellation is off.")
+      setResumedDetails({ planName: currentPlanName })
       router.refresh()
     } catch {
       setError("Something went wrong. Please try again.")
@@ -82,7 +86,6 @@ export function PricingPlansCheckout({
   async function handleSelect(planId: PlanId, period: BillingPeriod) {
     if (pendingPlanId) return
     setError(null)
-    setNotice(null)
 
     if (!billingEnabled) {
       setError("Billing isn't available yet. Please try again later.")
@@ -192,8 +195,6 @@ export function PricingPlansCheckout({
         </Banner>
       ) : null}
 
-      {notice ? <Banner tone="success">{notice}</Banner> : null}
-
       {error ? <Banner tone="error">{error}</Banner> : null}
 
       <PricingPlans
@@ -221,6 +222,13 @@ export function PricingPlansCheckout({
         details={cancelledDetails}
         onOpenChange={(open) => {
           if (!open) setCancelledDetails(null)
+        }}
+      />
+
+      <PlanResumedDialog
+        details={resumedDetails}
+        onOpenChange={(open) => {
+          if (!open) setResumedDetails(null)
         }}
       />
     </div>
