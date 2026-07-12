@@ -8,7 +8,9 @@ import {
   PlanCancelledDialog,
   type PlanCancelledDetails,
 } from "@/components/plan-cancelled-dialog"
-import type { BillingPeriod, PlanId } from "@/lib/plans"
+import { CancelSurveyDialog } from "@/components/cancel-survey-dialog"
+import { getPlan, type BillingPeriod, type PlanId } from "@/lib/plans"
+import type { CancellationReason } from "@/lib/billing/cancellation-reasons"
 
 // Client wrapper that turns the presentational PricingPlans cards into a working
 // purchase flow: picking a paid plan starts a Stripe Checkout session and
@@ -32,8 +34,13 @@ export function PricingPlansCheckout({
   const [isResuming, setIsResuming] = useState(false)
   const [cancelledDetails, setCancelledDetails] =
     useState<PlanCancelledDetails | null>(null)
+  // The cancellation survey shown before a downgrade actually goes through.
+  const [surveyOpen, setSurveyOpen] = useState(false)
+  const [cancelSubmitting, setCancelSubmitting] = useState(false)
+  const [surveyError, setSurveyError] = useState<string | null>(null)
 
   const checkoutStatus = searchParams.get("checkout")
+  const currentPlanName = getPlan(currentPlanId).name
 
   // Clears a scheduled cancellation so the current paid plan keeps running.
   // Refreshes on success so the server re-resolves the (no-longer-cancelling)
@@ -82,12 +89,9 @@ export function PricingPlansCheckout({
       return
     }
 
-    // Downgrading to Free schedules a cancellation at the end of the current
-    // period. This is done in-app (POST /api/billing/cancel) rather than through
-    // the Stripe portal so the outcome is always cancel-at-period-end and the
-    // user stays here instead of being bounced to Stripe. On success we refresh
-    // so the server re-resolves the now-cancelling plan and the cards flip to
-    // the "Cancellation scheduled" state.
+    // Downgrading to Free doesn't cancel straight away: first we open a short
+    // survey asking why. The actual cancellation happens in handleCancelSubmit
+    // once a reason is chosen.
     if (planId === "free") {
       if (cancelAtPeriodEnd) {
         setError(
@@ -95,42 +99,60 @@ export function PricingPlansCheckout({
         )
         return
       }
-
-      setPendingPlanId("free")
-      try {
-        const response = await fetch("/api/billing/cancel", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: "{}",
-        })
-        const data = (await response.json().catch(() => ({}))) as {
-          error?: string
-          planName?: string
-          periodEnd?: string
-        }
-        if (!response.ok) {
-          setError(data.error ?? "Something went wrong. Please try again.")
-          return
-        }
-        // Surface the confirmation in a dialog (plan, access-until date) instead
-        // of an inline banner, then refresh so the cards behind it flip to the
-        // "Cancellation scheduled" state.
-        if (data.planName && data.periodEnd) {
-          setCancelledDetails({
-            planName: data.planName,
-            periodEnd: data.periodEnd,
-          })
-        }
-        router.refresh()
-      } catch {
-        setError("Something went wrong. Please try again.")
-      } finally {
-        setPendingPlanId(null)
-      }
+      setSurveyError(null)
+      setSurveyOpen(true)
       return
     }
 
     await redirectTo(planId, "/api/billing/checkout", { planId, period })
+  }
+
+  // Runs the actual cancellation once the survey is submitted. Schedules the
+  // cancel in-app (POST /api/billing/cancel) rather than via the Stripe portal
+  // so the outcome is always cancel-at-period-end and the user stays here, and
+  // sends the survey reason + notes along to be recorded. On success we close
+  // the survey, show the confirmation dialog, and refresh so the cards flip to
+  // the "Cancellation scheduled" state.
+  async function handleCancelSubmit(reason: CancellationReason, notes: string) {
+    if (cancelSubmitting) return
+    setSurveyError(null)
+
+    if (!billingEnabled) {
+      setSurveyError("Billing isn't available yet. Please try again later.")
+      return
+    }
+
+    setCancelSubmitting(true)
+    setPendingPlanId("free")
+    try {
+      const response = await fetch("/api/billing/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason, notes }),
+      })
+      const data = (await response.json().catch(() => ({}))) as {
+        error?: string
+        planName?: string
+        periodEnd?: string
+      }
+      if (!response.ok) {
+        setSurveyError(data.error ?? "Something went wrong. Please try again.")
+        return
+      }
+      setSurveyOpen(false)
+      if (data.planName && data.periodEnd) {
+        setCancelledDetails({
+          planName: data.planName,
+          periodEnd: data.periodEnd,
+        })
+      }
+      router.refresh()
+    } catch {
+      setSurveyError("Something went wrong. Please try again.")
+    } finally {
+      setCancelSubmitting(false)
+      setPendingPlanId(null)
+    }
   }
 
   async function redirectTo(
@@ -182,6 +204,18 @@ export function PricingPlansCheckout({
         onSelectPlan={handleSelect}
         onResumePlan={handleResume}
       />
+
+      {surveyOpen ? (
+        <CancelSurveyDialog
+          planName={currentPlanName}
+          submitting={cancelSubmitting}
+          error={surveyError}
+          onOpenChange={(open) => {
+            if (!open) setSurveyOpen(false)
+          }}
+          onSubmit={handleCancelSubmit}
+        />
+      ) : null}
 
       <PlanCancelledDialog
         details={cancelledDetails}

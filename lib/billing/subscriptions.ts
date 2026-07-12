@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { getStripe } from "@/lib/stripe/stripe"
 import { resolvePlanFromPriceId } from "@/lib/stripe/config"
 import type { BillingPeriod } from "@/lib/plans"
+import type { CancellationReason } from "@/lib/billing/cancellation-reasons"
 
 // The projection of a user's Stripe subscription we persist. Stripe is the
 // source of truth; this is the read-model the app resolves entitlements from
@@ -115,6 +116,36 @@ export async function scheduleCancellationForUser(
   })
   await syncSubscriptionFromStripe(subscription.stripeSubscriptionId)
   return getSubscriptionForUser(userId)
+}
+
+// Records why a user cancelled, alongside the subscription they were on. This is
+// best-effort feedback capture: it must never block the cancellation itself, so
+// callers log and swallow failures rather than surfacing them to the user. The
+// reason is validated against the known set before this is called; notes are
+// optional free text, trimmed and dropped when empty.
+export async function saveCancellationFeedback({
+  userId,
+  reason,
+  notes,
+  subscription,
+}: {
+  userId: string
+  reason: CancellationReason
+  notes?: string | null
+  subscription: SubscriptionRecord | null
+}): Promise<void> {
+  const admin = createAdminClient()
+  const trimmedNotes = notes?.trim()
+  const { error } = await admin.from("billing_cancellation_feedback").insert({
+    user_id: userId,
+    stripe_subscription_id: subscription?.stripeSubscriptionId ?? null,
+    plan_id: subscription?.planId ?? null,
+    reason,
+    notes: trimmedNotes ? trimmedNotes : null,
+  })
+  if (error) {
+    throw new Error(`Failed to save cancellation feedback: ${error.message}`)
+  }
 }
 
 // Maps a Stripe customer id back to our app user via the billing_customers
