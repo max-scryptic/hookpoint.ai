@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
   Avatar,
@@ -100,9 +101,10 @@ export function NavUser({
             ) : null}
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem render={<a href="/dashboard/notifications" />}>
-                <BellIcon
-                />
+              <DropdownMenuItem
+                render={<Link href="/dashboard/notifications" />}
+              >
+                <BellIcon />
                 Notifications
               </DropdownMenuItem>
               <DropdownMenuItem render={<a href="/settings" />}>
