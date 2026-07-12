@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { getStripe } from "@/lib/stripe/stripe"
 import { resolvePlanFromPriceId } from "@/lib/stripe/config"
 import type { BillingPeriod } from "@/lib/plans"
+import type { CancellationReason } from "@/lib/billing/cancellation-reasons"
 
 // The projection of a user's Stripe subscription we persist. Stripe is the
 // source of truth; this is the read-model the app resolves entitlements from
@@ -101,19 +102,50 @@ export async function resumeSubscriptionForUser(
 // until the period closes) regardless of how the Stripe Customer Portal's
 // cancellation policy is configured. Reconciles the local projection immediately
 // so the caller can render the scheduled-cancellation state without waiting for
-// the webhook. Returns false when the user has no subscription.
+// the webhook. Returns the reconciled subscription (the caller surfaces its plan
+// and period end in the confirmation), or null when the user has no subscription.
 export async function scheduleCancellationForUser(
   userId: string,
-): Promise<boolean> {
+): Promise<SubscriptionRecord | null> {
   const subscription = await getSubscriptionForUser(userId)
-  if (!subscription) return false
+  if (!subscription) return null
 
   const stripe = getStripe()
   await stripe.subscriptions.update(subscription.stripeSubscriptionId, {
     cancel_at_period_end: true,
   })
   await syncSubscriptionFromStripe(subscription.stripeSubscriptionId)
-  return true
+  return getSubscriptionForUser(userId)
+}
+
+// Records why a user cancelled, alongside the subscription they were on. This is
+// best-effort feedback capture: it must never block the cancellation itself, so
+// callers log and swallow failures rather than surfacing them to the user. The
+// reason is validated against the known set before this is called; notes are
+// optional free text, trimmed and dropped when empty.
+export async function saveCancellationFeedback({
+  userId,
+  reason,
+  notes,
+  subscription,
+}: {
+  userId: string
+  reason: CancellationReason
+  notes?: string | null
+  subscription: SubscriptionRecord | null
+}): Promise<void> {
+  const admin = createAdminClient()
+  const trimmedNotes = notes?.trim()
+  const { error } = await admin.from("billing_cancellation_feedback").insert({
+    user_id: userId,
+    stripe_subscription_id: subscription?.stripeSubscriptionId ?? null,
+    plan_id: subscription?.planId ?? null,
+    reason,
+    notes: trimmedNotes ? trimmedNotes : null,
+  })
+  if (error) {
+    throw new Error(`Failed to save cancellation feedback: ${error.message}`)
+  }
 }
 
 // Maps a Stripe customer id back to our app user via the billing_customers
