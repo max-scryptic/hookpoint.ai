@@ -2,6 +2,7 @@ import { AnalysedVideoDetail } from "@/components/analysed-video-detail"
 import { DeepAnalysisEvidence } from "@/components/deep-analysis-evidence"
 import { SourceFileUpload } from "@/components/source-file-upload"
 import { getDeepAnalysisEvidence } from "@/lib/deep-analysis-evidence"
+import { getDeepAnalysisRollout } from "@/lib/deep-analysis-config"
 import { requireAuthenticatedUser } from "@/lib/auth"
 import { createClient } from "@/lib/supabase/server"
 import {
@@ -356,6 +357,7 @@ export default async function Page({
 }) {
   const { videoId } = await params
   const user = await requireAuthenticatedUser()
+  const deepAnalysisRollout = getDeepAnalysisRollout(user.id)
   const result = await analyse(user.id, videoId)
 
   const title = result.status === "ok" ? result.video.title : "Analysis"
@@ -474,6 +476,10 @@ export default async function Page({
               retentionAttribution={result.retentionAttribution}
               packagingAlignment={result.packagingAlignment}
               analyticsSummary={result.analyticsSummary}
+              deepAnalysisEvidence={
+                deepAnalysisRollout.insights ? deepAnalysisEvidence : null
+              }
+              showDeepRecommendations={deepAnalysisRollout.recommendations}
             />
             <SourceFileUpload
               videoId={videoId}
@@ -483,8 +489,13 @@ export default async function Page({
               filenameSimilarityThreshold={getFilenameSimilarityThreshold()}
               initialSourceFile={initialSourceFile}
             />
-            {deepAnalysisEvidence && (
-              <DeepAnalysisEvidence evidence={deepAnalysisEvidence} />
+            {deepAnalysisEvidence &&
+              deepAnalysisRollout.evidencePanel &&
+              result.analysedVideoId && (
+              <DeepAnalysisEvidence
+                evidence={deepAnalysisEvidence}
+                videoId={result.analysedVideoId}
+              />
             )}
           </>
         )}

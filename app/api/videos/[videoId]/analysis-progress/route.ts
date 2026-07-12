@@ -1,14 +1,14 @@
-import { after, NextResponse, type NextRequest } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
 
 import { createClient } from "@/lib/supabase/server"
-import { createAdminClient } from "@/lib/supabase/admin"
 import { getAnalysedVideo } from "@/lib/analysed-videos"
-import { synthesizeRetentionWindowEvents } from "@/lib/retention-window-event-synthesis"
+import { triggerRetentionWindowMediaExtraction } from "@/lib/retention-window-media-trigger"
 import { getSourceFileForVideo } from "@/lib/source-files/source-files"
 import {
   getDeepAnalysisProgress,
   type DeepAnalysisProgress,
 } from "@/lib/retention-window-media-progress"
+import { getLatestDeepAnalysisPipelineRun } from "@/lib/deep-analysis-pipeline-runs"
 
 // GET /api/videos/:videoId/analysis-progress
 // Polled by the source-file card while a raw upload's transcode/snapshot/audio
@@ -66,19 +66,14 @@ export async function GET(
           key === "eventSynthesis" || status === "ready" || status === "failed",
       )
     ) {
-      after(async () => {
-        try {
-          await synthesizeRetentionWindowEvents(
-            createAdminClient(),
-            user.id,
-            analysedVideo.id,
-          )
-        } catch (error) {
-          console.error("Failed to resume retention event synthesis", error)
-        }
-      })
+      triggerRetentionWindowMediaExtraction(sourceFile)
     }
-    return NextResponse.json(progress)
+    const pipelineRun = await getLatestDeepAnalysisPipelineRun(
+      supabase,
+      user.id,
+      analysedVideo.id,
+    ).catch(() => null)
+    return NextResponse.json({ ...progress, pipelineRun })
   } catch (error) {
     console.error("Failed to load analysis progress", error)
     return NextResponse.json(

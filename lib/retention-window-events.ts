@@ -12,7 +12,9 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import { selectDeepAnalysisWindows } from "@/lib/deep-analysis-window-selection"
 import type { PersistedRetentionWindow } from "@/lib/retention-windows"
+import { getDeepAnalysisMaxWindows } from "@/lib/retention-window-media-config"
 
 export type EventSynthesisStatus = "pending" | "processing" | "ready" | "failed"
 
@@ -57,8 +59,13 @@ export async function createPendingRetentionWindowEventSynthesis(
 ): Promise<void> {
   const rows: Record<string, unknown>[] = []
   const windowIdsWithoutAnalysisWindow: string[] = []
+  const selectedWindows = selectDeepAnalysisWindows(
+    windows,
+    getDeepAnalysisMaxWindows(),
+  )
+  const selectedIds = new Set(selectedWindows.map((window) => window.id))
 
-  for (const window of windows) {
+  for (const window of selectedWindows) {
     if (window.analysisFromSeconds == null || window.analysisToSeconds == null) {
       windowIdsWithoutAnalysisWindow.push(window.id)
       continue
@@ -72,6 +79,12 @@ export async function createPendingRetentionWindowEventSynthesis(
       error: null,
     })
   }
+
+  windowIdsWithoutAnalysisWindow.push(
+    ...windows
+      .filter((window) => !selectedIds.has(window.id))
+      .map((window) => window.id),
+  )
 
   if (rows.length > 0) {
     const { error } = await supabase

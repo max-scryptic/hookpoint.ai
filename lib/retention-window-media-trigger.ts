@@ -33,6 +33,11 @@ import {
 } from "@/lib/retention-window-media-extraction"
 import type { SourceFile } from "@/lib/source-files/source-files"
 import { synthesizeRetentionWindowEvents } from "@/lib/retention-window-event-synthesis"
+import {
+  claimDeepAnalysisPipelineRun,
+  finishDeepAnalysisPipelineRun,
+  runObservedPipelineStage,
+} from "@/lib/deep-analysis-pipeline-runs"
 
 export function triggerRetentionWindowMediaExtraction(
   sourceFile: SourceFile | null,
@@ -42,31 +47,32 @@ export function triggerRetentionWindowMediaExtraction(
   after(async () => {
     const admin = createAdminClient()
     const file = sourceFile as SourceFile
-
+    const run = await claimDeepAnalysisPipelineRun(
+      admin,
+      file.userId,
+      file.analysedVideoId,
+    ).catch((error) => {
+      console.error("Failed to claim deep analysis pipeline", error)
+      return null
+    })
+    if (!run) return
     try {
-      await extractPendingRetentionWindowMedia(
-        admin,
-        getStorageProvider(),
-        file,
+      await runObservedPipelineStage(admin, run, "extraction", () =>
+        extractPendingRetentionWindowMedia(admin, getStorageProvider(), file),
       )
-    } catch (error) {
-      console.error("Failed to run retention window media extraction", error)
-    }
-
-    try {
-      await analyzeRetentionWindowMedia(admin, file.userId, file.analysedVideoId)
-    } catch (error) {
-      console.error("Failed to run retention window media analysis", error)
-    }
-
-    try {
-      await synthesizeRetentionWindowEvents(
-        admin,
-        file.userId,
-        file.analysedVideoId,
+      await runObservedPipelineStage(admin, run, "media_analysis", () =>
+        analyzeRetentionWindowMedia(admin, file.userId, file.analysedVideoId),
       )
+      await runObservedPipelineStage(admin, run, "event_synthesis", () =>
+        synthesizeRetentionWindowEvents(admin, file.userId, file.analysedVideoId),
+      )
+      await finishDeepAnalysisPipelineRun(admin, run, { status: "ready" })
     } catch (error) {
-      console.error("Failed to synthesize retention window events", error)
+      console.error("Failed to run deep analysis pipeline", error)
+      await finishDeepAnalysisPipelineRun(admin, run, {
+        status: "failed",
+        error: error instanceof Error ? error.message : "Deep analysis pipeline failed",
+      }).catch(() => {})
     }
   })
 }

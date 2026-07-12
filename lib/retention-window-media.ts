@@ -16,8 +16,10 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import { selectDeepAnalysisWindows } from "@/lib/deep-analysis-window-selection"
 import type { SceneCut, SceneCueScanResult } from "@/lib/media/scene-detection"
 import type { PersistedRetentionWindow } from "@/lib/retention-windows"
+import { getDeepAnalysisMaxWindows } from "@/lib/retention-window-media-config"
 
 export const CHUNK_STEP_SECONDS = 5
 
@@ -178,8 +180,13 @@ export async function createPendingRetentionWindowAudio(
   windows: PersistedRetentionWindow[],
 ): Promise<void> {
   const audioRows: Record<string, unknown>[] = []
+  const selectedWindows = selectDeepAnalysisWindows(
+    windows,
+    getDeepAnalysisMaxWindows(),
+  )
+  const selectedIds = new Set(selectedWindows.map((window) => window.id))
 
-  for (const window of windows) {
+  for (const window of selectedWindows) {
     if (
       window.analysisFromSeconds == null ||
       window.analysisToSeconds == null
@@ -211,7 +218,7 @@ export async function createPendingRetentionWindowAudio(
 
   // A window that lost its analysis window entirely also loses its audio row.
   const windowIdsWithoutAnalysisWindow = windows
-    .filter((w) => w.analysisFromSeconds == null || w.analysisToSeconds == null)
+    .filter((window) => !selectedIds.has(window.id))
     .map((w) => w.id)
   if (windowIdsWithoutAnalysisWindow.length > 0) {
     const { error } = await supabase

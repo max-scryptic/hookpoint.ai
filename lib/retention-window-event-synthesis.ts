@@ -17,6 +17,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import { getAnalysedVideoTranscriptById } from "@/lib/analysed-videos"
 import { runWithConcurrency } from "@/lib/concurrency"
 import { responsesCallCost, type LlmCallCost } from "@/lib/llm-cost"
 import { recordRetentionWindowCost } from "@/lib/retention-window-costs"
@@ -26,6 +27,7 @@ import {
 } from "@/lib/retention-window-media-config"
 import {
   callOpenAiResponses,
+  computeSpeechRate,
   type AudioAnalysis,
   type SnapshotAnalysis,
 } from "@/lib/retention-window-media-analysis"
@@ -44,12 +46,149 @@ import {
 import { getRetentionAttribution } from "@/lib/retention-attributions"
 import { getRetentionWindowTranscripts } from "@/lib/retention-window-transcripts"
 import { getRetentionWindows } from "@/lib/retention-windows"
+import { transcriptForSegment, type TranscriptCue } from "@/lib/youtube/youtube"
+import type { MotionBucket } from "@/lib/media/scene-detection"
+import { getSparseVideoFeatureBaseline } from "@/lib/video-feature-baseline"
 import {
   computeAverageSceneCueMetrics,
   computeSceneCueMetrics,
   getRetentionWindowSceneCueScanStatuses,
   getVideoSceneCues,
+  type SceneCueMetrics,
 } from "@/lib/video-scene-cues"
+
+export interface ContrastRange {
+  fromSeconds: number
+  toSeconds: number
+}
+
+export interface WindowContrastEvidence {
+  controlRange: ContrastRange
+  targetRange: ContrastRange
+  controlEditing: SceneCueMetrics
+  targetEditing: SceneCueMetrics
+  editingDelta: {
+    cutsPerMinute: number | null
+    freezeCoverage: number
+    blackCoverage: number
+  }
+  // References into `visual` below, avoiding a second copy of every frame in
+  // the LLM payload while making the control/target split explicit.
+  controlVisualChunkIndexes: number[]
+  targetVisualChunkIndexes: number[]
+  controlAudio: ContrastAudioSummary
+  targetAudio: ContrastAudioSummary
+  audioDelta: {
+    averageVolumeDb: number | null
+    silence: number | null
+    speechRate: number | null
+  }
+  controlMotion: number | null
+  targetMotion: number | null
+  motionDelta: number | null
+}
+
+export interface ContrastAudioSummary {
+  averageVolumeDb: number | null
+  silence: number | null
+  speechRate: number | null
+}
+
+function summarizeAudioRange(
+  audio: AudioAnalysis | null,
+  transcript: TranscriptCue[],
+  range: ContrastRange,
+): ContrastAudioSummary {
+  const timeline = audio?.signal_timeline ?? []
+  let coveredSeconds = 0
+  let volumeWeighted = 0
+  let volumeSeconds = 0
+  let silenceWeighted = 0
+
+  for (const bucket of timeline) {
+    const overlap = Math.max(
+      0,
+      Math.min(bucket.to_seconds, range.toSeconds) -
+        Math.max(bucket.from_seconds, range.fromSeconds),
+    )
+    if (overlap <= 0) continue
+    coveredSeconds += overlap
+    silenceWeighted += bucket.silence * overlap
+    if (bucket.average_volume != null) {
+      volumeWeighted += bucket.average_volume * overlap
+      volumeSeconds += overlap
+    }
+  }
+
+  return {
+    averageVolumeDb:
+      volumeSeconds > 0 ? volumeWeighted / volumeSeconds : null,
+    silence: coveredSeconds > 0 ? silenceWeighted / coveredSeconds : null,
+    speechRate: computeSpeechRate(
+      transcriptForSegment(transcript, range.fromSeconds, range.toSeconds),
+      range.fromSeconds,
+      range.toSeconds,
+    ),
+  }
+}
+
+function summarizeMotionRange(
+  buckets: MotionBucket[],
+  range: ContrastRange,
+): number | null {
+  let weightedScore = 0
+  let coveredSeconds = 0
+  for (const bucket of buckets) {
+    const overlap = Math.max(
+      0,
+      Math.min(bucket.toSeconds, range.toSeconds) -
+        Math.max(bucket.fromSeconds, range.fromSeconds),
+    )
+    if (overlap <= 0) continue
+    weightedScore += bucket.score * overlap
+    coveredSeconds += overlap
+  }
+  return coveredSeconds > 0 ? weightedScore / coveredSeconds : null
+}
+
+// Builds the nearest fair pre-event comparison available inside the footage
+// already harvested for a retention window. The target is the detected
+// retention episode itself. Its control is an equally sized preceding range,
+// with a 10s minimum (enough to observe pacing) and 30s maximum (keeps the
+// comparison local), clamped to the padded analysis range. Hooks have no true
+// pre-event footage and therefore deliberately return null.
+export function buildWindowContrastRanges(params: {
+  kind: string
+  eventFromSeconds: number
+  eventToSeconds: number
+  analysisFromSeconds: number
+  analysisToSeconds: number
+}): { controlRange: ContrastRange; targetRange: ContrastRange } | null {
+  if (params.kind === "hook") return null
+
+  const targetFrom = Math.max(
+    params.analysisFromSeconds,
+    params.eventFromSeconds,
+  )
+  const targetTo = Math.min(params.analysisToSeconds, params.eventToSeconds)
+  if (targetTo <= targetFrom) return null
+
+  const desiredControlSeconds = Math.min(
+    30,
+    Math.max(10, targetTo - targetFrom),
+  )
+  const controlTo = targetFrom
+  const controlFrom = Math.max(
+    params.analysisFromSeconds,
+    controlTo - desiredControlSeconds,
+  )
+  if (controlTo <= controlFrom) return null
+
+  return {
+    controlRange: { fromSeconds: controlFrom, toSeconds: controlTo },
+    targetRange: { fromSeconds: targetFrom, toSeconds: targetTo },
+  }
+}
 
 // The evidence bundle handed to the synthesis call for one window — every
 // field here is already-computed (deterministic or a prior LLM call's
@@ -84,6 +223,7 @@ export interface WindowEvidence {
     freezeCoverage: number | null
     blackCoverage: number | null
     speechRate: number | null
+    motion: number | null
   }
   visual: {
     chunkIndex: number
@@ -95,6 +235,10 @@ export interface WindowEvidence {
     analysis: SnapshotAnalysis
   }[]
   audio: AudioAnalysis | null
+  // Local counterfactual: how the detected episode differs from the footage
+  // immediately preceding it. Null for the opening hook, which has no prior
+  // segment inside the video to use as a fair control.
+  contrast: WindowContrastEvidence | null
 }
 
 type VisualFrame = WindowEvidence["visual"][number]
@@ -201,6 +345,8 @@ export async function synthesizeRetentionWindowEvents(
     cues,
     transcripts,
     attribution,
+    videoTranscript,
+    sparseBaseline,
   ] = await Promise.all([
     getRetentionWindows(admin, userId, analysedVideoId),
     getRetentionWindowSnapshotsForVideo(admin, userId, analysedVideoId),
@@ -213,6 +359,10 @@ export async function synthesizeRetentionWindowEvents(
     // A missing (or failed) read just leaves scriptExplanation null — the
     // dedup reference is an enhancement, never a prerequisite.
     getRetentionAttribution(admin, userId, analysedVideoId).catch(() => null),
+    getAnalysedVideoTranscriptById(admin, userId, analysedVideoId).catch(
+      () => [],
+    ),
+    getSparseVideoFeatureBaseline(admin, userId, analysedVideoId).catch(() => null),
   ])
 
   const windowById = new Map(windows.map((w) => [w.id, w]))
@@ -223,8 +373,8 @@ export async function synthesizeRetentionWindowEvents(
     else snapshotsByWindow.set(snapshot.retentionWindowId, [snapshot])
   }
   const audioByWindow = new Map(audioClips.map((a) => [a.retentionWindowId, a]))
-  const scanStatusByWindow = new Map(
-    sceneCueScanStatuses.map((s) => [s.retentionWindowId, s.status]),
+  const scanByWindow = new Map(
+    sceneCueScanStatuses.map((scan) => [scan.retentionWindowId, scan]),
   )
   const transcriptByWindow = new Map(
     transcripts.map((t) => [t.retentionWindowId, t.transcript]),
@@ -267,10 +417,11 @@ export async function synthesizeRetentionWindowEvents(
         )
       : null
   const baseline = {
-    cutsPerMinute: editingBaseline?.cutsPerMinute ?? null,
-    freezeCoverage: editingBaseline?.freezeCoverage ?? null,
-    blackCoverage: editingBaseline?.blackCoverage ?? null,
-    speechRate: speechRateBaseline,
+    cutsPerMinute: sparseBaseline?.cutsPerMinute ?? editingBaseline?.cutsPerMinute ?? null,
+    freezeCoverage: sparseBaseline?.freezeCoverage ?? editingBaseline?.freezeCoverage ?? null,
+    blackCoverage: sparseBaseline?.blackCoverage ?? editingBaseline?.blackCoverage ?? null,
+    speechRate: sparseBaseline?.speechRate ?? speechRateBaseline,
+    motion: sparseBaseline?.motion ?? null,
   }
 
   const model = getEventSynthesisModel()
@@ -297,7 +448,8 @@ export async function synthesizeRetentionWindowEvents(
       }
 
       const windowSnapshots = snapshotsByWindow.get(job.retentionWindowId) ?? []
-      const scanStatus = scanStatusByWindow.get(job.retentionWindowId)
+      const scan = scanByWindow.get(job.retentionWindowId)
+      const scanStatus = scan?.status
       const audio = audioByWindow.get(job.retentionWindowId)
 
       const scanSettled = scanStatus != null && isSettled(scanStatus)
@@ -337,11 +489,122 @@ export async function synthesizeRetentionWindowEvents(
             })),
         )
 
+        // Overlapping windows can persist the same physical cut more than
+        // once, tagged to each source window. Scope metrics to this job's own
+        // scan so its target/control comparison never double-counts another
+        // window's copy of the cue.
+        const windowCues = cues.filter(
+          (cue) => cue.retentionWindowId === job.retentionWindowId,
+        )
         const metrics = computeSceneCueMetrics(
-          cues,
+          windowCues,
           window.analysisFromSeconds,
           window.analysisToSeconds,
         )
+
+        const contrastRanges = buildWindowContrastRanges({
+          kind: window.kind,
+          eventFromSeconds: window.fromSeconds,
+          eventToSeconds: window.toSeconds,
+          analysisFromSeconds: window.analysisFromSeconds,
+          analysisToSeconds: window.analysisToSeconds,
+        })
+        const contrast: WindowContrastEvidence | null = contrastRanges
+          ? (() => {
+              const controlEditing = computeSceneCueMetrics(
+                windowCues,
+                contrastRanges.controlRange.fromSeconds,
+                contrastRanges.controlRange.toSeconds,
+              )
+              const targetEditing = computeSceneCueMetrics(
+                windowCues,
+                contrastRanges.targetRange.fromSeconds,
+                contrastRanges.targetRange.toSeconds,
+              )
+              const analysedAudio =
+                audio.analysisStatus === "ready"
+                  ? (audio.analysis as AudioAnalysis)
+                  : null
+              const controlAudio = summarizeAudioRange(
+                analysedAudio,
+                videoTranscript,
+                contrastRanges.controlRange,
+              )
+              const targetAudio = summarizeAudioRange(
+                analysedAudio,
+                videoTranscript,
+                contrastRanges.targetRange,
+              )
+              const controlMotion = summarizeMotionRange(
+                scan?.motionBuckets ?? [],
+                contrastRanges.controlRange,
+              )
+              const targetMotion = summarizeMotionRange(
+                scan?.motionBuckets ?? [],
+                contrastRanges.targetRange,
+              )
+              const subtractNullable = (
+                target: number | null,
+                control: number | null,
+              ) =>
+                target != null && control != null ? target - control : null
+              return {
+                ...contrastRanges,
+                controlEditing,
+                targetEditing,
+                editingDelta: {
+                  cutsPerMinute:
+                    controlEditing.cutsPerMinute != null &&
+                    targetEditing.cutsPerMinute != null
+                      ? targetEditing.cutsPerMinute -
+                        controlEditing.cutsPerMinute
+                      : null,
+                  freezeCoverage:
+                    targetEditing.freezeCoverage -
+                    controlEditing.freezeCoverage,
+                  blackCoverage:
+                    targetEditing.blackCoverage - controlEditing.blackCoverage,
+                },
+                controlVisualChunkIndexes: visual
+                  .filter(
+                    (frame) =>
+                      frame.timestampSeconds >=
+                        contrastRanges.controlRange.fromSeconds &&
+                      frame.timestampSeconds <
+                        contrastRanges.controlRange.toSeconds,
+                  )
+                  .map((frame) => frame.chunkIndex),
+                targetVisualChunkIndexes: visual
+                  .filter(
+                    (frame) =>
+                      frame.timestampSeconds >=
+                        contrastRanges.targetRange.fromSeconds &&
+                      frame.timestampSeconds <=
+                        contrastRanges.targetRange.toSeconds,
+                  )
+                  .map((frame) => frame.chunkIndex),
+                controlAudio,
+                targetAudio,
+                audioDelta: {
+                  averageVolumeDb: subtractNullable(
+                    targetAudio.averageVolumeDb,
+                    controlAudio.averageVolumeDb,
+                  ),
+                  silence: subtractNullable(
+                    targetAudio.silence,
+                    controlAudio.silence,
+                  ),
+                  speechRate: subtractNullable(
+                    targetAudio.speechRate,
+                    controlAudio.speechRate,
+                  ),
+                },
+                controlMotion,
+                targetMotion,
+                motionDelta: subtractNullable(targetMotion, controlMotion),
+              }
+            })()
+          : null
 
         const evidence: WindowEvidence = {
           kind: window.kind,
@@ -367,6 +630,7 @@ export async function synthesizeRetentionWindowEvents(
             audio.analysisStatus === "ready"
               ? (audio.analysis as AudioAnalysis)
               : null,
+          contrast,
         }
 
         const { events, cost } = await deps.synthesizer.synthesize(evidence)
@@ -455,10 +719,11 @@ const EVENT_SYNTHESIS_SCHEMA = {
 } as const
 
 const EVENT_SYNTHESIS_INSTRUCTIONS = [
-  "You are given every piece of already-analysed evidence for one window of a YouTube video where audience retention rose or fell: the window's retention delta, its transcript, deterministic editing metrics (cut count/rate, freeze/black-frame coverage), a chronological list of already-described video frames (each with its own deterministic OCR text, ocrText — ground truth, not a guess), and an audio analysis of the clip. You are also given baseline: this video's own averages (cutsPerMinute, freeze/black coverage, speech rate) across every analysed window.",
+  "You are given every piece of already-analysed evidence for one window of a YouTube video where audience retention rose or fell: the window's retention delta, its transcript, deterministic editing metrics (cut count/rate, freeze/black-frame coverage), a chronological list of already-described video frames (each with its own deterministic OCR text, ocrText — ground truth, not a guess), and an audio analysis of the clip. You are also given baseline: this video's own sparse full-video averages (cutsPerMinute, freeze/black coverage, speech rate, and motion).",
   "Write each narrative to the uploader in the second person (you, your video), reviewing their own video. Whoever is heard speaking may be the uploader, a co-host, a guest, or a voiceover, so never pin what is said on a specific or gendered person (he, she, the creator, the host); frame it as the uploader's own video instead (say 'here you are still laying out the context', not 'he is still laying out the context').",
   "Identify the distinct, timestamped moments within the window that genuinely and non-obviously explain the retention change — a hard cut, a topic change in the transcript, a shift in pacing or energy, on-screen text or a graphic appearing/disappearing, a freeze or dead air, and so on. A single window can have more than one, but do not manufacture one per cut: most cuts and most frames are unremarkable.",
   "Judge editing and pacing as deviations from the given baseline, not in absolute terms: a static, low-cut, low-energy stretch only explains a drop when it is slower or flatter than this video's own norm, and a burst of cuts or rising energy only explains a gain when it is livelier than the norm. Where a metric drives an event, reference the deviation in the narrative (for example 'your cuts fall to about 2 per minute here versus roughly 11 across the video').",
+  "For non-hook windows you are also given contrast: a target range covering the detected retention episode and the immediately preceding control range. It contains editing, deterministic audio, and deterministic visual-motion summaries for both ranges, target-minus-control deltas, and chunkIndex lists identifying which visual frames belong to each range. Motion is normalised 0..1 frame difference, so use it comparatively rather than assigning a universal good/bad threshold. Prefer this local comparison over a generic absolute judgment. Only attribute a change to editing, audio, speech rate, motion, or visuals when the target actually differs meaningfully from the control; unchanged evidence is evidence against that hypothesis. If the target has no sampled visual frame, audio coverage, or motion coverage, do not infer a change from missing data.",
   "You may also be given scriptExplanation: the transcript-only explanation the user has already been shown for this window. Your job is to add what the words alone cannot reveal. Only surface an event that ADDS a non-verbal cause (a cut, a freeze or dead air, an energy or pacing shift, a graphic appearing or disappearing) or that CONTRADICTS the script explanation. Never emit an event that merely restates scriptExplanation. When scriptExplanation is null, none has been generated yet, so surface the genuinely notable multimodal moments as usual.",
   "For each event, give: event_type (the best-fitting category), timestamp_seconds (must fall within the window's fromSeconds/toSeconds), a one- or two-sentence narrative tying the evidence to the retention change, primary_evidence (which evidence source most explains it — use 'combined' only when multiple sources genuinely converge on the same moment), and confidence (0..1: how strongly the supplied evidence supports both that this moment happened AND that it plausibly moved retention). Reserve confidence above 0.7 for moments where the evidence clearly converges, for example a hard cut plus an energy drop plus a matching retention step.",
   "Only surface events actually supported by the evidence given — never invent frame content, transcript text, or audio characteristics that weren't provided. Prefer a few high-confidence, genuinely new events over many weak ones; if nothing clears a modest bar of being both well-supported and new, return an empty events array rather than padding.",
