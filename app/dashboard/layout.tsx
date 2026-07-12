@@ -3,6 +3,7 @@ import { requireAuthenticatedUser } from "@/lib/auth"
 import { getEntitlement } from "@/lib/billing/entitlements"
 import { getSidebarDefaultOpen } from "@/lib/sidebar-state"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
+import { NotificationAlerts } from "@/components/notification-alerts"
 
 // Shared shell for every /dashboard route. Keeping the sidebar provider, the
 // sidebar itself and the inset here — rather than re-declaring them in each
@@ -31,6 +32,7 @@ export default async function DashboardLayout({
     <SidebarProvider defaultOpen={defaultOpen}>
       <AppSidebar showUpgradeToPro={showUpgradeToPro} user={user} />
       <SidebarInset>{children}</SidebarInset>
+      <NotificationAlerts />
     </SidebarProvider>
   )
 }
