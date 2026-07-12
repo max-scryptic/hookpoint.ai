@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 
 import { PricingPlans } from "@/components/pricing-plans"
 import type { BillingPeriod, PlanId } from "@/lib/plans"
@@ -13,20 +13,63 @@ import type { BillingPeriod, PlanId } from "@/lib/plans"
 // `?checkout` query param Stripe redirects back with.
 export function PricingPlansCheckout({
   currentPlanId,
+  cancelAtPeriodEnd = false,
   billingEnabled,
 }: {
   currentPlanId: PlanId
+  cancelAtPeriodEnd?: boolean
   billingEnabled: boolean
 }) {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [pendingPlanId, setPendingPlanId] = useState<PlanId | null>(null)
+  const [isResuming, setIsResuming] = useState(false)
 
   const checkoutStatus = searchParams.get("checkout")
+
+  // Clears a scheduled cancellation so the current paid plan keeps running.
+  // Refreshes on success so the server re-resolves the (no-longer-cancelling)
+  // plan state and the cards flip back to their normal labels.
+  async function handleResume() {
+    if (isResuming || pendingPlanId) return
+    setError(null)
+    setNotice(null)
+
+    if (!billingEnabled) {
+      setError("Billing isn't available yet. Please try again later.")
+      return
+    }
+
+    setIsResuming(true)
+    try {
+      const response = await fetch("/api/billing/resume", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      })
+      const data = (await response.json().catch(() => ({}))) as {
+        error?: string
+      }
+      if (!response.ok) {
+        setError(data.error ?? "Something went wrong. Please try again.")
+        setIsResuming(false)
+        return
+      }
+      setNotice("Your plan will continue — the scheduled cancellation is off.")
+      router.refresh()
+    } catch {
+      setError("Something went wrong. Please try again.")
+    } finally {
+      setIsResuming(false)
+    }
+  }
 
   async function handleSelect(planId: PlanId, period: BillingPeriod) {
     if (pendingPlanId) return
     setError(null)
+    setNotice(null)
 
     if (!billingEnabled) {
       setError("Billing isn't available yet. Please try again later.")
@@ -34,8 +77,16 @@ export function PricingPlansCheckout({
     }
 
     // Downgrading to Free means cancelling the current subscription, which the
-    // user does from the Stripe billing portal.
+    // user does from the Stripe billing portal. If cancellation is already
+    // scheduled, Stripe would reject a second cancel flow, so surface the
+    // already-scheduled state instead of opening the portal.
     if (planId === "free") {
+      if (cancelAtPeriodEnd) {
+        setError(
+          "Your plan is already scheduled to move to Free at the end of the current billing period.",
+        )
+        return
+      }
       await redirectTo(planId, "/api/billing/portal", { action: "cancel" })
       return
     }
@@ -80,12 +131,17 @@ export function PricingPlansCheckout({
         </Banner>
       ) : null}
 
+      {notice ? <Banner tone="success">{notice}</Banner> : null}
+
       {error ? <Banner tone="error">{error}</Banner> : null}
 
       <PricingPlans
         currentPlanId={currentPlanId}
+        cancelAtPeriodEnd={cancelAtPeriodEnd}
         loadingPlanId={pendingPlanId}
+        resumingPlan={isResuming}
         onSelectPlan={handleSelect}
+        onResumePlan={handleResume}
       />
     </div>
   )

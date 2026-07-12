@@ -22,15 +22,21 @@ import {
 } from "@/components/ui/sidebar"
 import { requireAuthenticatedUser } from "@/lib/auth"
 
-// The user's plan drives which card shows "Current plan"; a lookup failure just
-// falls back to Free so the page always renders.
-async function loadCurrentPlan(userId: string): Promise<PlanId | null> {
+// The user's plan drives which card shows "Current plan", and whether the plan
+// is already scheduled to revert to Free drives the Free card's state. A lookup
+// failure just falls back to Free so the page always renders.
+async function loadCurrentPlan(
+  userId: string,
+): Promise<{ planId: PlanId | null; cancelAtPeriodEnd: boolean }> {
   try {
     const entitlement = await getEntitlement(userId)
-    return entitlement.planId
+    return {
+      planId: entitlement.planId,
+      cancelAtPeriodEnd: entitlement.cancelAtPeriodEnd,
+    }
   } catch (error) {
     console.error("Failed to resolve current plan for pricing", error)
-    return null
+    return { planId: null, cancelAtPeriodEnd: false }
   }
 }
 
@@ -39,7 +45,9 @@ export default async function PricingPage() {
     getSidebarDefaultOpen(),
     requireAuthenticatedUser(),
   ])
-  const currentPlanId = await loadCurrentPlan(user.id)
+  const { planId: currentPlanId, cancelAtPeriodEnd } = await loadCurrentPlan(
+    user.id,
+  )
   const billingEnabled = isStripeEnabled()
 
   return (
@@ -84,6 +92,7 @@ export default async function PricingPage() {
             <Suspense>
               <PricingPlansCheckout
                 currentPlanId={currentPlanId ?? "free"}
+                cancelAtPeriodEnd={cancelAtPeriodEnd}
                 billingEnabled={billingEnabled}
               />
             </Suspense>

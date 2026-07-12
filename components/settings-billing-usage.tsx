@@ -1,6 +1,7 @@
 import { DownloadIcon, ExternalLinkIcon, FileTextIcon } from "lucide-react"
 
 import { BillingPaymentMethod } from "@/components/billing-payment-method"
+import { BillingResumeButton } from "@/components/billing-resume-button"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -148,6 +149,7 @@ export function SettingsBillingUsage({
               <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 sm:col-span-2 lg:col-span-4 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
                 Cancellation scheduled. Paid features remain available until{" "}
                 {renewsLabel}; after that, your plan will revert to Free.
+                <BillingResumeButton enabled={billingEnabled} />
               </div>
             ) : null}
 

@@ -23,15 +23,21 @@ import { CreditsTooltip } from "@/components/credits-tooltip"
 // selection is a no-op placeholder.
 export function PricingPlans({
   currentPlanId = "free",
+  cancelAtPeriodEnd = false,
   loadingPlanId = null,
+  resumingPlan = false,
   onSelectPlan,
+  onResumePlan,
 }: {
   currentPlanId?: PlanId
+  cancelAtPeriodEnd?: boolean
   loadingPlanId?: PlanId | null
+  resumingPlan?: boolean
   onSelectPlan?: (planId: PlanId, period: BillingPeriod) => void
+  onResumePlan?: () => void
 }) {
   const [period, setPeriod] = useState<BillingPeriod>("annual")
-  const isLoading = loadingPlanId != null
+  const isLoading = loadingPlanId != null || resumingPlan
 
   return (
     <div className="space-y-8">
@@ -41,17 +47,30 @@ export function PricingPlans({
         onChange={setPeriod}
       />
       <div className="grid gap-4 lg:grid-cols-3">
-        {PLANS.map((plan) => (
-          <PlanCard
-            key={plan.id}
-            plan={plan}
-            period={period}
-            isCurrent={plan.id === currentPlanId}
-            isLoading={loadingPlanId === plan.id}
-            isDisabled={isLoading && loadingPlanId !== plan.id}
-            onSelect={() => onSelectPlan?.(plan.id, period)}
-          />
-        ))}
+        {PLANS.map((plan) => {
+          const isCurrent = plan.id === currentPlanId
+          // The current paid plan, while scheduled to cancel, offers a way back:
+          // resuming clears the cancellation instead of showing a dead "Current
+          // plan" label.
+          const isResumable = isCurrent && cancelAtPeriodEnd
+          return (
+            <PlanCard
+              key={plan.id}
+              plan={plan}
+              period={period}
+              isCurrent={isCurrent}
+              isResumable={isResumable}
+              isScheduledDowngrade={plan.id === "free" && cancelAtPeriodEnd}
+              isLoading={
+                loadingPlanId === plan.id || (resumingPlan && isResumable)
+              }
+              isDisabled={isLoading && loadingPlanId !== plan.id && !isResumable}
+              onSelect={() =>
+                isResumable ? onResumePlan?.() : onSelectPlan?.(plan.id, period)
+              }
+            />
+          )
+        })}
       </div>
       <p className="text-center text-xs text-muted-foreground">
         Prices in GBP. Annual plans are billed once yearly and shown as the
@@ -134,6 +153,8 @@ function PlanCard({
   plan,
   period,
   isCurrent,
+  isResumable,
+  isScheduledDowngrade,
   isLoading,
   isDisabled,
   onSelect,
@@ -141,6 +162,8 @@ function PlanCard({
   plan: Plan
   period: BillingPeriod
   isCurrent: boolean
+  isResumable: boolean
+  isScheduledDowngrade: boolean
   isLoading: boolean
   isDisabled: boolean
   onSelect: () => void
@@ -190,18 +213,27 @@ function PlanCard({
 
       <Button
         className="mt-6 w-full"
-        variant={plan.featured ? "default" : "outline"}
-        disabled={isCurrent || isLoading || isDisabled}
+        variant={plan.featured || isResumable ? "default" : "outline"}
+        disabled={
+          (isCurrent && !isResumable) ||
+          isScheduledDowngrade ||
+          isLoading ||
+          isDisabled
+        }
         aria-busy={isLoading}
         onClick={onSelect}
       >
         {isLoading ? (
           <>
             <Loader2Icon className="size-4 animate-spin" aria-hidden="true" />
-            Redirecting...
+            {isResumable ? "Resuming..." : "Redirecting..."}
           </>
+        ) : isResumable ? (
+          "Resume plan"
         ) : isCurrent ? (
           "Current plan"
+        ) : isScheduledDowngrade ? (
+          "Cancellation scheduled"
         ) : isFree ? (
           "Downgrade to Free"
         ) : (

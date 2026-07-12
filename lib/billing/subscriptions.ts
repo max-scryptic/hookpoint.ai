@@ -77,6 +77,24 @@ export async function syncCurrentSubscriptionForUser(
   await syncSubscriptionFromStripe(subscription.stripeSubscriptionId)
 }
 
+// Clears a scheduled cancellation so the paid plan continues past the current
+// period — the inverse of the portal's subscription_cancel flow. Reconciles the
+// local projection immediately so callers can render the resumed state without
+// waiting for the webhook. Returns false when the user has no subscription.
+export async function resumeSubscriptionForUser(
+  userId: string,
+): Promise<boolean> {
+  const subscription = await getSubscriptionForUser(userId)
+  if (!subscription) return false
+
+  const stripe = getStripe()
+  await stripe.subscriptions.update(subscription.stripeSubscriptionId, {
+    cancel_at_period_end: false,
+  })
+  await syncSubscriptionFromStripe(subscription.stripeSubscriptionId)
+  return true
+}
+
 // Maps a Stripe customer id back to our app user via the billing_customers
 // mapping written when the customer was created. Returns null if we've never
 // seen that customer (e.g. a subscription created directly in the dashboard).
