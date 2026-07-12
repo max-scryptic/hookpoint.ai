@@ -101,19 +101,20 @@ export async function resumeSubscriptionForUser(
 // until the period closes) regardless of how the Stripe Customer Portal's
 // cancellation policy is configured. Reconciles the local projection immediately
 // so the caller can render the scheduled-cancellation state without waiting for
-// the webhook. Returns false when the user has no subscription.
+// the webhook. Returns the reconciled subscription (the caller surfaces its plan
+// and period end in the confirmation), or null when the user has no subscription.
 export async function scheduleCancellationForUser(
   userId: string,
-): Promise<boolean> {
+): Promise<SubscriptionRecord | null> {
   const subscription = await getSubscriptionForUser(userId)
-  if (!subscription) return false
+  if (!subscription) return null
 
   const stripe = getStripe()
   await stripe.subscriptions.update(subscription.stripeSubscriptionId, {
     cancel_at_period_end: true,
   })
   await syncSubscriptionFromStripe(subscription.stripeSubscriptionId)
-  return true
+  return getSubscriptionForUser(userId)
 }
 
 // Maps a Stripe customer id back to our app user via the billing_customers

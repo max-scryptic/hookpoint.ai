@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { isStripeEnabled } from "@/lib/stripe/config"
 import { scheduleCancellationForUser } from "@/lib/billing/subscriptions"
+import { getPlan } from "@/lib/plans"
 
 // POST /api/billing/cancel
 // Schedules the user's paid plan to move to Free at the end of the current
@@ -10,7 +11,8 @@ import { scheduleCancellationForUser } from "@/lib/billing/subscriptions"
 // (cancel_at_period_end = true) rather than sending the user through the
 // portal's hosted cancel flow, so the semantics are deterministic and don't
 // depend on the Customer Portal's cancellation policy. Returns no redirect URL;
-// the caller refreshes to pick up the reconciled "Cancellation scheduled" state.
+// the caller shows an in-app confirmation dialog (from the plan name and period
+// end below) and refreshes to pick up the "Cancellation scheduled" state.
 export async function POST() {
   if (!isStripeEnabled()) {
     return NextResponse.json(
@@ -36,7 +38,11 @@ export async function POST() {
         { status: 400 },
       )
     }
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({
+      ok: true,
+      planName: getPlan(scheduled.planId).name,
+      periodEnd: scheduled.currentPeriodEnd,
+    })
   } catch (error) {
     console.error("Failed to schedule subscription cancellation", error)
     return NextResponse.json(

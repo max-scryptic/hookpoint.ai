@@ -4,6 +4,10 @@ import { useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 
 import { PricingPlans } from "@/components/pricing-plans"
+import {
+  PlanCancelledDialog,
+  type PlanCancelledDetails,
+} from "@/components/plan-cancelled-dialog"
 import type { BillingPeriod, PlanId } from "@/lib/plans"
 
 // Client wrapper that turns the presentational PricingPlans cards into a working
@@ -26,6 +30,8 @@ export function PricingPlansCheckout({
   const [notice, setNotice] = useState<string | null>(null)
   const [pendingPlanId, setPendingPlanId] = useState<PlanId | null>(null)
   const [isResuming, setIsResuming] = useState(false)
+  const [cancelledDetails, setCancelledDetails] =
+    useState<PlanCancelledDetails | null>(null)
 
   const checkoutStatus = searchParams.get("checkout")
 
@@ -99,14 +105,22 @@ export function PricingPlansCheckout({
         })
         const data = (await response.json().catch(() => ({}))) as {
           error?: string
+          planName?: string
+          periodEnd?: string
         }
         if (!response.ok) {
           setError(data.error ?? "Something went wrong. Please try again.")
           return
         }
-        setNotice(
-          "Your plan is scheduled to move to Free at the end of the current billing period.",
-        )
+        // Surface the confirmation in a dialog (plan, access-until date) instead
+        // of an inline banner, then refresh so the cards behind it flip to the
+        // "Cancellation scheduled" state.
+        if (data.planName && data.periodEnd) {
+          setCancelledDetails({
+            planName: data.planName,
+            periodEnd: data.periodEnd,
+          })
+        }
         router.refresh()
       } catch {
         setError("Something went wrong. Please try again.")
@@ -167,6 +181,13 @@ export function PricingPlansCheckout({
         resumingPlan={isResuming}
         onSelectPlan={handleSelect}
         onResumePlan={handleResume}
+      />
+
+      <PlanCancelledDialog
+        details={cancelledDetails}
+        onOpenChange={(open) => {
+          if (!open) setCancelledDetails(null)
+        }}
       />
     </div>
   )
