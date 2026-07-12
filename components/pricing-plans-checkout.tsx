@@ -76,10 +76,12 @@ export function PricingPlansCheckout({
       return
     }
 
-    // Downgrading to Free means cancelling the current subscription, which the
-    // user does from the Stripe billing portal. If cancellation is already
-    // scheduled, Stripe would reject a second cancel flow, so surface the
-    // already-scheduled state instead of opening the portal.
+    // Downgrading to Free schedules a cancellation at the end of the current
+    // period. This is done in-app (POST /api/billing/cancel) rather than through
+    // the Stripe portal so the outcome is always cancel-at-period-end and the
+    // user stays here instead of being bounced to Stripe. On success we refresh
+    // so the server re-resolves the now-cancelling plan and the cards flip to
+    // the "Cancellation scheduled" state.
     if (planId === "free") {
       if (cancelAtPeriodEnd) {
         setError(
@@ -87,7 +89,30 @@ export function PricingPlansCheckout({
         )
         return
       }
-      await redirectTo(planId, "/api/billing/portal", { action: "cancel" })
+
+      setPendingPlanId("free")
+      try {
+        const response = await fetch("/api/billing/cancel", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        })
+        const data = (await response.json().catch(() => ({}))) as {
+          error?: string
+        }
+        if (!response.ok) {
+          setError(data.error ?? "Something went wrong. Please try again.")
+          return
+        }
+        setNotice(
+          "Your plan is scheduled to move to Free at the end of the current billing period.",
+        )
+        router.refresh()
+      } catch {
+        setError("Something went wrong. Please try again.")
+      } finally {
+        setPendingPlanId(null)
+      }
       return
     }
 

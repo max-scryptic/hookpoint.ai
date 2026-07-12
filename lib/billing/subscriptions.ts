@@ -95,6 +95,27 @@ export async function resumeSubscriptionForUser(
   return true
 }
 
+// Schedules a cancellation at the end of the current period — the "Downgrade to
+// Free" action. Backs the in-app cancel rather than the portal's hosted flow so
+// the outcome is deterministic (always cancel-at-period-end, keeping paid access
+// until the period closes) regardless of how the Stripe Customer Portal's
+// cancellation policy is configured. Reconciles the local projection immediately
+// so the caller can render the scheduled-cancellation state without waiting for
+// the webhook. Returns false when the user has no subscription.
+export async function scheduleCancellationForUser(
+  userId: string,
+): Promise<boolean> {
+  const subscription = await getSubscriptionForUser(userId)
+  if (!subscription) return false
+
+  const stripe = getStripe()
+  await stripe.subscriptions.update(subscription.stripeSubscriptionId, {
+    cancel_at_period_end: true,
+  })
+  await syncSubscriptionFromStripe(subscription.stripeSubscriptionId)
+  return true
+}
+
 // Maps a Stripe customer id back to our app user via the billing_customers
 // mapping written when the customer was created. Returns null if we've never
 // seen that customer (e.g. a subscription created directly in the dashboard).
