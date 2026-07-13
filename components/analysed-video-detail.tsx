@@ -113,14 +113,63 @@ function rowHighlightClass(
   return `${base} transition-colors ${isHighlighted ? ROW_HIGHLIGHT[kind] : ""}`
 }
 
-// Nudge the highlighted row into view when a chart marker is clicked, so the
-// linked item is visible even if it sits lower in a long list. `block: "nearest"`
-// keeps the scroll minimal — it only moves if the row is off-screen.
+// How the page glides to a highlighted row when a chart marker is clicked. The
+// native smooth `scrollIntoView` felt sudden, so we run our own eased animation
+// that is a touch slower and gentler. The target leaves a comfortable gap below
+// the top of the viewport so the linked row lands clear of the sticky source
+// video floating in the top-right.
+const HIGHLIGHT_SCROLL_DURATION_MS = 900
+const HIGHLIGHT_SCROLL_TOP_OFFSET = 96
+
+// Standard ease-in-out cubic: slow start, quick middle, slow settle — the shape
+// that reads as a deliberate glide rather than a snap.
+function easeInOutCubic(t: number): number {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
+}
+
+// Smoothly scrolls the window so `element` sits `HIGHLIGHT_SCROLL_TOP_OFFSET`
+// below the top of the viewport. Skips the animation entirely for users who
+// prefer reduced motion, and no-ops when the row is already about where it
+// would land so a second click doesn't jitter the page.
+function smoothScrollToElement(element: HTMLElement) {
+  requestAnimationFrame(() => {
+    const startY = window.scrollY
+    const targetY = Math.max(
+      0,
+      element.getBoundingClientRect().top + startY - HIGHLIGHT_SCROLL_TOP_OFFSET,
+    )
+    const distance = targetY - startY
+    if (Math.abs(distance) < 8) return
+
+    const prefersReducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches
+    if (prefersReducedMotion) {
+      window.scrollTo(0, targetY)
+      return
+    }
+
+    let startTime: number | null = null
+    const step = (timestamp: number) => {
+      if (startTime === null) startTime = timestamp
+      const progress = Math.min(
+        1,
+        (timestamp - startTime) / HIGHLIGHT_SCROLL_DURATION_MS,
+      )
+      window.scrollTo(0, startY + distance * easeInOutCubic(progress))
+      if (progress < 1) requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
+  })
+}
+
+// Glide the highlighted row into view when a chart marker is clicked, so the
+// linked item is visible even if it sits lower in a long list.
 function useHighlightScroll(highlightedId?: string | null) {
   const ref = useRef<HTMLLIElement>(null)
   useEffect(() => {
-    if (highlightedId) {
-      ref.current?.scrollIntoView({ block: "nearest", behavior: "smooth" })
+    if (highlightedId && ref.current) {
+      smoothScrollToElement(ref.current)
     }
   }, [highlightedId])
   return ref
@@ -1281,44 +1330,56 @@ export function AnalysedVideoDetail({
             <AreaChartIcon className="size-4 text-muted-foreground" />
             <h2 className="text-sm font-medium">Audience retention</h2>
           </div>
-          <RetentionChart
-            points={retention}
-            durationSeconds={video.durationSeconds}
-            insights={chartInsights}
-            selectedInsightId={playbackWindow?.id ?? null}
-            onScrubTimeChange={setPreviewTime}
-            videoOverlay={
-              video.thumbnailUrl ? (
-                <SourceVideoPlayer
-                  videoId={video.id}
-                  thumbnailUrl={video.thumbnailUrl}
-                  title={video.title}
-                  scrubTime={previewTime}
-                  playbackWindow={playbackWindow}
-                />
-              ) : null
-            }
-            onInsightSelect={(insight) => {
-              setPlaybackWindow(
-                insight
-                  ? {
-                      id: insight.id,
-                      fromSeconds: insight.fromSeconds,
-                      toSeconds: insight.toSeconds,
-                    }
-                  : null,
-              )
-              // Bring the tab holding this insight forward so its highlighted
-              // row is the one on show. Leave the tab as-is when clicking off.
-              if (insight) setRetentionTab(TAB_FOR_INSIGHT_KIND[insight.kind])
-            }}
-          />
+          {/* The chart and its insight lists share one positioning context so the
+              floating source video can be `position: sticky` across both. It
+              starts over the empty top-right of the chart (its highest point,
+              page-wise) and, once the page scrolls far enough that it would slide
+              off the top, pins just below the top of the viewport and rides down
+              with the scroll — staying visible while the reader works through a
+              long list — until the bottom of this section scrolls past. */}
+          <div className="relative flex flex-col gap-3">
+            {video.thumbnailUrl && (
+              <div className="pointer-events-none absolute inset-0 z-20">
+                <div className="sticky top-4 flex justify-end px-5 pt-5">
+                  <div className="w-2/5 max-w-64">
+                    <SourceVideoPlayer
+                      videoId={video.id}
+                      thumbnailUrl={video.thumbnailUrl}
+                      title={video.title}
+                      scrubTime={previewTime}
+                      playbackWindow={playbackWindow}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+            <RetentionChart
+              points={retention}
+              durationSeconds={video.durationSeconds}
+              insights={chartInsights}
+              selectedInsightId={playbackWindow?.id ?? null}
+              onScrubTimeChange={setPreviewTime}
+              onInsightSelect={(insight) => {
+                setPlaybackWindow(
+                  insight
+                    ? {
+                        id: insight.id,
+                        fromSeconds: insight.fromSeconds,
+                        toSeconds: insight.toSeconds,
+                      }
+                    : null,
+                )
+                // Bring the tab holding this insight forward so its highlighted
+                // row is the one on show. Leave the tab as-is when clicking off.
+                if (insight) setRetentionTab(TAB_FOR_INSIGHT_KIND[insight.kind])
+              }}
+            />
 
-          {defaultRetentionTab && (
-            <Tabs
-              value={retentionTab ?? defaultRetentionTab}
-              onValueChange={(value) => setRetentionTab(value as string)}
-            >
+            {defaultRetentionTab && (
+              <Tabs
+                value={retentionTab ?? defaultRetentionTab}
+                onValueChange={(value) => setRetentionTab(value as string)}
+              >
               <TabsList>
                 {hookWindows.length > 0 && (
                   <TabsTrigger value="hook">
@@ -1379,7 +1440,8 @@ export function AnalysedVideoDetail({
                 </TabsContent>
               )}
             </Tabs>
-          )}
+            )}
+          </div>
         </section>
 
         {pacingStretches.length > 0 && (
