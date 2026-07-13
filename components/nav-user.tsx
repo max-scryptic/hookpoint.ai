@@ -23,7 +23,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { createClient } from "@/lib/supabase/client"
-import { ChevronsUpDownIcon, SparklesIcon, BellIcon, Settings2Icon, LogOutIcon } from "lucide-react"
+import { ChevronsUpDownIcon, SparklesIcon, Settings2Icon, LogOutIcon } from "lucide-react"
 
 export function NavUser({
   showUpgradeToPro,
@@ -101,10 +101,6 @@ export function NavUser({
             ) : null}
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem render={<a href="/notifications" />}>
-                <BellIcon />
-                Notifications
-              </DropdownMenuItem>
               <DropdownMenuItem render={<a href="/settings" />}>
                 <Settings2Icon />
                 Settings
