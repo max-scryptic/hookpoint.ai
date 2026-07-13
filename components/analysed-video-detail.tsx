@@ -25,7 +25,10 @@ import {
   type RetentionChartInsight,
 } from "@/components/retention-chart"
 import { RecommendationCallout } from "@/components/recommendation-callout"
-import { SourceVideoThumbnail } from "@/components/source-video-thumbnail"
+import {
+  SourceVideoPlayer,
+  SourceVideoThumbnail,
+} from "@/components/source-video-thumbnail"
 import { TryCallout } from "@/components/try-callout"
 import {
   Tabs,
@@ -1221,11 +1224,8 @@ export function AnalysedVideoDetail({
           {video.thumbnailUrl && (
             <div className="shrink-0 sm:self-start">
               <SourceVideoThumbnail
-                videoId={video.id}
                 thumbnailUrl={video.thumbnailUrl}
                 title={video.title}
-                scrubTime={previewTime}
-                playbackWindow={playbackWindow}
               />
             </div>
           )}
@@ -1301,6 +1301,17 @@ export function AnalysedVideoDetail({
             insights={chartInsights}
             selectedInsightId={playbackWindow?.id ?? null}
             onScrubTimeChange={setPreviewTime}
+            videoOverlay={
+              video.thumbnailUrl ? (
+                <SourceVideoPlayer
+                  videoId={video.id}
+                  thumbnailUrl={video.thumbnailUrl}
+                  title={video.title}
+                  scrubTime={previewTime}
+                  playbackWindow={playbackWindow}
+                />
+              ) : null
+            }
             onInsightSelect={(insight) => {
               setPlaybackWindow(
                 insight

@@ -1,5 +1,6 @@
 "use client"
 
+import type { ReactNode } from "react"
 import { useId, useMemo, useState } from "react"
 
 import type { RetentionPoint } from "@/lib/youtube/youtube"
@@ -51,6 +52,7 @@ export function RetentionChart({
   selectedInsightId = null,
   onScrubTimeChange,
   onInsightSelect,
+  videoOverlay = null,
 }: {
   points: RetentionPoint[]
   durationSeconds: number
@@ -61,6 +63,10 @@ export function RetentionChart({
   selectedInsightId?: string | null
   onScrubTimeChange?: (seconds: number | null) => void
   onInsightSelect?: (insight: RetentionChartInsight | null) => void
+  // An optional floating source-video player, laid over the empty top-right of
+  // the plot where the retention curve has already fallen away. The overlay
+  // owns its own fade/interactivity; the chart only positions and sizes it.
+  videoOverlay?: ReactNode
 }) {
   const gradientId = useId()
   const haloFilterId = `${gradientId}-halo`
@@ -224,7 +230,16 @@ export function RetentionChart({
   }
 
   return (
-    <div className="rounded-xl border bg-card p-4">
+    <div className="relative rounded-xl border bg-card p-4">
+      {/* Floating source-video player over the empty top-right of the plot. The
+          wrapper is click-through so it never steals pointer moves from the
+          chart; the player re-enables pointer events on itself only while an
+          insight is selected (so its controls work). */}
+      {videoOverlay && (
+        <div className="pointer-events-none absolute right-5 top-5 z-10 w-2/5 max-w-64">
+          {videoOverlay}
+        </div>
+      )}
       <svg
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         className="w-full"
