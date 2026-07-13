@@ -16,32 +16,12 @@ export function notifySourceFileReady(videoId: string) {
   )
 }
 
-export function SourceVideoThumbnail({
-  videoId,
-  thumbnailUrl,
-  title,
-  scrubTime,
-  playbackWindow,
-}: {
-  videoId: string
-  thumbnailUrl: string
-  title: string
-  scrubTime?: number | null
-  playbackWindow?: {
-    id: string
-    fromSeconds: number
-    toSeconds: number
-  } | null
-}) {
+// Fetches (and re-fetches, when the source file finishes uploading) a signed
+// playback URL for a video's uploaded source file. Returns the URL once it is
+// available, plus a loading flag the player uses while the media buffers.
+function useSourcePlayback(videoId: string) {
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const videoRef = useRef<HTMLVideoElement>(null)
-
-  // The player is only "engaged" while the user has an insight selected (a
-  // playback window) or is scrubbing the chart. When neither is true we fall
-  // back to the static thumbnail rather than leaving the video paused on its
-  // last frame.
-  const isEngaged = Boolean(playbackWindow) || scrubTime != null
 
   const loadSourceVideo = useCallback(async () => {
     try {
@@ -77,6 +57,70 @@ export function SourceVideoThumbnail({
       window.removeEventListener(SOURCE_FILE_READY_EVENT, handleSourceFileReady)
     }
   }, [loadSourceVideo, videoId])
+
+  return { playbackUrl, setPlaybackUrl, isLoading, setIsLoading }
+}
+
+// The static packaging thumbnail shown at the top of the analysis. It no longer
+// swaps itself out for the source video — playback now happens in the floating
+// SourceVideoPlayer that appears over the retention chart — so this stays a
+// constant reference image for the video's packaging.
+export function SourceVideoThumbnail({
+  thumbnailUrl,
+  title,
+}: {
+  thumbnailUrl: string
+  title: string
+}) {
+  return (
+    <div className="relative aspect-video w-full shrink-0 overflow-hidden rounded-xl bg-muted sm:w-64">
+      <Image
+        src={thumbnailUrl}
+        alt={title}
+        fill
+        sizes="256px"
+        className="object-cover"
+      />
+    </div>
+  )
+}
+
+// A floating source-video player that fills whatever container it is placed in.
+// It plays the selected insight window (with sound) when `playbackWindow` is
+// set, and previews the scrubbed moment (muted) when `scrubTime` is set. When
+// neither is engaged it fades away, leaving the underlying UI (e.g. the chart)
+// visible and interactive.
+export function SourceVideoPlayer({
+  videoId,
+  thumbnailUrl,
+  title,
+  scrubTime,
+  playbackWindow,
+}: {
+  videoId: string
+  thumbnailUrl: string
+  title: string
+  scrubTime?: number | null
+  playbackWindow?: {
+    id: string
+    fromSeconds: number
+    toSeconds: number
+  } | null
+}) {
+  const { playbackUrl, setPlaybackUrl, isLoading, setIsLoading } =
+    useSourcePlayback(videoId)
+  const videoRef = useRef<HTMLVideoElement>(null)
+
+  // The player is only "engaged" while the user has an insight selected (a
+  // playback window) or is scrubbing the chart. When neither is true we fade it
+  // out rather than leaving the video paused on its last frame.
+  const isEngaged = Boolean(playbackWindow) || scrubTime != null
+  const isVisible = isEngaged && Boolean(playbackUrl)
+  // Only intercept pointer events (for the native video controls) while an
+  // insight is actively selected and on screen. During a scrub preview — or
+  // whenever the player is faded out — it stays click-through so the chart
+  // underneath keeps receiving pointer moves and marker clicks.
+  const isInteractive = isVisible && Boolean(playbackWindow)
 
   useEffect(() => {
     const video = videoRef.current
@@ -129,17 +173,14 @@ export function SourceVideoThumbnail({
   }, [playbackUrl, playbackWindow, scrubTime])
 
   return (
-    <div className="relative aspect-video w-full shrink-0 overflow-hidden rounded-xl bg-muted sm:w-64">
-      <Image
-        src={thumbnailUrl}
-        alt={title}
-        fill
-        sizes="256px"
-        className={`object-cover transition-[filter,opacity] duration-300 ${
-          isEngaged && isLoading ? "scale-105 blur-md opacity-75" : ""
-        }`}
-      />
-
+    <div
+      className={`relative aspect-video w-full overflow-hidden rounded-xl border border-black/10 bg-black shadow-2xl ring-1 ring-black/5 transition-[opacity,transform] duration-300 ease-out dark:border-white/10 ${
+        isVisible
+          ? "translate-y-0 scale-100 opacity-100"
+          : "translate-y-1.5 scale-[0.97] opacity-0"
+      } ${isInteractive ? "pointer-events-auto" : "pointer-events-none"}`}
+      aria-hidden={!isVisible}
+    >
       {playbackUrl && (
         <video
           ref={videoRef}
@@ -149,11 +190,7 @@ export function SourceVideoThumbnail({
           controls
           playsInline
           preload="metadata"
-          className={`absolute inset-0 size-full object-cover transition-opacity duration-300 ${
-            isEngaged && !isLoading
-              ? "opacity-100"
-              : "pointer-events-none opacity-0"
-          }`}
+          className="absolute inset-0 size-full object-cover"
           onLoadStart={() => setIsLoading(true)}
           onLoadedData={() => setIsLoading(false)}
           onCanPlay={() => setIsLoading(false)}
@@ -176,7 +213,7 @@ export function SourceVideoThumbnail({
         />
       )}
 
-      {isEngaged && isLoading && (
+      {isVisible && isLoading && (
         <div
           className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/15"
           role="status"
