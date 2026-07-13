@@ -203,13 +203,9 @@ function RetentionWindows({
                 This video is too short to reach this window.
               </p>
             ) : (
-              <AttributionNote attribution={attribution.get(window.windowIndex)} />
-            )}
-            {!window.outOfRange && (
-              <MultimodalInsight insight={deepInsights.get(window.windowIndex)} />
-            )}
-            {!window.outOfRange && (
-              <ActionableRecommendation
+              <WindowFeedback
+                attribution={attribution.get(window.windowIndex)}
+                insight={deepInsights.get(window.windowIndex)}
                 recommendation={recommendations.get(window.windowIndex)}
               />
             )}
@@ -319,13 +315,27 @@ function AttributionNote({
   if (!attribution || attribution.explanation === "") return null
   return (
     <div className="pl-10">
+      <ScriptFeedbackBody attribution={attribution} />
+    </div>
+  )
+}
+
+// The script attribution's inner content, without the row's left indent, so it
+// can be reused both flat (AttributionNote) and inside the tabbed layout below.
+function ScriptFeedbackBody({
+  attribution,
+}: {
+  attribution: RetentionMomentAttribution
+}) {
+  return (
+    <>
       <p className="text-sm">{attribution.explanation}</p>
       {attribution.tip && (
         <div className="mt-2">
           <TryCallout>{attribution.tip}</TryCallout>
         </div>
       )}
-    </div>
+    </>
   )
 }
 
@@ -336,7 +346,19 @@ function MultimodalInsight({
 }) {
   if (!insight) return null
   return (
-    <div className="ml-10 flex gap-2 rounded-lg border bg-muted/30 p-3 text-sm">
+    <div className="ml-10">
+      <MultimodalInsightBody insight={insight} />
+    </div>
+  )
+}
+
+function MultimodalInsightBody({
+  insight,
+}: {
+  insight: RankedRetentionWindowEvent
+}) {
+  return (
+    <div className="flex gap-2 rounded-lg border bg-muted/30 p-3 text-sm">
       <SparklesIcon className="mt-0.5 size-4 shrink-0 text-violet-500" />
       <div>
         <p>{insight.narrative}</p>
@@ -356,11 +378,128 @@ function ActionableRecommendation({
   if (!recommendation) return null
   return (
     <div className="ml-10">
+      <ActionableRecommendationBody recommendation={recommendation} />
+    </div>
+  )
+}
+
+function ActionableRecommendationBody({
+  recommendation,
+}: {
+  recommendation: DeepAnalysisRecommendation
+}) {
+  return (
+    <>
       <TryCallout>{recommendation.action}</TryCallout>
       <p className="mt-1 text-xs text-muted-foreground">
         {recommendation.expectedPurpose}
       </p>
+    </>
+  )
+}
+
+// The deep (multimodal) insight plus its actionable recommendation, without the
+// row's left indent, for reuse inside the tabbed layout.
+function DeepFeedbackBody({
+  insight,
+  recommendation,
+}: {
+  insight: RankedRetentionWindowEvent
+  recommendation: DeepAnalysisRecommendation | undefined
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <MultimodalInsightBody insight={insight} />
+      {recommendation && (
+        <ActionableRecommendationBody recommendation={recommendation} />
+      )}
     </div>
+  )
+}
+
+// The tab label for a window's deep insight, named after whatever the insight is
+// actually about (editing, pacing, audio, ...) so it reads as a distinct kind
+// of feedback next to the transcript-only "Script" tab. Falls back to the
+// evidence source when the event type is unspecific.
+function deepFeedbackTabLabel(insight: RankedRetentionWindowEvent): string {
+  switch (insight.eventType) {
+    case "scene_cut":
+      return "Editing"
+    case "visual_change":
+      return "Visual"
+    case "on_screen_text_change":
+      return "On-screen text"
+    case "pacing_change":
+      return "Pacing"
+    case "audio_change":
+      return "Audio"
+    case "topic_shift":
+      return "Structure"
+    default:
+      break
+  }
+  switch (insight.primaryEvidence) {
+    case "editing":
+      return "Editing"
+    case "visual":
+      return "Visual"
+    case "audio":
+      return "Audio"
+    case "transcript":
+      return "Delivery"
+    case "combined":
+      return "Multimodal"
+    default:
+      return "Editing"
+  }
+}
+
+// A window's feedback block. When the window has BOTH transcript-only script
+// feedback AND a deep multimodal insight, the two are split across tabs so every
+// tip stays visible without stacking into a tall, noisy column. When only one
+// source is present, it renders flat exactly as before.
+function WindowFeedback({
+  attribution,
+  insight,
+  recommendation,
+}: {
+  attribution: RetentionMomentAttribution | undefined
+  insight: RankedRetentionWindowEvent | undefined
+  recommendation: DeepAnalysisRecommendation | undefined
+}) {
+  const hasScript = attribution != null && attribution.explanation !== ""
+  const hasDeep = insight != null
+
+  if (hasScript && hasDeep) {
+    return (
+      <div className="pl-10">
+        <Tabs defaultValue="script" className="gap-2">
+          <TabsList>
+            <TabsTrigger value="script">Script</TabsTrigger>
+            <TabsTrigger value="deep">
+              {deepFeedbackTabLabel(insight)}
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="script">
+            <ScriptFeedbackBody attribution={attribution} />
+          </TabsContent>
+          <TabsContent value="deep">
+            <DeepFeedbackBody
+              insight={insight}
+              recommendation={recommendation}
+            />
+          </TabsContent>
+        </Tabs>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <AttributionNote attribution={attribution} />
+      <MultimodalInsight insight={insight} />
+      <ActionableRecommendation recommendation={recommendation} />
+    </>
   )
 }
 
@@ -428,9 +567,9 @@ function DropList({
               </span>
             </div>
 
-            <AttributionNote attribution={attribution.get(drop.windowIndex)} />
-            <MultimodalInsight insight={deepInsights.get(drop.windowIndex)} />
-            <ActionableRecommendation
+            <WindowFeedback
+              attribution={attribution.get(drop.windowIndex)}
+              insight={deepInsights.get(drop.windowIndex)}
               recommendation={recommendations.get(drop.windowIndex)}
             />
           </li>
@@ -540,9 +679,9 @@ function GainList({
               </span>
             </div>
 
-            <AttributionNote attribution={attribution.get(gain.windowIndex)} />
-            <MultimodalInsight insight={deepInsights.get(gain.windowIndex)} />
-            <ActionableRecommendation
+            <WindowFeedback
+              attribution={attribution.get(gain.windowIndex)}
+              insight={deepInsights.get(gain.windowIndex)}
               recommendation={recommendations.get(gain.windowIndex)}
             />
           </li>
