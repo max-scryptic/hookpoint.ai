@@ -169,44 +169,62 @@ function RetentionWindows({
               "flex flex-col gap-2 p-4",
             )}
           >
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-3">
-                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
-                  {index + 1}
-                </span>
-                <span className="font-mono text-sm">
-                  {formatTimestamp(window.fromSeconds)} –{" "}
-                  {formatTimestamp(window.toSeconds)}
-                </span>
-                <ScriptSegmentTooltip
-                  transcript={transcript}
-                  fromSeconds={window.fromSeconds}
-                  toSeconds={window.toSeconds}
-                />
-              </div>
-              {!window.outOfRange && (
-                <span
-                  className={`text-sm font-medium ${
-                    window.delta > 0
-                      ? "text-emerald-600 dark:text-emerald-400"
-                      : "text-destructive"
-                  }`}
-                >
-                  {window.delta > 0 ? "+" : "−"}
-                  {(Math.abs(window.delta) * 100).toFixed(1)}%
-                </span>
-              )}
-            </div>
-
             {window.outOfRange ? (
-              <p className="text-sm text-muted-foreground">
-                This video is too short to reach this window.
-              </p>
+              <>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-3">
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                      {index + 1}
+                    </span>
+                    <span className="font-mono text-sm">
+                      {formatTimestamp(window.fromSeconds)} –{" "}
+                      {formatTimestamp(window.toSeconds)}
+                    </span>
+                    <ScriptSegmentTooltip
+                      transcript={transcript}
+                      fromSeconds={window.fromSeconds}
+                      toSeconds={window.toSeconds}
+                    />
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  This video is too short to reach this window.
+                </p>
+              </>
             ) : (
               <WindowFeedback
                 attribution={attribution.get(window.windowIndex)}
                 insight={deepInsights.get(window.windowIndex)}
                 recommendation={recommendations.get(window.windowIndex)}
+                header={(tabs) => (
+                  <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                        {index + 1}
+                      </span>
+                      <span className="font-mono text-sm">
+                        {formatTimestamp(window.fromSeconds)} –{" "}
+                        {formatTimestamp(window.toSeconds)}
+                      </span>
+                      <ScriptSegmentTooltip
+                        transcript={transcript}
+                        fromSeconds={window.fromSeconds}
+                        toSeconds={window.toSeconds}
+                      />
+                      {tabs}
+                    </div>
+                    <span
+                      className={`text-sm font-medium ${
+                        window.delta > 0
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : "text-destructive"
+                      }`}
+                    >
+                      {window.delta > 0 ? "+" : "−"}
+                      {(Math.abs(window.delta) * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                )}
               />
             )}
           </li>
@@ -398,8 +416,11 @@ function ActionableRecommendationBody({
   )
 }
 
-// The deep (multimodal) insight plus its actionable recommendation, without the
-// row's left indent, for reuse inside the tabbed layout.
+// The deep (multimodal) insight plus its actionable recommendation, formatted
+// identically to ScriptFeedbackBody so every tab reads the same: the white
+// evidence line, then the blue "Try:" tip. No bordered box, evidence-source
+// caption or expected-purpose subtext — those would make the deep tab look
+// unlike the Script tab it sits beside.
 function DeepFeedbackBody({
   insight,
   recommendation,
@@ -408,12 +429,14 @@ function DeepFeedbackBody({
   recommendation: DeepAnalysisRecommendation | undefined
 }) {
   return (
-    <div className="flex flex-col gap-2">
-      <MultimodalInsightBody insight={insight} />
+    <>
+      <p className="text-sm">{insight.narrative}</p>
       {recommendation && (
-        <ActionableRecommendationBody recommendation={recommendation} />
+        <div className="mt-2">
+          <TryCallout>{recommendation.action}</TryCallout>
+        </div>
       )}
-    </div>
+    </>
   )
 }
 
@@ -454,15 +477,22 @@ function deepFeedbackTabLabel(insight: RankedRetentionWindowEvent): string {
   }
 }
 
-// A window's feedback block. When the window has BOTH transcript-only script
-// feedback AND a deep multimodal insight, the two are split across tabs so every
-// tip stays visible without stacking into a tall, noisy column. When only one
-// source is present, it renders flat exactly as before.
+// A window's feedback block, rendered together with the row's header so the
+// Script/deep tab switcher can sit inline on the top row (after the transcript
+// quote) rather than below it. `header` is given the tab list to place in that
+// row — or null when there are no tabs to show — and returns the full header.
+//
+// When the window has BOTH transcript-only script feedback AND a deep
+// multimodal insight, the two are split across tabs so every tip stays visible
+// without stacking into a tall, noisy column. When only one source is present,
+// it renders flat below the header exactly as before.
 function WindowFeedback({
+  header,
   attribution,
   insight,
   recommendation,
 }: {
+  header: (tabs: React.ReactNode) => React.ReactNode
   attribution: RetentionMomentAttribution | undefined
   insight: RankedRetentionWindowEvent | undefined
   recommendation: DeepAnalysisRecommendation | undefined
@@ -472,30 +502,28 @@ function WindowFeedback({
 
   if (hasScript && hasDeep) {
     return (
-      <div className="pl-10">
-        <Tabs defaultValue="script" className="gap-2">
+      <Tabs defaultValue="script" className="gap-2">
+        {header(
           <TabsList>
             <TabsTrigger value="script">Script</TabsTrigger>
             <TabsTrigger value="deep">
               {deepFeedbackTabLabel(insight)}
             </TabsTrigger>
           </TabsList>
-          <TabsContent value="script">
-            <ScriptFeedbackBody attribution={attribution} />
-          </TabsContent>
-          <TabsContent value="deep">
-            <DeepFeedbackBody
-              insight={insight}
-              recommendation={recommendation}
-            />
-          </TabsContent>
-        </Tabs>
-      </div>
+        )}
+        <TabsContent value="script" className="pl-10">
+          <ScriptFeedbackBody attribution={attribution} />
+        </TabsContent>
+        <TabsContent value="deep" className="pl-10">
+          <DeepFeedbackBody insight={insight} recommendation={recommendation} />
+        </TabsContent>
+      </Tabs>
     )
   }
 
   return (
     <>
+      {header(null)}
       <AttributionNote attribution={attribution} />
       <MultimodalInsight insight={insight} />
       <ActionableRecommendation recommendation={recommendation} />
@@ -547,30 +575,32 @@ function DropList({
               "flex flex-col gap-2 p-4",
             )}
           >
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
-                  {index + 1}
-                </span>
-                <span className="font-mono text-sm">
-                  {formatTimestamp(drop.fromSeconds)} –{" "}
-                  {formatTimestamp(drop.toSeconds)}
-                </span>
-                <ScriptSegmentTooltip
-                  transcript={transcript}
-                  fromSeconds={drop.fromSeconds}
-                  toSeconds={drop.toSeconds}
-                />
-              </div>
-              <span className="text-sm font-medium text-destructive">
-                −{(Math.abs(drop.delta) * 100).toFixed(1)}%
-              </span>
-            </div>
-
             <WindowFeedback
               attribution={attribution.get(drop.windowIndex)}
               insight={deepInsights.get(drop.windowIndex)}
               recommendation={recommendations.get(drop.windowIndex)}
+              header={(tabs) => (
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                      {index + 1}
+                    </span>
+                    <span className="font-mono text-sm">
+                      {formatTimestamp(drop.fromSeconds)} –{" "}
+                      {formatTimestamp(drop.toSeconds)}
+                    </span>
+                    <ScriptSegmentTooltip
+                      transcript={transcript}
+                      fromSeconds={drop.fromSeconds}
+                      toSeconds={drop.toSeconds}
+                    />
+                    {tabs}
+                  </div>
+                  <span className="text-sm font-medium text-destructive">
+                    −{(Math.abs(drop.delta) * 100).toFixed(1)}%
+                  </span>
+                </div>
+              )}
             />
           </li>
         )
@@ -659,30 +689,32 @@ function GainList({
               "flex flex-col gap-2 p-4",
             )}
           >
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
-                  {index + 1}
-                </span>
-                <span className="font-mono text-sm">
-                  {formatTimestamp(gain.fromSeconds)} –{" "}
-                  {formatTimestamp(gain.toSeconds)}
-                </span>
-                <ScriptSegmentTooltip
-                  transcript={transcript}
-                  fromSeconds={gain.fromSeconds}
-                  toSeconds={gain.toSeconds}
-                />
-              </div>
-              <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
-                +{(gain.delta * 100).toFixed(1)}%
-              </span>
-            </div>
-
             <WindowFeedback
               attribution={attribution.get(gain.windowIndex)}
               insight={deepInsights.get(gain.windowIndex)}
               recommendation={recommendations.get(gain.windowIndex)}
+              header={(tabs) => (
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                      {index + 1}
+                    </span>
+                    <span className="font-mono text-sm">
+                      {formatTimestamp(gain.fromSeconds)} –{" "}
+                      {formatTimestamp(gain.toSeconds)}
+                    </span>
+                    <ScriptSegmentTooltip
+                      transcript={transcript}
+                      fromSeconds={gain.fromSeconds}
+                      toSeconds={gain.toSeconds}
+                    />
+                    {tabs}
+                  </div>
+                  <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
+                    +{(gain.delta * 100).toFixed(1)}%
+                  </span>
+                </div>
+              )}
             />
           </li>
         )
