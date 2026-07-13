@@ -92,6 +92,7 @@ const TAB_FOR_INSIGHT_KIND: Record<
   hook: "hook",
   drop: "drop-offs",
   gain: "gains",
+  pacing: "pacing",
 }
 
 // When a retention insight marker on the chart is selected, the matching row in
@@ -1116,7 +1117,9 @@ export function AnalysedVideoDetail({
         ? "drop-offs"
         : gains.length > 0
           ? "gains"
-          : null
+          : pacingStretches.length > 0
+            ? "pacing"
+            : null
 
   // The retention tab is controlled so that clicking an insight marker on the
   // chart can switch to the tab holding that insight (see onInsightSelect).
@@ -1250,6 +1253,17 @@ export function AnalysedVideoDetail({
         transcript: said || undefined,
       }
     }),
+    ...(pacingAnalysis?.slowOrRepetitiveStretches ?? []).map(
+      (stretch, index) => ({
+        id: `pacing-${stretch.startSeconds}-${stretch.endSeconds}`,
+        kind: "pacing" as const,
+        label: `Pacing opportunity ${index + 1}`,
+        fromSeconds: stretch.startSeconds,
+        toSeconds: stretch.endSeconds,
+        recommendation: stretch.suggestion,
+        transcript: stretch.reason,
+      }),
+    ),
   ]
 
   return (
@@ -1399,6 +1413,12 @@ export function AnalysedVideoDetail({
                     Gains
                   </TabsTrigger>
                 )}
+                {pacingStretches.length > 0 && (
+                  <TabsTrigger value="pacing">
+                    <GaugeIcon className="text-blue-600 dark:text-blue-400" />
+                    Pacing
+                  </TabsTrigger>
+                )}
               </TabsList>
 
               {hookWindows.length > 0 && (
@@ -1439,25 +1459,21 @@ export function AnalysedVideoDetail({
                   />
                 </TabsContent>
               )}
+
+              {pacingStretches.length > 0 && (
+                <TabsContent value="pacing">
+                  <PacingAnalysisSection
+                    analysis={pacingAnalysis}
+                    transcript={transcript}
+                    hasTranscript={transcript.length > 0}
+                    highlightedId={playbackWindow?.id ?? null}
+                  />
+                </TabsContent>
+              )}
             </Tabs>
             )}
           </div>
         </section>
-
-        {pacingStretches.length > 0 && (
-          <section className="flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <GaugeIcon className="size-4 text-muted-foreground" />
-              <h2 className="text-sm font-medium">Pacing</h2>
-            </div>
-            <PacingAnalysisSection
-              analysis={pacingAnalysis}
-              transcript={transcript}
-              hasTranscript={transcript.length > 0}
-              highlightedId={playbackWindow?.id ?? null}
-            />
-          </section>
-        )}
       </div>
     </div>
   )
