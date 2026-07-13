@@ -115,11 +115,10 @@ function rowHighlightClass(
 
 // How the page glides to a highlighted row when a chart marker is clicked. The
 // native smooth `scrollIntoView` felt sudden, so we run our own eased animation
-// that is a touch slower and gentler. The target leaves a comfortable gap below
-// the top of the viewport so the linked row lands clear of the sticky source
-// video floating in the top-right.
+// that is a touch slower and gentler. The row lands centered in the viewport so
+// the linked item reads as the focus of attention rather than being pinned to
+// the top of the screen.
 const HIGHLIGHT_SCROLL_DURATION_MS = 900
-const HIGHLIGHT_SCROLL_TOP_OFFSET = 96
 
 // Standard ease-in-out cubic: slow start, quick middle, slow settle — the shape
 // that reads as a deliberate glide rather than a snap.
@@ -127,17 +126,16 @@ function easeInOutCubic(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
 }
 
-// Smoothly scrolls the window so `element` sits `HIGHLIGHT_SCROLL_TOP_OFFSET`
-// below the top of the viewport. Skips the animation entirely for users who
-// prefer reduced motion, and no-ops when the row is already about where it
-// would land so a second click doesn't jitter the page.
+// Smoothly scrolls the window so `element` is vertically centered in the
+// viewport. Skips the animation entirely for users who prefer reduced motion,
+// and no-ops when the row is already about where it would land so a second
+// click doesn't jitter the page.
 function smoothScrollToElement(element: HTMLElement) {
   requestAnimationFrame(() => {
     const startY = window.scrollY
-    const targetY = Math.max(
-      0,
-      element.getBoundingClientRect().top + startY - HIGHLIGHT_SCROLL_TOP_OFFSET,
-    )
+    const rect = element.getBoundingClientRect()
+    const centerOffset = (window.innerHeight - rect.height) / 2
+    const targetY = Math.max(0, rect.top + startY - centerOffset)
     const distance = targetY - startY
     if (Math.abs(distance) < 8) return
 
