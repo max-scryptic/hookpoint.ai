@@ -105,8 +105,9 @@ export function getRetentionWindowAiCallConcurrency(): number {
 
 // Maximum retention windows that receive the paid/decode-heavy deep path.
 // Every window remains in light analysis. Set to 0 for no cap (useful for
-// controlled evaluation); the default 6 normally covers one hook, the most
-// important drops and at least the strongest gain.
+// controlled evaluation); the default 6 normally covers both hook windows
+// (the initial hook and hook delivery), the most important drops and at least
+// the strongest gain.
 export function getDeepAnalysisMaxWindows(): number {
   const raw = process.env.DEEP_ANALYSIS_MAX_WINDOWS
   const parsed = raw != null ? Number(raw) : NaN

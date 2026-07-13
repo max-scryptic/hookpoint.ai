@@ -130,8 +130,8 @@ function mapAudioRow(row: AudioRow): RetentionWindowAudioClip {
 //
 // Snapping the interior samples to a *global* phase rather than stepping from
 // fromSeconds is deliberate: when two overlapping windows both fall back to
-// this grid (a hook at 0-30 and a drop-off at 7.4-47.4, say), a from-relative
-// grid would land them on interleaved-but-distinct seconds (…,20,25 vs
+// this grid (hook delivery at 10-30 and a drop-off at 7.4-47.4, say), a
+// from-relative grid would land them on interleaved-but-distinct seconds (…,20,25 vs
 // …,22.4,27.4) so nothing is shared, whereas a global grid puts both on the
 // same 10,15,20,25 gridlines across their shared span. That lets the
 // extraction frame cache (keyed on the exact timestamp, see

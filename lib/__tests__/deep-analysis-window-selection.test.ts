@@ -55,6 +55,21 @@ describe("selectDeepAnalysisWindows", () => {
     ])
   })
 
+  it("keeps both hook windows even under a tight cap", () => {
+    const windows = [
+      window("initial-hook", "hook", -0.2, { windowIndex: 0 }),
+      window("hook-delivery", "hook", -0.15, { windowIndex: 1 }),
+      window("drop-big", "drop_off", -0.08, { steepness: 2.5 }),
+      window("gain-big", "gain", 0.07),
+    ]
+
+    // Both hooks are mandatory, so a cap of 2 spends both slots on them.
+    expect(selectDeepAnalysisWindows(windows, 2).map((item) => item.id)).toEqual([
+      "initial-hook",
+      "hook-delivery",
+    ])
+  })
+
   it("excludes windows without an analysis range", () => {
     const windows = [
       window("hook", "hook", -0.2),
