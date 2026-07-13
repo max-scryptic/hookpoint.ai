@@ -12,7 +12,6 @@ import {
   computeRetentionWindows,
   detectRetentionGains,
   detectSignificantDropOffs,
-  HOOK_COVERAGE_END_SECONDS,
   type RetentionPoint,
 } from "@/lib/youtube/youtube"
 
@@ -89,16 +88,21 @@ const GAIN_PADDING_AFTER_SECONDS = 20
 
 // Derives the padded analysis window for a single retention window row, or
 // null when this row has no analysis window of its own:
-//   • hook     – one combined 0s..min(30s, duration) window, carried only on
-//                window_index 0. hook-delivery (index 1) is already covered by
-//                it, so harvesting it again would just duplicate the chunks.
+//   • hook     – its own fixed bounds, so the initial hook (0-10s) and hook
+//                delivery (10-30s) are each harvested and analysed as a
+//                separate deep-analysis window. The opening line and how it's
+//                then grounded are the two highest-leverage stretches of a
+//                video, so we critique them independently rather than blending
+//                them into one 0-30s read. Clamped to [0, durationSeconds]:
+//                a video too short to reach a hook window drops it (returns
+//                null).
 //   • drop_off – 30s before to 10s after the anchor (the midpoint of the
 //                detected step, since that step can itself span several
 //                seconds on longer videos).
 //   • gain     – 10s before to 20s after the anchor. Unlike drop-offs, gains
 //                aren't gated to start after the hook, so the lower bound can
 //                clamp to 0 for an early gain.
-// Both non-hook cases clamp to [0, durationSeconds].
+// The drop_off/gain cases clamp to [0, durationSeconds] around their anchor.
 export function computeAnalysisWindow(
   kind: RetentionWindowKind,
   windowIndex: number,
@@ -107,12 +111,10 @@ export function computeAnalysisWindow(
   durationSeconds: number,
 ): { fromSeconds: number; toSeconds: number } | null {
   if (kind === "hook") {
-    if (windowIndex !== 0) return null
-    const end =
-      durationSeconds > 0
-        ? Math.min(HOOK_COVERAGE_END_SECONDS, durationSeconds)
-        : HOOK_COVERAGE_END_SECONDS
-    return end > 0 ? { fromSeconds: 0, toSeconds: end } : null
+    const to =
+      durationSeconds > 0 ? Math.min(toSeconds, durationSeconds) : toSeconds
+    const from = Math.min(fromSeconds, to)
+    return to > from ? { fromSeconds: from, toSeconds: to } : null
   }
 
   const anchor = (fromSeconds + toSeconds) / 2

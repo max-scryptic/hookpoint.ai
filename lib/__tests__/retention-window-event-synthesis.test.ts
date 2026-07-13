@@ -262,13 +262,25 @@ describe("buildWindowContrastRanges", () => {
     })
   })
 
-  it("does not invent a control for the opening hook", () => {
+  it("does not invent a control for a hook window", () => {
+    // Neither the initial hook nor hook delivery gets a fabricated control:
+    // the opening has no prior footage, and hook delivery is judged on its own
+    // merits rather than against the initial hook.
     expect(
       buildWindowContrastRanges({
         kind: "hook",
         eventFromSeconds: 0,
         eventToSeconds: 10,
         analysisFromSeconds: 0,
+        analysisToSeconds: 10,
+      }),
+    ).toBeNull()
+    expect(
+      buildWindowContrastRanges({
+        kind: "hook",
+        eventFromSeconds: 10,
+        eventToSeconds: 30,
+        analysisFromSeconds: 10,
         analysisToSeconds: 30,
       }),
     ).toBeNull()

@@ -186,7 +186,7 @@ function makeWindow(
     isAbnormallySteep: null,
     outOfRange: false,
     analysisFromSeconds: 0,
-    analysisToSeconds: 30,
+    analysisToSeconds: 10,
     ...overrides,
   }
 }
@@ -204,7 +204,7 @@ describe("createPendingRetentionWindowSceneCueScans", () => {
     expect(rows[0]).toMatchObject({
       retention_window_id: "rw-1",
       from_seconds: 0,
-      to_seconds: 30,
+      to_seconds: 10,
       status: "pending",
     })
   })
