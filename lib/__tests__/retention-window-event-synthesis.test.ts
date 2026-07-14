@@ -64,9 +64,10 @@ function audioRow(overrides: Record<string, unknown> = {}) {
 }
 
 // A fake covering exactly the query shapes synthesizeRetentionWindowEvents
-// issues: six parallel "select ... for the whole video" reads (canned per
-// table), plus delete+insert on retention_window_events and update on
-// retention_window_event_synthesis.
+// issues: the parallel "select ... for the whole video" reads (canned per
+// table, including the cross-video channel-history read of
+// retention_window_events), plus delete+insert on retention_window_events and
+// update on retention_window_event_synthesis.
 function makeFakeSupabase(tables: Record<string, Record<string, unknown>[]>) {
   const updates: { table: string; id?: string; payload: Record<string, unknown> }[] =
     []
@@ -99,6 +100,8 @@ function makeFakeSupabase(tables: Record<string, Record<string, unknown>[]>) {
           if (column === "id") pendingId = value
           return builder
         },
+        neq: () => builder,
+        limit: () => builder,
         // getRetentionAttribution reads a single analysed_videos row; there's
         // no seeded retention_attribution here, so it resolves to null and the
         // synthesizer just runs without a script-explanation dedup reference.
@@ -449,6 +452,32 @@ describe("synthesizeRetentionWindowEvents", () => {
           ],
         },
       ],
+      // Events previously synthesized for two OTHER videos, read back by the
+      // channel-history loader (the fake ignores the neq filter, so these
+      // stand in for the cross-video rows the real query would return).
+      retention_window_events: [
+        {
+          analysed_video_id: "av-2",
+          event_type: "pacing_change",
+          narrative: "Your cuts slow well below the video's usual rate here.",
+          confidence: 0.8,
+          retention_windows: { kind: "drop_off" },
+        },
+        {
+          analysed_video_id: "av-3",
+          event_type: "pacing_change",
+          narrative: "A long static stretch loses momentum.",
+          confidence: 0.7,
+          retention_windows: { kind: "drop_off" },
+        },
+        {
+          analysed_video_id: "av-3",
+          event_type: "scene_cut",
+          narrative: "A burst of quick cuts holds attention.",
+          confidence: 0.9,
+          retention_windows: { kind: "gain" },
+        },
+      ],
     })
     const synthesizer = fakeSynthesizer()
     synthesizer.synthesize.mockResolvedValueOnce({
@@ -500,6 +529,23 @@ describe("synthesizeRetentionWindowEvents", () => {
     expect(evidence.contrast?.controlMotion).toBeCloseTo(0.05)
     expect(evidence.contrast?.targetMotion).toBeCloseTo(0.2)
     expect(evidence.contrast?.motionDelta).toBeCloseTo(0.15)
+    expect(evidence.channelHistory).toEqual({
+      videoCount: 2,
+      hooks: null,
+      dropOffs: {
+        eventCount: 2,
+        trends: [{ eventType: "pacing_change", eventCount: 2, videoCount: 2 }],
+        exampleNarratives: [
+          "Your cuts slow well below the video's usual rate here.",
+          "A long static stretch loses momentum.",
+        ],
+      },
+      gains: {
+        eventCount: 1,
+        trends: [{ eventType: "scene_cut", eventCount: 1, videoCount: 1 }],
+        exampleNarratives: ["A burst of quick cuts holds attention."],
+      },
+    })
 
     expect(deletes).toContainEqual({ table: "retention_window_events" })
     expect(inserts).toContainEqual(

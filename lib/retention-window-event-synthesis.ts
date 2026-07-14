@@ -18,6 +18,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { getAnalysedVideoTranscriptById } from "@/lib/analysed-videos"
+import {
+  getChannelEventHistory,
+  type ChannelEventHistory,
+} from "@/lib/channel-event-history"
 import { runWithConcurrency } from "@/lib/concurrency"
 import { responsesCallCost, type LlmCallCost } from "@/lib/llm-cost"
 import { recordRetentionWindowCost } from "@/lib/retention-window-costs"
@@ -239,6 +243,13 @@ export interface WindowEvidence {
   // immediately preceding it. Null for the opening hook, which has no prior
   // segment inside the video to use as a fair control.
   contrast: WindowContrastEvidence | null
+  // Cross-video prior: a compact summary of the events previously synthesized
+  // across this uploader's OTHER deeply-analysed videos (which event types
+  // recur in hooks/drop-offs/gains and across how many videos, plus example
+  // narratives). Context for framing recurring channel habits — never grounds
+  // for inventing a local event. Null until enough other videos have been
+  // deeply analysed to call anything a trend.
+  channelHistory: ChannelEventHistory | null
 }
 
 type VisualFrame = WindowEvidence["visual"][number]
@@ -347,6 +358,7 @@ export async function synthesizeRetentionWindowEvents(
     attribution,
     videoTranscript,
     sparseBaseline,
+    channelHistory,
   ] = await Promise.all([
     getRetentionWindows(admin, userId, analysedVideoId),
     getRetentionWindowSnapshotsForVideo(admin, userId, analysedVideoId),
@@ -363,6 +375,9 @@ export async function synthesizeRetentionWindowEvents(
       () => [],
     ),
     getSparseVideoFeatureBaseline(admin, userId, analysedVideoId).catch(() => null),
+    // Best-effort like the attribution read: channel history enriches the
+    // narratives but must never block or fail a window's synthesis.
+    getChannelEventHistory(admin, userId, analysedVideoId).catch(() => null),
   ])
 
   const windowById = new Map(windows.map((w) => [w.id, w]))
@@ -631,6 +646,7 @@ export async function synthesizeRetentionWindowEvents(
               ? (audio.analysis as AudioAnalysis)
               : null,
           contrast,
+          channelHistory,
         }
 
         const { events, cost } = await deps.synthesizer.synthesize(evidence)
@@ -725,6 +741,7 @@ const EVENT_SYNTHESIS_INSTRUCTIONS = [
   "Judge editing and pacing as deviations from the given baseline, not in absolute terms: a static, low-cut, low-energy stretch only explains a drop when it is slower or flatter than this video's own norm, and a burst of cuts or rising energy only explains a gain when it is livelier than the norm. Where a metric drives an event, reference the deviation in the narrative (for example 'your cuts fall to about 2 per minute here versus roughly 11 across the video').",
   "For non-hook windows you are also given contrast: a target range covering the detected retention episode and the immediately preceding control range. It contains editing, deterministic audio, and deterministic visual-motion summaries for both ranges, target-minus-control deltas, and chunkIndex lists identifying which visual frames belong to each range. Motion is normalised 0..1 frame difference, so use it comparatively rather than assigning a universal good/bad threshold. Prefer this local comparison over a generic absolute judgment. Only attribute a change to editing, audio, speech rate, motion, or visuals when the target actually differs meaningfully from the control; unchanged evidence is evidence against that hypothesis. If the target has no sampled visual frame, audio coverage, or motion coverage, do not infer a change from missing data.",
   "You may also be given scriptExplanation: the transcript-only explanation the user has already been shown for this window. Your job is to add what the words alone cannot reveal. Only surface an event that ADDS a non-verbal cause (a cut, a freeze or dead air, an energy or pacing shift, a graphic appearing or disappearing) or that CONTRADICTS the script explanation. Never emit an event that merely restates scriptExplanation. When scriptExplanation is null, none has been generated yet, so surface the genuinely notable multimodal moments as usual.",
+  "You may also be given channelHistory: a compact summary of the retention events previously synthesized across this uploader's other deeply analysed videos, covering how many videos it draws on, which event types recur in their hooks, drop-offs, and gains (with how many distinct videos each recurs in), and a few example narratives. Treat it as prior context about what habitually moves retention on this channel: when the local evidence supports an event that matches a recurring channel pattern, note the recurrence in the narrative (for example 'a pattern that shows up across your other videos as well') and let the convergence nudge confidence up slightly. Never surface an event on channel history alone, and never let history suppress a well-evidenced local event that breaks the pattern; the local evidence always decides whether an event exists. channelHistory is null when too few other videos have been deeply analysed to establish a trend.",
   "For each event, give: event_type (the best-fitting category), timestamp_seconds (must fall within the window's fromSeconds/toSeconds), a one- or two-sentence narrative tying the evidence to the retention change, primary_evidence (which evidence source most explains it — use 'combined' only when multiple sources genuinely converge on the same moment), and confidence (0..1: how strongly the supplied evidence supports both that this moment happened AND that it plausibly moved retention). Reserve confidence above 0.7 for moments where the evidence clearly converges, for example a hard cut plus an energy drop plus a matching retention step.",
   "Only surface events actually supported by the evidence given — never invent frame content, transcript text, or audio characteristics that weren't provided. Prefer a few high-confidence, genuinely new events over many weak ones; if nothing clears a modest bar of being both well-supported and new, return an empty events array rather than padding.",
   'Never output an em dash character ("—") anywhere in your response; if you would use one, rewrite the phrase with a comma, colon, parentheses, or two separate sentences instead.',
