@@ -15,7 +15,7 @@ import {
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { CreditsTooltip } from "@/components/credits-tooltip"
+import { CreditsTooltip, InfoTooltip } from "@/components/credits-tooltip"
 
 // The pricing comparison: three plan cards side by side with a monthly/annual
 // billing toggle that reprices all three at once. Pay buttons call
@@ -257,6 +257,8 @@ function PlanCard({
             <CheckIcon className="mt-0.5 size-4 shrink-0 text-primary" />
             {feature.credits ? (
               <CreditsTooltip>{feature.label}</CreditsTooltip>
+            ) : feature.tooltip ? (
+              <InfoTooltip content={feature.tooltip}>{feature.label}</InfoTooltip>
             ) : (
               <span>{feature.label}</span>
             )}

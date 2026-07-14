@@ -13,7 +13,12 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import { ListVideoIcon, TerminalSquareIcon, VideoIcon } from "lucide-react"
+import {
+  ListVideoIcon,
+  TerminalSquareIcon,
+  TrendingUpIcon,
+  VideoIcon,
+} from "lucide-react"
 
 const navMain = [
   {
@@ -33,6 +38,11 @@ const navMain = [
     // /dashboard/analysed-video/[videoId].
     match: "/dashboard/analysed-video",
     icon: <ListVideoIcon />,
+  },
+  {
+    title: "Channel Trends",
+    url: "/dashboard/channel-trends",
+    icon: <TrendingUpIcon />,
   },
 ]
 
