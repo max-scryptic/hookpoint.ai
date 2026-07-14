@@ -5,12 +5,18 @@ import {
   SparklesIcon,
   TrendingDownIcon,
   TrendingUpIcon,
-  ZapIcon,
 } from "lucide-react"
 
 import { EventTypeBadge } from "@/components/event-type-badge"
+import { HookIcon } from "@/components/hook-icon"
 import { buttonVariants } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs"
 import {
   EARLY_TRENDS_VIDEO_THRESHOLD,
   ESTABLISHED_TRENDS_VIDEO_THRESHOLD,
@@ -124,26 +130,15 @@ function TrendCard({ trend }: { trend: ChannelTrend }) {
 }
 
 function TrendsSection({
-  icon,
-  title,
   description,
   kind,
 }: {
-  icon: React.ReactNode
-  title: string
   description: string
-  kind: ChannelKindTrends | null
+  kind: ChannelKindTrends
 }) {
-  if (kind == null) return null
   return (
     <section className="flex flex-col gap-3">
-      <div>
-        <h2 className="flex items-center gap-2 text-base font-semibold">
-          {icon}
-          {title}
-        </h2>
-        <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
-      </div>
+      <p className="text-sm text-muted-foreground">{description}</p>
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         {kind.trends.map((trend) => (
           <TrendCard key={trend.eventType} trend={trend} />
@@ -193,6 +188,41 @@ function EarlySignalNote({ data }: { data: ChannelTrendsData }) {
 
 export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
   const showTrends = data.stage === "early" || data.stage === "established"
+
+  // Each section becomes a tab, but only when it actually has trends to show —
+  // mirroring the per-window tabs on the analysed-video page.
+  const sections = [
+    {
+      value: "loses",
+      label: "What loses viewers",
+      icon: <TrendingDownIcon className="text-destructive" />,
+      description:
+        "The causes that recur across your drop-offs, most channel-wide first.",
+      kind: data.dropOffs,
+    },
+    {
+      value: "holds",
+      label: "What holds viewers",
+      icon: (
+        <TrendingUpIcon className="text-emerald-600 dark:text-emerald-500" />
+      ),
+      description:
+        "The patterns your retention gains keep coming back to — worth repeating on purpose.",
+      kind: data.gains,
+    },
+    {
+      value: "hooks",
+      label: "Hook patterns",
+      icon: <HookIcon className="text-amber-600 dark:text-amber-500" />,
+      description:
+        "What your openings have in common when viewers stay or slip away.",
+      kind: data.hooks,
+    },
+  ].filter(
+    (section): section is typeof section & { kind: ChannelKindTrends } =>
+      section.kind != null
+  )
+
   return (
     <div className="flex flex-col gap-6">
       <LibraryStats data={data} />
@@ -200,26 +230,26 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
       {showTrends ? (
         <>
           <EarlySignalNote data={data} />
-          <TrendsSection
-            icon={<TrendingDownIcon className="size-4 text-destructive" />}
-            title="What loses viewers"
-            description="The causes that recur across your drop-offs, most channel-wide first."
-            kind={data.dropOffs}
-          />
-          <TrendsSection
-            icon={
-              <TrendingUpIcon className="size-4 text-emerald-600 dark:text-emerald-500" />
-            }
-            title="What holds viewers"
-            description="The patterns your retention gains keep coming back to — worth repeating on purpose."
-            kind={data.gains}
-          />
-          <TrendsSection
-            icon={<ZapIcon className="size-4 text-amber-600 dark:text-amber-500" />}
-            title="Hook patterns"
-            description="What your openings have in common when viewers stay or slip away."
-            kind={data.hooks}
-          />
+          {sections.length > 0 && (
+            <Tabs defaultValue={sections[0].value}>
+              <TabsList>
+                {sections.map((section) => (
+                  <TabsTrigger key={section.value} value={section.value}>
+                    {section.icon}
+                    {section.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+              {sections.map((section) => (
+                <TabsContent key={section.value} value={section.value}>
+                  <TrendsSection
+                    description={section.description}
+                    kind={section.kind}
+                  />
+                </TabsContent>
+              ))}
+            </Tabs>
+          )}
         </>
       ) : (
         <BuildingCard data={data} />
