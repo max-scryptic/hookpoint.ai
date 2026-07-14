@@ -178,66 +178,73 @@ export function SourceVideoPlayer({
   }, [playbackUrl, playbackWindow, scrubTime])
 
   return (
+    // Outer wrapper owns the float animation and pointer state; the close
+    // button hangs off it so it can sit *outside* the frame without being
+    // clipped by the inner `overflow-hidden`.
     <div
-      className={`relative aspect-video w-full overflow-hidden rounded-xl border border-black/10 bg-black shadow-2xl ring-1 ring-black/5 transition-[opacity,transform] duration-300 ease-out dark:border-white/10 ${
+      className={`relative aspect-video w-full transition-[opacity,transform] duration-300 ease-out ${
         isVisible
           ? "translate-y-0 scale-100 opacity-100"
           : "translate-y-1.5 scale-[0.97] opacity-0"
       } ${isInteractive ? "pointer-events-auto" : "pointer-events-none"}`}
       aria-hidden={!isVisible}
     >
-      {playbackUrl && (
-        <video
-          ref={videoRef}
-          key={playbackUrl}
-          src={playbackUrl}
-          poster={thumbnailUrl}
-          controls
-          playsInline
-          preload="metadata"
-          className="absolute inset-0 size-full object-cover"
-          onLoadStart={() => setIsLoading(true)}
-          onLoadedData={() => setIsLoading(false)}
-          onCanPlay={() => setIsLoading(false)}
-          onWaiting={() => setIsLoading(true)}
-          onPlaying={() => setIsLoading(false)}
-          onTimeUpdate={(event) => {
-            if (
-              playbackWindow &&
-              event.currentTarget.currentTime >= playbackWindow.toSeconds
-            ) {
-              event.currentTarget.pause()
-              event.currentTarget.currentTime = playbackWindow.toSeconds
-            }
-          }}
-          onError={() => {
-            setPlaybackUrl(null)
-            setIsLoading(false)
-          }}
-          aria-label={`Play ${title}`}
-        />
-      )}
+      <div className="relative size-full overflow-hidden rounded-xl border border-black/10 bg-black shadow-2xl ring-1 ring-black/5 dark:border-white/10">
+        {playbackUrl && (
+          <video
+            ref={videoRef}
+            key={playbackUrl}
+            src={playbackUrl}
+            poster={thumbnailUrl}
+            controls
+            playsInline
+            preload="metadata"
+            className="absolute inset-0 size-full object-cover"
+            onLoadStart={() => setIsLoading(true)}
+            onLoadedData={() => setIsLoading(false)}
+            onCanPlay={() => setIsLoading(false)}
+            onWaiting={() => setIsLoading(true)}
+            onPlaying={() => setIsLoading(false)}
+            onTimeUpdate={(event) => {
+              if (
+                playbackWindow &&
+                event.currentTarget.currentTime >= playbackWindow.toSeconds
+              ) {
+                event.currentTarget.pause()
+                event.currentTarget.currentTime = playbackWindow.toSeconds
+              }
+            }}
+            onError={() => {
+              setPlaybackUrl(null)
+              setIsLoading(false)
+            }}
+            aria-label={`Play ${title}`}
+          />
+        )}
 
-      {isVisible && isLoading && (
-        <div
-          className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/15"
-          role="status"
-          aria-label="Loading video"
-        >
-          <span className="flex size-10 items-center justify-center rounded-full bg-black/55 text-white shadow-sm backdrop-blur-sm">
-            <Loader2Icon className="size-5 animate-spin" aria-hidden="true" />
-          </span>
-        </div>
-      )}
+        {isVisible && isLoading && (
+          <div
+            className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/15"
+            role="status"
+            aria-label="Loading video"
+          >
+            <span className="flex size-10 items-center justify-center rounded-full bg-black/55 text-white shadow-sm backdrop-blur-sm">
+              <Loader2Icon className="size-5 animate-spin" aria-hidden="true" />
+            </span>
+          </div>
+        )}
+      </div>
 
-      {/* A visible way to dismiss the player while an insight is open. Shown
-          only when the player is interactive (an insight window is selected),
-          so a passing scrub preview never puts a stray button on screen. */}
+      {/* A visible way to dismiss the player while an insight is open. Sits just
+          outside the frame's top-left corner so it never overlaps the native
+          video controls (expand/PiP top-left, mute top-right). Shown only when
+          the player is interactive (an insight window is selected), so a passing
+          scrub preview never puts a stray button on screen. */}
       {isInteractive && onClose && (
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-2 top-2 z-10 flex size-7 items-center justify-center rounded-full bg-black/55 text-white shadow-sm backdrop-blur-sm transition-colors hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+          className="absolute right-full top-0 z-10 mr-2 flex size-7 items-center justify-center rounded-full bg-black/55 text-white shadow-md backdrop-blur-sm transition-colors hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
           aria-label="Close video player"
         >
           <XIcon className="size-4" aria-hidden="true" />
