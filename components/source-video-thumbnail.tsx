@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Loader2Icon } from "lucide-react"
+import { Loader2Icon, XIcon } from "lucide-react"
 
 interface SourceFileResponse {
   playbackUrl?: string | null
@@ -96,6 +96,7 @@ export function SourceVideoPlayer({
   title,
   scrubTime,
   playbackWindow,
+  onClose,
 }: {
   videoId: string
   thumbnailUrl: string
@@ -106,6 +107,10 @@ export function SourceVideoPlayer({
     fromSeconds: number
     toSeconds: number
   } | null
+  // Dismiss the open insight (closing the player and clearing the chart
+  // highlight). Wired to the same state the outside-click handler clears, so
+  // the button and the click-away gesture are two ways to do the one thing.
+  onClose?: () => void
 }) {
   const { playbackUrl, setPlaybackUrl, isLoading, setIsLoading } =
     useSourcePlayback(videoId)
@@ -223,6 +228,20 @@ export function SourceVideoPlayer({
             <Loader2Icon className="size-5 animate-spin" aria-hidden="true" />
           </span>
         </div>
+      )}
+
+      {/* A visible way to dismiss the player while an insight is open. Shown
+          only when the player is interactive (an insight window is selected),
+          so a passing scrub preview never puts a stray button on screen. */}
+      {isInteractive && onClose && (
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-2 top-2 z-10 flex size-7 items-center justify-center rounded-full bg-black/55 text-white shadow-sm backdrop-blur-sm transition-colors hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+          aria-label="Close video player"
+        >
+          <XIcon className="size-4" aria-hidden="true" />
+        </button>
       )}
     </div>
   )

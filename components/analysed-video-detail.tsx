@@ -1360,6 +1360,7 @@ export function AnalysedVideoDetail({
                       title={video.title}
                       scrubTime={previewTime}
                       playbackWindow={playbackWindow}
+                      onClose={() => setPlaybackWindow(null)}
                     />
                   </div>
                 </div>
