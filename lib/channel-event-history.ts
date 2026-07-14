@@ -143,23 +143,28 @@ function embeddedKind(row: ChannelEventHistoryRow): string | null {
   return embedded?.kind ?? null
 }
 
-// Loads and summarises the channel's event history, excluding the video
-// currently being analysed so a video never reads its own (possibly stale)
-// events back as channel context.
-export async function getChannelEventHistory(
+// Loads the user's synthesized events joined to their window's kind, newest
+// first — the raw records both the synthesizer's channelHistory summary and
+// the Channel Trends page (lib/channel-trends.ts) aggregate over. Pass
+// excludeAnalysedVideoId when the caller is analysing a video, so it never
+// reads its own (possibly stale) events back as channel context.
+export async function loadChannelEventRecords(
   supabase: SupabaseClient,
   userId: string,
-  excludeAnalysedVideoId: string,
-): Promise<ChannelEventHistory | null> {
-  const { data, error } = await supabase
+  options: { excludeAnalysedVideoId?: string; limit?: number } = {},
+): Promise<ChannelEventRecord[]> {
+  let query = supabase
     .from("retention_window_events")
     .select(
       "analysed_video_id, event_type, narrative, confidence, retention_windows!inner(kind)",
     )
     .eq("user_id", userId)
-    .neq("analysed_video_id", excludeAnalysedVideoId)
+  if (options.excludeAnalysedVideoId != null) {
+    query = query.neq("analysed_video_id", options.excludeAnalysedVideoId)
+  }
+  const { data, error } = await query
     .order("created_at", { ascending: false })
-    .limit(MAX_EVENT_ROWS)
+    .limit(options.limit ?? MAX_EVENT_ROWS)
 
   if (error) {
     throw new Error(`Failed to load channel event history: ${error.message}`)
@@ -177,6 +182,18 @@ export async function getChannelEventHistory(
       confidence: row.confidence ?? null,
     })
   }
+  return records
+}
 
+// Loads and summarises the channel's event history for the synthesizer,
+// excluding the video currently being analysed.
+export async function getChannelEventHistory(
+  supabase: SupabaseClient,
+  userId: string,
+  excludeAnalysedVideoId: string,
+): Promise<ChannelEventHistory | null> {
+  const records = await loadChannelEventRecords(supabase, userId, {
+    excludeAnalysedVideoId,
+  })
   return summarizeChannelEvents(records)
 }
