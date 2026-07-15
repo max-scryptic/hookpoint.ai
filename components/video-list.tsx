@@ -215,6 +215,9 @@ export function VideoList({
             <TableHead className="hidden px-4 py-3 text-right text-accent-foreground sm:table-cell">
               Views
             </TableHead>
+            <TableHead className="hidden px-4 py-3 text-right text-accent-foreground sm:table-cell">
+              Subs gained
+            </TableHead>
             <TableHead className="hidden px-4 py-3 text-right text-accent-foreground lg:table-cell">
               Comments
             </TableHead>
@@ -257,6 +260,9 @@ export function VideoList({
                       <span className="sm:hidden">
                         {formatCount(video.viewCount)} views
                       </span>
+                      <span className="sm:hidden">
+                        {formatCount(video.subscribersGained)} subs gained
+                      </span>
                       {isAnalysed && (
                         <span className="sm:hidden">
                           <AnalysedBadge />
@@ -274,6 +280,9 @@ export function VideoList({
               </TableCell>
               <TableCell className="hidden px-4 py-3 align-top text-right text-sm tabular-nums text-muted-foreground sm:table-cell">
                 {formatCount(video.viewCount)}
+              </TableCell>
+              <TableCell className="hidden px-4 py-3 align-top text-right text-sm tabular-nums text-muted-foreground sm:table-cell">
+                {formatCount(video.subscribersGained)}
               </TableCell>
               <TableCell className="hidden px-4 py-3 align-top text-right text-sm tabular-nums text-muted-foreground lg:table-cell">
                 {formatCount(video.commentCount)}

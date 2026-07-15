@@ -144,6 +144,10 @@ function toRow(analysed: AnalysedVideo): AnalysedRow {
       commentCount: details?.commentCount ?? null,
       durationSeconds: details?.durationSeconds ?? null,
       privacyStatus: details?.privacyStatus ?? "private",
+      // Served from the analytics summary stored at analyse time; rows from
+      // before that column existed stay "—" until a detail-page visit
+      // backfills them.
+      subscribersGained: analysed.analyticsSummary?.subscribersGained ?? null,
     },
   }
 }
@@ -417,6 +421,9 @@ export function AnalysedVideoBrowser({ videos }: { videos: AnalysedVideo[] }) {
                 <TableHead className="hidden px-4 py-3 text-right text-accent-foreground sm:table-cell">
                   Views
                 </TableHead>
+                <TableHead className="hidden px-4 py-3 text-right text-accent-foreground sm:table-cell">
+                  Subs gained
+                </TableHead>
                 <TableHead className="hidden px-4 py-3 text-right text-accent-foreground lg:table-cell">
                   Comments
                 </TableHead>
@@ -467,6 +474,9 @@ export function AnalysedVideoBrowser({ videos }: { videos: AnalysedVideo[] }) {
                             {formatCount(video.viewCount)} views
                           </span>
                           <span className="sm:hidden">
+                            {formatCount(video.subscribersGained)} subs gained
+                          </span>
+                          <span className="sm:hidden">
                             Analysed {formatAnalysedAt(dateAnalysed)}
                           </span>
                         </div>
@@ -485,6 +495,9 @@ export function AnalysedVideoBrowser({ videos }: { videos: AnalysedVideo[] }) {
                   </TableCell>
                   <TableCell className="hidden px-4 py-3 align-top text-right text-sm tabular-nums text-muted-foreground sm:table-cell">
                     {formatCount(video.viewCount)}
+                  </TableCell>
+                  <TableCell className="hidden px-4 py-3 align-top text-right text-sm tabular-nums text-muted-foreground sm:table-cell">
+                    {formatCount(video.subscribersGained)}
                   </TableCell>
                   <TableCell className="hidden px-4 py-3 align-top text-right text-sm tabular-nums text-muted-foreground lg:table-cell">
                     {formatCount(video.commentCount)}

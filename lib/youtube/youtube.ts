@@ -35,6 +35,9 @@ export interface RecentVideo {
   commentCount: number | null
   durationSeconds: number | null
   privacyStatus: VideoPrivacyStatus
+  // Lifetime subscribers gained from this video's watch page, enriched from the
+  // Analytics API; null when the report failed or the video wasn't covered.
+  subscribersGained: number | null
 }
 
 export interface RecentVideosPage {
@@ -223,13 +226,19 @@ export async function getRecentVideos(
         commentCount: null,
         durationSeconds: null,
         privacyStatus: "private",
+        subscribersGained: null,
       }
     })
     .filter((video): video is RecentVideo => video !== null)
 
   // search.list omits statistics, privacy status and duration, so enrich the
-  // results with a single videos.list call keyed on the IDs we just collected.
-  await enrichWithVideoDetails(accessToken, videos)
+  // results with a single videos.list call keyed on the IDs we just collected,
+  // plus one Analytics report for per-video subscribers gained. Both are
+  // independent and best-effort, so they run in parallel.
+  await Promise.all([
+    enrichWithVideoDetails(accessToken, videos),
+    enrichWithSubscribersGained(accessToken, videos),
+  ])
 
   return {
     videos,
@@ -298,6 +307,75 @@ async function enrichWithVideoDetails(
     if (privacy === "public" || privacy === "unlisted" || privacy === "private") {
       video.privacyStatus = privacy
     }
+  }
+}
+
+// Fetches lifetime subscribers gained for a batch of videos the authenticated
+// user owns, in a single Analytics report (1 quota unit) dimensioned by video.
+// Videos with no recorded subscriber activity are omitted from the report's
+// rows, so callers should treat a missing ID as 0. The video filter accepts up
+// to 500 IDs; callers here never pass more than one page (≤50).
+export async function getSubscribersGainedByVideo(
+  accessToken: string,
+  videoIds: string[],
+): Promise<Map<string, number>> {
+  const gained = new Map<string, number>()
+  if (videoIds.length === 0) return gained
+
+  const url = new URL(`${ANALYTICS_API}/reports`)
+  url.searchParams.set("ids", "channel==MINE")
+  // Full channel lifetime — the earliest date YouTube accepts.
+  url.searchParams.set("startDate", "2005-02-01")
+  url.searchParams.set("endDate", isoDate(new Date().toISOString())!)
+  url.searchParams.set("dimensions", "video")
+  url.searchParams.set("metrics", "subscribersGained")
+  url.searchParams.set("filters", `video==${videoIds.join(",")}`)
+  url.searchParams.set("sort", "-subscribersGained")
+  url.searchParams.set("maxResults", String(videoIds.length))
+
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: "no-store",
+  })
+
+  if (!response.ok) {
+    throw new Error(
+      `YouTube Analytics API error (${response.status}): ${await response.text()}`,
+    )
+  }
+
+  const json = (await response.json()) as {
+    rows?: Array<[string, number]>
+  }
+
+  for (const [videoId, subscribersGained] of json.rows ?? []) {
+    gained.set(String(videoId), Number(subscribersGained))
+  }
+
+  return gained
+}
+
+// Mutates the passed videos in place, filling in subscribersGained from one
+// batched Analytics report. Failures are swallowed (the column just shows no
+// data) so an Analytics outage never hides the uploads list itself.
+async function enrichWithSubscribersGained(
+  accessToken: string,
+  videos: RecentVideo[],
+): Promise<void> {
+  if (videos.length === 0) return
+
+  try {
+    const gained = await getSubscribersGainedByVideo(
+      accessToken,
+      videos.map((video) => video.id),
+    )
+    for (const video of videos) {
+      // The report omits videos with no subscriber activity, so once it has
+      // succeeded a missing row genuinely means zero.
+      video.subscribersGained = gained.get(video.id) ?? 0
+    }
+  } catch (error) {
+    console.error("Failed to enrich recent videos with subscribers gained", error)
   }
 }
 

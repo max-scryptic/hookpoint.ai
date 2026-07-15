@@ -1291,6 +1291,10 @@ export function AnalysedVideoDetail({
                   value={formatCompactNumber(analyticsSummary.views)}
                 />
                 <Metric
+                  label="Subscribers gained"
+                  value={formatCompactNumber(analyticsSummary.subscribersGained)}
+                />
+                <Metric
                   label="Avg. view duration"
                   value={
                     analyticsSummary.averageViewDurationSeconds != null
