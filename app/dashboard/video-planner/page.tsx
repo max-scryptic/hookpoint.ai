@@ -57,11 +57,13 @@ export default async function Page() {
               <span className="font-semibold text-foreground">
                 Starter and Pro
               </span>{" "}
-              users. Upload a
-              video before it goes live on YouTube, and we&apos;ll combine your
-              channel trends, retention events, and more to predict which
-              sections are likely to drop or gain retention — so you can make
-              edits before you publish.
+              users.
+            </p>
+            <p className="mt-3 text-sm text-muted-foreground">
+              Upload a video before it goes live on YouTube, and we&apos;ll
+              combine your channel trends, retention events, and more to predict
+              which sections are likely to drop or gain retention, so you can
+              make edits before you publish.
             </p>
           </div>
         </Card>
