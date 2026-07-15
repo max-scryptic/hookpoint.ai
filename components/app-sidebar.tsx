@@ -14,6 +14,7 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 import {
+  ClapperboardIcon,
   ListVideoIcon,
   TerminalSquareIcon,
   TrendingUpIcon,
@@ -43,6 +44,11 @@ const navMain = [
     title: "Channel Trends",
     url: "/dashboard/channel-trends",
     icon: <TrendingUpIcon />,
+  },
+  {
+    title: "Video Planner",
+    url: "/dashboard/video-planner",
+    icon: <ClapperboardIcon />,
   },
 ]
 
