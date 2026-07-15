@@ -6,6 +6,7 @@ import {
   buildChannelRecurrence,
   buildChannelSignature,
   buildChannelTrends,
+  buildSubscriberConversion,
   channelTrendsStage,
   type ChannelVideo,
 } from "@/lib/channel-trends"
@@ -25,8 +26,19 @@ function video(
   id: string,
   title: string | null = null,
   dateAnalysed: string | null = null,
+  analytics: Partial<
+    Pick<ChannelVideo, "views" | "subscribersGained" | "subscribersLost">
+  > = {},
 ): ChannelVideo {
-  return { id, title, dateAnalysed }
+  return {
+    id,
+    title,
+    dateAnalysed,
+    views: null,
+    subscribersGained: null,
+    subscribersLost: null,
+    ...analytics,
+  }
 }
 
 describe("channelTrendsStage", () => {
@@ -162,6 +174,172 @@ describe("buildChannelTrends", () => {
     expect(data.signature).toBeNull()
     expect(data.insights).toEqual([])
     expect(data.recurrence).toBeNull()
+    expect(data.subscribers).toBeNull()
+  })
+})
+
+describe("buildSubscriberConversion", () => {
+  // Three ordinary converters around 1/1k and one video converting at 10× the
+  // median with a healthy absolute count — the motivating "+30 vs +2" case.
+  const magnetVideos = [
+    video("v-1", "Ordinary one", null, { views: 2000, subscribersGained: 2 }),
+    video("v-2", "Ordinary two", null, { views: 3000, subscribersGained: 3 }),
+    video("v-3", "Ordinary three", null, { views: 1000, subscribersGained: 1 }),
+    video("v-4", "The breakout", null, { views: 3000, subscribersGained: 30 }),
+  ]
+
+  it("computes per-1k rates against the median and flags the magnet", () => {
+    const conversion = buildSubscriberConversion([], magnetVideos, 4)
+
+    expect(conversion?.coveredVideoCount).toBe(4)
+    expect(conversion?.medianRatePer1k).toBe(1)
+    // Sorted best rate first.
+    expect(conversion?.rows.map((row) => row.id)).toEqual([
+      "v-4",
+      "v-1",
+      "v-2",
+      "v-3",
+    ])
+    expect(conversion?.rows[0]).toMatchObject({
+      ratePer1k: 10,
+      subscribersGained: 30,
+      outcome: "magnet",
+    })
+    expect(conversion?.magnetCount).toBe(1)
+    expect(
+      conversion?.rows.slice(1).every((row) => row.outcome === "typical"),
+    ).toBe(true)
+  })
+
+  it("withholds the magnet flag below the absolute-count floor", () => {
+    // 9 subs on 300 views is a 30/1k rate but too few people to conclude from.
+    const conversion = buildSubscriberConversion(
+      [],
+      [
+        video("v-1", null, null, { views: 2000, subscribersGained: 2 }),
+        video("v-2", null, null, { views: 3000, subscribersGained: 3 }),
+        video("v-3", null, null, { views: 300, subscribersGained: 9 }),
+      ],
+      3,
+    )
+
+    expect(conversion?.rows.every((row) => row.outcome === "typical")).toBe(true)
+  })
+
+  it("flags a leak only on a meaningful net loss", () => {
+    const conversion = buildSubscriberConversion(
+      [],
+      [
+        video("v-1", null, null, {
+          views: 2000,
+          subscribersGained: 2,
+          subscribersLost: 9, // −7 net
+        }),
+        video("v-2", null, null, {
+          views: 3000,
+          subscribersGained: 3,
+          subscribersLost: 5, // −2 net: everyday churn, not a verdict
+        }),
+        video("v-3", null, null, { views: 1000, subscribersGained: 1 }),
+      ],
+      3,
+    )
+
+    const byId = new Map(conversion?.rows.map((row) => [row.id, row]))
+    expect(byId.get("v-1")).toMatchObject({ netGained: -7, outcome: "leak" })
+    expect(byId.get("v-2")).toMatchObject({ netGained: -2, outcome: "typical" })
+    expect(byId.get("v-3")).toMatchObject({ netGained: null, outcome: "typical" })
+    expect(conversion?.leakCount).toBe(1)
+  })
+
+  it("needs three covered videos, ignoring rows without a snapshot", () => {
+    expect(
+      buildSubscriberConversion(
+        [],
+        [
+          video("v-1", null, null, { views: 2000, subscribersGained: 2 }),
+          video("v-2", null, null, { views: 3000, subscribersGained: 3 }),
+          video("v-3"), // no analytics snapshot
+        ],
+        3,
+      ),
+    ).toBeNull()
+  })
+
+  it("surfaces gain/hook patterns present in every magnet but rare elsewhere", () => {
+    const records: ChannelEventRecord[] = [
+      // The magnet's gains lean on text overlays; one other video has them too.
+      record({
+        analysedVideoId: "v-4",
+        windowKind: "gain",
+        eventType: "on_screen_text_change",
+        narrative: "A payoff overlay lands as retention climbs.",
+        confidence: 0.9,
+      }),
+      record({
+        analysedVideoId: "v-1",
+        windowKind: "gain",
+        eventType: "on_screen_text_change",
+        confidence: 0.7,
+      }),
+      // Scene cuts appear in the magnet AND most others — style, not a lead.
+      record({ analysedVideoId: "v-4", windowKind: "gain", eventType: "scene_cut" }),
+      record({ analysedVideoId: "v-1", windowKind: "gain", eventType: "scene_cut" }),
+      record({ analysedVideoId: "v-2", windowKind: "gain", eventType: "scene_cut" }),
+      // A drop-off in the magnet never becomes a subscriber explanation.
+      record({ analysedVideoId: "v-4", eventType: "pacing_change" }),
+      // A hook pattern unique to the magnet.
+      record({
+        analysedVideoId: "v-4",
+        windowKind: "hook",
+        eventType: "topic_shift",
+        narrative: "The opening promises the result up front.",
+        confidence: 0.8,
+      }),
+    ]
+
+    const conversion = buildSubscriberConversion(records, magnetVideos, 4)
+
+    expect(
+      conversion?.patterns.map((p) => [p.side, p.eventType]),
+    ).toEqual([
+      ["hook", "topic_shift"],
+      ["gain", "on_screen_text_change"],
+    ])
+    const hook = conversion?.patterns[0]
+    expect(hook).toMatchObject({
+      magnetVideoCount: 1,
+      otherVideoCount: 0,
+      otherTotal: 3,
+    })
+    expect(hook?.events).toEqual([
+      {
+        narrative: "The opening promises the result up front.",
+        videoTitle: "The breakout",
+        confidence: 0.8,
+      },
+    ])
+  })
+
+  it("reports no patterns when nothing broke away from the median", () => {
+    const conversion = buildSubscriberConversion(
+      [
+        record({
+          analysedVideoId: "v-1",
+          windowKind: "gain",
+          eventType: "scene_cut",
+        }),
+      ],
+      [
+        video("v-1", null, null, { views: 2000, subscribersGained: 2 }),
+        video("v-2", null, null, { views: 3000, subscribersGained: 3 }),
+        video("v-3", null, null, { views: 1000, subscribersGained: 1 }),
+      ],
+      3,
+    )
+
+    expect(conversion?.magnetCount).toBe(0)
+    expect(conversion?.patterns).toEqual([])
   })
 })
 

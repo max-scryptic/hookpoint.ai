@@ -79,12 +79,17 @@ export interface ChannelKindTrends {
   trends: ChannelTrend[]
 }
 
-// A library video, as the derived views need it: title for attribution and
-// analysis date to order the recurrence strip's columns.
+// A library video, as the derived views need it: title for attribution,
+// analysis date to order the recurrence strip's columns, and the lifetime
+// totals from the analytics snapshot stored at analyse time — null when the
+// video predates the analytics_summary column or a metric wasn't reported.
 export interface ChannelVideo {
   id: string
   title: string | null
   dateAnalysed: string | null
+  views: number | null
+  subscribersGained: number | null
+  subscribersLost: number | null
 }
 
 // Events with no confidence (rows written before the column existed) weigh in
@@ -186,6 +191,78 @@ export interface ChannelRecurrence {
   rows: ChannelRecurrenceRow[]
 }
 
+// --- Subscriber conversion: which uploads turn viewers into subscribers ----
+
+// Rates are per 1,000 views because raw subscriber counts mostly measure
+// reach: +30 subs on 50k views is a worse conversion than +8 on 2k. The
+// stored analytics snapshot supplies views and subscribers from the same
+// moment, so the ratio stays internally consistent even as a snapshot ages.
+//
+// Everything here is correlational by construction: a "magnet" is a video
+// that converted at a multiple of the channel's typical rate, and the
+// patterns block reports which retention-gain / hook event types every magnet
+// had that the rest of the library mostly lacked. Subscribing is also driven
+// by topic, packaging and who the video reached, so the UI phrases these as
+// leads, never causes.
+
+// The section needs a few videos with subscriber data before a median rate —
+// and outliers against it — mean anything.
+export const SUBSCRIBER_MIN_COVERED_VIDEOS = 3
+// A magnet must convert at several times the channel's typical rate AND gain
+// a non-trivial absolute count; three subscribers on a hundred views is a
+// fluke, not a signal.
+const MAGNET_MIN_RATE_RATIO = 3
+const MAGNET_MIN_GAINED = 10
+// Nearly every video sheds a subscriber or two; a leak verdict needs a
+// meaningful net loss.
+const LEAK_MIN_NET_LOSS = 5
+// A "what the magnets did differently" pattern must appear in EVERY magnet
+// and in at most this share of the other covered videos.
+const PATTERN_MAX_OTHER_SHARE = 0.5
+const MAX_SUBSCRIBER_PATTERNS = 3
+const MAX_PATTERN_EVENTS = 2
+
+export type SubscriberOutcome = "magnet" | "typical" | "leak"
+
+export interface SubscriberVideoRow {
+  id: string
+  title: string | null
+  views: number
+  subscribersGained: number
+  subscribersLost: number | null
+  // gained − lost; null when the snapshot never reported losses.
+  netGained: number | null
+  ratePer1k: number
+  outcome: SubscriberOutcome
+}
+
+export type SubscriberPatternSide = Extract<RetentionWindowKind, "gain" | "hook">
+
+// One event type every magnet video had (in its gains or its hook) that the
+// rest of the covered library mostly lacked — the "what was different about
+// that video" evidence, with receipts from the magnets themselves.
+export interface SubscriberPattern {
+  eventType: RetentionWindowEventType
+  side: SubscriberPatternSide
+  magnetVideoCount: number
+  // How many of the covered non-magnet videos also had it, out of otherTotal.
+  otherVideoCount: number
+  otherTotal: number
+  events: ChannelTrendEvent[]
+}
+
+export interface ChannelSubscriberConversion {
+  // Covered videos only (a stored snapshot with views and subscribers),
+  // sorted by conversion rate, best first.
+  rows: SubscriberVideoRow[]
+  medianRatePer1k: number
+  coveredVideoCount: number
+  libraryVideoCount: number
+  magnetCount: number
+  leakCount: number
+  patterns: SubscriberPattern[]
+}
+
 export interface ChannelTrendsData {
   stage: ChannelTrendsStage
   // Distinct videos with a completed event synthesis — the library the
@@ -204,6 +281,8 @@ export interface ChannelTrendsData {
   // those that cleared the insight gates.
   insights: ChannelInsight[]
   recurrence: ChannelRecurrence | null
+  // Null until enough library videos carry an analytics snapshot.
+  subscribers: ChannelSubscriberConversion | null
 }
 
 function kindTrends(
@@ -532,6 +611,161 @@ export function buildChannelRecurrence(
   return { videos: recent, rows }
 }
 
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 1
+    ? sorted[mid]
+    : (sorted[mid - 1] + sorted[mid]) / 2
+}
+
+// The contrast pass behind "what your subscriber magnets did differently":
+// event types present in every magnet's gain or hook windows but rare across
+// the other covered videos. Drop-off events are excluded — something that
+// showed up where viewers left is not a candidate explanation for gained
+// subscribers.
+function subscriberPatterns(
+  records: ChannelEventRecord[],
+  magnetIds: Set<string>,
+  otherIds: Set<string>,
+  videoTitleById: Map<string, string>,
+): SubscriberPattern[] {
+  if (magnetIds.size === 0 || otherIds.size === 0) return []
+
+  interface PatternStats {
+    magnetVideos: Set<string>
+    otherVideos: Set<string>
+    magnetRecords: ChannelEventRecord[]
+  }
+  const byKey = new Map<string, PatternStats>()
+  for (const record of records) {
+    if (record.windowKind !== "gain" && record.windowKind !== "hook") continue
+    const isMagnet = magnetIds.has(record.analysedVideoId)
+    if (!isMagnet && !otherIds.has(record.analysedVideoId)) continue
+    const key = `${record.windowKind} ${record.eventType}`
+    const stats =
+      byKey.get(key) ??
+      ({
+        magnetVideos: new Set(),
+        otherVideos: new Set(),
+        magnetRecords: [],
+      } as PatternStats)
+    if (isMagnet) {
+      stats.magnetVideos.add(record.analysedVideoId)
+      stats.magnetRecords.push(record)
+    } else {
+      stats.otherVideos.add(record.analysedVideoId)
+    }
+    byKey.set(key, stats)
+  }
+
+  return [...byKey.entries()]
+    .filter(
+      ([, stats]) =>
+        stats.magnetVideos.size === magnetIds.size &&
+        stats.otherVideos.size / otherIds.size <= PATTERN_MAX_OTHER_SHARE,
+    )
+    .map(([key, stats]) => {
+      const [side, eventType] = key.split(" ") as [
+        SubscriberPatternSide,
+        RetentionWindowEventType,
+      ]
+      return {
+        eventType,
+        side,
+        magnetVideoCount: stats.magnetVideos.size,
+        otherVideoCount: stats.otherVideos.size,
+        otherTotal: otherIds.size,
+        events: [...stats.magnetRecords]
+          .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))
+          .slice(0, MAX_PATTERN_EVENTS)
+          .map((record) => ({
+            narrative: record.narrative,
+            videoTitle: videoTitleById.get(record.analysedVideoId) ?? null,
+            confidence: record.confidence ?? null,
+          })),
+      }
+    })
+    .sort(
+      (a, b) =>
+        a.otherVideoCount - b.otherVideoCount ||
+        (b.events[0]?.confidence ?? 0) - (a.events[0]?.confidence ?? 0) ||
+        a.eventType.localeCompare(b.eventType),
+    )
+    .slice(0, MAX_SUBSCRIBER_PATTERNS)
+}
+
+// The subscriber conversion view: per-1k-views rates for every covered video,
+// robust outlier flags against the channel median, and the pattern contrast
+// for the magnets. Null until enough videos carry subscriber data.
+export function buildSubscriberConversion(
+  records: ChannelEventRecord[],
+  videos: ChannelVideo[],
+  libraryVideoCount: number,
+): ChannelSubscriberConversion | null {
+  const covered = videos.filter(
+    (video) =>
+      video.views != null && video.views > 0 && video.subscribersGained != null,
+  )
+  if (covered.length < SUBSCRIBER_MIN_COVERED_VIDEOS) return null
+
+  const medianRatePer1k = median(
+    covered.map((video) => (video.subscribersGained! / video.views!) * 1000),
+  )
+
+  const rows: SubscriberVideoRow[] = covered
+    .map((video) => {
+      const views = video.views!
+      const subscribersGained = video.subscribersGained!
+      const subscribersLost = video.subscribersLost
+      const netGained =
+        subscribersLost == null ? null : subscribersGained - subscribersLost
+      const ratePer1k = (subscribersGained / views) * 1000
+      // A net loss outranks a strong gross rate: the channel shrank.
+      const outcome: SubscriberOutcome =
+        netGained != null && netGained <= -LEAK_MIN_NET_LOSS
+          ? "leak"
+          : subscribersGained >= MAGNET_MIN_GAINED &&
+              (medianRatePer1k === 0
+                ? ratePer1k > 0
+                : ratePer1k >= MAGNET_MIN_RATE_RATIO * medianRatePer1k)
+            ? "magnet"
+            : "typical"
+      return {
+        id: video.id,
+        title: video.title,
+        views,
+        subscribersGained,
+        subscribersLost: subscribersLost ?? null,
+        netGained,
+        ratePer1k,
+        outcome,
+      }
+    })
+    .sort((a, b) => b.ratePer1k - a.ratePer1k || a.id.localeCompare(b.id))
+
+  const videoTitleById = new Map<string, string>()
+  for (const video of covered) {
+    if (video.title != null) videoTitleById.set(video.id, video.title)
+  }
+  const magnetIds = new Set(
+    rows.filter((row) => row.outcome === "magnet").map((row) => row.id),
+  )
+  const otherIds = new Set(
+    rows.filter((row) => row.outcome !== "magnet").map((row) => row.id),
+  )
+
+  return {
+    rows,
+    medianRatePer1k,
+    coveredVideoCount: covered.length,
+    libraryVideoCount,
+    magnetCount: magnetIds.size,
+    leakCount: rows.filter((row) => row.outcome === "leak").length,
+    patterns: subscriberPatterns(records, magnetIds, otherIds, videoTitleById),
+  }
+}
+
 // Pure aggregation over already-loaded inputs, split from the loader so tests
 // don't need a database.
 export function buildChannelTrends(params: {
@@ -557,6 +791,7 @@ export function buildChannelTrends(params: {
     signature,
     insights: buildChannelInsights(records, signature, libraryVideoCount),
     recurrence: buildChannelRecurrence(records, videos, signature),
+    subscribers: buildSubscriberConversion(records, videos, libraryVideoCount),
   }
 }
 
@@ -591,8 +826,9 @@ async function loadLibrarySize(
   }
 }
 
-// Title + analysis date for every video the page touches — event attribution
-// and the recurrence strip's chronological columns both read from this.
+// Title, analysis date and analytics snapshot for every video the page
+// touches — event attribution, the recurrence strip's chronological columns
+// and the subscriber conversion view all read from this.
 async function loadVideos(
   supabase: SupabaseClient,
   userId: string,
@@ -602,7 +838,7 @@ async function loadVideos(
 
   const { data, error } = await supabase
     .from("analysed_videos")
-    .select("id, video_title, date_analysed")
+    .select("id, video_title, date_analysed, analytics_summary")
     .eq("user_id", userId)
     .in("id", videoIds)
 
@@ -615,11 +851,19 @@ async function loadVideos(
       id: string
       video_title: string | null
       date_analysed: string | null
+      analytics_summary: {
+        views?: number | null
+        subscribersGained?: number | null
+        subscribersLost?: number | null
+      } | null
     }[]
   ).map((row) => ({
     id: row.id,
     title: row.video_title,
     dateAnalysed: row.date_analysed,
+    views: row.analytics_summary?.views ?? null,
+    subscribersGained: row.analytics_summary?.subscribersGained ?? null,
+    subscribersLost: row.analytics_summary?.subscribersLost ?? null,
   }))
 }
 
