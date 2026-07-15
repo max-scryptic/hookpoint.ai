@@ -50,10 +50,14 @@ export default async function Page() {
 
         <Card className="flex flex-col items-start gap-3 p-6">
           <ClapperboardIcon className="size-5 text-muted-foreground" />
-          <div>
+          <div className="w-full">
             <h2 className="text-base font-semibold">Coming soon</h2>
-            <p className="mt-1 max-w-prose text-sm text-muted-foreground">
-              Video Planner is coming soon to Starter and Pro users. Upload a
+            <p className="mt-1 text-sm text-muted-foreground">
+              Video Planner is coming soon to{" "}
+              <span className="font-semibold text-foreground">
+                Starter and Pro
+              </span>{" "}
+              users. Upload a
               video before it goes live on YouTube, and we&apos;ll combine your
               channel trends, retention events, and more to predict which
               sections are likely to drop or gain retention — so you can make
