@@ -51,8 +51,7 @@ export default async function Page() {
         <Card className="flex flex-col items-start gap-3 p-6">
           <ClapperboardIcon className="size-5 text-muted-foreground" />
           <div className="w-full">
-            <h2 className="text-base font-semibold">Coming soon</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Video Planner is coming soon to{" "}
               <span className="font-semibold text-foreground">
                 Starter and Pro
