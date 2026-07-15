@@ -44,7 +44,11 @@ import {
   formatPublishedAt,
 } from "@/components/video-list"
 import type { AnalysedVideo } from "@/lib/analysed-videos"
-import type { RecentVideo, VideoPrivacyStatus } from "@/lib/youtube/youtube"
+import {
+  netSubscribersGained,
+  type RecentVideo,
+  type VideoPrivacyStatus,
+} from "@/lib/youtube/youtube"
 
 type PrivacyFilter = "all" | VideoPrivacyStatus
 
@@ -146,8 +150,10 @@ function toRow(analysed: AnalysedVideo): AnalysedRow {
       privacyStatus: details?.privacyStatus ?? "private",
       // Served from the analytics summary stored at analyse time; rows from
       // before that column existed stay "—" until a detail-page visit
-      // backfills them.
-      subscribersGained: analysed.analyticsSummary?.subscribersGained ?? null,
+      // backfills them. Net of subscribers lost, so it can be negative.
+      subscribersGained: analysed.analyticsSummary
+        ? netSubscribersGained(analysed.analyticsSummary)
+        : null,
     },
   }
 }
