@@ -213,7 +213,7 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
     {
       value: "hooks",
       label: "Hook patterns",
-      icon: <HookIcon className="text-amber-600 dark:text-amber-500" />,
+      icon: <HookIcon className="text-yellow-500 dark:text-yellow-400" />,
       description:
         "What your openings have in common when viewers stay or slip away.",
       kind: data.hooks,
