@@ -59,18 +59,17 @@ describe("buildChannelTrends", () => {
       eventType: "pacing_change",
       eventCount: 2,
       videoCount: 2,
-      videoTitles: ["How I edit", "My studio tour"],
     })
     expect(data.gains?.trends).toEqual([
       {
         eventType: "scene_cut",
         eventCount: 1,
         videoCount: 1,
-        videoTitles: ["Gear review"],
-        examples: [
+        events: [
           {
             narrative: "A burst of quick cuts holds attention.",
             videoTitle: "Gear review",
+            confidence: 0.7,
           },
         ],
       },
@@ -97,7 +96,7 @@ describe("buildChannelTrends", () => {
     ])
   })
 
-  it("caps examples at the highest-confidence narratives and caps listed titles", () => {
+  it("ranks a trend's individual events by confidence for the drill-down", () => {
     const data = buildChannelTrends({
       records: [
         record({ analysedVideoId: "av-1", narrative: "n-0.5", confidence: 0.5 }),
@@ -117,11 +116,19 @@ describe("buildChannelTrends", () => {
 
     const trend = data.dropOffs?.trends[0]
     expect(trend?.videoCount).toBe(4)
-    expect(trend?.videoTitles).toHaveLength(3)
-    expect(trend?.examples.map((example) => example.narrative)).toEqual([
+    expect(trend?.eventCount).toBe(4)
+    // Every occurrence is carried, highest-confidence first, each attributed.
+    expect(trend?.events.map((event) => event.narrative)).toEqual([
       "n-0.9",
       "n-0.8",
+      "n-0.5",
+      "n-null",
     ])
+    expect(trend?.events[0]).toEqual({
+      narrative: "n-0.9",
+      videoTitle: "Two",
+      confidence: 0.9,
+    })
   })
 
   it("reports an empty library without trends", () => {

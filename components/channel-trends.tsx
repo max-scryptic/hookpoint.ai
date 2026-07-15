@@ -1,5 +1,6 @@
 import Link from "next/link"
 import {
+  ChevronDownIcon,
   LibraryIcon,
   LockIcon,
   SparklesIcon,
@@ -11,6 +12,11 @@ import { EventTypeBadge } from "@/components/event-type-badge"
 import { HookIcon } from "@/components/hook-icon"
 import { buttonVariants } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 import {
   Tabs,
   TabsContent,
@@ -98,34 +104,44 @@ function StageProgress({ data }: { data: ChannelTrendsData }) {
   )
 }
 
-function TrendCard({ trend }: { trend: ChannelTrend }) {
+// One expandable trend row: the event type and its channel-wide counts on the
+// collapsed line, the individual occurrences (ranked by confidence) revealed on
+// expand — the drill-down from "Pacing Change · 6 events" to those 6 events.
+function TrendRow({ trend }: { trend: ChannelTrend }) {
+  const hidden = trend.eventCount - trend.events.length
   return (
-    <div className="flex flex-col gap-2 rounded-lg border p-3 text-sm">
-      <div className="flex flex-wrap items-center gap-2">
+    <Collapsible className="border-b last:border-b-0">
+      <CollapsibleTrigger className="group flex w-full flex-wrap items-center gap-x-3 gap-y-1 py-3 text-left">
+        <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[panel-open]:rotate-180" />
         <EventTypeBadge eventType={trend.eventType} />
-        <span className="text-xs text-muted-foreground">
-          {plural(trend.eventCount, "event")} across{" "}
-          {plural(trend.videoCount, "video")}
+        <span className="text-sm font-medium tabular-nums">
+          {plural(trend.eventCount, "event")}
         </span>
-      </div>
-      {trend.videoTitles.length > 0 && (
-        <p className="text-xs text-muted-foreground">
-          Seen in {trend.videoTitles.join(" · ")}
-          {trend.videoCount > trend.videoTitles.length ? " and more" : ""}
-        </p>
-      )}
-      {trend.examples.map((example) => (
-        <blockquote
-          key={`${example.videoTitle ?? ""}:${example.narrative}`}
-          className="border-l-2 pl-3 text-xs text-muted-foreground italic"
-        >
-          {example.narrative}
-          {example.videoTitle && (
-            <span className="not-italic"> — {example.videoTitle}</span>
-          )}
-        </blockquote>
-      ))}
-    </div>
+        <span className="ml-auto text-xs text-muted-foreground">
+          across {plural(trend.videoCount, "video")}
+        </span>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="flex flex-col gap-2 pb-3 pl-7">
+        {trend.events.map((event, index) => (
+          <div
+            key={`${event.videoTitle ?? ""}:${event.narrative}:${index}`}
+            className="flex flex-col gap-0.5 border-l-2 pl-3 text-xs"
+          >
+            <p className="text-muted-foreground">{event.narrative}</p>
+            {event.videoTitle && (
+              <span className="text-muted-foreground/80">
+                {event.videoTitle}
+              </span>
+            )}
+          </div>
+        ))}
+        {hidden > 0 && (
+          <p className="pl-3 text-xs text-muted-foreground">
+            and {plural(hidden, "more event")}
+          </p>
+        )}
+      </CollapsibleContent>
+    </Collapsible>
   )
 }
 
@@ -139,9 +155,9 @@ function TrendsSection({
   return (
     <section className="flex flex-col gap-3">
       <p className="text-sm text-muted-foreground">{description}</p>
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+      <div className="rounded-lg border px-3">
         {kind.trends.map((trend) => (
-          <TrendCard key={trend.eventType} trend={trend} />
+          <TrendRow key={trend.eventType} trend={trend} />
         ))}
       </div>
     </section>
