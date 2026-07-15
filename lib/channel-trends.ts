@@ -34,15 +34,19 @@ export function channelTrendsStage(
   return "established"
 }
 
-const MAX_TREND_VIDEO_TITLES = 3
-const MAX_TREND_EXAMPLES = 2
+// Enough individual occurrences to fill an expanded drill-down without
+// unbounded rows for a prolific channel's most common event type.
+const MAX_TREND_EVENTS = 25
 // Deeper than the synthesizer's prompt-summary cap: the page reports
 // library-wide counts, so it reads further back before aggregating.
 const MAX_EVENT_ROWS = 2000
 
-export interface ChannelTrendExample {
+// One occurrence of an event type, surfaced when a trend row is expanded so
+// the page can show the events behind the count, ranked by confidence.
+export interface ChannelTrendEvent {
   narrative: string
   videoTitle: string | null
+  confidence: number | null
 }
 
 export interface ChannelTrend {
@@ -51,10 +55,10 @@ export interface ChannelTrend {
   // Distinct videos this event type appeared in for this window kind —
   // recurrence across videos, not raw volume, is what makes a channel trend.
   videoCount: number
-  videoTitles: string[]
-  // Highest-confidence narratives for this event type, with their source
-  // video's title for attribution.
-  examples: ChannelTrendExample[]
+  // The individual occurrences behind eventCount, highest-confidence first,
+  // each attributed to its source video — the drill-down under the row. Capped
+  // at MAX_TREND_EVENTS, so eventCount can exceed events.length.
+  events: ChannelTrendEvent[]
 }
 
 export interface ChannelKindTrends {
@@ -98,16 +102,13 @@ function kindTrends(
         eventType,
         eventCount: group.length,
         videoCount: videoIds.length,
-        videoTitles: videoIds
-          .map((id) => videoTitleById.get(id))
-          .filter((title): title is string => title != null)
-          .slice(0, MAX_TREND_VIDEO_TITLES),
-        examples: [...group]
+        events: [...group]
           .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))
-          .slice(0, MAX_TREND_EXAMPLES)
+          .slice(0, MAX_TREND_EVENTS)
           .map((record) => ({
             narrative: record.narrative,
             videoTitle: videoTitleById.get(record.analysedVideoId) ?? null,
+            confidence: record.confidence ?? null,
           })),
       }
     })
