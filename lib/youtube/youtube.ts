@@ -35,8 +35,10 @@ export interface RecentVideo {
   commentCount: number | null
   durationSeconds: number | null
   privacyStatus: VideoPrivacyStatus
-  // Lifetime subscribers gained from this video's watch page, enriched from the
-  // Analytics API; null when the report failed or the video wasn't covered.
+  // Lifetime NET subscribers gained from this video's watch page (gained minus
+  // lost), enriched from the Analytics API; negative when the video lost the
+  // channel more subscribers than it earned. Null when the report failed or
+  // the video wasn't covered.
   subscribersGained: number | null
 }
 
@@ -310,11 +312,15 @@ async function enrichWithVideoDetails(
   }
 }
 
-// Fetches lifetime subscribers gained for a batch of videos the authenticated
-// user owns, in a single Analytics report (1 quota unit) dimensioned by video.
-// Videos with no recorded subscriber activity are omitted from the report's
-// rows, so callers should treat a missing ID as 0. The video filter accepts up
-// to 500 IDs; callers here never pass more than one page (≤50).
+// Fetches lifetime NET subscribers gained (subscribersGained minus
+// subscribersLost, so it can be negative) for a batch of videos the
+// authenticated user owns, in a single Analytics report (1 quota unit)
+// dimensioned by video. YouTube's subscribersGained metric alone only counts
+// gross gains, which would floor every video at 0 even when it drove more
+// unsubscribes than subscribes. Videos with no recorded subscriber activity
+// are omitted from the report's rows, so callers should treat a missing ID as
+// 0. The video filter accepts up to 500 IDs; callers here never pass more than
+// one page (≤50).
 export async function getSubscribersGainedByVideo(
   accessToken: string,
   videoIds: string[],
@@ -328,7 +334,7 @@ export async function getSubscribersGainedByVideo(
   url.searchParams.set("startDate", "2005-02-01")
   url.searchParams.set("endDate", isoDate(new Date().toISOString())!)
   url.searchParams.set("dimensions", "video")
-  url.searchParams.set("metrics", "subscribersGained")
+  url.searchParams.set("metrics", "subscribersGained,subscribersLost")
   url.searchParams.set("filters", `video==${videoIds.join(",")}`)
   url.searchParams.set("sort", "-subscribersGained")
   url.searchParams.set("maxResults", String(videoIds.length))
@@ -345,11 +351,22 @@ export async function getSubscribersGainedByVideo(
   }
 
   const json = (await response.json()) as {
-    rows?: Array<[string, number]>
+    columnHeaders?: Array<{ name?: string }>
+    rows?: Array<Array<string | number | null>>
   }
 
-  for (const [videoId, subscribersGained] of json.rows ?? []) {
-    gained.set(String(videoId), Number(subscribersGained))
+  // Resolve columns by name so we don't depend on metric ordering.
+  const headers = (json.columnHeaders ?? []).map((header) => header.name ?? "")
+  const videoIndex = headers.indexOf("video")
+  const gainedIndex = headers.indexOf("subscribersGained")
+  const lostIndex = headers.indexOf("subscribersLost")
+  if (videoIndex === -1 || gainedIndex === -1) return gained
+
+  for (const row of json.rows ?? []) {
+    const subscribersGained = Number(row[gainedIndex] ?? 0)
+    const subscribersLost =
+      lostIndex === -1 ? 0 : Number(row[lostIndex] ?? 0)
+    gained.set(String(row[videoIndex]), subscribersGained - subscribersLost)
   }
 
   return gained
@@ -598,11 +615,25 @@ export interface VideoAnalyticsSummary {
   likes: number | null
   comments: number | null
   shares: number | null
+  // Gross counts as YouTube reports them — subscribersGained never goes
+  // negative on its own. Use netSubscribersGained() when displaying a single
+  // "subs gained" figure so a net loss shows as a negative number.
   subscribersGained: number | null
   subscribersLost: number | null
   // Ordered most-viewed first. Empty when YouTube reports no breakdown.
   trafficSources: TrafficSource[]
   fetchedAt: string
+}
+
+// Net subscriber change for a video: gained minus lost, so a video that cost
+// the channel subscribers reports a negative number. Summaries cached before
+// subscribersLost existed (or where YouTube omitted it) treat lost as 0. Null
+// when YouTube reported no gained figure at all.
+export function netSubscribersGained(
+  summary: Pick<VideoAnalyticsSummary, "subscribersGained" | "subscribersLost">,
+): number | null {
+  if (summary.subscribersGained == null) return null
+  return summary.subscribersGained - (summary.subscribersLost ?? 0)
 }
 
 // Runs one YouTube Analytics report for a single owned video and returns the
