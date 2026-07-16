@@ -1474,29 +1474,18 @@ function RetentionTrendsTabs({
   )
 }
 
-function BuildingCard({ data }: { data: ChannelTrendsData }) {
-  const isEmpty = data.stage === "empty"
-
+function BuildingCard() {
   return (
     <Card className="flex flex-col items-start gap-3 p-6">
       <LibraryIcon className="size-5 text-muted-foreground" />
-      <div>
-        <h2 className="text-base font-semibold">
-          {data.stage === "empty"
-            ? (
-                <>
-                  Start your{" "}
-                  <span className="font-semibold text-foreground">
-                    content library
-                  </span>
-                </>
-              )
-            : "Your library is growing"}
-        </h2>
-        <p className="mt-1 max-w-prose text-sm text-muted-foreground">
-          Every deep analysis adds its retention events to a private library of
-          your content. Once{" "}
-          {EARLY_TRENDS_VIDEO_THRESHOLD} videos are in, this page starts
+      <div className="w-full">
+        <p className="max-w-prose text-sm text-muted-foreground">
+          Every deep analysis adds its retention events to a private{" "}
+          <span className="font-semibold text-foreground">Content Library</span>{" "}
+          of your content.
+        </p>
+        <p className="mt-3 max-w-prose text-sm text-muted-foreground">
+          Once {EARLY_TRENDS_VIDEO_THRESHOLD} videos are in, this page starts
           surfacing the patterns that repeat across your channel - what loses
           viewers, what holds them, and how your hooks behave.
         </p>
@@ -1623,7 +1612,7 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
           )}
         </>
       ) : (
-        <BuildingCard data={data} />
+        <BuildingCard />
       )}
     </div>
   )
