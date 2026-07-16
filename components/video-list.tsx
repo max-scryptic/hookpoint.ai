@@ -294,19 +294,12 @@ export function VideoList({
               <TableCell className="hidden px-4 py-3 align-top text-right text-sm tabular-nums text-muted-foreground lg:table-cell">
                 {formatCount(video.commentCount)}
               </TableCell>
-              <TableCell className="hidden px-4 py-3 align-top sm:table-cell">
-                {isAnalysed ? (
-                  <AnalysedBadge />
-                ) : (
-                  <span className="text-sm text-muted-foreground">N/A</span>
-                )}
-              </TableCell>
               {showAnalysedColumn && (
                 <TableCell className="hidden px-4 py-3 align-top sm:table-cell">
                   {isAnalysed ? (
                     <AnalysedBadge />
                   ) : (
-                    <span className="text-sm text-muted-foreground">—</span>
+                    <span className="text-sm text-muted-foreground">N/A</span>
                   )}
                 </TableCell>
               )}
