@@ -441,9 +441,6 @@ export function AnalysedVideoBrowser({
                 <TableHead className="px-4 py-3 text-accent-foreground">
                   Video
                 </TableHead>
-                <TableHead className="hidden px-4 py-3 text-accent-foreground sm:table-cell">
-                  Raw file uploaded
-                </TableHead>
                 <TableHead className="hidden px-4 py-3 text-accent-foreground md:table-cell">
                   Visibility
                 </TableHead>
@@ -461,6 +458,9 @@ export function AnalysedVideoBrowser({
                 </TableHead>
                 <TableHead className="hidden px-4 py-3 text-accent-foreground sm:table-cell">
                   Analysed
+                </TableHead>
+                <TableHead className="hidden px-4 py-3 text-accent-foreground sm:table-cell">
+                  Raw file uploaded
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -521,13 +521,6 @@ export function AnalysedVideoBrowser({
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell className="hidden px-4 py-3 align-top sm:table-cell">
-                    {rawFileUploaded ? (
-                      <RawFileBadge />
-                    ) : (
-                      <span className="text-sm text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
                   <TableCell className="hidden px-4 py-3 align-top md:table-cell">
                     {privacyKnown ? (
                       <VisibilityCell status={video.privacyStatus} />
@@ -549,6 +542,13 @@ export function AnalysedVideoBrowser({
                   </TableCell>
                   <TableCell className="hidden px-4 py-3 align-top text-sm text-muted-foreground sm:table-cell">
                     {formatAnalysedAt(dateAnalysed)}
+                  </TableCell>
+                  <TableCell className="hidden px-4 py-3 align-top sm:table-cell">
+                    {rawFileUploaded ? (
+                      <RawFileBadge />
+                    ) : (
+                      <span className="text-sm text-muted-foreground">—</span>
+                    )}
                   </TableCell>
                 </TableRow>
                 )
