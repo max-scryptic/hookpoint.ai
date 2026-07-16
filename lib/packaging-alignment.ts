@@ -9,6 +9,7 @@
 // promise); retention, pacing and watch-through belong to the separate
 // retention analysis, so the hook is judged only on what it communicates here.
 
+import type { PackagingTaxonomy } from "@/lib/packaging-taxonomy"
 import {
   transcriptForSegment,
   type TranscriptCue,
@@ -50,6 +51,10 @@ export interface PackagingAlignment {
   // breakdown existed; the UI falls back to these when `components` is absent.
   whatWorked?: string[]
   whatCouldBeBetter?: string[]
+  // The categorical read of the same packaging (lib/packaging-taxonomy.ts),
+  // generated alongside new alignments and backfilled onto older ones the
+  // next time their detail page is opened. Absent until then.
+  taxonomy?: PackagingTaxonomy
   model: string
   generatedAt: string
 }

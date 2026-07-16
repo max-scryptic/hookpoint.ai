@@ -103,6 +103,18 @@ export function getRetentionWindowAiCallConcurrency(): number {
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 5
 }
 
+// Maximum retention windows that receive the paid/decode-heavy deep path.
+// Every window remains in light analysis. Set to 0 for no cap (useful for
+// controlled evaluation); the default 6 normally covers both hook windows
+// (the initial hook and hook delivery), the most important drops and at least
+// the strongest gain.
+export function getDeepAnalysisMaxWindows(): number {
+  const raw = process.env.DEEP_ANALYSIS_MAX_WINDOWS
+  const parsed = raw != null ? Number(raw) : NaN
+  if (Number.isFinite(parsed) && parsed === 0) return Number.POSITIVE_INFINITY
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 6
+}
+
 // OpenAI model used to describe a window's harvested snapshots (vision input).
 // Defaults to the same model already used for transcript pacing analysis.
 export function getSnapshotAnalysisModel(): string {

@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
   Avatar,
@@ -22,7 +23,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { createClient } from "@/lib/supabase/client"
-import { ChevronsUpDownIcon, SparklesIcon, BellIcon, Settings2Icon, LogOutIcon } from "lucide-react"
+import { ChevronsUpDownIcon, SparklesIcon, Settings2Icon, LogOutIcon } from "lucide-react"
 
 export function NavUser({
   showUpgradeToPro,
@@ -100,21 +101,14 @@ export function NavUser({
             ) : null}
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <BellIcon
-                />
-                Notifications
-              </DropdownMenuItem>
               <DropdownMenuItem render={<a href="/settings" />}>
-                <Settings2Icon
-                />
+                <Settings2Icon />
                 Settings
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout}>
-              <LogOutIcon
-              />
+              <LogOutIcon />
               Log out
             </DropdownMenuItem>
           </DropdownMenuContent>

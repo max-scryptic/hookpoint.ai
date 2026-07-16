@@ -12,7 +12,7 @@ import {
 import type { PersistedRetentionWindow } from "@/lib/retention-windows"
 
 describe("buildChunkTimestamps", () => {
-  it("splits the hook's 0-30s window into 5s chunks, per spec", () => {
+  it("splits a 0-30s window into 5s chunks, per spec", () => {
     expect(buildChunkTimestamps(0, 30)).toEqual([0, 5, 10, 15, 20, 25, 30])
   })
 
@@ -37,10 +37,10 @@ describe("buildChunkTimestamps", () => {
   })
 
   it("overlapping windows share their interior gridlines in the shared span", () => {
-    const hook = buildChunkTimestamps(0, 30)
+    const opening = buildChunkTimestamps(0, 30)
     const dropOff = buildChunkTimestamps(7.375, 47.375)
-    const shared = hook.filter((t) => dropOff.includes(t))
-    // Everything the hook samples from 10s on is shared with the drop-off,
+    const shared = opening.filter((t) => dropOff.includes(t))
+    // Everything the opening samples from 10s on is shared with the drop-off,
     // so the extraction frame cache grabs each of those seconds once.
     expect(shared).toEqual([10, 15, 20, 25, 30])
   })
@@ -296,7 +296,7 @@ function makeWindow(
     isAbnormallySteep: null,
     outOfRange: false,
     analysisFromSeconds: 0,
-    analysisToSeconds: 30,
+    analysisToSeconds: 10,
     ...overrides,
   }
 }
@@ -316,17 +316,42 @@ describe("createPendingRetentionWindowAudio", () => {
     expect(audio[0]).toMatchObject({
       retention_window_id: "rw-1",
       from_seconds: 0,
-      to_seconds: 30,
+      to_seconds: 10,
       status: "pending",
     })
   })
 
-  it("skips windows with no analysis window (e.g. hook-delivery)", async () => {
+  it("harvests hook delivery over its own 10-30s window", async () => {
     const { supabase, upserts } = makeFakeSupabase()
     const window = makeWindow({
       id: "rw-2",
       windowIndex: 1,
       windowKey: "hook-delivery",
+      label: "Hook Delivery",
+      fromSeconds: 10,
+      toSeconds: 30,
+      analysisFromSeconds: 10,
+      analysisToSeconds: 30,
+    })
+
+    await createPendingRetentionWindowAudio(supabase, "user-1", "av-1", [
+      window,
+    ])
+
+    const audio = upserts["retention_window_audio"]
+    expect(audio).toHaveLength(1)
+    expect(audio[0]).toMatchObject({
+      retention_window_id: "rw-2",
+      from_seconds: 10,
+      to_seconds: 30,
+      status: "pending",
+    })
+  })
+
+  it("skips windows with no analysis window", async () => {
+    const { supabase, upserts } = makeFakeSupabase()
+    const window = makeWindow({
+      id: "rw-3",
       analysisFromSeconds: null,
       analysisToSeconds: null,
     })

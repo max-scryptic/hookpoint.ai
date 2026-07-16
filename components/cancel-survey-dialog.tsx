@@ -151,6 +151,7 @@ export function CancelSurveyDialog({
         <DialogFooter>
           <Button
             variant="outline"
+            type="button"
             disabled={submitting}
             onClick={() => onOpenChange(false)}
           >
@@ -158,6 +159,8 @@ export function CancelSurveyDialog({
           </Button>
           <Button
             variant="destructive"
+            type="button"
+            className="min-w-36"
             disabled={!canSubmit || submitting}
             aria-busy={submitting}
             onClick={handleSubmit}

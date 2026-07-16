@@ -37,6 +37,8 @@ const SCENE_DETECTION_SCALE_WIDTH = 320
 // and the adjacent-frame dedup in event synthesis are the second and third
 // lines of defence for whatever still slips through.
 const SCENE_CUT_SCORE_THRESHOLD = 0.5
+const MOTION_SAMPLE_FPS = 2
+const MOTION_BUCKET_SECONDS = 5
 
 // freezedetect: noise tolerance (dB, more negative = stricter) and the
 // minimum span before a static frame counts as a "freeze" worth flagging,
@@ -64,6 +66,14 @@ export interface SceneCueScanResult {
   cuts: SceneCut[]
   freezes: SceneSpan[]
   blacks: SceneSpan[]
+  motionBuckets?: MotionBucket[]
+}
+
+export interface MotionBucket {
+  fromSeconds: number
+  toSeconds: number
+  // signalstats YDIF normalised from ffmpeg's native 0..255 range.
+  score: number
 }
 
 // `-copyts` keeps every reported timestamp (pts_time, freeze_start,
@@ -77,13 +87,11 @@ export function buildSceneCueScanArgs(
   fromSeconds: number,
   toSeconds: number,
 ): string[] {
-  const filters = [
-    `scale='min(${SCENE_DETECTION_SCALE_WIDTH},iw)':-2`,
-    `freezedetect=n=${FREEZE_NOISE_THRESHOLD_DB}dB:d=${FREEZE_MIN_DURATION_SECONDS}`,
-    `blackdetect=d=${BLACK_MIN_DURATION_SECONDS}:pic_th=${BLACK_PICTURE_THRESHOLD}:pix_th=${BLACK_PIXEL_THRESHOLD}`,
-    `select='gt(scene,${SCENE_CUT_SCORE_THRESHOLD})'`,
-    "showinfo",
-  ].join(",")
+  const filterGraph = [
+    `[0:v]scale='min(${SCENE_DETECTION_SCALE_WIDTH},iw)':-2,split=2[scene][motion]`,
+    `[scene]freezedetect=n=${FREEZE_NOISE_THRESHOLD_DB}dB:d=${FREEZE_MIN_DURATION_SECONDS},blackdetect=d=${BLACK_MIN_DURATION_SECONDS}:pic_th=${BLACK_PICTURE_THRESHOLD}:pix_th=${BLACK_PIXEL_THRESHOLD},select='gt(scene,${SCENE_CUT_SCORE_THRESHOLD})',showinfo[scene_out]`,
+    `[motion]fps=${MOTION_SAMPLE_FPS},signalstats,metadata=print:key=lavfi.signalstats.YDIF[motion_out]`,
+  ].join(";")
 
   return [
     "-ss",
@@ -94,8 +102,12 @@ export function buildSceneCueScanArgs(
     String(Math.max(0, toSeconds - fromSeconds)),
     "-an",
     "-copyts",
-    "-vf",
-    filters,
+    "-filter_complex",
+    filterGraph,
+    "-map",
+    "[scene_out]",
+    "-map",
+    "[motion_out]",
     "-f",
     "null",
     "-",
@@ -119,6 +131,7 @@ export function buildSceneCueScanArgs(
 export function parseSceneCues(
   stderr: string,
   windowToSeconds: number,
+  windowFromSeconds = 0,
 ): SceneCueScanResult {
   const cuts = [
     ...stderr.matchAll(/Parsed_showinfo_\d+ @ [^\]]+\].*?pts_time:([\d.]+)/g),
@@ -148,7 +161,35 @@ export function parseSceneCues(
     toSeconds: Number(match[2]),
   }))
 
-  return { cuts, freezes, blacks }
+  const samples = [
+    ...stderr.matchAll(
+      /frame:\d+[^\n]*pts_time:([-\d.]+)[\s\S]*?lavfi\.signalstats\.YDIF=(\d+(?:\.\d+)?)/g,
+    ),
+  ].map((match) => ({
+    atSeconds: Number(match[1]),
+    score: Math.min(1, Math.max(0, Number(match[2]) / 255)),
+  }))
+  const grouped = new Map<number, number[]>()
+  for (const sample of samples) {
+    const bucketStart = Math.max(
+      windowFromSeconds,
+      Math.floor(sample.atSeconds / MOTION_BUCKET_SECONDS) *
+        MOTION_BUCKET_SECONDS,
+    )
+    const scores = grouped.get(bucketStart)
+    if (scores) scores.push(sample.score)
+    else grouped.set(bucketStart, [sample.score])
+  }
+  const motionBuckets = [...grouped.entries()]
+    .map(([fromSeconds, scores]) => ({
+      fromSeconds,
+      toSeconds: Math.min(windowToSeconds, fromSeconds + MOTION_BUCKET_SECONDS),
+      score: scores.reduce((sum, score) => sum + score, 0) / scores.length,
+    }))
+    .filter((bucket) => bucket.toSeconds > bucket.fromSeconds)
+    .sort((a, b) => a.fromSeconds - b.fromSeconds)
+
+  return { cuts, freezes, blacks, motionBuckets }
 }
 
 // Unlike a thumbnail/audio grab (seek to one point, pull a little data), a
@@ -192,5 +233,5 @@ export async function scanVideoSceneCues(
     buildSceneCueScanArgs(sourceUrl, fromSeconds, toSeconds),
     { timeoutMs: computeSceneCueScanTimeoutMs(fromSeconds, toSeconds) },
   )
-  return parseSceneCues(stderr, toSeconds)
+  return parseSceneCues(stderr, toSeconds, fromSeconds)
 }

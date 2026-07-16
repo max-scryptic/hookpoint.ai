@@ -25,6 +25,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import { getAnalysedVideoTranscriptById } from "@/lib/analysed-videos"
 import { runWithConcurrency } from "@/lib/concurrency"
 import {
   addLlmCallCost,
@@ -34,7 +35,10 @@ import {
   type LlmCallCost,
   type ResponsesUsage,
 } from "@/lib/llm-cost"
-import { measureAudioClipStats } from "@/lib/media/video-extraction"
+import {
+  measureAudioSignalBuckets,
+  type AudioSignalBucket,
+} from "@/lib/media/video-extraction"
 import { recordRetentionWindowCost } from "@/lib/retention-window-costs"
 import {
   claimRetentionWindowAudioPendingAnalysis,
@@ -52,7 +56,12 @@ import {
   getSnapshotAnalysisModel,
 } from "@/lib/retention-window-media-config"
 import { getRetentionWindowTranscripts } from "@/lib/retention-window-transcripts"
+import { getRetentionWindows, type PersistedRetentionWindow } from "@/lib/retention-windows"
 import type { StorageProvider } from "@/lib/storage"
+import {
+  transcriptForSegment,
+  type TranscriptCue,
+} from "@/lib/youtube/youtube"
 
 // Field names deliberately match the shape the product side already sketched
 // out for these two schemas (scene/face_visible/... and
@@ -95,7 +104,14 @@ interface AudioAnalysisModelOutput {
   notable_events: string[]
 }
 
-export interface AudioAnalysis extends AudioAnalysisModelOutput {
+export interface AudioAnalysis {
+  music: boolean | null
+  music_description: string | null
+  speakers: number | null
+  tone: string | null
+  energy: "low" | "moderate" | "high" | null
+  notable_events: string[]
+  model_analysis_status?: "ready" | "skipped"
   // Words per minute across the window's transcript (already stored in
   // retention_window_transcripts) — derived, not asked of the audio model,
   // since it's exact where a model's estimate would be a guess.
@@ -104,6 +120,40 @@ export interface AudioAnalysis extends AudioAnalysisModelOutput {
   average_volume: number | null
   // ffmpeg silencedetect coverage, 0-1; null if measurement failed.
   silence: number | null
+  // Deterministic acoustic measurements on the source video's absolute
+  // timeline. Optional keeps reads of pre-feature JSON rows compatible.
+  signal_timeline?: Array<{
+    from_seconds: number
+    to_seconds: number
+    average_volume: number | null
+    silence: number
+  }>
+}
+
+export interface AudioEscalationSignals {
+  averageVolumeDeltaDb: number | null
+  silenceDelta: number | null
+  speechRateDelta: number | null
+}
+
+export function shouldRunPaidAudioAnalysis(
+  kind: PersistedRetentionWindow["kind"],
+  signals: AudioEscalationSignals,
+): boolean {
+  if (kind === "hook" || kind === "gain") return true
+  // No acoustic comparison means uncertainty, not permission to skip.
+  if (
+    signals.averageVolumeDeltaDb == null ||
+    signals.silenceDelta == null
+  ) {
+    return true
+  }
+  return (
+    Math.abs(signals.averageVolumeDeltaDb) >= 3 ||
+    Math.abs(signals.silenceDelta) >= 0.1 ||
+    (signals.speechRateDelta != null &&
+      Math.abs(signals.speechRateDelta) >= 30)
+  )
 }
 
 // Split out from the fetch orchestration below so tests can inject a fake
@@ -188,14 +238,20 @@ export async function analyzeRetentionWindowMedia(
 
   const snapshotModel = getSnapshotAnalysisModel()
   const expiry = getAnalysisMediaReadUrlExpirySeconds()
-  const transcriptsByWindow =
+  const [windowTranscripts, videoTranscript, retentionWindows] =
     pendingAudio.length > 0
-      ? new Map(
-          (
-            await getRetentionWindowTranscripts(admin, userId, analysedVideoId)
-          ).map((transcript) => [transcript.retentionWindowId, transcript.transcript]),
-        )
-      : new Map<string, string>()
+      ? await Promise.all([
+          getRetentionWindowTranscripts(admin, userId, analysedVideoId),
+          getAnalysedVideoTranscriptById(admin, userId, analysedVideoId).catch(
+            () => [],
+          ),
+          getRetentionWindows(admin, userId, analysedVideoId),
+        ])
+      : [[], [], []]
+  const transcriptsByWindow = new Map(
+    windowTranscripts.map((item) => [item.retentionWindowId, item.transcript]),
+  )
+  const windowById = new Map(retentionWindows.map((window) => [window.id, window]))
 
   const concurrency = getRetentionWindowAiCallConcurrency()
 
@@ -267,25 +323,29 @@ export async function analyzeRetentionWindowMedia(
   const audioModel = getAudioAnalysisModel()
   await runWithConcurrency(pendingAudio, concurrency, async (audio) => {
     try {
-      const { analysis, cost } = await analyzeOneAudioClip(
+      const { analysis, cost, usedPaidModel } = await analyzeOneAudioClip(
         audio,
         transcriptsByWindow.get(audio.retentionWindowId) ?? null,
+        videoTranscript,
+        windowById.get(audio.retentionWindowId) ?? null,
         deps,
       )
       await updateRetentionWindowAudioAnalysis(admin, userId, audio.id, {
         status: "ready",
         analysis,
-        model: audioModel,
+        model: usedPaidModel ? audioModel : "deterministic-only",
       })
-      await recordRetentionWindowCost(admin, {
-        userId,
-        analysedVideoId,
-        retentionWindowId: audio.retentionWindowId,
-        step: "audio",
-        cost,
-      }).catch((error) =>
-        console.error("Failed to record audio analysis cost", error),
-      )
+      if (cost) {
+        await recordRetentionWindowCost(admin, {
+          userId,
+          analysedVideoId,
+          retentionWindowId: audio.retentionWindowId,
+          step: "audio",
+          cost,
+        }).catch((error) =>
+          console.error("Failed to record audio analysis cost", error),
+        )
+      }
     } catch (error) {
       console.error("Failed to analyse retention window audio", error)
       await updateRetentionWindowAudioAnalysis(admin, userId, audio.id, {
@@ -316,50 +376,178 @@ export function computeSpeechRate(
   return Math.round(countWords(transcript) / minutes)
 }
 
+function summarizeSignalRange(
+  buckets: AudioSignalBucket[],
+  fromSeconds: number,
+  toSeconds: number,
+): { averageVolumeDb: number | null; silence: number | null } {
+  let covered = 0
+  let silence = 0
+  let volume = 0
+  let volumeCovered = 0
+  for (const bucket of buckets) {
+    const overlap = Math.max(
+      0,
+      Math.min(bucket.toSeconds, toSeconds) -
+        Math.max(bucket.fromSeconds, fromSeconds),
+    )
+    if (overlap <= 0) continue
+    covered += overlap
+    silence += bucket.silenceRatio * overlap
+    if (bucket.averageVolumeDb != null) {
+      volume += bucket.averageVolumeDb * overlap
+      volumeCovered += overlap
+    }
+  }
+  return {
+    averageVolumeDb: volumeCovered > 0 ? volume / volumeCovered : null,
+    silence: covered > 0 ? silence / covered : null,
+  }
+}
+
+function audioEscalationSignals(
+  window: PersistedRetentionWindow,
+  buckets: AudioSignalBucket[],
+  transcript: TranscriptCue[],
+): AudioEscalationSignals {
+  const targetFrom = window.fromSeconds
+  const targetTo = window.toSeconds
+  const desiredControl = Math.min(30, Math.max(10, targetTo - targetFrom))
+  const controlFrom = Math.max(
+    window.analysisFromSeconds ?? targetFrom,
+    targetFrom - desiredControl,
+  )
+  const control = summarizeSignalRange(buckets, controlFrom, targetFrom)
+  const target = summarizeSignalRange(buckets, targetFrom, targetTo)
+  const controlSpeech = computeSpeechRate(
+    transcriptForSegment(transcript, controlFrom, targetFrom),
+    controlFrom,
+    targetFrom,
+  )
+  const targetSpeech = computeSpeechRate(
+    transcriptForSegment(transcript, targetFrom, targetTo),
+    targetFrom,
+    targetTo,
+  )
+  const subtract = (a: number | null, b: number | null) =>
+    a != null && b != null ? a - b : null
+  return {
+    averageVolumeDeltaDb: subtract(
+      target.averageVolumeDb,
+      control.averageVolumeDb,
+    ),
+    silenceDelta: subtract(target.silence, control.silence),
+    speechRateDelta: subtract(targetSpeech, controlSpeech),
+  }
+}
+
 async function analyzeOneAudioClip(
   audio: RetentionWindowAudioClip,
   transcript: string | null,
+  videoTranscript: TranscriptCue[],
+  window: PersistedRetentionWindow | null,
   deps: RetentionWindowMediaAnalysisDeps,
-): Promise<{ analysis: AudioAnalysis; cost: LlmCallCost }> {
+): Promise<{
+  analysis: AudioAnalysis
+  cost: LlmCallCost | null
+  usedPaidModel: boolean
+}> {
   const url = await deps.mediaStorage.createSignedReadUrl(
     audio.storagePath as string,
     getAnalysisMediaReadUrlExpirySeconds(),
   )
-  const response = await fetch(url)
-  if (!response.ok) {
-    throw new Error(
-      `Failed to fetch audio clip for analysis (${response.status})`,
-    )
-  }
-  const bytes = Buffer.from(await response.arrayBuffer())
-
-  const [modelResult, stats] = await Promise.all([
-    deps.analyzer.analyzeAudio({
+  const signalBuckets = await measureAudioSignalBuckets(
+    url,
+    audio.toSeconds - audio.fromSeconds,
+  ).catch(() => [])
+  const absoluteBuckets = signalBuckets.map((bucket) => ({
+    ...bucket,
+    fromSeconds: audio.fromSeconds + bucket.fromSeconds,
+    toSeconds: audio.fromSeconds + bucket.toSeconds,
+  }))
+  const signals = window
+    ? audioEscalationSignals(window, absoluteBuckets, videoTranscript)
+    : {
+        averageVolumeDeltaDb: null,
+        silenceDelta: null,
+        speechRateDelta: null,
+      }
+  const usedPaidModel = window
+    ? shouldRunPaidAudioAnalysis(window.kind, signals)
+    : true
+  let modelResult: AnalyzeAudioResult | null = null
+  if (usedPaidModel) {
+    const response = await fetch(url)
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch audio clip for analysis (${response.status})`,
+      )
+    }
+    const bytes = Buffer.from(await response.arrayBuffer())
+    modelResult = await deps.analyzer.analyzeAudio({
       base64: bytes.toString("base64"),
-      // Matches buildRetentionAudioObjectPath's "audio.mp3" extraction
-      // output. OpenAI's input_audio only accepts wav/mp3, not aac.
       format: "mp3",
-    }),
-    // Loudness/silence are measured deterministically via ffmpeg, so a
-    // measurement failure shouldn't fail the whole row — just leave those two
-    // fields null and keep the model-derived ones.
-    measureAudioClipStats(url, audio.toSeconds - audio.fromSeconds).catch(
-      () => ({ averageVolumeDb: null, silenceRatio: null }),
-    ),
-  ])
+    })
+  }
+
+  const coveredSeconds = signalBuckets.reduce(
+    (sum, bucket) => sum + (bucket.toSeconds - bucket.fromSeconds),
+    0,
+  )
+  const silenceSeconds = signalBuckets.reduce(
+    (sum, bucket) =>
+      sum +
+      bucket.silenceRatio * (bucket.toSeconds - bucket.fromSeconds),
+    0,
+  )
+  const volumeBuckets = signalBuckets.filter(
+    (bucket) => bucket.averageVolumeDb != null,
+  )
+  const volumeSeconds = volumeBuckets.reduce(
+    (sum, bucket) => sum + (bucket.toSeconds - bucket.fromSeconds),
+    0,
+  )
+  // Average linear amplitude, then return to dB. Arithmetic averaging dB
+  // values would over-weight quiet buckets because dB is logarithmic.
+  const averageAmplitude =
+    volumeSeconds > 0
+      ? volumeBuckets.reduce(
+          (sum, bucket) =>
+            sum +
+            Math.pow(10, (bucket.averageVolumeDb as number) / 20) *
+              (bucket.toSeconds - bucket.fromSeconds),
+          0,
+        ) / volumeSeconds
+      : null
 
   return {
     analysis: {
-      ...modelResult.analysis,
+      music: modelResult?.analysis.music ?? null,
+      music_description: modelResult?.analysis.music_description ?? null,
+      speakers: modelResult?.analysis.speakers ?? null,
+      tone: modelResult?.analysis.tone ?? null,
+      energy: modelResult?.analysis.energy ?? null,
+      notable_events: modelResult?.analysis.notable_events ?? [],
+      model_analysis_status: usedPaidModel ? "ready" : "skipped",
       speech_rate: computeSpeechRate(
         transcript,
         audio.fromSeconds,
         audio.toSeconds,
       ),
-      average_volume: stats.averageVolumeDb,
-      silence: stats.silenceRatio,
+      average_volume:
+        averageAmplitude != null && averageAmplitude > 0
+          ? 20 * Math.log10(averageAmplitude)
+          : null,
+      silence: coveredSeconds > 0 ? silenceSeconds / coveredSeconds : null,
+      signal_timeline: absoluteBuckets.map((bucket) => ({
+        from_seconds: bucket.fromSeconds,
+        to_seconds: bucket.toSeconds,
+        average_volume: bucket.averageVolumeDb,
+        silence: bucket.silenceRatio,
+      })),
     },
-    cost: modelResult.cost,
+    cost: modelResult?.cost ?? null,
+    usedPaidModel,
   }
 }
 

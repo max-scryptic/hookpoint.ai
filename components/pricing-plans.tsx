@@ -15,7 +15,7 @@ import {
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { CreditsTooltip } from "@/components/credits-tooltip"
+import { CreditsTooltip, InfoTooltip } from "@/components/credits-tooltip"
 
 // The pricing comparison: three plan cards side by side with a monthly/annual
 // billing toggle that reprices all three at once. Pay buttons call
@@ -23,6 +23,7 @@ import { CreditsTooltip } from "@/components/credits-tooltip"
 // selection is a no-op placeholder.
 export function PricingPlans({
   currentPlanId = "free",
+  currentBillingPeriod = null,
   cancelAtPeriodEnd = false,
   loadingPlanId = null,
   resumingPlan = false,
@@ -30,6 +31,7 @@ export function PricingPlans({
   onResumePlan,
 }: {
   currentPlanId?: PlanId
+  currentBillingPeriod?: BillingPeriod | null
   cancelAtPeriodEnd?: boolean
   loadingPlanId?: PlanId | null
   resumingPlan?: boolean
@@ -48,17 +50,21 @@ export function PricingPlans({
       />
       <div className="grid gap-4 lg:grid-cols-3">
         {PLANS.map((plan) => {
-          const isCurrent = plan.id === currentPlanId
+          const isCurrentTier = plan.id === currentPlanId
+          const isCurrent =
+            isCurrentTier &&
+            (plan.id === "free" || period === currentBillingPeriod)
           // The current paid plan, while scheduled to cancel, offers a way back:
           // resuming clears the cancellation instead of showing a dead "Current
           // plan" label.
-          const isResumable = isCurrent && cancelAtPeriodEnd
+          const isResumable = isCurrentTier && cancelAtPeriodEnd
           return (
             <PlanCard
               key={plan.id}
               plan={plan}
               period={period}
               isCurrent={isCurrent}
+              isCurrentTier={isCurrentTier}
               isResumable={isResumable}
               isScheduledDowngrade={plan.id === "free" && cancelAtPeriodEnd}
               isLoading={
@@ -153,6 +159,7 @@ function PlanCard({
   plan,
   period,
   isCurrent,
+  isCurrentTier,
   isResumable,
   isScheduledDowngrade,
   isLoading,
@@ -162,6 +169,7 @@ function PlanCard({
   plan: Plan
   period: BillingPeriod
   isCurrent: boolean
+  isCurrentTier: boolean
   isResumable: boolean
   isScheduledDowngrade: boolean
   isLoading: boolean
@@ -232,6 +240,8 @@ function PlanCard({
           "Resume plan"
         ) : isCurrent ? (
           "Current plan"
+        ) : isCurrentTier ? (
+          `Switch to ${period === "annual" ? "annual" : "monthly"}`
         ) : isScheduledDowngrade ? (
           "Cancellation scheduled"
         ) : isFree ? (
@@ -247,6 +257,8 @@ function PlanCard({
             <CheckIcon className="mt-0.5 size-4 shrink-0 text-primary" />
             {feature.credits ? (
               <CreditsTooltip>{feature.label}</CreditsTooltip>
+            ) : feature.tooltip ? (
+              <InfoTooltip content={feature.tooltip}>{feature.label}</InfoTooltip>
             ) : (
               <span>{feature.label}</span>
             )}

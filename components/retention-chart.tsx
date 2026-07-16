@@ -229,7 +229,7 @@ export function RetentionChart({
   }
 
   return (
-    <div className="rounded-xl border bg-card p-4">
+    <div className="relative rounded-xl border bg-card p-4">
       <svg
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         className="w-full"

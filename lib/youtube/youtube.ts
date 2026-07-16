@@ -35,6 +35,11 @@ export interface RecentVideo {
   commentCount: number | null
   durationSeconds: number | null
   privacyStatus: VideoPrivacyStatus
+  // Lifetime NET subscribers gained from this video's watch page (gained minus
+  // lost), enriched from the Analytics API; negative when the video lost the
+  // channel more subscribers than it earned. Null when the report failed or
+  // the video wasn't covered.
+  subscribersGained: number | null
 }
 
 export interface RecentVideosPage {
@@ -239,13 +244,19 @@ export async function getRecentVideos(
         commentCount: null,
         durationSeconds: null,
         privacyStatus: "private",
+        subscribersGained: null,
       }
     })
     .filter((video): video is RecentVideo => video !== null)
 
   // search.list omits statistics, privacy status and duration, so enrich the
-  // results with a single videos.list call keyed on the IDs we just collected.
-  await enrichWithVideoDetails(accessToken, videos)
+  // results with a single videos.list call keyed on the IDs we just collected,
+  // plus one Analytics report for per-video subscribers gained. Both are
+  // independent and best-effort, so they run in parallel.
+  await Promise.all([
+    enrichWithVideoDetails(accessToken, videos),
+    enrichWithSubscribersGained(accessToken, videos),
+  ])
 
   return {
     videos,
@@ -314,6 +325,90 @@ async function enrichWithVideoDetails(
     if (privacy === "public" || privacy === "unlisted" || privacy === "private") {
       video.privacyStatus = privacy
     }
+  }
+}
+
+// Fetches lifetime NET subscribers gained (subscribersGained minus
+// subscribersLost, so it can be negative) for a batch of videos the
+// authenticated user owns, in a single Analytics report (1 quota unit)
+// dimensioned by video. YouTube's subscribersGained metric alone only counts
+// gross gains, which would floor every video at 0 even when it drove more
+// unsubscribes than subscribes. Videos with no recorded subscriber activity
+// are omitted from the report's rows, so callers should treat a missing ID as
+// 0. The video filter accepts up to 500 IDs; callers here never pass more than
+// one page (≤50).
+export async function getSubscribersGainedByVideo(
+  accessToken: string,
+  videoIds: string[],
+): Promise<Map<string, number>> {
+  const gained = new Map<string, number>()
+  if (videoIds.length === 0) return gained
+
+  const url = new URL(`${ANALYTICS_API}/reports`)
+  url.searchParams.set("ids", "channel==MINE")
+  // Full channel lifetime — the earliest date YouTube accepts.
+  url.searchParams.set("startDate", "2005-02-01")
+  url.searchParams.set("endDate", isoDate(new Date().toISOString())!)
+  url.searchParams.set("dimensions", "video")
+  url.searchParams.set("metrics", "subscribersGained,subscribersLost")
+  url.searchParams.set("filters", `video==${videoIds.join(",")}`)
+  url.searchParams.set("sort", "-subscribersGained")
+  url.searchParams.set("maxResults", String(videoIds.length))
+
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: "no-store",
+  })
+
+  if (!response.ok) {
+    throw new Error(
+      `YouTube Analytics API error (${response.status}): ${await response.text()}`,
+    )
+  }
+
+  const json = (await response.json()) as {
+    columnHeaders?: Array<{ name?: string }>
+    rows?: Array<Array<string | number | null>>
+  }
+
+  // Resolve columns by name so we don't depend on metric ordering.
+  const headers = (json.columnHeaders ?? []).map((header) => header.name ?? "")
+  const videoIndex = headers.indexOf("video")
+  const gainedIndex = headers.indexOf("subscribersGained")
+  const lostIndex = headers.indexOf("subscribersLost")
+  if (videoIndex === -1 || gainedIndex === -1) return gained
+
+  for (const row of json.rows ?? []) {
+    const subscribersGained = Number(row[gainedIndex] ?? 0)
+    const subscribersLost =
+      lostIndex === -1 ? 0 : Number(row[lostIndex] ?? 0)
+    gained.set(String(row[videoIndex]), subscribersGained - subscribersLost)
+  }
+
+  return gained
+}
+
+// Mutates the passed videos in place, filling in subscribersGained from one
+// batched Analytics report. Failures are swallowed (the column just shows no
+// data) so an Analytics outage never hides the uploads list itself.
+async function enrichWithSubscribersGained(
+  accessToken: string,
+  videos: RecentVideo[],
+): Promise<void> {
+  if (videos.length === 0) return
+
+  try {
+    const gained = await getSubscribersGainedByVideo(
+      accessToken,
+      videos.map((video) => video.id),
+    )
+    for (const video of videos) {
+      // The report omits videos with no subscriber activity, so once it has
+      // succeeded a missing row genuinely means zero.
+      video.subscribersGained = gained.get(video.id) ?? 0
+    }
+  } catch (error) {
+    console.error("Failed to enrich recent videos with subscribers gained", error)
   }
 }
 
@@ -536,11 +631,25 @@ export interface VideoAnalyticsSummary {
   likes: number | null
   comments: number | null
   shares: number | null
+  // Gross counts as YouTube reports them — subscribersGained never goes
+  // negative on its own. Use netSubscribersGained() when displaying a single
+  // "subs gained" figure so a net loss shows as a negative number.
   subscribersGained: number | null
   subscribersLost: number | null
   // Ordered most-viewed first. Empty when YouTube reports no breakdown.
   trafficSources: TrafficSource[]
   fetchedAt: string
+}
+
+// Net subscriber change for a video: gained minus lost, so a video that cost
+// the channel subscribers reports a negative number. Summaries cached before
+// subscribersLost existed (or where YouTube omitted it) treat lost as 0. Null
+// when YouTube reported no gained figure at all.
+export function netSubscribersGained(
+  summary: Pick<VideoAnalyticsSummary, "subscribersGained" | "subscribersLost">,
+): number | null {
+  if (summary.subscribersGained == null) return null
+  return summary.subscribersGained - (summary.subscribersLost ?? 0)
 }
 
 // Runs one YouTube Analytics report for a single owned video and returns the
@@ -936,31 +1045,85 @@ export function detectDropOffs(
     .sort((a, b) => a.fromTimestampSeconds - b.fromTimestampSeconds)
 }
 
-// The mirror image of detectDropOffs: finds the segments where retention rises
-// fastest. A rising curve means viewers re-watched or skipped back to a moment,
-// so these are the points that held or grew the audience. Walks consecutive
-// points, keeps gains larger than `minGain` absolute watch-ratio, and returns
-// the largest `limit` of them, ordered from earliest to latest for display.
+interface DirectionalRetentionEpisode {
+  fromPoint: RetentionPoint
+  toPoint: RetentionPoint
+  totalChange: number
+  stepCount: number
+}
+
+const RETENTION_COMPARISON_EPSILON = 1e-9
+
+// Groups adjacent curve steps moving in the same direction into one episode.
+// YouTube's retention curve is sampled, so one real audience reaction often
+// arrives as two or three consecutive steps rather than one perfectly aligned
+// point. `minStepChange` prevents ordinary sub-threshold curve noise from
+// chaining into a long false episode; the caller applies its threshold to the
+// episode's total after grouping.
+function buildDirectionalRetentionEpisodes(
+  points: RetentionPoint[],
+  direction: "drop" | "gain",
+  minStepChange: number,
+  ignoreBeforeSeconds = 0,
+): DirectionalRetentionEpisode[] {
+  const episodes: DirectionalRetentionEpisode[] = []
+  let current: DirectionalRetentionEpisode | null = null
+
+  for (let i = 1; i < points.length; i++) {
+    const prev = points[i - 1]
+    const next = points[i]
+    const signedChange = next.watchRatio - prev.watchRatio
+    const change = direction === "gain" ? signedChange : -signedChange
+    const eligible =
+      prev.timestampSeconds >= ignoreBeforeSeconds &&
+      change > minStepChange + RETENTION_COMPARISON_EPSILON
+
+    if (!eligible) {
+      if (current) episodes.push(current)
+      current = null
+      continue
+    }
+
+    if (current && current.toPoint === prev) {
+      current.toPoint = next
+      current.totalChange += change
+      current.stepCount += 1
+    } else {
+      if (current) episodes.push(current)
+      current = {
+        fromPoint: prev,
+        toPoint: next,
+        totalChange: change,
+        stepCount: 1,
+      }
+    }
+  }
+
+  if (current) episodes.push(current)
+  return episodes
+}
+
+// Finds meaningful rising episodes. A gain spread across adjacent Analytics
+// samples is returned once with its full range and cumulative magnitude,
+// instead of being reported as several competing insights for the same viewer
+// reaction. Results are ranked by total gain, capped, then displayed in time
+// order. A gain can mean positive replay, confusion, or navigation; downstream
+// analysis is responsible for distinguishing those hypotheses.
 export function detectRetentionGains(
   points: RetentionPoint[],
   { minGain = 0.03, limit = 5 }: { minGain?: number; limit?: number } = {},
 ): RetentionGain[] {
-  const gains: RetentionGain[] = []
-
-  for (let i = 1; i < points.length; i++) {
-    const prev = points[i - 1]
-    const curr = points[i]
-    const delta = curr.watchRatio - prev.watchRatio
-    if (delta >= minGain) {
-      gains.push({
-        fromTimestampSeconds: prev.timestampSeconds,
-        toTimestampSeconds: curr.timestampSeconds,
-        watchRatioGain: delta,
-      })
-    }
-  }
-
-  return gains
+  const minStepChange = minGain / 2
+  return buildDirectionalRetentionEpisodes(points, "gain", minStepChange)
+    .filter(
+      (episode) =>
+        episode.totalChange + RETENTION_COMPARISON_EPSILON >= minGain,
+    )
+    .map((episode) => ({
+      fromTimestampSeconds: episode.fromPoint.timestampSeconds,
+      toTimestampSeconds: episode.toPoint.timestampSeconds,
+      watchRatioGain: episode.totalChange,
+    }))
     .sort((a, b) => b.watchRatioGain - a.watchRatioGain)
     .slice(0, limit)
     .sort((a, b) => a.fromTimestampSeconds - b.fromTimestampSeconds)
@@ -1123,9 +1286,11 @@ function median(values: number[]): number {
     : sorted[mid]
 }
 
-// Finds the drop-offs that are actually worth a creator's attention, as opposed
-// to the natural decay every video shows. A point is surfaced when EITHER:
-//   • its drop is meaningfully steeper than the video's own median step drop
+// Finds the drop-off episodes that are actually worth a creator's attention,
+// as opposed to the natural decay every video shows. Adjacent meaningful
+// downward steps are grouped before qualification, so one audience reaction
+// produces one analysis window. An episode is surfaced when EITHER:
+//   • its average step is meaningfully steeper than the median step drop
 //     (steepness >= steepnessFactor), OR
 //   • viewers were underperforming similar videos there (relativePerformance
 //     below `underperformBelow`) while still losing a non-trivial share.
@@ -1161,39 +1326,45 @@ export function detectSignificantDropOffs(
   }
   const baseline = median(stepDrops) || minDrop
 
-  const drops: SignificantDropOff[] = []
-  for (let i = 1; i < points.length; i++) {
-    const prev = points[i - 1]
-    const curr = points[i]
-    // Skip any window that begins inside the opening already covered by The
-    // Hook windows. We gate on the window's start (`prev`) rather than its end
-    // (`curr`): a step that straddles the boundary (e.g. 25s -> 35s) would
-    // otherwise be kept and stored as a drop-off starting at 25s, overlapping
-    // the hook section.
-    if (prev.timestampSeconds < ignoreBeforeSeconds) continue
-    const delta = prev.watchRatio - curr.watchRatio
-    if (delta < minDrop) continue
+  const drops = buildDirectionalRetentionEpisodes(
+    points,
+    "drop",
+    minDrop / 2,
+    ignoreBeforeSeconds,
+  ).flatMap((episode): SignificantDropOff[] => {
+    if (episode.totalChange + RETENTION_COMPARISON_EPSILON < minDrop) return []
 
-    const steepness = delta / baseline
-    const relativePerformance = curr.relativePerformance
-    const isAbnormallySteep = steepness >= steepnessFactor
+    // Compare the episode's average step with the curve's normal step. Using
+    // total change directly would make any long, ordinary decline look
+    // abnormally steep merely because it covered more samples.
+    const steepness = episode.totalChange / episode.stepCount / baseline
+    const relativePerformance = episode.toPoint.relativePerformance
+    const isAbnormallySteep =
+      steepness + RETENTION_COMPARISON_EPSILON >= steepnessFactor
     const underperforms =
       relativePerformance != null && relativePerformance < underperformBelow
 
-    if (!isAbnormallySteep && !underperforms) continue
+    if (!isAbnormallySteep && !underperforms) return []
 
-    drops.push({
-      fromTimestampSeconds: prev.timestampSeconds,
-      toTimestampSeconds: curr.timestampSeconds,
-      watchRatioDrop: delta,
+    return [{
+      fromTimestampSeconds: episode.fromPoint.timestampSeconds,
+      toTimestampSeconds: episode.toPoint.timestampSeconds,
+      watchRatioDrop: episode.totalChange,
       relativePerformance,
       steepness,
       isAbnormallySteep,
-    })
-  }
+    }]
+  })
 
   return drops
-    .sort((a, b) => b.watchRatioDrop - a.watchRatioDrop)
+    // Total impact matters, but an equally sized abrupt loss is more
+    // diagnostic than a gentler one. This ranking only selects the top N;
+    // presentation remains chronological below.
+    .sort(
+      (a, b) =>
+        b.watchRatioDrop * Math.max(1, b.steepness) -
+        a.watchRatioDrop * Math.max(1, a.steepness),
+    )
     .slice(0, limit)
     .sort((a, b) => a.fromTimestampSeconds - b.fromTimestampSeconds)
 }

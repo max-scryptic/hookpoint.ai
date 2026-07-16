@@ -85,6 +85,7 @@ import {
   type SourceFile,
 } from "@/lib/source-files/source-files"
 import type { StorageProvider } from "@/lib/storage"
+import { generateSparseVideoFeatureBaseline } from "@/lib/video-feature-baseline"
 import {
   getPendingRetentionWindowSceneCueScans,
   replaceRetentionWindowSceneCues,
@@ -255,6 +256,16 @@ export function sliceSceneCues(
     ),
     freezes: clipSpans(cues.freezes),
     blacks: clipSpans(cues.blacks),
+    motionBuckets: (cues.motionBuckets ?? [])
+      .filter(
+        (bucket) =>
+          bucket.toSeconds > fromSeconds && bucket.fromSeconds < toSeconds,
+      )
+      .map((bucket) => ({
+        ...bucket,
+        fromSeconds: Math.max(fromSeconds, bucket.fromSeconds),
+        toSeconds: Math.min(toSeconds, bucket.toSeconds),
+      })),
   }
 }
 
@@ -331,6 +342,23 @@ export async function extractPendingRetentionWindowMedia(
       concurrency,
       (span) => scanMergedSpan(admin, sourceFile, source, span, deps),
     )
+
+    // Sample eight seconds per minute across the full video to establish the
+    // creator's actual editing/motion norm. This is deterministic ffmpeg work
+    // against the 360p proxy and makes no model call. It runs once per video
+    // and is best-effort so baseline failure cannot strand window extraction.
+    const durationSeconds =
+      sourceFile.youtubeDurationSeconds ?? sourceFile.uploadedDurationSeconds
+    if (durationSeconds && durationSeconds > 0) {
+      await generateSparseVideoFeatureBaseline({
+        supabase: admin,
+        userId: sourceFile.userId,
+        analysedVideoId: sourceFile.analysedVideoId,
+        durationSeconds,
+        scan: (fromSeconds, toSeconds) =>
+          deps.sceneCueScanner.scan(source, fromSeconds, toSeconds),
+      }).catch((error) => console.error("Failed to generate sparse video baseline", error))
+    }
 
     // Re-read pending snapshots after the scan loop above: it may have just
     // created fresh rows (derived from cues) for whichever windows it scanned,
@@ -516,7 +544,12 @@ async function scanMergedSpan(
   }
 
   for (const scan of span.scans) {
-    let cues: SceneCueScanResult = { cuts: [], freezes: [], blacks: [] }
+    let cues: SceneCueScanResult = {
+      cuts: [],
+      freezes: [],
+      blacks: [],
+      motionBuckets: [],
+    }
     let scanError = spanError
 
     if (spanCues) {
@@ -559,7 +592,9 @@ async function scanMergedSpan(
         admin,
         sourceFile.userId,
         scan.id,
-        scanError ? { status: "failed", error: scanError } : { status: "ready" },
+        scanError
+          ? { status: "failed", error: scanError }
+          : { status: "ready", motionBuckets: cues.motionBuckets ?? [] },
       )
     } catch (error) {
       console.error(

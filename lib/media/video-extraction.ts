@@ -95,6 +95,137 @@ export interface AudioSignalStats {
   silenceRatio: number | null
 }
 
+export interface AudioSignalBucket {
+  fromSeconds: number
+  toSeconds: number
+  averageVolumeDb: number | null
+  silenceRatio: number
+}
+
+export const AUDIO_SIGNAL_BUCKET_SECONDS = 5
+
+// One decode produces one RMS metadata frame per bucket plus exact silence
+// spans. Resampling first makes asetnsamples' bucket length independent of the
+// source file's sample rate.
+export function buildAudioSignalBucketsArgs(
+  sourceUrl: string,
+  bucketSeconds: number = AUDIO_SIGNAL_BUCKET_SECONDS,
+): string[] {
+  const sampleRate = 16_000
+  const samplesPerBucket = Math.max(1, Math.round(sampleRate * bucketSeconds))
+  return [
+    "-i",
+    sourceUrl,
+    "-af",
+    [
+      `aresample=${sampleRate}`,
+      "silencedetect=noise=-35dB:d=0.3",
+      `asetnsamples=n=${samplesPerBucket}:p=0`,
+      "astats=metadata=1:reset=1",
+      "ametadata=print:key=lavfi.astats.Overall.RMS_level",
+    ].join(","),
+    "-f",
+    "null",
+    "-",
+  ]
+}
+
+function overlapSeconds(
+  fromA: number,
+  toA: number,
+  fromB: number,
+  toB: number,
+): number {
+  return Math.max(0, Math.min(toA, toB) - Math.max(fromA, fromB))
+}
+
+export function parseAudioSignalBuckets(
+  stderr: string,
+  durationSeconds: number,
+  bucketSeconds: number = AUDIO_SIGNAL_BUCKET_SECONDS,
+): AudioSignalBucket[] {
+  if (durationSeconds <= 0 || bucketSeconds <= 0) return []
+
+  const levels = [
+    ...stderr.matchAll(
+      /frame:\d+[^\n]*pts_time:([-\d.]+)[\s\S]*?lavfi\.astats\.Overall\.RMS_level=(-?inf|-?\d+(?:\.\d+)?)/g,
+    ),
+  ].map((match) => ({
+    fromSeconds: Math.max(0, Number(match[1])),
+    averageVolumeDb:
+      match[2].toLowerCase().includes("inf") ? null : Number(match[2]),
+  }))
+
+  const silenceStarts = [
+    ...stderr.matchAll(/silence_start:\s*(-?\d+(?:\.\d+)?)/g),
+  ].map((match) => Number(match[1]))
+  const silenceEnds = [
+    ...stderr.matchAll(/silence_end:\s*(-?\d+(?:\.\d+)?)/g),
+  ].map((match) => Number(match[1]))
+  const silenceSpans = silenceStarts.map((fromSeconds, index) => ({
+    fromSeconds: Math.max(0, fromSeconds),
+    toSeconds: Math.min(
+      durationSeconds,
+      Math.max(fromSeconds, silenceEnds[index] ?? durationSeconds),
+    ),
+  }))
+
+  // A fully silent input may omit parseable RMS metadata. Keep a canonical
+  // grid so downstream code sees silence instead of treating the track as
+  // missing altogether.
+  const starts =
+    levels.length > 0
+      ? levels
+      : Array.from(
+          { length: Math.ceil(durationSeconds / bucketSeconds) },
+          (_, index) => ({
+            fromSeconds: index * bucketSeconds,
+            averageVolumeDb: null,
+          }),
+        )
+
+  return starts
+    .filter((sample) => sample.fromSeconds < durationSeconds)
+    .map((sample) => {
+      const toSeconds = Math.min(
+        durationSeconds,
+        sample.fromSeconds + bucketSeconds,
+      )
+      const duration = toSeconds - sample.fromSeconds
+      const silenceSeconds = silenceSpans.reduce(
+        (sum, span) =>
+          sum +
+          overlapSeconds(
+            sample.fromSeconds,
+            toSeconds,
+            span.fromSeconds,
+            span.toSeconds,
+          ),
+        0,
+      )
+      return {
+        fromSeconds: sample.fromSeconds,
+        toSeconds,
+        averageVolumeDb: sample.averageVolumeDb,
+        silenceRatio:
+          duration > 0
+            ? Math.min(1, Math.max(0, silenceSeconds / duration))
+            : 0,
+      }
+    })
+}
+
+export async function measureAudioSignalBuckets(
+  sourceUrl: string,
+  durationSeconds: number,
+  bucketSeconds: number = AUDIO_SIGNAL_BUCKET_SECONDS,
+): Promise<AudioSignalBucket[]> {
+  const { stderr } = await runFfmpegCapturingOutput(
+    buildAudioSignalBucketsArgs(sourceUrl, bucketSeconds),
+  )
+  return parseAudioSignalBuckets(stderr, durationSeconds, bucketSeconds)
+}
+
 // These are deterministic acoustic measurements, not something worth asking a
 // model to estimate by ear (an LLM "listening" to a clip has no way to
 // actually measure dB or silence duration — it would just be fabricating a

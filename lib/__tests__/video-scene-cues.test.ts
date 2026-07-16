@@ -15,6 +15,7 @@ import {
 function cue(overrides: Partial<VideoSceneCue>): VideoSceneCue {
   return {
     id: "cue-1",
+    retentionWindowId: "rw-1",
     kind: "cut",
     fromSeconds: 0,
     toSeconds: 0,
@@ -185,7 +186,7 @@ function makeWindow(
     isAbnormallySteep: null,
     outOfRange: false,
     analysisFromSeconds: 0,
-    analysisToSeconds: 30,
+    analysisToSeconds: 10,
     ...overrides,
   }
 }
@@ -203,7 +204,7 @@ describe("createPendingRetentionWindowSceneCueScans", () => {
     expect(rows[0]).toMatchObject({
       retention_window_id: "rw-1",
       from_seconds: 0,
-      to_seconds: 30,
+      to_seconds: 10,
       status: "pending",
     })
   })
@@ -279,7 +280,7 @@ describe("updateRetentionWindowSceneCueScanStatus", () => {
     expect(updates).toContainEqual({
       table: "retention_window_scene_cue_scans",
       id: "scan-1",
-      payload: { status: "ready", error: null },
+      payload: { status: "ready", error: null, motion_buckets: [] },
     })
   })
 

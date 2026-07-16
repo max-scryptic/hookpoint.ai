@@ -16,8 +16,10 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import { selectDeepAnalysisWindows } from "@/lib/deep-analysis-window-selection"
 import type { SceneCut, SceneCueScanResult } from "@/lib/media/scene-detection"
 import type { PersistedRetentionWindow } from "@/lib/retention-windows"
+import { getDeepAnalysisMaxWindows } from "@/lib/retention-window-media-config"
 
 export const CHUNK_STEP_SECONDS = 5
 
@@ -128,8 +130,8 @@ function mapAudioRow(row: AudioRow): RetentionWindowAudioClip {
 //
 // Snapping the interior samples to a *global* phase rather than stepping from
 // fromSeconds is deliberate: when two overlapping windows both fall back to
-// this grid (a hook at 0-30 and a drop-off at 7.4-47.4, say), a from-relative
-// grid would land them on interleaved-but-distinct seconds (…,20,25 vs
+// this grid (hook delivery at 10-30 and a drop-off at 7.4-47.4, say), a
+// from-relative grid would land them on interleaved-but-distinct seconds (…,20,25 vs
 // …,22.4,27.4) so nothing is shared, whereas a global grid puts both on the
 // same 10,15,20,25 gridlines across their shared span. That lets the
 // extraction frame cache (keyed on the exact timestamp, see
@@ -178,8 +180,13 @@ export async function createPendingRetentionWindowAudio(
   windows: PersistedRetentionWindow[],
 ): Promise<void> {
   const audioRows: Record<string, unknown>[] = []
+  const selectedWindows = selectDeepAnalysisWindows(
+    windows,
+    getDeepAnalysisMaxWindows(),
+  )
+  const selectedIds = new Set(selectedWindows.map((window) => window.id))
 
-  for (const window of windows) {
+  for (const window of selectedWindows) {
     if (
       window.analysisFromSeconds == null ||
       window.analysisToSeconds == null
@@ -211,7 +218,7 @@ export async function createPendingRetentionWindowAudio(
 
   // A window that lost its analysis window entirely also loses its audio row.
   const windowIdsWithoutAnalysisWindow = windows
-    .filter((w) => w.analysisFromSeconds == null || w.analysisToSeconds == null)
+    .filter((window) => !selectedIds.has(window.id))
     .map((w) => w.id)
   if (windowIdsWithoutAnalysisWindow.length > 0) {
     const { error } = await supabase

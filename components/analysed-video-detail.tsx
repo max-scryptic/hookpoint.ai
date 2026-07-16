@@ -11,18 +11,25 @@ import {
   MinusIcon,
   PackageIcon,
   QuoteIcon,
+  SparklesIcon,
   TrendingDownIcon,
   TrendingUpIcon,
   TypeIcon,
 } from "lucide-react"
 
 import { HookIcon } from "@/components/hook-icon"
+import type { DeepAnalysisEvidence } from "@/lib/deep-analysis-evidence"
+import type { RankedRetentionWindowEvent } from "@/lib/deep-analysis-insight-ranking"
+import type { DeepAnalysisRecommendation } from "@/lib/deep-analysis-recommendations"
 import {
   RetentionChart,
   type RetentionChartInsight,
 } from "@/components/retention-chart"
 import { RecommendationCallout } from "@/components/recommendation-callout"
-import { SourceVideoThumbnail } from "@/components/source-video-thumbnail"
+import {
+  SourceVideoPlayer,
+  SourceVideoThumbnail,
+} from "@/components/source-video-thumbnail"
 import { TryCallout } from "@/components/try-callout"
 import {
   Tabs,
@@ -50,6 +57,7 @@ import type {
 import { computeMetadataHygiene } from "@/lib/metadata-hygiene"
 import type { RetentionWindow } from "@/lib/retention-windows"
 import {
+  netSubscribersGained,
   transcriptForSegment,
   transcriptSegmentEdges,
   type RetentionPoint,
@@ -110,14 +118,61 @@ function rowHighlightClass(
   return `${base} transition-colors ${isHighlighted ? ROW_HIGHLIGHT[kind] : ""}`
 }
 
-// Nudge the highlighted row into view when a chart marker is clicked, so the
-// linked item is visible even if it sits lower in a long list. `block: "nearest"`
-// keeps the scroll minimal — it only moves if the row is off-screen.
+// How the page glides to a highlighted row when a chart marker is clicked. The
+// native smooth `scrollIntoView` felt sudden, so we run our own eased animation
+// that is a touch slower and gentler. The row lands centered in the viewport so
+// the linked item reads as the focus of attention rather than being pinned to
+// the top of the screen.
+const HIGHLIGHT_SCROLL_DURATION_MS = 900
+
+// Standard ease-in-out cubic: slow start, quick middle, slow settle — the shape
+// that reads as a deliberate glide rather than a snap.
+function easeInOutCubic(t: number): number {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
+}
+
+// Smoothly scrolls the window so `element` is vertically centered in the
+// viewport. Skips the animation entirely for users who prefer reduced motion,
+// and no-ops when the row is already about where it would land so a second
+// click doesn't jitter the page.
+function smoothScrollToElement(element: HTMLElement) {
+  requestAnimationFrame(() => {
+    const startY = window.scrollY
+    const rect = element.getBoundingClientRect()
+    const centerOffset = (window.innerHeight - rect.height) / 2
+    const targetY = Math.max(0, rect.top + startY - centerOffset)
+    const distance = targetY - startY
+    if (Math.abs(distance) < 8) return
+
+    const prefersReducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches
+    if (prefersReducedMotion) {
+      window.scrollTo(0, targetY)
+      return
+    }
+
+    let startTime: number | null = null
+    const step = (timestamp: number) => {
+      if (startTime === null) startTime = timestamp
+      const progress = Math.min(
+        1,
+        (timestamp - startTime) / HIGHLIGHT_SCROLL_DURATION_MS,
+      )
+      window.scrollTo(0, startY + distance * easeInOutCubic(progress))
+      if (progress < 1) requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
+  })
+}
+
+// Glide the highlighted row into view when a chart marker is clicked, so the
+// linked item is visible even if it sits lower in a long list.
 function useHighlightScroll(highlightedId?: string | null) {
   const ref = useRef<HTMLLIElement>(null)
   useEffect(() => {
-    if (highlightedId) {
-      ref.current?.scrollIntoView({ block: "nearest", behavior: "smooth" })
+    if (highlightedId && ref.current) {
+      smoothScrollToElement(ref.current)
     }
   }, [highlightedId])
   return ref
@@ -131,11 +186,15 @@ function RetentionWindows({
   windows,
   transcript,
   attribution,
+  deepInsights,
+  recommendations,
   highlightedId,
 }: {
   windows: RetentionWindow[]
   transcript: TranscriptCue[]
   attribution: Map<number, RetentionMomentAttribution>
+  deepInsights: Map<number, RankedRetentionWindowEvent>
+  recommendations: Map<number, DeepAnalysisRecommendation>
   highlightedId?: string | null
 }) {
   const highlightedRef = useHighlightScroll(highlightedId)
@@ -164,41 +223,63 @@ function RetentionWindows({
               "flex flex-col gap-2 p-4",
             )}
           >
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-3">
-                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
-                  {index + 1}
-                </span>
-                <span className="font-mono text-sm">
-                  {formatTimestamp(window.fromSeconds)} –{" "}
-                  {formatTimestamp(window.toSeconds)}
-                </span>
-                <ScriptSegmentTooltip
-                  transcript={transcript}
-                  fromSeconds={window.fromSeconds}
-                  toSeconds={window.toSeconds}
-                />
-              </div>
-              {!window.outOfRange && (
-                <span
-                  className={`text-sm font-medium ${
-                    window.delta > 0
-                      ? "text-emerald-600 dark:text-emerald-400"
-                      : "text-destructive"
-                  }`}
-                >
-                  {window.delta > 0 ? "+" : "−"}
-                  {(Math.abs(window.delta) * 100).toFixed(1)}%
-                </span>
-              )}
-            </div>
-
             {window.outOfRange ? (
-              <p className="text-sm text-muted-foreground">
-                This video is too short to reach this window.
-              </p>
+              <>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-3">
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                      {index + 1}
+                    </span>
+                    <span className="font-mono text-sm">
+                      {formatTimestamp(window.fromSeconds)} –{" "}
+                      {formatTimestamp(window.toSeconds)}
+                    </span>
+                    <ScriptSegmentTooltip
+                      transcript={transcript}
+                      fromSeconds={window.fromSeconds}
+                      toSeconds={window.toSeconds}
+                    />
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  This video is too short to reach this window.
+                </p>
+              </>
             ) : (
-              <AttributionNote attribution={attribution.get(window.windowIndex)} />
+              <WindowFeedback
+                attribution={attribution.get(window.windowIndex)}
+                insight={deepInsights.get(window.windowIndex)}
+                recommendation={recommendations.get(window.windowIndex)}
+                header={(tabs) => (
+                  <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                        {index + 1}
+                      </span>
+                      <span className="font-mono text-sm">
+                        {formatTimestamp(window.fromSeconds)} –{" "}
+                        {formatTimestamp(window.toSeconds)}
+                      </span>
+                      <ScriptSegmentTooltip
+                        transcript={transcript}
+                        fromSeconds={window.fromSeconds}
+                        toSeconds={window.toSeconds}
+                      />
+                      {tabs}
+                    </div>
+                    <span
+                      className={`text-sm font-medium ${
+                        window.delta > 0
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : "text-destructive"
+                      }`}
+                    >
+                      {window.delta > 0 ? "+" : "−"}
+                      {(Math.abs(window.delta) * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                )}
+              />
             )}
           </li>
         )
@@ -306,13 +387,201 @@ function AttributionNote({
   if (!attribution || attribution.explanation === "") return null
   return (
     <div className="pl-10">
+      <ScriptFeedbackBody attribution={attribution} />
+    </div>
+  )
+}
+
+// The script attribution's inner content, without the row's left indent, so it
+// can be reused both flat (AttributionNote) and inside the tabbed layout below.
+function ScriptFeedbackBody({
+  attribution,
+}: {
+  attribution: RetentionMomentAttribution
+}) {
+  return (
+    <>
       <p className="text-sm">{attribution.explanation}</p>
       {attribution.tip && (
         <div className="mt-2">
           <TryCallout>{attribution.tip}</TryCallout>
         </div>
       )}
+    </>
+  )
+}
+
+function MultimodalInsight({
+  insight,
+}: {
+  insight: RankedRetentionWindowEvent | undefined
+}) {
+  if (!insight) return null
+  return (
+    <div className="ml-10">
+      <MultimodalInsightBody insight={insight} />
     </div>
+  )
+}
+
+function MultimodalInsightBody({
+  insight,
+}: {
+  insight: RankedRetentionWindowEvent
+}) {
+  return (
+    <div className="flex gap-2 rounded-lg border bg-muted/30 p-3 text-sm">
+      <SparklesIcon className="mt-0.5 size-4 shrink-0 text-violet-500" />
+      <div>
+        <p>{insight.narrative}</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Multimodal evidence · {insight.evidenceQuality} confidence
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function ActionableRecommendation({
+  recommendation,
+}: {
+  recommendation: DeepAnalysisRecommendation | undefined
+}) {
+  if (!recommendation) return null
+  return (
+    <div className="ml-10">
+      <ActionableRecommendationBody recommendation={recommendation} />
+    </div>
+  )
+}
+
+function ActionableRecommendationBody({
+  recommendation,
+}: {
+  recommendation: DeepAnalysisRecommendation
+}) {
+  return (
+    <>
+      <TryCallout>{recommendation.action}</TryCallout>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {recommendation.expectedPurpose}
+      </p>
+    </>
+  )
+}
+
+// The deep (multimodal) insight plus its actionable recommendation, formatted
+// identically to ScriptFeedbackBody so every tab reads the same: the white
+// evidence line, then the blue "Try:" tip. No bordered box, evidence-source
+// caption or expected-purpose subtext — those would make the deep tab look
+// unlike the Script tab it sits beside.
+function DeepFeedbackBody({
+  insight,
+  recommendation,
+}: {
+  insight: RankedRetentionWindowEvent
+  recommendation: DeepAnalysisRecommendation | undefined
+}) {
+  return (
+    <>
+      <p className="text-sm">{insight.narrative}</p>
+      {recommendation && (
+        <div className="mt-2">
+          <TryCallout>{recommendation.action}</TryCallout>
+        </div>
+      )}
+    </>
+  )
+}
+
+// The tab label for a window's deep insight, named after whatever the insight is
+// actually about (editing, pacing, audio, ...) so it reads as a distinct kind
+// of feedback next to the transcript-only "Script" tab. Falls back to the
+// evidence source when the event type is unspecific.
+function deepFeedbackTabLabel(insight: RankedRetentionWindowEvent): string {
+  switch (insight.eventType) {
+    case "scene_cut":
+      return "Editing"
+    case "visual_change":
+      return "Visual"
+    case "on_screen_text_change":
+      return "On-screen text"
+    case "pacing_change":
+      return "Pacing"
+    case "audio_change":
+      return "Audio"
+    case "topic_shift":
+      return "Structure"
+    default:
+      break
+  }
+  switch (insight.primaryEvidence) {
+    case "editing":
+      return "Editing"
+    case "visual":
+      return "Visual"
+    case "audio":
+      return "Audio"
+    case "transcript":
+      return "Delivery"
+    case "combined":
+      return "Multimodal"
+    default:
+      return "Editing"
+  }
+}
+
+// A window's feedback block, rendered together with the row's header so the
+// Script/deep tab switcher can sit inline on the top row (after the transcript
+// quote) rather than below it. `header` is given the tab list to place in that
+// row — or null when there are no tabs to show — and returns the full header.
+//
+// When the window has BOTH transcript-only script feedback AND a deep
+// multimodal insight, the two are split across tabs so every tip stays visible
+// without stacking into a tall, noisy column. When only one source is present,
+// it renders flat below the header exactly as before.
+function WindowFeedback({
+  header,
+  attribution,
+  insight,
+  recommendation,
+}: {
+  header: (tabs: React.ReactNode) => React.ReactNode
+  attribution: RetentionMomentAttribution | undefined
+  insight: RankedRetentionWindowEvent | undefined
+  recommendation: DeepAnalysisRecommendation | undefined
+}) {
+  const hasScript = attribution != null && attribution.explanation !== ""
+  const hasDeep = insight != null
+
+  if (hasScript && hasDeep) {
+    return (
+      <Tabs defaultValue="script" className="gap-2">
+        {header(
+          <TabsList>
+            <TabsTrigger value="script">Script</TabsTrigger>
+            <TabsTrigger value="deep">
+              {deepFeedbackTabLabel(insight)}
+            </TabsTrigger>
+          </TabsList>
+        )}
+        <TabsContent value="script" className="pl-10">
+          <ScriptFeedbackBody attribution={attribution} />
+        </TabsContent>
+        <TabsContent value="deep" className="pl-10">
+          <DeepFeedbackBody insight={insight} recommendation={recommendation} />
+        </TabsContent>
+      </Tabs>
+    )
+  }
+
+  return (
+    <>
+      {header(null)}
+      <AttributionNote attribution={attribution} />
+      <MultimodalInsight insight={insight} />
+      <ActionableRecommendation recommendation={recommendation} />
+    </>
   )
 }
 
@@ -320,6 +589,8 @@ function DropList({
   drops,
   transcript,
   attribution,
+  deepInsights,
+  recommendations,
   highlightedId,
 }: {
   // The significant *mid-video* drop-offs (kind = 'drop_off'). The Hook section
@@ -328,6 +599,8 @@ function DropList({
   transcript: TranscriptCue[]
   // AI explanations/tips keyed by the drop-off's windowIndex, when generated.
   attribution: Map<number, RetentionMomentAttribution>
+  deepInsights: Map<number, RankedRetentionWindowEvent>
+  recommendations: Map<number, DeepAnalysisRecommendation>
   highlightedId?: string | null
 }) {
   const highlightedRef = useHighlightScroll(highlightedId)
@@ -356,27 +629,33 @@ function DropList({
               "flex flex-col gap-2 p-4",
             )}
           >
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
-                  {index + 1}
-                </span>
-                <span className="font-mono text-sm">
-                  {formatTimestamp(drop.fromSeconds)} –{" "}
-                  {formatTimestamp(drop.toSeconds)}
-                </span>
-                <ScriptSegmentTooltip
-                  transcript={transcript}
-                  fromSeconds={drop.fromSeconds}
-                  toSeconds={drop.toSeconds}
-                />
-              </div>
-              <span className="text-sm font-medium text-destructive">
-                −{(Math.abs(drop.delta) * 100).toFixed(1)}%
-              </span>
-            </div>
-
-            <AttributionNote attribution={attribution.get(drop.windowIndex)} />
+            <WindowFeedback
+              attribution={attribution.get(drop.windowIndex)}
+              insight={deepInsights.get(drop.windowIndex)}
+              recommendation={recommendations.get(drop.windowIndex)}
+              header={(tabs) => (
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                      {index + 1}
+                    </span>
+                    <span className="font-mono text-sm">
+                      {formatTimestamp(drop.fromSeconds)} –{" "}
+                      {formatTimestamp(drop.toSeconds)}
+                    </span>
+                    <ScriptSegmentTooltip
+                      transcript={transcript}
+                      fromSeconds={drop.fromSeconds}
+                      toSeconds={drop.toSeconds}
+                    />
+                    {tabs}
+                  </div>
+                  <span className="text-sm font-medium text-destructive">
+                    −{(Math.abs(drop.delta) * 100).toFixed(1)}%
+                  </span>
+                </div>
+              )}
+            />
           </li>
         )
       })}
@@ -436,11 +715,15 @@ function GainList({
   gains,
   transcript,
   attribution,
+  deepInsights,
+  recommendations,
   highlightedId,
 }: {
   gains: RetentionWindow[]
   transcript: TranscriptCue[]
   attribution: Map<number, RetentionMomentAttribution>
+  deepInsights: Map<number, RankedRetentionWindowEvent>
+  recommendations: Map<number, DeepAnalysisRecommendation>
   highlightedId?: string | null
 }) {
   const highlightedRef = useHighlightScroll(highlightedId)
@@ -460,27 +743,33 @@ function GainList({
               "flex flex-col gap-2 p-4",
             )}
           >
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
-                  {index + 1}
-                </span>
-                <span className="font-mono text-sm">
-                  {formatTimestamp(gain.fromSeconds)} –{" "}
-                  {formatTimestamp(gain.toSeconds)}
-                </span>
-                <ScriptSegmentTooltip
-                  transcript={transcript}
-                  fromSeconds={gain.fromSeconds}
-                  toSeconds={gain.toSeconds}
-                />
-              </div>
-              <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
-                +{(gain.delta * 100).toFixed(1)}%
-              </span>
-            </div>
-
-            <AttributionNote attribution={attribution.get(gain.windowIndex)} />
+            <WindowFeedback
+              attribution={attribution.get(gain.windowIndex)}
+              insight={deepInsights.get(gain.windowIndex)}
+              recommendation={recommendations.get(gain.windowIndex)}
+              header={(tabs) => (
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                      {index + 1}
+                    </span>
+                    <span className="font-mono text-sm">
+                      {formatTimestamp(gain.fromSeconds)} –{" "}
+                      {formatTimestamp(gain.toSeconds)}
+                    </span>
+                    <ScriptSegmentTooltip
+                      transcript={transcript}
+                      fromSeconds={gain.fromSeconds}
+                      toSeconds={gain.toSeconds}
+                    />
+                    {tabs}
+                  </div>
+                  <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
+                    +{(gain.delta * 100).toFixed(1)}%
+                  </span>
+                </div>
+              )}
+            />
           </li>
         )
       })}
@@ -831,6 +1120,8 @@ export function AnalysedVideoDetail({
   retentionAttribution = null,
   packagingAlignment = null,
   analyticsSummary = null,
+  deepAnalysisEvidence = null,
+  showDeepRecommendations = true,
 }: {
   video: VideoDetails
   retention: RetentionPoint[]
@@ -840,6 +1131,8 @@ export function AnalysedVideoDetail({
   retentionAttribution?: RetentionAttribution | null
   packagingAlignment?: PackagingAlignment | null
   analyticsSummary?: VideoAnalyticsSummary | null
+  deepAnalysisEvidence?: DeepAnalysisEvidence | null
+  showDeepRecommendations?: boolean
 }) {
   const [previewTime, setPreviewTime] = useState<number | null>(null)
   const [playbackWindow, setPlaybackWindow] = useState<{
@@ -917,6 +1210,38 @@ export function AnalysedVideoDetail({
   const gainAttribution = attributionByKind("gain")
   const holdAttribution = attributionByKind("hold")
   const hookAttribution = attributionByKind("hook")
+  const deepInsightsByKind = (
+    kind: RetentionMomentKind,
+  ): Map<number, RankedRetentionWindowEvent> => {
+    const map = new Map<number, RankedRetentionWindowEvent>()
+    for (const evidence of deepAnalysisEvidence?.windows ?? []) {
+      if (evidence.window.kind === kind && evidence.events[0]) {
+        map.set(evidence.window.windowIndex, evidence.events[0])
+      }
+    }
+    return map
+  }
+  const hookDeepInsights = deepInsightsByKind("hook")
+  const dropDeepInsights = deepInsightsByKind("drop_off")
+  const gainDeepInsights = deepInsightsByKind("gain")
+  const recommendationsByKind = (
+    kind: RetentionMomentKind,
+  ): Map<number, DeepAnalysisRecommendation> => {
+    const map = new Map<number, DeepAnalysisRecommendation>()
+    for (const evidence of deepAnalysisEvidence?.windows ?? []) {
+      if (
+        showDeepRecommendations &&
+        evidence.window.kind === kind &&
+        evidence.recommendations[0]
+      ) {
+        map.set(evidence.window.windowIndex, evidence.recommendations[0])
+      }
+    }
+    return map
+  }
+  const hookRecommendations = recommendationsByKind("hook")
+  const dropRecommendations = recommendationsByKind("drop_off")
+  const gainRecommendations = recommendationsByKind("gain")
   const chartInsights: RetentionChartInsight[] = [
     ...hookWindows
       .filter((window) => !window.outOfRange)
@@ -1043,11 +1368,8 @@ export function AnalysedVideoDetail({
           {video.thumbnailUrl && (
             <div className="shrink-0 sm:self-start">
               <SourceVideoThumbnail
-                videoId={video.id}
                 thumbnailUrl={video.thumbnailUrl}
                 title={video.title}
-                scrubTime={previewTime}
-                playbackWindow={playbackWindow}
               />
             </div>
           )}
@@ -1064,6 +1386,12 @@ export function AnalysedVideoDetail({
                 <Metric
                   label="Views"
                   value={formatCompactNumber(analyticsSummary.views)}
+                />
+                <Metric
+                  label="Subscribers gained"
+                  value={formatCompactNumber(
+                    netSubscribersGained(analyticsSummary),
+                  )}
                 />
                 <Metric
                   label="Avg. view duration"
@@ -1117,33 +1445,57 @@ export function AnalysedVideoDetail({
             <AreaChartIcon className="size-4 text-muted-foreground" />
             <h2 className="text-sm font-medium">Audience retention</h2>
           </div>
-          <RetentionChart
-            points={retention}
-            durationSeconds={video.durationSeconds}
-            insights={chartInsights}
-            selectedInsightId={playbackWindow?.id ?? null}
-            onScrubTimeChange={setPreviewTime}
-            onInsightSelect={(insight) => {
-              setPlaybackWindow(
-                insight
-                  ? {
-                      id: insight.id,
-                      fromSeconds: insight.fromSeconds,
-                      toSeconds: insight.toSeconds,
-                    }
-                  : null,
-              )
-              // Bring the tab holding this insight forward so its highlighted
-              // row is the one on show. Leave the tab as-is when clicking off.
-              if (insight) setRetentionTab(TAB_FOR_INSIGHT_KIND[insight.kind])
-            }}
-          />
+          {/* The chart and its insight lists share one positioning context so the
+              floating source video can be `position: sticky` across both. It
+              starts over the empty top-right of the chart (its highest point,
+              page-wise) and, once the page scrolls far enough that it would slide
+              off the top, pins just below the top of the viewport and rides down
+              with the scroll — staying visible while the reader works through a
+              long list — until the bottom of this section scrolls past. */}
+          <div className="relative flex flex-col gap-3">
+            {video.thumbnailUrl && (
+              <div className="pointer-events-none absolute inset-0 z-20">
+                <div className="sticky top-4 flex justify-end px-5 pt-5">
+                  <div className="w-2/5 max-w-64">
+                    <SourceVideoPlayer
+                      videoId={video.id}
+                      thumbnailUrl={video.thumbnailUrl}
+                      title={video.title}
+                      scrubTime={previewTime}
+                      playbackWindow={playbackWindow}
+                      onClose={() => setPlaybackWindow(null)}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+            <RetentionChart
+              points={retention}
+              durationSeconds={video.durationSeconds}
+              insights={chartInsights}
+              selectedInsightId={playbackWindow?.id ?? null}
+              onScrubTimeChange={setPreviewTime}
+              onInsightSelect={(insight) => {
+                setPlaybackWindow(
+                  insight
+                    ? {
+                        id: insight.id,
+                        fromSeconds: insight.fromSeconds,
+                        toSeconds: insight.toSeconds,
+                      }
+                    : null,
+                )
+                // Bring the tab holding this insight forward so its highlighted
+                // row is the one on show. Leave the tab as-is when clicking off.
+                if (insight) setRetentionTab(TAB_FOR_INSIGHT_KIND[insight.kind])
+              }}
+            />
 
-          {defaultRetentionTab && (
-            <Tabs
-              value={retentionTab ?? defaultRetentionTab}
-              onValueChange={(value) => setRetentionTab(value as string)}
-            >
+            {defaultRetentionTab && (
+              <Tabs
+                value={retentionTab ?? defaultRetentionTab}
+                onValueChange={(value) => setRetentionTab(value as string)}
+              >
               <TabsList>
                 {hookWindows.length > 0 && (
                   <TabsTrigger value="hook">
@@ -1183,6 +1535,8 @@ export function AnalysedVideoDetail({
                     windows={hookWindows}
                     transcript={transcript}
                     attribution={hookAttribution}
+                    deepInsights={hookDeepInsights}
+                    recommendations={hookRecommendations}
                     highlightedId={playbackWindow?.id ?? null}
                   />
                 </TabsContent>
@@ -1194,6 +1548,8 @@ export function AnalysedVideoDetail({
                     drops={drops}
                     transcript={transcript}
                     attribution={dropAttribution}
+                    deepInsights={dropDeepInsights}
+                    recommendations={dropRecommendations}
                     highlightedId={playbackWindow?.id ?? null}
                   />
                 </TabsContent>
@@ -1205,6 +1561,8 @@ export function AnalysedVideoDetail({
                     gains={gains}
                     transcript={transcript}
                     attribution={gainAttribution}
+                    deepInsights={gainDeepInsights}
+                    recommendations={gainRecommendations}
                     highlightedId={playbackWindow?.id ?? null}
                   />
                 </TabsContent>
@@ -1232,7 +1590,8 @@ export function AnalysedVideoDetail({
                 </TabsContent>
               )}
             </Tabs>
-          )}
+            )}
+          </div>
         </section>
       </div>
     </div>

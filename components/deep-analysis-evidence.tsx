@@ -10,6 +10,7 @@ import {
   SparklesIcon,
 } from "lucide-react"
 
+import { DeepAnalysisFeedback } from "@/components/deep-analysis-feedback"
 import {
   Collapsible,
   CollapsibleContent,
@@ -32,7 +33,7 @@ import type {
   DeepAnalysisEvidence as DeepAnalysisEvidenceData,
   WindowEvidence,
 } from "@/lib/deep-analysis-evidence"
-import type { RetentionWindowEventType } from "@/lib/retention-window-events"
+import { EventTypeBadge } from "@/components/event-type-badge"
 
 function formatTimestamp(totalSeconds: number): string {
   const seconds = Math.max(0, Math.round(totalSeconds))
@@ -90,8 +91,10 @@ const KIND_LABELS: Record<WindowEvidence["window"]["kind"], string> = {
 // is full oversight of exactly what the pipeline produced for each window.
 export function DeepAnalysisEvidence({
   evidence,
+  videoId,
 }: {
   evidence: DeepAnalysisEvidenceData
+  videoId: string
 }) {
   if (evidence.windows.length === 0) return null
 
@@ -106,7 +109,7 @@ export function DeepAnalysisEvidence({
 
       <div className="flex flex-col gap-3">
         {evidence.windows.map((item) => (
-          <WindowEvidenceCard key={item.window.id} item={item} />
+          <WindowEvidenceCard key={item.window.id} item={item} videoId={videoId} />
         ))}
       </div>
     </section>
@@ -155,7 +158,13 @@ function VideoCostSummary({
   )
 }
 
-function WindowEvidenceCard({ item }: { item: WindowEvidence }) {
+function WindowEvidenceCard({
+  item,
+  videoId,
+}: {
+  item: WindowEvidence
+  videoId: string
+}) {
   const { window } = item
   const from = window.analysisFromSeconds ?? window.fromSeconds
   const to = window.analysisToSeconds ?? window.toSeconds
@@ -186,7 +195,12 @@ function WindowEvidenceCard({ item }: { item: WindowEvidence }) {
 
       <CollapsibleContent className="flex flex-col gap-5 border-t p-4">
         <EventsSection events={item.events} />
-        <CardInsightDraft item={item} />
+        <RecommendationsSection recommendations={item.recommendations} />
+        <DeepAnalysisFeedback
+          videoId={videoId}
+          retentionWindowId={window.id}
+          initialFeedback={item.feedback}
+        />
         <div className="flex flex-col divide-y rounded-lg border">
           <RetentionSection window={window} />
           <EditingSection editing={item.editing} baseline={item.baseline} />
@@ -197,6 +211,32 @@ function WindowEvidenceCard({ item }: { item: WindowEvidence }) {
         </div>
       </CollapsibleContent>
     </Collapsible>
+  )
+}
+
+function RecommendationsSection({
+  recommendations,
+}: {
+  recommendations: WindowEvidence["recommendations"]
+}) {
+  if (recommendations.length === 0) return null
+  return (
+    <div className="flex flex-col gap-2">
+      <SubsectionHeader
+        icon={<LightbulbIcon className="size-3.5 text-muted-foreground" />}
+        label="Recommended tests"
+      />
+      {recommendations.map((recommendation) => (
+        <div key={recommendation.id} className="rounded-lg border p-3 text-sm">
+          <p className="font-medium">
+            {formatTimestamp(recommendation.timestampSeconds)} · {recommendation.action}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {recommendation.expectedPurpose}
+          </p>
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -248,16 +288,6 @@ function AccordionSection({
   )
 }
 
-const EVENT_TYPE_STYLES: Record<RetentionWindowEventType, string> = {
-  scene_cut: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
-  topic_shift: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
-  visual_change: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  audio_change: "bg-pink-500/10 text-pink-700 dark:text-pink-400",
-  pacing_change: "bg-orange-500/10 text-orange-700 dark:text-orange-400",
-  on_screen_text_change: "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400",
-  other: "bg-muted text-muted-foreground",
-}
-
 function EventsSection({ events }: { events: WindowEvidence["events"] }) {
   if (events.length === 0) {
     return (
@@ -267,7 +297,8 @@ function EventsSection({ events }: { events: WindowEvidence["events"] }) {
           label="Synthesized events"
         />
         <p className="text-sm text-muted-foreground">
-          No events have been synthesized for this window yet.
+          No sufficiently supported multimodal insight was found for this
+          window.
         </p>
       </div>
     )
@@ -285,7 +316,7 @@ function EventsSection({ events }: { events: WindowEvidence["events"] }) {
             <TableHead>Time</TableHead>
             <TableHead>Type</TableHead>
             <TableHead>Evidence</TableHead>
-            <TableHead>Conf.</TableHead>
+            <TableHead>Quality</TableHead>
             <TableHead className="whitespace-normal">Narrative</TableHead>
           </TableRow>
         </TableHeader>
@@ -296,19 +327,15 @@ function EventsSection({ events }: { events: WindowEvidence["events"] }) {
                 {formatTimestamp(event.timestampSeconds)}
               </TableCell>
               <TableCell>
-                <span
-                  className={`rounded-md px-1.5 py-0.5 text-xs font-medium whitespace-nowrap ${EVENT_TYPE_STYLES[event.eventType]}`}
-                >
-                  {formatLabel(event.eventType)}
-                </span>
+                <EventTypeBadge eventType={event.eventType} />
               </TableCell>
               <TableCell className="text-xs text-muted-foreground">
                 {formatLabel(event.primaryEvidence)}
               </TableCell>
               <TableCell className="font-mono text-xs tabular-nums text-muted-foreground">
-                {event.confidence != null
-                  ? `${Math.round(event.confidence * 100)}%`
-                  : "—"}
+                <span className="whitespace-nowrap">
+                  #{event.insightRank} · {formatLabel(event.evidenceQuality)}
+                </span>
               </TableCell>
               <TableCell className="max-w-md min-w-64 text-wrap whitespace-normal">
                 {event.narrative}
@@ -700,6 +727,9 @@ function InsightChip({ children }: { children: React.ReactNode }) {
   )
 }
 
+// Kept temporarily as dormant tuning code until the calibrated production
+// cards have been exercised against real videos; it is no longer rendered.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function CardInsightDraft({ item }: { item: WindowEvidence }) {
   const { window, events, audio } = item
   const snaps = readySnapshots(item.snapshots)
@@ -803,7 +833,11 @@ function CardInsightDraft({ item }: { item: WindowEvidence }) {
             )}
             {audioAnalysis && (
               <>
-                <InsightChip>{formatLabel(audioAnalysis.energy)} energy</InsightChip>
+                {audioAnalysis.energy && (
+                  <InsightChip>
+                    {formatLabel(audioAnalysis.energy)} energy
+                  </InsightChip>
+                )}
                 {audioAnalysis.speech_rate != null && (
                   <InsightChip>{audioAnalysis.speech_rate} wpm</InsightChip>
                 )}
@@ -1224,13 +1258,22 @@ function AudioSection({
 
       {analysis ? (
         <dl className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
-          <Field label="Music" value={formatBoolean(analysis.music)} />
+          {analysis.model_analysis_status === "skipped" && (
+            <Field label="Listening model" value="Skipped (stable audio)" />
+          )}
+          {analysis.music != null && (
+            <Field label="Music" value={formatBoolean(analysis.music)} />
+          )}
           {analysis.music_description && (
             <Field label="Music description" value={analysis.music_description} />
           )}
-          <Field label="Speakers" value={String(analysis.speakers)} />
-          <Field label="Tone" value={analysis.tone} />
-          <Field label="Energy" value={formatLabel(analysis.energy)} />
+          {analysis.speakers != null && (
+            <Field label="Speakers" value={String(analysis.speakers)} />
+          )}
+          {analysis.tone && <Field label="Tone" value={analysis.tone} />}
+          {analysis.energy && (
+            <Field label="Energy" value={formatLabel(analysis.energy)} />
+          )}
           <BaselineField
             label="Speech rate"
             value={analysis.speech_rate}

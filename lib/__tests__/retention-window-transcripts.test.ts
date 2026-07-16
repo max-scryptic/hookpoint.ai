@@ -90,7 +90,6 @@ describe("saveRetentionWindowTranscripts", () => {
     const { supabase, upserts, deletes } = makeFakeSupabase()
     const window = makeWindow({
       id: "rw-2",
-      windowKey: "hook-delivery",
       analysisFromSeconds: null,
       analysisToSeconds: null,
     })

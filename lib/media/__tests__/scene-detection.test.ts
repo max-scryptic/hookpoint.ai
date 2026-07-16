@@ -26,15 +26,19 @@ describe("buildSceneCueScanArgs", () => {
     expect(args[args.indexOf("-t") + 1]).toBe("0")
   })
 
-  it("chains downscale, freezedetect, blackdetect and scene-select in one -vf graph", () => {
+  it("splits one decode into scene-cue and low-FPS motion branches", () => {
     const args = buildSceneCueScanArgs("https://signed.example/video.mp4", 0, 30)
-    const filters = args[args.indexOf("-vf") + 1]
+    const filters = args[args.indexOf("-filter_complex") + 1]
 
     expect(filters).toContain("scale=")
     expect(filters).toContain("freezedetect=")
     expect(filters).toContain("blackdetect=")
     expect(filters).toContain("select=")
     expect(filters).toContain("showinfo")
+    expect(filters).toContain("split=2")
+    expect(filters).toContain("fps=2")
+    expect(filters).toContain("signalstats")
+    expect(filters).toContain("lavfi.signalstats.YDIF")
     // freezedetect/blackdetect (non-destructive) must run before select
     // (destructive) so a single decode pass feeds all three.
     expect(filters.indexOf("freezedetect=")).toBeLessThan(filters.indexOf("select="))
@@ -91,6 +95,24 @@ describe("parseSceneCues", () => {
       cuts: [],
       freezes: [],
       blacks: [],
+      motionBuckets: [],
     })
+  })
+
+  it("aggregates low-FPS YDIF samples into normalised five-second buckets", () => {
+    const stderr = [
+      "frame:0 pts:0 pts_time:20",
+      "lavfi.signalstats.YDIF=12.75",
+      "frame:1 pts:1 pts_time:20.5",
+      "lavfi.signalstats.YDIF=25.5",
+      "frame:2 pts:2 pts_time:25",
+      "lavfi.signalstats.YDIF=51",
+    ].join("\n")
+
+    const buckets = parseSceneCues(stderr, 30, 20).motionBuckets ?? []
+    expect(buckets).toHaveLength(2)
+    expect(buckets[0]).toMatchObject({ fromSeconds: 20, toSeconds: 25 })
+    expect(buckets[0].score).toBeCloseTo(0.075)
+    expect(buckets[1]).toEqual({ fromSeconds: 25, toSeconds: 30, score: 0.2 })
   })
 })

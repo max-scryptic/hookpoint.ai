@@ -58,12 +58,12 @@ describe("buildRetentionWindows", () => {
 
     expect(drops).toHaveLength(1)
     expect(drops[0]).toMatchObject({
-      fromSeconds: 40,
+      fromSeconds: 30,
       toSeconds: 50,
       relativePerformance: 0.3,
       isAbnormallySteep: false,
     })
-    expect(drops[0].delta).toBeCloseTo(-0.18)
+    expect(drops[0].delta).toBeCloseTo(-0.2)
     expect(drops[0].steepness).not.toBeNull()
   })
 
@@ -93,16 +93,19 @@ describe("buildRetentionWindows", () => {
     }
   })
 
-  it("carries the combined 0-30s analysis window on the first hook row only", () => {
+  it("gives each hook window its own analysis range", () => {
     const hooks = buildRetentionWindows(retention, 60).filter(
       (w) => w.kind === "hook",
     )
+    // Initial hook (0-10s) and hook delivery (10-30s) are analysed separately.
     expect(hooks[0]).toMatchObject({
       analysisFromSeconds: 0,
+      analysisToSeconds: 10,
+    })
+    expect(hooks[1]).toMatchObject({
+      analysisFromSeconds: 10,
       analysisToSeconds: 30,
     })
-    expect(hooks[1].analysisFromSeconds).toBeNull()
-    expect(hooks[1].analysisToSeconds).toBeNull()
   })
 
   it("pads the drop-off and gain analysis windows around their midpoint", () => {
@@ -110,9 +113,10 @@ describe("buildRetentionWindows", () => {
     const drop = windows.find((w) => w.kind === "drop_off")!
     const gain = windows.find((w) => w.kind === "gain")!
 
-    // drop-off step is 40 -> 50, midpoint 45; padded -30/+10.
-    expect(drop.analysisFromSeconds).toBeCloseTo(15)
-    expect(drop.analysisToSeconds).toBeCloseTo(55)
+    // Adjacent downward steps form one 30 -> 50 episode, midpoint 40;
+    // padded -30/+10.
+    expect(drop.analysisFromSeconds).toBeCloseTo(10)
+    expect(drop.analysisToSeconds).toBeCloseTo(50)
 
     // gain step is 50 -> 60, midpoint 55; padded -10/+20, clamped to duration.
     expect(gain.analysisFromSeconds).toBeCloseTo(45)
@@ -148,18 +152,36 @@ describe("buildRetentionWindows", () => {
 })
 
 describe("computeAnalysisWindow", () => {
-  it("returns the combined hook window only for window_index 0", () => {
+  it("gives each hook window its own bounds", () => {
     expect(computeAnalysisWindow("hook", 0, 0, 10, 120)).toEqual({
       fromSeconds: 0,
+      toSeconds: 10,
+    })
+    expect(computeAnalysisWindow("hook", 1, 10, 30, 120)).toEqual({
+      fromSeconds: 10,
       toSeconds: 30,
     })
-    expect(computeAnalysisWindow("hook", 1, 10, 30, 120)).toBeNull()
   })
 
-  it("clamps the hook window to a short video's duration", () => {
+  it("clamps a hook window to a short video's duration", () => {
+    // A 18s video reaches the initial hook fully but only part of hook delivery.
     expect(computeAnalysisWindow("hook", 0, 0, 10, 18)).toEqual({
       fromSeconds: 0,
+      toSeconds: 10,
+    })
+    expect(computeAnalysisWindow("hook", 1, 10, 30, 18)).toEqual({
+      fromSeconds: 10,
       toSeconds: 18,
+    })
+  })
+
+  it("drops a hook window the video is too short to reach", () => {
+    // An 8s video never reaches hook delivery (10-30s), so it has no window.
+    expect(computeAnalysisWindow("hook", 1, 10, 30, 8)).toBeNull()
+    // The initial hook is still analysed over what footage exists.
+    expect(computeAnalysisWindow("hook", 0, 0, 10, 8)).toEqual({
+      fromSeconds: 0,
+      toSeconds: 8,
     })
   })
 

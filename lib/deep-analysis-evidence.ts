@@ -11,6 +11,27 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import {
+  assignGlobalInsightRanks,
+  evaluateRetentionWindowInsights,
+  type RankedRetentionWindowEvent,
+  type SuppressedRetentionWindowEvent,
+} from "@/lib/deep-analysis-insight-ranking"
+import {
+  getDeepAnalysisMaxInsightsPerWindow,
+  getDeepAnalysisMaxRecommendationsPerWindow,
+  getDeepAnalysisMinimumInsightScore,
+} from "@/lib/deep-analysis-config"
+import {
+  compileDeepAnalysisRecommendations,
+  dedupeDeepAnalysisRecommendations,
+  type DeepAnalysisRecommendation,
+} from "@/lib/deep-analysis-recommendations"
+
+import {
+  getDeepAnalysisInsightFeedbackForVideo,
+  type DeepAnalysisInsightFeedback,
+} from "@/lib/deep-analysis-insight-feedback"
+import {
   getRetentionWindowCostsForVideo,
   type RetentionWindowCost,
 } from "@/lib/retention-window-costs"
@@ -38,6 +59,7 @@ import {
   getVideoSceneCues,
   type SceneCueMetrics,
 } from "@/lib/video-scene-cues"
+import { getSparseVideoFeatureBaseline } from "@/lib/video-feature-baseline"
 
 // Long enough to cover a single page view without needing to be refreshed,
 // the same reasoning the source-file playback URL (60 minutes) already uses.
@@ -61,12 +83,15 @@ export interface DeepAnalysisBaseline {
   freezeCoverage: number | null
   blackCoverage: number | null
   speechRate: number | null
+  motion: number | null
 }
 
 export interface WindowEvidence {
   window: PersistedRetentionWindow
   displayLabel: string
-  events: RetentionWindowEvent[]
+  events: RankedRetentionWindowEvent[]
+  recommendations: DeepAnalysisRecommendation[]
+  suppressedInsights: SuppressedRetentionWindowEvent[]
   transcript: string | null
   snapshots: DeepAnalysisSnapshotView[]
   audio: DeepAnalysisAudioView | null
@@ -82,6 +107,7 @@ export interface WindowEvidence {
   // failed) — those simply render no cost figure.
   costs: RetentionWindowCost[]
   totalCostUsd: number
+  feedback: DeepAnalysisInsightFeedback | null
 }
 
 // A video's full deep-analysis evidence plus the video-level cost roll-up: the
@@ -131,7 +157,17 @@ export async function getDeepAnalysisEvidence(
   analysedVideoId: string,
   transcodedDurationSeconds: number | null = null,
 ): Promise<DeepAnalysisEvidence> {
-  const [windows, events, transcripts, snapshots, audioClips, costs, cues] =
+  const [
+    windows,
+    events,
+    transcripts,
+    snapshots,
+    audioClips,
+    costs,
+    cues,
+    feedbackByWindow,
+    sparseBaseline,
+  ] =
     await Promise.all([
       getRetentionWindows(supabase, userId, analysedVideoId),
       getRetentionWindowEvents(supabase, userId, analysedVideoId),
@@ -140,6 +176,10 @@ export async function getDeepAnalysisEvidence(
       getRetentionWindowAudioForVideo(supabase, userId, analysedVideoId),
       getRetentionWindowCostsForVideo(supabase, userId, analysedVideoId),
       getVideoSceneCues(supabase, userId, analysedVideoId),
+      getDeepAnalysisInsightFeedbackForVideo(supabase, userId, analysedVideoId),
+      getSparseVideoFeatureBaseline(supabase, userId, analysedVideoId).catch(
+        () => null,
+      ),
     ])
 
   // The video-wide baseline, computed once and shared by every window — the
@@ -163,10 +203,16 @@ export async function getDeepAnalysisEvidence(
         )
       : null
   const baseline: DeepAnalysisBaseline = {
-    cutsPerMinute: editingBaseline?.cutsPerMinute ?? null,
-    freezeCoverage: editingBaseline?.freezeCoverage ?? null,
-    blackCoverage: editingBaseline?.blackCoverage ?? null,
-    speechRate: speechRateBaseline,
+    cutsPerMinute:
+      sparseBaseline?.cutsPerMinute ?? editingBaseline?.cutsPerMinute ?? null,
+    freezeCoverage:
+      sparseBaseline?.freezeCoverage ??
+      editingBaseline?.freezeCoverage ??
+      null,
+    blackCoverage:
+      sparseBaseline?.blackCoverage ?? editingBaseline?.blackCoverage ?? null,
+    speechRate: sparseBaseline?.speechRate ?? speechRateBaseline,
+    motion: sparseBaseline?.motion ?? null,
   }
 
   const eventsByWindow = new Map<string, RetentionWindowEvent[]>()
@@ -218,14 +264,14 @@ export async function getDeepAnalysisEvidence(
 
   const result: WindowEvidence[] = []
   for (const window of sortedWindows) {
-    const windowEvents = eventsByWindow.get(window.id) ?? []
+    const rawWindowEvents = eventsByWindow.get(window.id) ?? []
     const transcript = transcriptByWindow.get(window.id) ?? null
     const windowSnapshots = snapshotsByWindow.get(window.id) ?? []
     const audio = audioByWindow.get(window.id) ?? null
     const windowCosts = costsByWindow.get(window.id) ?? []
 
     if (
-      windowEvents.length === 0 &&
+      rawWindowEvents.length === 0 &&
       transcript == null &&
       windowSnapshots.length === 0 &&
       audio == null
@@ -259,10 +305,41 @@ export async function getDeepAnalysisEvidence(
           )
         : null
 
+    const insightEvaluation = evaluateRetentionWindowInsights({
+      events: rawWindowEvents,
+      window,
+      minimumScore: getDeepAnalysisMinimumInsightScore(),
+      maxInsights: getDeepAnalysisMaxInsightsPerWindow(),
+      evidence: {
+        hasEditing: editing != null,
+        hasVisual: windowSnapshots.some(
+          (snapshot) =>
+            snapshot.analysisStatus === "ready" && snapshot.analysis != null,
+        ),
+        hasAudio: audio?.analysisStatus === "ready" && audio.analysis != null,
+        hasTranscript: transcript != null && transcript.trim().length > 0,
+      },
+    })
+    const windowEvents = insightEvaluation.ranked
+    const analysedAudio =
+      audio?.analysisStatus === "ready" && audio.analysis != null
+        ? (audio.analysis as AudioAnalysis)
+        : null
+    const recommendations = compileDeepAnalysisRecommendations({
+      events: windowEvents,
+      window,
+      editing,
+      baseline,
+      audio: analysedAudio,
+      maxRecommendations: getDeepAnalysisMaxRecommendationsPerWindow(),
+    })
+
     result.push({
       window,
       displayLabel: windowDisplayLabel(window),
       events: windowEvents,
+      recommendations,
+      suppressedInsights: insightEvaluation.suppressed,
       transcript,
       snapshots: snapshotViews,
       audio: audioView,
@@ -270,8 +347,14 @@ export async function getDeepAnalysisEvidence(
       baseline,
       costs: windowCosts,
       totalCostUsd: windowCosts.reduce((sum, cost) => sum + cost.costUsd, 0),
+      feedback: feedbackByWindow.get(window.id) ?? null,
     })
   }
+
+  assignGlobalInsightRanks(result.map((window) => window.events))
+  dedupeDeepAnalysisRecommendations(
+    result.map((window) => window.recommendations),
+  )
 
   const llmCostUsd = result.reduce((sum, w) => sum + w.totalCostUsd, 0)
   const transcodingCost = transcodingCostUsd(transcodedDurationSeconds)

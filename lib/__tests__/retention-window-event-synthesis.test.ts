@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import {
+  buildWindowContrastRanges,
   dedupeAdjacentVisualFrames,
   synthesizeRetentionWindowEvents,
   type RetentionWindowEventSynthesizer,
@@ -63,9 +64,10 @@ function audioRow(overrides: Record<string, unknown> = {}) {
 }
 
 // A fake covering exactly the query shapes synthesizeRetentionWindowEvents
-// issues: six parallel "select ... for the whole video" reads (canned per
-// table), plus delete+insert on retention_window_events and update on
-// retention_window_event_synthesis.
+// issues: the parallel "select ... for the whole video" reads (canned per
+// table, including the cross-video channel-history read of
+// retention_window_events), plus delete+insert on retention_window_events and
+// update on retention_window_event_synthesis.
 function makeFakeSupabase(tables: Record<string, Record<string, unknown>[]>) {
   const updates: { table: string; id?: string; payload: Record<string, unknown> }[] =
     []
@@ -98,6 +100,8 @@ function makeFakeSupabase(tables: Record<string, Record<string, unknown>[]>) {
           if (column === "id") pendingId = value
           return builder
         },
+        neq: () => builder,
+        limit: () => builder,
         // getRetentionAttribution reads a single analysed_videos row; there's
         // no seeded retention_attribution here, so it resolves to null and the
         // synthesizer just runs without a script-explanation dedup reference.
@@ -230,6 +234,62 @@ describe("dedupeAdjacentVisualFrames", () => {
   })
 })
 
+describe("buildWindowContrastRanges", () => {
+  it("uses an equally sized preceding control for a longer episode", () => {
+    expect(
+      buildWindowContrastRanges({
+        kind: "drop_off",
+        eventFromSeconds: 100,
+        eventToSeconds: 120,
+        analysisFromSeconds: 70,
+        analysisToSeconds: 130,
+      }),
+    ).toEqual({
+      controlRange: { fromSeconds: 80, toSeconds: 100 },
+      targetRange: { fromSeconds: 100, toSeconds: 120 },
+    })
+  })
+
+  it("uses a ten-second minimum control and clamps it to harvested footage", () => {
+    expect(
+      buildWindowContrastRanges({
+        kind: "gain",
+        eventFromSeconds: 8,
+        eventToSeconds: 10,
+        analysisFromSeconds: 3,
+        analysisToSeconds: 30,
+      }),
+    ).toEqual({
+      controlRange: { fromSeconds: 3, toSeconds: 8 },
+      targetRange: { fromSeconds: 8, toSeconds: 10 },
+    })
+  })
+
+  it("does not invent a control for a hook window", () => {
+    // Neither the initial hook nor hook delivery gets a fabricated control:
+    // the opening has no prior footage, and hook delivery is judged on its own
+    // merits rather than against the initial hook.
+    expect(
+      buildWindowContrastRanges({
+        kind: "hook",
+        eventFromSeconds: 0,
+        eventToSeconds: 10,
+        analysisFromSeconds: 0,
+        analysisToSeconds: 10,
+      }),
+    ).toBeNull()
+    expect(
+      buildWindowContrastRanges({
+        kind: "hook",
+        eventFromSeconds: 10,
+        eventToSeconds: 30,
+        analysisFromSeconds: 10,
+        analysisToSeconds: 30,
+      }),
+    ).toBeNull()
+  })
+})
+
 describe("synthesizeRetentionWindowEvents", () => {
   it("does nothing when there are no pending jobs", async () => {
     const { supabase } = makeFakeSupabase({})
@@ -328,12 +388,48 @@ describe("synthesizeRetentionWindowEvents", () => {
         }),
         snapshotRow({ id: "snap-2", chunk_index: 1, timestamp_seconds: 158 }),
       ],
-      retention_window_audio: [audioRow()],
+      retention_window_audio: [
+        audioRow({
+          analysis: {
+            tone: "excited",
+            energy: "high",
+            speech_rate: 148,
+            signal_timeline: [
+              {
+                from_seconds: 149,
+                to_seconds: 154,
+                average_volume: -22,
+                silence: 0.2,
+              },
+              {
+                from_seconds: 154,
+                to_seconds: 159,
+                average_volume: -16,
+                silence: 0,
+              },
+            ],
+          },
+        }),
+      ],
       retention_window_scene_cue_scans: [
-        { retention_window_id: "rw-1", status: "ready" },
+        {
+          retention_window_id: "rw-1",
+          status: "ready",
+          motion_buckets: [
+            { fromSeconds: 149, toSeconds: 154, score: 0.05 },
+            { fromSeconds: 154, toSeconds: 159, score: 0.2 },
+          ],
+        },
       ],
       video_scene_cues: [
-        { id: "cue-1", kind: "cut", from_seconds: 154, to_seconds: 154, score: null },
+        {
+          id: "cue-1",
+          retention_window_id: "rw-1",
+          kind: "cut",
+          from_seconds: 154,
+          to_seconds: 154,
+          score: null,
+        },
       ],
       retention_window_transcripts: [
         {
@@ -342,6 +438,44 @@ describe("synthesizeRetentionWindowEvents", () => {
           from_seconds: 124,
           to_seconds: 186,
           transcript: "we made five thousand dollars last month",
+        },
+      ],
+      analysed_videos: [
+        {
+          transcript: [
+            { startSeconds: 149, endSeconds: 153, text: "slow setup here" },
+            {
+              startSeconds: 155,
+              endSeconds: 159,
+              text: "now several much faster words arrive together",
+            },
+          ],
+        },
+      ],
+      // Events previously synthesized for two OTHER videos, read back by the
+      // channel-history loader (the fake ignores the neq filter, so these
+      // stand in for the cross-video rows the real query would return).
+      retention_window_events: [
+        {
+          analysed_video_id: "av-2",
+          event_type: "pacing_change",
+          narrative: "Your cuts slow well below the video's usual rate here.",
+          confidence: 0.8,
+          retention_windows: { kind: "drop_off" },
+        },
+        {
+          analysed_video_id: "av-3",
+          event_type: "pacing_change",
+          narrative: "A long static stretch loses momentum.",
+          confidence: 0.7,
+          retention_windows: { kind: "drop_off" },
+        },
+        {
+          analysed_video_id: "av-3",
+          event_type: "scene_cut",
+          narrative: "A burst of quick cuts holds attention.",
+          confidence: 0.9,
+          retention_windows: { kind: "gain" },
         },
       ],
     })
@@ -375,6 +509,44 @@ describe("synthesizeRetentionWindowEvents", () => {
     expect(evidence.visual[0].ocrText).toBe("SALE 50% OFF")
     expect(evidence.visual[1].ocrText).toBeNull()
     expect(evidence.audio).toMatchObject({ tone: "excited", speech_rate: 148 })
+    expect(evidence.contrast).toMatchObject({
+      controlRange: { fromSeconds: 132, toSeconds: 154 },
+      targetRange: { fromSeconds: 154, toSeconds: 176 },
+      controlEditing: { cutCount: 0, cutsPerMinute: 0 },
+      targetEditing: { cutCount: 1 },
+    })
+    expect(evidence.contrast?.controlVisualChunkIndexes).toEqual([0])
+    expect(evidence.contrast?.targetVisualChunkIndexes).toEqual([1])
+    expect(evidence.contrast?.controlAudio).toMatchObject({
+      averageVolumeDb: -22,
+      silence: 0.2,
+    })
+    expect(evidence.contrast?.targetAudio).toMatchObject({
+      averageVolumeDb: -16,
+      silence: 0,
+    })
+    expect(evidence.contrast?.audioDelta.averageVolumeDb).toBe(6)
+    expect(evidence.contrast?.controlMotion).toBeCloseTo(0.05)
+    expect(evidence.contrast?.targetMotion).toBeCloseTo(0.2)
+    expect(evidence.contrast?.motionDelta).toBeCloseTo(0.15)
+    expect(evidence.channelHistory).toEqual({
+      videoCount: 2,
+      hooks: null,
+      dropOffs: {
+        eventCount: 2,
+        trends: [{ eventType: "pacing_change", eventCount: 2, videoCount: 2 }],
+        exampleNarratives: [
+          "Your cuts slow well below the video's usual rate here.",
+          "A long static stretch loses momentum.",
+        ],
+      },
+      gains: {
+        eventCount: 1,
+        trends: [{ eventType: "scene_cut", eventCount: 1, videoCount: 1 }],
+        exampleNarratives: ["A burst of quick cuts holds attention."],
+      },
+      holds: null,
+    })
 
     expect(deletes).toContainEqual({ table: "retention_window_events" })
     expect(inserts).toContainEqual(

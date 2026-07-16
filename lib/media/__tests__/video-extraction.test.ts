@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest"
 
 import {
   buildAudioSegmentArgs,
+  buildAudioSignalBucketsArgs,
   buildAudioStatsArgs,
   buildThumbnailArgs,
+  parseAudioSignalBuckets,
   parseAudioSignalStats,
 } from "@/lib/media/video-extraction"
 
@@ -105,5 +107,52 @@ describe("parseAudioSignalStats", () => {
 
   it("returns a null silence ratio when duration is unknown", () => {
     expect(parseAudioSignalStats("mean_volume: -10 dB", 0).silenceRatio).toBeNull()
+  })
+})
+
+describe("timestamped audio signal buckets", () => {
+  it("builds one-pass five-second RMS and silence analysis", () => {
+    const args = buildAudioSignalBucketsArgs("https://example.test/audio.mp3")
+    const filter = args[args.indexOf("-af") + 1]
+    expect(filter).toContain("aresample=16000")
+    expect(filter).toContain("asetnsamples=n=80000:p=0")
+    expect(filter).toContain("silencedetect=noise=-35dB:d=0.3")
+    expect(filter).toContain("lavfi.astats.Overall.RMS_level")
+  })
+
+  it("parses loudness and intersects silence spans with each bucket", () => {
+    const stderr = [
+      "frame:0 pts:0 pts_time:0",
+      "lavfi.astats.Overall.RMS_level=-18.5",
+      "[silencedetect @ 0x1] silence_start: 3",
+      "[silencedetect @ 0x1] silence_end: 7 | silence_duration: 4",
+      "frame:1 pts:80000 pts_time:5",
+      "lavfi.astats.Overall.RMS_level=-24",
+    ].join("\n")
+
+    expect(parseAudioSignalBuckets(stderr, 10)).toEqual([
+      {
+        fromSeconds: 0,
+        toSeconds: 5,
+        averageVolumeDb: -18.5,
+        silenceRatio: 0.4,
+      },
+      {
+        fromSeconds: 5,
+        toSeconds: 10,
+        averageVolumeDb: -24,
+        silenceRatio: 0.4,
+      },
+    ])
+  })
+
+  it("closes an ongoing silence at the clip end", () => {
+    const stderr = [
+      "[silencedetect @ 0x1] silence_start: 2",
+      "frame:0 pts:0 pts_time:0",
+      "lavfi.astats.Overall.RMS_level=-inf",
+    ].join("\n")
+
+    expect(parseAudioSignalBuckets(stderr, 5)[0].silenceRatio).toBeCloseTo(0.6)
   })
 })

@@ -9,6 +9,7 @@ import {
   cleanTranscriptCues,
   type RetentionPoint,
   type TranscriptCue,
+  type VideoAnalyticsSummary,
   type VideoDetails,
 } from "@/lib/youtube/youtube"
 
@@ -24,6 +25,10 @@ export interface AnalysedVideo {
   retention: RetentionPoint[] | null
   transcript: TranscriptCue[] | null
   rawAnalytics: Record<string, unknown> | null
+  // The deterministic KPI summary fetched at analyse time (see
+  // lib/video-analytics.ts); null for rows analysed before it existed that
+  // haven't been backfilled by a detail-page visit yet.
+  analyticsSummary: VideoAnalyticsSummary | null
 }
 
 // Raw row shape as returned by Supabase (snake_case columns).
@@ -37,10 +42,11 @@ interface AnalysedVideoRow {
   retention: RetentionPoint[] | null
   transcript: TranscriptCue[] | null
   raw_analytics: Record<string, unknown> | null
+  analytics_summary: VideoAnalyticsSummary | null
 }
 
 const COLUMNS =
-  "id, user_id, video_id, video_title, date_analysed, video_details, retention, transcript, raw_analytics"
+  "id, user_id, video_id, video_title, date_analysed, video_details, retention, transcript, raw_analytics, analytics_summary"
 
 function mapRow(row: AnalysedVideoRow): AnalysedVideo {
   return {
@@ -53,6 +59,7 @@ function mapRow(row: AnalysedVideoRow): AnalysedVideo {
     retention: row.retention,
     transcript: row.transcript,
     rawAnalytics: row.raw_analytics,
+    analyticsSummary: row.analytics_summary,
   }
 }
 
@@ -191,4 +198,28 @@ export async function getAnalysedVideo(
   }
 
   return data ? mapRow(data as AnalysedVideoRow) : null
+}
+
+// Lightweight lookup for workers that already have the analysed_videos UUID
+// rather than YouTube's video id. Event synthesis uses the timestamped cues to
+// compare speech rate inside a retention episode with its preceding control.
+export async function getAnalysedVideoTranscriptById(
+  supabase: SupabaseClient,
+  userId: string,
+  analysedVideoId: string,
+): Promise<TranscriptCue[]> {
+  const { data, error } = await supabase
+    .from("analysed_videos")
+    .select("transcript")
+    .eq("user_id", userId)
+    .eq("id", analysedVideoId)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(`Failed to load analysed video transcript: ${error.message}`)
+  }
+
+  return cleanTranscriptCues(
+    ((data as { transcript?: TranscriptCue[] | null } | null)?.transcript ?? []),
+  )
 }

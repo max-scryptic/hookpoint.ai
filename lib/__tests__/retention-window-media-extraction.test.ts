@@ -875,6 +875,10 @@ describe("sliceSceneCues", () => {
         cuts: [{ atSeconds: 5 }, { atSeconds: 35 }, { atSeconds: 70 }],
         freezes: [{ fromSeconds: 25, toSeconds: 45 }],
         blacks: [{ fromSeconds: 0, toSeconds: 10 }],
+        motionBuckets: [
+          { fromSeconds: 25, toSeconds: 35, score: 0.1 },
+          { fromSeconds: 55, toSeconds: 65, score: 0.3 },
+        ],
       },
       30,
       60,
@@ -883,6 +887,10 @@ describe("sliceSceneCues", () => {
     expect(sliced.cuts).toEqual([{ atSeconds: 35 }])
     expect(sliced.freezes).toEqual([{ fromSeconds: 30, toSeconds: 45 }])
     expect(sliced.blacks).toEqual([])
+    expect(sliced.motionBuckets).toEqual([
+      { fromSeconds: 30, toSeconds: 35, score: 0.1 },
+      { fromSeconds: 55, toSeconds: 60, score: 0.3 },
+    ])
   })
 })
 
