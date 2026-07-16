@@ -122,12 +122,17 @@ async function analyse(
         userId,
         cached.id,
       )
-      if (retentionWindows.length === 0) {
-        const built = buildRetentionWindows(
-          cached.retention,
-          cached.videoDetails.durationSeconds,
-        )
-        retentionWindows = built
+      const built = buildRetentionWindows(
+        cached.retention,
+        cached.videoDetails.durationSeconds,
+      )
+      const needsFullWindowBackfill = retentionWindows.length === 0
+      const needsHoldBackfill =
+        !needsFullWindowBackfill &&
+        !retentionWindows.some((window) => window.kind === "hold") &&
+        built.some((window) => window.kind === "hold")
+      if (needsFullWindowBackfill || needsHoldBackfill) {
+        if (needsFullWindowBackfill) retentionWindows = built
         try {
           const savedWindows = await saveRetentionWindows(
             supabase,
@@ -135,31 +140,38 @@ async function analyse(
             cached.id,
             built,
           )
+          // A legacy report that already has hooks, gains and drop-offs only
+          // needs jobs for its newly-added holds. Passing every saved window to
+          // the upsert helpers would reset settled paid work back to pending.
+          const windowsToAnalyse = needsFullWindowBackfill
+            ? savedWindows
+            : savedWindows.filter((window) => window.kind === "hold")
           await createPendingRetentionWindowAudio(
             supabase,
             userId,
             cached.id,
-            savedWindows,
+            windowsToAnalyse,
           )
           await createPendingRetentionWindowSceneCueScans(
             supabase,
             userId,
             cached.id,
-            savedWindows,
+            windowsToAnalyse,
           )
           await createPendingRetentionWindowEventSynthesis(
             supabase,
             userId,
             cached.id,
-            savedWindows,
+            windowsToAnalyse,
           )
           await saveRetentionWindowTranscripts(
             supabase,
             userId,
             cached.id,
-            savedWindows,
+            windowsToAnalyse,
             transcript,
           )
+          retentionWindows = savedWindows
           triggerRetentionWindowMediaExtraction(
             await getSourceFileForVideo(supabase, userId, videoId),
           )

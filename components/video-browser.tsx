@@ -6,6 +6,8 @@ import {
   ArrowUpDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  EyeIcon,
+  EyeOffIcon,
   GlobeIcon,
   LinkIcon,
   ListFilterIcon,
@@ -82,6 +84,10 @@ export function VideoBrowser({
   const [privacy, setPrivacy] = useState<PrivacyFilter>("all")
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
   const [order, setOrder] = useState<RecentVideosOrder>("date")
+  // This page's whole job is picking a video to analyse, so already-analysed
+  // uploads are hidden by default. The toggle brings them back (and, when on,
+  // surfaces the "Analysed" column) for the occasional re-visit.
+  const [showAnalysed, setShowAnalysed] = useState(false)
 
   // Normalise the picker's Date range to YYYY-MM-DD strings for comparison
   // against each video's (UTC) publish date.
@@ -186,6 +192,7 @@ export function VideoBrowser({
   // ISO timestamp; its date portion compares directly against the YYYY-MM-DD
   // bounds, with `dateTo` inclusive of the whole day.
   const visibleVideos = page.videos.filter((video) => {
+    if (!showAnalysed && analysedIds.has(video.id)) return false
     if (privacy !== "all" && video.privacyStatus !== privacy) return false
     if (dateFrom || dateTo) {
       const publishedDate = video.publishedAt.slice(0, 10)
@@ -282,6 +289,23 @@ export function VideoBrowser({
           </DropdownMenuContent>
         </DropdownMenu>
 
+        {analysedIds.size > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 gap-2"
+            aria-pressed={showAnalysed}
+            onClick={() => setShowAnalysed((value) => !value)}
+          >
+            {showAnalysed ? (
+              <EyeOffIcon className="size-4" />
+            ) : (
+              <EyeIcon className="size-4" />
+            )}
+            {showAnalysed ? "Hide analysed" : "Show analysed"}
+          </Button>
+        )}
+
         {hasActiveFilters && (
           <Button
             variant="ghost"
@@ -314,7 +338,11 @@ export function VideoBrowser({
             <p className="text-sm text-muted-foreground">{emptyMessage}</p>
           </div>
         ) : (
-          <VideoList videos={visibleVideos} analysedIds={analysedIds} />
+          <VideoList
+            videos={visibleVideos}
+            analysedIds={analysedIds}
+            showAnalysedColumn={showAnalysed}
+          />
         )}
       </div>
 

@@ -85,7 +85,7 @@ describe("buildRetentionWindows", () => {
 
   it("indexes each kind from zero independently", () => {
     const windows = buildRetentionWindows(retention, 60)
-    for (const kind of ["hook", "drop_off", "gain"] as const) {
+    for (const kind of ["hook", "drop_off", "gain", "hold"] as const) {
       const ofKind = windows.filter((w) => w.kind === kind)
       expect(ofKind.map((w) => w.windowIndex)).toEqual(
         ofKind.map((_, index) => index),
@@ -121,6 +121,33 @@ describe("buildRetentionWindows", () => {
     // gain step is 50 -> 60, midpoint 55; padded -10/+20, clamped to duration.
     expect(gain.analysisFromSeconds).toBeCloseTo(45)
     expect(gain.analysisToSeconds).toBeCloseTo(60)
+  })
+
+  it("stores a sustained flat stretch as a hold", () => {
+    const flatRetention = [
+      point(0, 1),
+      point(10, 0.8),
+      point(30, 0.65),
+      point(40, 0.648, 0.72),
+      point(50, 0.651, 0.74),
+      point(60, 0.649, 0.76),
+      point(70, 0.647, 0.75),
+    ]
+    const holds = buildRetentionWindows(flatRetention, 70).filter(
+      (window) => window.kind === "hold",
+    )
+
+    expect(holds).toHaveLength(1)
+    expect(holds[0]).toMatchObject({
+      kind: "hold",
+      fromSeconds: 30,
+      toSeconds: 60,
+      startWatchRatio: 0.65,
+      endWatchRatio: 0.649,
+      outOfRange: false,
+    })
+    expect(holds[0].delta).toBeCloseTo(-0.001)
+    expect(holds[0].relativePerformance).toBeCloseTo(0.705)
   })
 })
 
@@ -176,6 +203,13 @@ describe("computeAnalysisWindow", () => {
     expect(computeAnalysisWindow("gain", 0, 4, 6, 300)).toEqual({
       fromSeconds: 0,
       toSeconds: 25,
+    })
+  })
+
+  it("pads both ends of a hold evenly", () => {
+    expect(computeAnalysisWindow("hold", 0, 100, 130, 300)).toEqual({
+      fromSeconds: 90,
+      toSeconds: 140,
     })
   })
 

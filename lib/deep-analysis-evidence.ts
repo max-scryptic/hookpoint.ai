@@ -131,12 +131,15 @@ const KIND_ORDER: Record<PersistedRetentionWindow["kind"], number> = {
   hook: 0,
   drop_off: 1,
   gain: 2,
+  hold: 3,
 }
 
 function windowDisplayLabel(window: PersistedRetentionWindow): string {
   if (window.kind === "hook") return window.label ?? "Hook"
   const ordinal = window.windowIndex + 1
-  return window.kind === "drop_off" ? `Drop-off #${ordinal}` : `Gain #${ordinal}`
+  if (window.kind === "drop_off") return `Drop-off #${ordinal}`
+  if (window.kind === "gain") return `Gain #${ordinal}`
+  return `Hold #${ordinal}`
 }
 
 // Loads a video's full evidence set and groups it by window, skipping any

@@ -51,7 +51,7 @@ type ClientState =
   | { phase: "error"; message: string }
 
 function formatBytes(bytes: number | null): string {
-  if (bytes == null) return "—"
+  if (bytes == null) return "N/A"
   if (bytes < 1024) return `${bytes} B`
   const units = ["KB", "MB", "GB", "TB"]
   let value = bytes / 1024
@@ -64,7 +64,7 @@ function formatBytes(bytes: number | null): string {
 }
 
 function formatDuration(seconds: number | null): string {
-  if (seconds == null) return "—"
+  if (seconds == null) return "N/A"
   const total = Math.round(seconds)
   const hrs = Math.floor(total / 3600)
   const mins = Math.floor((total % 3600) / 60)
@@ -635,7 +635,7 @@ export function SourceFileUpload({
               </DialogTitle>
               <DialogDescription className="text-balance leading-relaxed">
                 Your video has been uploaded and analysis has now begun. This
-                runs in the background, so you’re free to leave this page — we’ll
+                runs in the background, so you’re free to leave this page. We’ll
                 email you once it’s been fully analysed.
               </DialogDescription>
             </div>
@@ -706,7 +706,7 @@ function Body({
           {client.durationMismatch && (
             <li>
               Its duration is {formatDuration(client.durationSeconds)}, while the
-              YouTube video is {formatDuration(youtubeDurationSeconds)} — a difference
+              YouTube video is {formatDuration(youtubeDurationSeconds)}, a difference
               of {client.durationDifferenceSeconds?.toFixed(1) ?? "?"} seconds.
             </li>
           )}

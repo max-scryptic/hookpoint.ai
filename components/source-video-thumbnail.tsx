@@ -177,6 +177,28 @@ export function SourceVideoPlayer({
       video.removeEventListener("loadedmetadata", previewAtScrubTime)
   }, [playbackUrl, playbackWindow, scrubTime])
 
+  // With an insight selected but no uploaded source file to play, there's no
+  // video to float here — yet the reader still needs an obvious way to turn the
+  // highlight back off. Occupy the same sticky slot the player would, offering a
+  // labelled dismiss control that mirrors the player's own close button so the
+  // gesture is the same whether or not a raw file has been uploaded.
+  if (!playbackUrl) {
+    if (!playbackWindow || !onClose) return null
+    return (
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={onClose}
+          className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full border bg-card/95 px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-md backdrop-blur-sm transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label="Close highlights"
+        >
+          <XIcon className="size-4" aria-hidden="true" />
+          Close highlights
+        </button>
+      </div>
+    )
+  }
+
   return (
     // Outer wrapper owns the float animation and pointer state; the close
     // button hangs off it so it can sit *outside* the frame without being

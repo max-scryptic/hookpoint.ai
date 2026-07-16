@@ -545,6 +545,7 @@ describe("synthesizeRetentionWindowEvents", () => {
         trends: [{ eventType: "scene_cut", eventCount: 1, videoCount: 1 }],
         exampleNarratives: ["A burst of quick cuts holds attention."],
       },
+      holds: null,
     })
 
     expect(deletes).toContainEqual({ table: "retention_window_events" })
