@@ -136,7 +136,9 @@ function StageProgress({ data }: { data: ChannelTrendsData }) {
   const message =
     data.stage === "early"
       ? `${data.libraryVideoCount} of ${target} videos - trends strengthening as your library grows.`
-      : `Deeply analyse ${plural(remaining, "more video")} to unlock early trends.`
+      : `Analyse ${plural(remaining, "file")} with ${
+          remaining === 1 ? "its raw source file" : "their raw source files"
+        } to unlock early trends.`
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-4">
@@ -1473,16 +1475,23 @@ function RetentionTrendsTabs({
 }
 
 function BuildingCard({ data }: { data: ChannelTrendsData }) {
+  const isEmpty = data.stage === "empty"
+
   return (
     <Card className="flex flex-col items-start gap-3 p-6">
       <LibraryIcon className="size-5 text-muted-foreground" />
-      <div>
-        <h2 className="text-base font-semibold">
-          {data.stage === "empty"
-            ? "Start your content library"
-            : "Your library is growing"}
-        </h2>
-        <p className="mt-1 max-w-prose text-sm text-muted-foreground">
+      <div className="w-full">
+        {isEmpty ? (
+          <p className="text-sm text-muted-foreground">
+            Start your content library by analysing your videos with their raw
+            source files.
+          </p>
+        ) : (
+          <h2 className="text-base font-semibold">Your library is growing</h2>
+        )}
+        <p
+          className={`${isEmpty ? "mt-3" : "mt-1"} text-sm text-muted-foreground`}
+        >
           Every deep analysis adds its retention events to a private library of
           your content. Once{" "}
           {EARLY_TRENDS_VIDEO_THRESHOLD} videos are in, this page starts
