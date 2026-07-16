@@ -1,21 +1,27 @@
 import Link from "next/link"
 import {
   AreaChartIcon,
+  BookOpenIcon,
   ChevronDownIcon,
+  Clock3Icon,
   ImageIcon,
   LibraryIcon,
   LockIcon,
   MinusIcon,
   PackageIcon,
+  RefreshCwIcon,
+  ShieldCheckIcon,
   SparklesIcon,
   TrendingDownIcon,
   TrendingUpIcon,
   UserPlusIcon,
+  WrenchIcon,
 } from "lucide-react"
 
 import {
   insightCopy,
   packagingFeatureLabel,
+  playbookCopy,
 } from "@/components/channel-trends-copy"
 import {
   EventTypeBadge,
@@ -42,6 +48,7 @@ import {
   type ChannelInsight,
   type ChannelKindTrends,
   type ChannelPackagingPatterns,
+  type ChannelPlaybookRule,
   type ChannelRecurrence,
   type ChannelRecurrenceRow,
   type ChannelSignatureRow,
@@ -73,6 +80,16 @@ import type { RetentionWindowEventType } from "@/lib/retention-window-events"
 
 function plural(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? "" : "s"}`
+}
+
+function formatTimestamp(totalSeconds: number): string {
+  const safe = Math.max(0, Math.round(totalSeconds))
+  const hours = Math.floor(safe / 3600)
+  const minutes = Math.floor((safe % 3600) / 60)
+  const seconds = safe % 60
+  return hours > 0
+    ? `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
+    : `${minutes}:${String(seconds).padStart(2, "0")}`
 }
 
 function StatTile({ label, value }: { label: string; value: number }) {
@@ -217,18 +234,156 @@ function SignalMeter({
   )
 }
 
+const PLAYBOOK_KIND_META = {
+  keep: {
+    label: "Keep doing this",
+    comparison: "audience holds vs drop-offs",
+    Icon: ShieldCheckIcon,
+    text: "text-teal-700 dark:text-teal-400",
+    border: "border-t-teal-600",
+    edge: "border-l-teal-600",
+    fill: "bg-teal-600",
+  },
+  fix: {
+    label: "Fix this next",
+    comparison: "drop-offs vs audience holds",
+    Icon: WrenchIcon,
+    text: "text-destructive",
+    border: "border-t-destructive",
+    edge: "border-l-destructive",
+    fill: "bg-destructive",
+  },
+  recover: {
+    label: "Recover attention",
+    comparison: "retention gains vs audience holds",
+    Icon: RefreshCwIcon,
+    text: "text-emerald-700 dark:text-emerald-400",
+    border: "border-t-emerald-600",
+    edge: "border-l-emerald-600",
+    fill: "bg-emerald-600",
+  },
+} as const
+
+function percent(value: number): string {
+  return `${Math.round(value * 100)}%`
+}
+
+function PlaybookRuleCard({ rule }: { rule: ChannelPlaybookRule }) {
+  const meta = PLAYBOOK_KIND_META[rule.kind]
+  const copy = playbookCopy(rule.kind, rule.eventType)
+
+  return (
+    <Card className={`flex flex-col gap-3 border-t-2 p-5 ${meta.border}`}>
+      <div
+        className={`flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase ${meta.text}`}
+      >
+        <meta.Icon className="size-3.5" />
+        {meta.label}
+      </div>
+      <div>
+        <EventTypeBadge eventType={rule.eventType} />
+        <h3 className="mt-2 text-base font-semibold">{copy.headline}</h3>
+      </div>
+      <p className="text-sm text-muted-foreground">{copy.action}</p>
+      <div className={`rounded-r-md border-l-2 bg-muted/50 px-3 py-2 ${meta.edge}`}>
+        <span className={`block text-xs font-semibold ${meta.text}`}>
+          Next-video rule
+        </span>
+        <span className="text-sm">{copy.whenToUse}</span>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        <Chip>
+          {rule.evidenceVideoCount}/{rule.targetCoveredVideoCount} target videos
+        </Chip>
+        <Chip>
+          {rule.controlVideoCount}/{rule.controlCoveredVideoCount} control videos
+        </Chip>
+        <Chip>avg confidence {rule.meanConfidence.toFixed(2)}</Chip>
+      </div>
+      <div className="text-xs text-muted-foreground">
+        <span className="font-medium text-foreground">
+          {percent(rule.targetRate)} vs {percent(rule.controlRate)}
+        </span>{" "}
+        across {meta.comparison}
+      </div>
+      <SignalMeter signal={rule.signal} fillClass={meta.fill} />
+      {rule.receipts.length > 0 && (
+        <Collapsible>
+          <CollapsibleTrigger className="group flex items-center gap-1 text-xs font-medium text-muted-foreground">
+            <ChevronDownIcon className="size-3.5 transition-transform duration-200 group-data-[panel-open]:rotate-180" />
+            Open evidence from {plural(rule.receipts.length, "video")}
+          </CollapsibleTrigger>
+          <CollapsibleContent className="flex flex-col gap-2 pt-2 pl-4">
+            {rule.receipts.map((receipt) => (
+              <EventReceipt
+                key={`${receipt.analysedVideoId}:${receipt.timestampSeconds ?? "unknown"}`}
+                narrative={receipt.narrative}
+                videoTitle={receipt.videoTitle}
+                analysedVideoId={receipt.analysedVideoId}
+                timestampSeconds={receipt.timestampSeconds}
+              />
+            ))}
+          </CollapsibleContent>
+        </Collapsible>
+      )}
+    </Card>
+  )
+}
+
+function ChannelPlaybook({ rules }: { rules: ChannelPlaybookRule[] }) {
+  return (
+    <section className="flex flex-col gap-3">
+      <div className="rounded-xl border bg-muted/20 p-5">
+        <div className="flex items-center gap-2">
+          <BookOpenIcon className="size-5 text-primary" />
+          <h2 className="text-lg font-semibold">Your next-video playbook</h2>
+        </div>
+        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+          The clearest repeat, repair and recovery rules from your channel.
+          Audience holds act as the control, so common editing habits are not
+          mistaken for useful signals.
+        </p>
+      </div>
+      <div className="grid gap-3 lg:grid-cols-3">
+        {rules.map((rule) => (
+          <PlaybookRuleCard key={rule.kind} rule={rule} />
+        ))}
+      </div>
+    </section>
+  )
+}
+
 function EventReceipt({
   narrative,
   videoTitle,
+  analysedVideoId,
+  timestampSeconds,
 }: {
   narrative: string
   videoTitle: string | null
+  analysedVideoId?: string
+  timestampSeconds?: number | null
 }) {
+  const sourceLabel = [
+    videoTitle,
+    timestampSeconds == null ? null : formatTimestamp(timestampSeconds),
+  ]
+    .filter(Boolean)
+    .join(" · ")
   return (
     <div className="flex flex-col gap-0.5 border-l-2 pl-3 text-xs">
       <p className="text-muted-foreground">{stripEmDashes(narrative)}</p>
-      {videoTitle && (
-        <span className="text-muted-foreground/80">{videoTitle}</span>
+      {sourceLabel && analysedVideoId && (
+        <Link
+          href={`/dashboard/analysed-video/${analysedVideoId}`}
+          className="inline-flex items-center gap-1 text-muted-foreground/80 underline-offset-2 hover:text-foreground hover:underline"
+        >
+          {timestampSeconds != null && <Clock3Icon className="size-3" />}
+          {sourceLabel}
+        </Link>
+      )}
+      {sourceLabel && !analysedVideoId && (
+        <span className="text-muted-foreground/80">{sourceLabel}</span>
       )}
     </div>
   )
@@ -1397,6 +1552,9 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
 
   return (
     <div className="flex flex-col gap-6">
+      {showTrends && data.playbook.length > 0 && (
+        <ChannelPlaybook rules={data.playbook} />
+      )}
       <LibraryStats data={data} />
       <StageProgress data={data} />
       {showTrends ? (
