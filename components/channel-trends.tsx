@@ -118,7 +118,9 @@ function StageProgress({ data }: { data: ChannelTrendsData }) {
   const message =
     data.stage === "early"
       ? `${data.libraryVideoCount} of ${target} videos - trends strengthening as your library grows.`
-      : `Deeply analyse ${plural(remaining, "more video")} to unlock early trends.`
+      : data.libraryVideoCount === 0
+        ? `Analyse ${target} videos with their raw source files to unlock early trends.`
+        : `Deeply analyse ${plural(remaining, "more video")} to unlock early trends.`
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-4">
@@ -1305,7 +1307,14 @@ function BuildingCard({ data }: { data: ChannelTrendsData }) {
       <div>
         <h2 className="text-base font-semibold">
           {data.stage === "empty"
-            ? "Start your content library"
+            ? (
+                <>
+                  Start your{" "}
+                  <span className="font-semibold text-foreground">
+                    content library
+                  </span>
+                </>
+              )
             : "Your library is growing"}
         </h2>
         <p className="mt-1 max-w-prose text-sm text-muted-foreground">
