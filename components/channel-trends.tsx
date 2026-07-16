@@ -1,9 +1,11 @@
 import Link from "next/link"
 import {
+  AreaChartIcon,
   ChevronDownIcon,
   ImageIcon,
   LibraryIcon,
   LockIcon,
+  PackageIcon,
   SparklesIcon,
   TrendingDownIcon,
   TrendingUpIcon,
@@ -26,6 +28,12 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs"
 import {
   EARLY_TRENDS_VIDEO_THRESHOLD,
   ESTABLISHED_TRENDS_VIDEO_THRESHOLD,
@@ -1216,6 +1224,80 @@ function FullBreakdown({ data }: { data: ChannelTrendsData }) {
   )
 }
 
+// The top-3 tabs: the retention section's quick read, splitting the recurring
+// patterns into the ones that cost you viewers and the ones that keep them.
+// Each tab shows only the three most channel-wide trends (trends arrive
+// ordered most-channel-wide first, so a slice is the top 3); the exhaustive
+// list stays in the Full breakdown below.
+const RETENTION_TRENDS_TAB_LIMIT = 3
+
+function RetentionTrendsTabs({
+  dropOffs,
+  gains,
+}: {
+  dropOffs: ChannelKindTrends | null
+  gains: ChannelKindTrends | null
+}) {
+  const tabs = [
+    {
+      value: "negative",
+      label: "Negative retention",
+      icon: <TrendingDownIcon className="text-destructive" />,
+      description:
+        "Your top 3 recurring drop-off patterns, most channel-wide first.",
+      trends: dropOffs?.trends.slice(0, RETENTION_TRENDS_TAB_LIMIT) ?? [],
+    },
+    {
+      value: "positive",
+      label: "Positive retention",
+      icon: (
+        <TrendingUpIcon className="text-emerald-600 dark:text-emerald-500" />
+      ),
+      description:
+        "Your top 3 recurring retention gains, most channel-wide first.",
+      trends: gains?.trends.slice(0, RETENTION_TRENDS_TAB_LIMIT) ?? [],
+    },
+  ].filter((tab) => tab.trends.length > 0)
+
+  if (tabs.length === 0) return null
+
+  return (
+    <Card className="flex flex-col gap-3 p-5">
+      <div>
+        <h3 className="text-sm font-semibold">Top retention trends</h3>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          The patterns that recur across the most of your uploads, split by
+          whether they lose viewers or hold them.
+        </p>
+      </div>
+      <Tabs defaultValue={tabs[0].value}>
+        <TabsList>
+          {tabs.map((tab) => (
+            <TabsTrigger key={tab.value} value={tab.value}>
+              {tab.icon}
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        {tabs.map((tab) => (
+          <TabsContent
+            key={tab.value}
+            value={tab.value}
+            className="flex flex-col gap-2"
+          >
+            <p className="text-xs text-muted-foreground">{tab.description}</p>
+            <div className="rounded-lg border px-3">
+              {tab.trends.map((trend) => (
+                <TrendRow key={trend.eventType} trend={trend} />
+              ))}
+            </div>
+          </TabsContent>
+        ))}
+      </Tabs>
+    </Card>
+  )
+}
+
 function BuildingCard({ data }: { data: ChannelTrendsData }) {
   return (
     <Card className="flex flex-col items-start gap-3 p-6">
@@ -1260,16 +1342,21 @@ function EarlySignalNote({ data }: { data: ChannelTrendsData }) {
 function TrendsSection({
   title,
   description,
+  icon,
   children,
 }: {
   title: string
   description: string
+  icon: React.ReactNode
   children: React.ReactNode
 }) {
   return (
     <section className="flex flex-col gap-3">
       <div className="border-b pb-2">
-        <h2 className="text-lg font-semibold">{title}</h2>
+        <div className="flex items-center gap-2">
+          {icon}
+          <h2 className="text-lg font-semibold">{title}</h2>
+        </div>
         <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
       </div>
       {children}
@@ -1299,6 +1386,7 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
             <TrendsSection
               title="Retention"
               description="What keeps viewers watching and where they leave, across every deeply analysed upload."
+              icon={<AreaChartIcon className="size-4 text-muted-foreground" />}
             >
               {data.insights.length > 0 && (
                 <div className="flex flex-col gap-3">
@@ -1311,6 +1399,10 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
                   ))}
                 </div>
               )}
+              <RetentionTrendsTabs
+                dropOffs={data.dropOffs}
+                gains={data.gains}
+              />
               {data.signature != null && (
                 <SignatureChart
                   rows={data.signature}
@@ -1329,6 +1421,7 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
             <TrendsSection
               title="Packaging"
               description="How your titles, thumbnails and promises translate into reach and subscribers."
+              icon={<PackageIcon className="size-4 text-muted-foreground" />}
             >
               {data.packaging != null && (
                 <PackagingPatternsCard packaging={data.packaging} />
