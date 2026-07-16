@@ -173,9 +173,9 @@ function formatAnalysedAt(iso: string): string {
 // signal that a video has been deeply analysed rather than only retention-scanned.
 function RawFileBadge() {
   return (
-    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-600 dark:text-emerald-500">
+    <span className="inline-flex items-center text-sm font-medium text-emerald-600 dark:text-emerald-500">
       <CircleCheckIcon className="size-4" />
-      Uploaded
+      <span className="sr-only">Uploaded</span>
     </span>
   )
 }
@@ -442,7 +442,7 @@ export function AnalysedVideoBrowser({
                   Video
                 </TableHead>
                 <TableHead className="hidden px-4 py-3 text-accent-foreground sm:table-cell">
-                  Raw file
+                  Raw file uploaded
                 </TableHead>
                 <TableHead className="hidden px-4 py-3 text-accent-foreground md:table-cell">
                   Visibility
