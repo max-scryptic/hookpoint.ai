@@ -24,6 +24,12 @@ import {
   loadChannelEventRecords,
   type ChannelEventRecord,
 } from "@/lib/channel-event-history"
+import type {
+  HookDelivery,
+  PackagingTaxonomy,
+  PromiseType,
+  TitleStyle,
+} from "@/lib/packaging-taxonomy"
 import type { RetentionWindowEventType } from "@/lib/retention-window-events"
 import type { RetentionWindowKind } from "@/lib/retention-windows"
 
@@ -80,9 +86,10 @@ export interface ChannelKindTrends {
 }
 
 // A library video, as the derived views need it: title for attribution,
-// analysis date to order the recurrence strip's columns, and the lifetime
-// totals from the analytics snapshot stored at analyse time — null when the
-// video predates the analytics_summary column or a metric wasn't reported.
+// analysis date to order the recurrence strip's columns, the lifetime totals
+// from the analytics snapshot stored at analyse time (null when the video
+// predates the analytics_summary column or a metric wasn't reported), and the
+// packaging read for the packaging patterns view.
 export interface ChannelVideo {
   id: string
   title: string | null
@@ -90,6 +97,16 @@ export interface ChannelVideo {
   views: number | null
   subscribersGained: number | null
   subscribersLost: number | null
+  // YouTube publish date, from the stored video metadata.
+  publishedAt: string | null
+  // When the analytics snapshot was taken — the "as of" moment views/day is
+  // measured against, so a snapshot's age never skews the rate.
+  analyticsFetchedAt: string | null
+  // Share (0..1) of snapshot views from Browse features + Suggested videos —
+  // the packaging-earned surfaces; null when no traffic breakdown exists.
+  browseSuggestedShare: number | null
+  // The categorical packaging read; null until generated or backfilled.
+  packaging: PackagingTaxonomy | null
 }
 
 // Events with no confidence (rows written before the column existed) weigh in
@@ -263,6 +280,97 @@ export interface ChannelSubscriberConversion {
   patterns: SubscriberPattern[]
 }
 
+// --- Packaging patterns: what high-reach packaging does differently --------
+
+// Reach is views per day between publish and the analytics snapshot, because
+// raw view counts can't be compared across a library where one video is two
+// years old and another is two weeks old. Both numbers come from the same
+// snapshot, so the rate is internally consistent — but it still favours
+// recent uploads (views front-load), which the UI says out loud.
+//
+// The comparison itself is the same contrast move the retention machinery
+// uses, applied to the packaging taxonomy: split covered videos into a
+// high-reach and a low-reach half, then report the packaging features common
+// in the high half and rare in the low half. Correlational by construction.
+
+export const PACKAGING_MIN_COVERED_VIDEOS = 4
+// Both reach bands need this many taxonomy-carrying videos before feature
+// prevalence between them says anything.
+const FEATURE_MIN_BAND_VIDEOS = 2
+const FEATURE_MIN_HIGH_SHARE = 2 / 3
+const FEATURE_MAX_LOW_SHARE = 1 / 3
+const MAX_PACKAGING_FEATURES = 4
+// Thumbnail text banding: none, a few words, a wall.
+const THUMB_TEXT_HEAVY_WORDS = 4
+// Alignment score banding for the tight/loose feature flags.
+const ALIGNMENT_TIGHT_SCORE = 0.75
+const ALIGNMENT_LOOSE_SCORE = 0.5
+// A topic needs a couple of videos and a pronounced reach ratio before the
+// page calls it out.
+const TOPIC_MIN_VIDEOS = 2
+const TOPIC_CALLOUT_RATIO = 1.5
+const MAX_TOPIC_ROWS = 3
+
+export type ReachBand = "high" | "middle" | "low"
+
+// A packaging trait as a countable flag. Both directions of a trait exist
+// (face / no face) so whichever side splits the bands can surface.
+export type PackagingFeature =
+  | `title:${TitleStyle}`
+  | "thumb:face"
+  | "thumb:no_face"
+  | "thumb:text_free"
+  | "thumb:text_light"
+  | "thumb:text_heavy"
+  | `promise:${PromiseType}`
+  | `hook:${HookDelivery}`
+  | "alignment:tight"
+  | "alignment:loose"
+
+export interface PackagingReachVideo {
+  id: string
+  title: string | null
+  views: number
+  // Days between publish and the analytics snapshot, floored at 1.
+  ageDays: number
+  viewsPerDay: number
+  browseSuggestedShare: number | null
+  band: ReachBand
+  hasTaxonomy: boolean
+}
+
+export interface PackagingFeatureContrast {
+  feature: PackagingFeature
+  // Prevalence among the taxonomy-carrying videos of each band.
+  highCount: number
+  highTotal: number
+  lowCount: number
+  lowTotal: number
+}
+
+export interface PackagingTopicReach {
+  topic: string
+  videoCount: number
+  medianViewsPerDay: number
+  // vs the covered library's median reach: 2 = twice the typical reach.
+  ratio: number
+}
+
+export interface ChannelPackagingPatterns {
+  // Covered videos sorted by reach, best first.
+  videos: PackagingReachVideo[]
+  medianViewsPerDay: number
+  // Features over-represented in the high-reach band, strongest split first;
+  // empty when either band lacks taxonomy coverage.
+  features: PackagingFeatureContrast[]
+  // Topics whose reach is pronouncedly above or below the channel's typical,
+  // highest ratio first.
+  topics: PackagingTopicReach[]
+  taxonomyVideoCount: number
+  coveredVideoCount: number
+  libraryVideoCount: number
+}
+
 export interface ChannelTrendsData {
   stage: ChannelTrendsStage
   // Distinct videos with a completed event synthesis — the library the
@@ -283,6 +391,8 @@ export interface ChannelTrendsData {
   recurrence: ChannelRecurrence | null
   // Null until enough library videos carry an analytics snapshot.
   subscribers: ChannelSubscriberConversion | null
+  // Null until enough library videos carry views and a publish date.
+  packaging: ChannelPackagingPatterns | null
 }
 
 function kindTrends(
@@ -766,6 +876,194 @@ export function buildSubscriberConversion(
   }
 }
 
+// Flattens a taxonomy into the countable trait flags the band contrast runs
+// over.
+export function packagingFeatures(
+  taxonomy: PackagingTaxonomy,
+): PackagingFeature[] {
+  const features: PackagingFeature[] = taxonomy.titleStyles.map(
+    (style): PackagingFeature => `title:${style}`,
+  )
+  features.push(taxonomy.thumbnailHasFace ? "thumb:face" : "thumb:no_face")
+  features.push(
+    taxonomy.thumbnailTextWordCount === 0
+      ? "thumb:text_free"
+      : taxonomy.thumbnailTextWordCount < THUMB_TEXT_HEAVY_WORDS
+        ? "thumb:text_light"
+        : "thumb:text_heavy",
+  )
+  features.push(`promise:${taxonomy.promiseType}`)
+  features.push(`hook:${taxonomy.hookDelivery}`)
+  if (taxonomy.alignmentScore >= ALIGNMENT_TIGHT_SCORE) {
+    features.push("alignment:tight")
+  } else if (taxonomy.alignmentScore < ALIGNMENT_LOOSE_SCORE) {
+    features.push("alignment:loose")
+  }
+  return features
+}
+
+// Packaging features common in the high-reach band and rare in the low-reach
+// band. Both bands must carry enough taxonomies; the middle band (odd counts)
+// never votes.
+function packagingFeatureContrasts(
+  high: PackagingTaxonomy[],
+  low: PackagingTaxonomy[],
+): PackagingFeatureContrast[] {
+  if (high.length < FEATURE_MIN_BAND_VIDEOS || low.length < FEATURE_MIN_BAND_VIDEOS) {
+    return []
+  }
+
+  const count = (band: PackagingTaxonomy[]): Map<PackagingFeature, number> => {
+    const counts = new Map<PackagingFeature, number>()
+    for (const taxonomy of band) {
+      for (const feature of new Set(packagingFeatures(taxonomy))) {
+        counts.set(feature, (counts.get(feature) ?? 0) + 1)
+      }
+    }
+    return counts
+  }
+  const highCounts = count(high)
+  const lowCounts = count(low)
+
+  return [...highCounts.entries()]
+    .map(([feature, highCount]) => ({
+      feature,
+      highCount,
+      highTotal: high.length,
+      lowCount: lowCounts.get(feature) ?? 0,
+      lowTotal: low.length,
+    }))
+    .filter(
+      (row) =>
+        row.highCount / row.highTotal >= FEATURE_MIN_HIGH_SHARE &&
+        row.lowCount / row.lowTotal <= FEATURE_MAX_LOW_SHARE,
+    )
+    .sort(
+      (a, b) =>
+        b.highCount / b.highTotal -
+          b.lowCount / b.lowTotal -
+          (a.highCount / a.highTotal - a.lowCount / a.lowTotal) ||
+        b.highCount - a.highCount ||
+        a.feature.localeCompare(b.feature),
+    )
+    .slice(0, MAX_PACKAGING_FEATURES)
+}
+
+// Topics whose median reach sits pronouncedly above or below the channel's
+// typical reach.
+function packagingTopicReach(
+  videos: { viewsPerDay: number; taxonomy: PackagingTaxonomy | null }[],
+  medianViewsPerDay: number,
+): PackagingTopicReach[] {
+  if (medianViewsPerDay <= 0) return []
+
+  const byTopic = new Map<string, number[]>()
+  for (const video of videos) {
+    if (video.taxonomy == null) continue
+    for (const topic of new Set(video.taxonomy.topics)) {
+      const rates = byTopic.get(topic)
+      if (rates) rates.push(video.viewsPerDay)
+      else byTopic.set(topic, [video.viewsPerDay])
+    }
+  }
+
+  return [...byTopic.entries()]
+    .filter(([, rates]) => rates.length >= TOPIC_MIN_VIDEOS)
+    .map(([topic, rates]) => {
+      const medianRate = median(rates)
+      return {
+        topic,
+        videoCount: rates.length,
+        medianViewsPerDay: medianRate,
+        ratio: medianRate / medianViewsPerDay,
+      }
+    })
+    .filter(
+      (row) =>
+        row.ratio >= TOPIC_CALLOUT_RATIO || row.ratio <= 1 / TOPIC_CALLOUT_RATIO,
+    )
+    .sort((a, b) => b.ratio - a.ratio || a.topic.localeCompare(b.topic))
+    .slice(0, MAX_TOPIC_ROWS)
+}
+
+const DAY_MS = 86_400_000
+
+// The packaging patterns view: per-video reach (views/day at snapshot time),
+// a high/low band split, and the packaging features and topics that separate
+// the bands. Null until enough videos carry both views and a publish date.
+export function buildPackagingPatterns(
+  videos: ChannelVideo[],
+  libraryVideoCount: number,
+): ChannelPackagingPatterns | null {
+  const covered = videos.flatMap((video) => {
+    if (video.views == null || video.views <= 0) return []
+    const published = video.publishedAt ? Date.parse(video.publishedAt) : NaN
+    const fetched = video.analyticsFetchedAt
+      ? Date.parse(video.analyticsFetchedAt)
+      : NaN
+    if (!Number.isFinite(published) || !Number.isFinite(fetched)) return []
+    const ageDays = Math.max(1, Math.round((fetched - published) / DAY_MS))
+    return [
+      {
+        video,
+        views: video.views,
+        ageDays,
+        viewsPerDay: video.views / ageDays,
+      },
+    ]
+  })
+  if (covered.length < PACKAGING_MIN_COVERED_VIDEOS) return null
+
+  covered.sort(
+    (a, b) =>
+      b.viewsPerDay - a.viewsPerDay || a.video.id.localeCompare(b.video.id),
+  )
+  const bandSize = Math.floor(covered.length / 2)
+  const bandFor = (index: number): ReachBand =>
+    index < bandSize
+      ? "high"
+      : index >= covered.length - bandSize
+        ? "low"
+        : "middle"
+
+  const rows: PackagingReachVideo[] = covered.map((entry, index) => ({
+    id: entry.video.id,
+    title: entry.video.title,
+    views: entry.views,
+    ageDays: entry.ageDays,
+    viewsPerDay: entry.viewsPerDay,
+    browseSuggestedShare: entry.video.browseSuggestedShare,
+    band: bandFor(index),
+    hasTaxonomy: entry.video.packaging != null,
+  }))
+
+  const bandTaxonomies = (band: ReachBand): PackagingTaxonomy[] =>
+    covered
+      .filter((entry, index) => bandFor(index) === band)
+      .flatMap((entry) => entry.video.packaging ?? [])
+
+  const medianViewsPerDay = median(covered.map((entry) => entry.viewsPerDay))
+  return {
+    videos: rows,
+    medianViewsPerDay,
+    features: packagingFeatureContrasts(
+      bandTaxonomies("high"),
+      bandTaxonomies("low"),
+    ),
+    topics: packagingTopicReach(
+      covered.map((entry) => ({
+        viewsPerDay: entry.viewsPerDay,
+        taxonomy: entry.video.packaging,
+      })),
+      medianViewsPerDay,
+    ),
+    taxonomyVideoCount: covered.filter((entry) => entry.video.packaging != null)
+      .length,
+    coveredVideoCount: covered.length,
+    libraryVideoCount,
+  }
+}
+
 // Pure aggregation over already-loaded inputs, split from the loader so tests
 // don't need a database.
 export function buildChannelTrends(params: {
@@ -792,6 +1090,7 @@ export function buildChannelTrends(params: {
     insights: buildChannelInsights(records, signature, libraryVideoCount),
     recurrence: buildChannelRecurrence(records, videos, signature),
     subscribers: buildSubscriberConversion(records, videos, libraryVideoCount),
+    packaging: buildPackagingPatterns(videos, libraryVideoCount),
   }
 }
 
@@ -826,9 +1125,32 @@ async function loadLibrarySize(
   }
 }
 
-// Title, analysis date and analytics snapshot for every video the page
-// touches — event attribution, the recurrence strip's chronological columns
-// and the subscriber conversion view all read from this.
+// The traffic-source codes YouTube attributes to its packaging-driven
+// surfaces: Browse features (home/subscriptions feed) and Suggested videos.
+const PACKAGING_TRAFFIC_SOURCES = new Set(["SUBSCRIBER", "RELATED_VIDEO"])
+
+function browseSuggestedShare(
+  trafficSources: { source?: string; views?: number }[] | undefined,
+): number | null {
+  if (!trafficSources || trafficSources.length === 0) return null
+  let total = 0
+  let packagingDriven = 0
+  for (const bucket of trafficSources) {
+    const views = bucket.views ?? 0
+    total += views
+    if (bucket.source && PACKAGING_TRAFFIC_SOURCES.has(bucket.source)) {
+      packagingDriven += views
+    }
+  }
+  return total > 0 ? packagingDriven / total : null
+}
+
+// Title, analysis date, analytics snapshot and packaging taxonomy for every
+// video the page touches — event attribution, the recurrence strip's
+// chronological columns, the subscriber conversion view and the packaging
+// patterns view all read from this. JSON-path selects keep the payload to the
+// fields used instead of shipping whole video_details/packaging_alignment
+// documents.
 async function loadVideos(
   supabase: SupabaseClient,
   userId: string,
@@ -838,7 +1160,9 @@ async function loadVideos(
 
   const { data, error } = await supabase
     .from("analysed_videos")
-    .select("id, video_title, date_analysed, analytics_summary")
+    .select(
+      "id, video_title, date_analysed, analytics_summary, published_at:video_details->>publishedAt, packaging_taxonomy:packaging_alignment->taxonomy",
+    )
     .eq("user_id", userId)
     .in("id", videoIds)
 
@@ -847,7 +1171,7 @@ async function loadVideos(
   }
 
   return (
-    (data ?? []) as {
+    (data ?? []) as unknown as {
       id: string
       video_title: string | null
       date_analysed: string | null
@@ -855,7 +1179,11 @@ async function loadVideos(
         views?: number | null
         subscribersGained?: number | null
         subscribersLost?: number | null
+        trafficSources?: { source?: string; views?: number }[]
+        fetchedAt?: string | null
       } | null
+      published_at: string | null
+      packaging_taxonomy: PackagingTaxonomy | null
     }[]
   ).map((row) => ({
     id: row.id,
@@ -864,6 +1192,12 @@ async function loadVideos(
     views: row.analytics_summary?.views ?? null,
     subscribersGained: row.analytics_summary?.subscribersGained ?? null,
     subscribersLost: row.analytics_summary?.subscribersLost ?? null,
+    publishedAt: row.published_at,
+    analyticsFetchedAt: row.analytics_summary?.fetchedAt ?? null,
+    browseSuggestedShare: browseSuggestedShare(
+      row.analytics_summary?.trafficSources,
+    ),
+    packaging: row.packaging_taxonomy,
   }))
 }
 

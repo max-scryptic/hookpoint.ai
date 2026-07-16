@@ -6,10 +6,13 @@ import {
   buildChannelRecurrence,
   buildChannelSignature,
   buildChannelTrends,
+  buildPackagingPatterns,
   buildSubscriberConversion,
   channelTrendsStage,
+  packagingFeatures,
   type ChannelVideo,
 } from "@/lib/channel-trends"
+import type { PackagingTaxonomy } from "@/lib/packaging-taxonomy"
 
 function record(overrides: Partial<ChannelEventRecord>): ChannelEventRecord {
   return {
@@ -26,8 +29,8 @@ function video(
   id: string,
   title: string | null = null,
   dateAnalysed: string | null = null,
-  analytics: Partial<
-    Pick<ChannelVideo, "views" | "subscribersGained" | "subscribersLost">
+  extras: Partial<
+    Omit<ChannelVideo, "id" | "title" | "dateAnalysed">
   > = {},
 ): ChannelVideo {
   return {
@@ -37,7 +40,11 @@ function video(
     views: null,
     subscribersGained: null,
     subscribersLost: null,
-    ...analytics,
+    publishedAt: null,
+    analyticsFetchedAt: null,
+    browseSuggestedShare: null,
+    packaging: null,
+    ...extras,
   }
 }
 
@@ -175,6 +182,7 @@ describe("buildChannelTrends", () => {
     expect(data.insights).toEqual([])
     expect(data.recurrence).toBeNull()
     expect(data.subscribers).toBeNull()
+    expect(data.packaging).toBeNull()
   })
 })
 
@@ -652,6 +660,190 @@ describe("buildChannelRecurrence", () => {
         records,
         [video("v-1")],
         buildChannelSignature(records),
+      ),
+    ).toBeNull()
+  })
+})
+
+function taxonomy(overrides: Partial<PackagingTaxonomy> = {}): PackagingTaxonomy {
+  return {
+    titleStyles: ["direct_label"],
+    thumbnailHasFace: false,
+    thumbnailEmotion: null,
+    thumbnailTextWordCount: 0,
+    promiseType: "other",
+    hookDelivery: "delayed",
+    alignmentScore: 0.6,
+    topics: ["general"],
+    model: "test-model",
+    generatedAt: "2026-07-01T00:00:00Z",
+    ...overrides,
+  }
+}
+
+describe("packagingFeatures", () => {
+  it("flattens a taxonomy into countable trait flags", () => {
+    expect(
+      packagingFeatures(
+        taxonomy({
+          titleStyles: ["curiosity_gap", "result_claim"],
+          thumbnailHasFace: true,
+          thumbnailEmotion: "excited",
+          thumbnailTextWordCount: 5,
+          promiseType: "transformation",
+          hookDelivery: "direct",
+          alignmentScore: 0.9,
+        }),
+      ),
+    ).toEqual([
+      "title:curiosity_gap",
+      "title:result_claim",
+      "thumb:face",
+      "thumb:text_heavy",
+      "promise:transformation",
+      "hook:direct",
+      "alignment:tight",
+    ])
+  })
+
+  it("bands thumbnail text and only flags pronounced alignment", () => {
+    expect(packagingFeatures(taxonomy())).toEqual([
+      "title:direct_label",
+      "thumb:no_face",
+      "thumb:text_free",
+      "promise:other",
+      "hook:delayed",
+      // 0.6 sits between loose (<0.5) and tight (>=0.75): no flag.
+    ])
+    expect(
+      packagingFeatures(taxonomy({ thumbnailTextWordCount: 2, alignmentScore: 0.3 })),
+    ).toContain("thumb:text_light")
+    expect(
+      packagingFeatures(taxonomy({ alignmentScore: 0.3 })),
+    ).toContain("alignment:loose")
+  })
+})
+
+describe("buildPackagingPatterns", () => {
+  // All published the same day with a snapshot ten days later, so views/day
+  // is just views/10: 100, 50, 20, 10 — high band {r-1, r-2}, low {r-3, r-4}.
+  const reachExtras = {
+    publishedAt: "2026-01-01T00:00:00Z",
+    analyticsFetchedAt: "2026-01-11T00:00:00Z",
+  }
+  const reachVideos = [
+    video("r-1", "Breakout", null, {
+      ...reachExtras,
+      views: 1000,
+      packaging: taxonomy({
+        titleStyles: ["curiosity_gap"],
+        thumbnailHasFace: true,
+        thumbnailEmotion: "excited",
+        topics: ["gear reviews"],
+      }),
+    }),
+    video("r-2", "Solid", null, {
+      ...reachExtras,
+      views: 500,
+      packaging: taxonomy({
+        titleStyles: ["curiosity_gap"],
+        thumbnailHasFace: true,
+        thumbnailEmotion: "happy",
+        topics: ["gear reviews"],
+      }),
+    }),
+    video("r-3", "Quiet", null, {
+      ...reachExtras,
+      views: 200,
+      packaging: taxonomy({ topics: ["vlogs"] }),
+    }),
+    video("r-4", "Quietest", null, {
+      ...reachExtras,
+      views: 100,
+      packaging: taxonomy({ topics: ["vlogs", "one-off"] }),
+    }),
+  ]
+
+  it("computes views/day, bands the halves and finds the feature contrast", () => {
+    const patterns = buildPackagingPatterns(reachVideos, 4)
+
+    expect(patterns?.videos.map((v) => [v.id, v.band])).toEqual([
+      ["r-1", "high"],
+      ["r-2", "high"],
+      ["r-3", "low"],
+      ["r-4", "low"],
+    ])
+    expect(patterns?.videos[0]).toMatchObject({
+      views: 1000,
+      ageDays: 10,
+      viewsPerDay: 100,
+      hasTaxonomy: true,
+    })
+    expect(patterns?.medianViewsPerDay).toBe(35)
+
+    // Both high-band videos share a curiosity-gap title and a face; both
+    // low-band videos have neither. Shared traits (promise, hook, text-free
+    // thumbnail) never qualify.
+    expect(patterns?.features.map((f) => f.feature)).toEqual([
+      "thumb:face",
+      "title:curiosity_gap",
+    ])
+    expect(patterns?.features[0]).toMatchObject({
+      highCount: 2,
+      highTotal: 2,
+      lowCount: 0,
+      lowTotal: 2,
+    })
+  })
+
+  it("calls out topics that over- and under-perform the typical reach", () => {
+    const patterns = buildPackagingPatterns(reachVideos, 4)
+
+    // gear reviews: median 75/day vs channel 35 → ~2.1×; vlogs: 15 → ~0.43×.
+    // "one-off" has a single video and never qualifies.
+    expect(patterns?.topics.map((t) => t.topic)).toEqual([
+      "gear reviews",
+      "vlogs",
+    ])
+    expect(patterns?.topics[0].ratio).toBeCloseTo(75 / 35)
+    expect(patterns?.topics[1].videoCount).toBe(2)
+  })
+
+  it("leaves the middle video of an odd split out of both bands", () => {
+    const withMiddle = [
+      ...reachVideos,
+      video("r-5", "Median", null, { ...reachExtras, views: 300 }),
+    ]
+    const patterns = buildPackagingPatterns(withMiddle, 5)
+
+    const bands = new Map(patterns?.videos.map((v) => [v.id, v.band]))
+    expect(bands.get("r-5")).toBe("middle")
+    expect(bands.get("r-2")).toBe("high")
+    expect(bands.get("r-3")).toBe("low")
+  })
+
+  it("withholds features when a band lacks taxonomy coverage", () => {
+    const sparse = reachVideos.map((v, index) =>
+      index === 2 || index === 3 ? { ...v, packaging: null } : v,
+    )
+    const patterns = buildPackagingPatterns(sparse, 4)
+
+    expect(patterns?.features).toEqual([])
+    expect(patterns?.taxonomyVideoCount).toBe(2)
+  })
+
+  it("needs four videos with views, a publish date and a snapshot date", () => {
+    expect(
+      buildPackagingPatterns(
+        [
+          ...reachVideos.slice(0, 3),
+          // No publish date: excluded from coverage.
+          video("r-4", null, null, {
+            views: 100,
+            analyticsFetchedAt: "2026-01-11T00:00:00Z",
+          }),
+        ],
+        4,
       ),
     ).toBeNull()
   })

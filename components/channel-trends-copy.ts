@@ -1,4 +1,9 @@
-import type { ChannelInsightKind } from "@/lib/channel-trends"
+import type { ChannelInsightKind, PackagingFeature } from "@/lib/channel-trends"
+import type {
+  HookDelivery,
+  PromiseType,
+  TitleStyle,
+} from "@/lib/packaging-taxonomy"
 import type { RetentionWindowEventType } from "@/lib/retention-window-events"
 
 // The written half of a channel insight: lib/channel-trends.ts decides WHICH
@@ -138,4 +143,58 @@ export function insightCopy(
   eventType: RetentionWindowEventType,
 ): InsightCopy {
   return COPY_BY_KIND[kind][eventType]
+}
+
+// --- Packaging feature labels ----------------------------------------------
+// Human names for the packaging taxonomy's countable trait flags, shown in
+// the "what your high-reach packaging does differently" contrast.
+
+const TITLE_STYLE_LABELS: Record<TitleStyle, string> = {
+  curiosity_gap: "Curiosity-gap title",
+  how_to: "How-to title",
+  number_list: "Numbered-list title",
+  question: "Question title",
+  negative_warning: "Warning / mistake title",
+  result_claim: "Result-claim title",
+  challenge: "Challenge title",
+  personal_story: "Personal-story title",
+  direct_label: "Plain descriptive title",
+}
+
+const PROMISE_LABELS: Record<PromiseType, string> = {
+  transformation: "Transformation promise",
+  result_reveal: "Result-reveal promise",
+  how_to: "Instructional promise",
+  list: "List promise",
+  story: "Story promise",
+  challenge: "Challenge promise",
+  opinion: "Opinion promise",
+  comparison: "Comparison promise",
+  other: "Unclassified promise",
+}
+
+const HOOK_DELIVERY_LABELS: Record<HookDelivery, string> = {
+  direct: "Hook pays off the promise immediately",
+  delayed: "Hook takes its time reaching the promise",
+  absent: "Hook never addresses the promise",
+}
+
+const FLAT_FEATURE_LABELS: Record<string, string> = {
+  "thumb:face": "Face in the thumbnail",
+  "thumb:no_face": "No face in the thumbnail",
+  "thumb:text_free": "Text-free thumbnail",
+  "thumb:text_light": "Light thumbnail text (1–3 words)",
+  "thumb:text_heavy": "Text-heavy thumbnail (4+ words)",
+  "alignment:tight": "Tight title–thumbnail–hook alignment",
+  "alignment:loose": "Loose title–thumbnail–hook alignment",
+}
+
+export function packagingFeatureLabel(feature: PackagingFeature): string {
+  const flat = FLAT_FEATURE_LABELS[feature]
+  if (flat) return flat
+  const [prefix, value] = feature.split(":") as [string, string]
+  if (prefix === "title") return TITLE_STYLE_LABELS[value as TitleStyle]
+  if (prefix === "promise") return PROMISE_LABELS[value as PromiseType]
+  if (prefix === "hook") return HOOK_DELIVERY_LABELS[value as HookDelivery]
+  return feature
 }
