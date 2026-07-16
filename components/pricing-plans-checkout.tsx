@@ -253,7 +253,7 @@ export function PricingPlansCheckout({
     <div className="space-y-4">
       {checkoutStatus === "success" ? (
         <Banner tone="success">
-          You&rsquo;re all set — your new plan is active. It can take a moment to
+          You&rsquo;re all set, your new plan is active. It can take a moment to
           appear here while we confirm the payment.
         </Banner>
       ) : null}

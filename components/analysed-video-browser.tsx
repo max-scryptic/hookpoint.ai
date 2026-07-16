@@ -493,7 +493,7 @@ export function AnalysedVideoBrowser({ videos }: { videos: AnalysedVideo[] }) {
                     {privacyKnown ? (
                       <VisibilityCell status={video.privacyStatus} />
                     ) : (
-                      <span className="text-sm text-muted-foreground">—</span>
+                      <span className="text-sm text-muted-foreground">N/A</span>
                     )}
                   </TableCell>
                   <TableCell className="hidden px-4 py-3 align-top text-sm text-muted-foreground lg:table-cell">

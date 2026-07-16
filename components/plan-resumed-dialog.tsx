@@ -41,7 +41,7 @@ export function PlanResumedDialog({
           <div>
             <DialogTitle className="text-xl">Plan resumed</DialogTitle>
             <DialogDescription>
-              Your {details.planName} plan will continue — the scheduled
+              Your {details.planName} plan will continue, and the scheduled
               cancellation is off.
             </DialogDescription>
           </div>
