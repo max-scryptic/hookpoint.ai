@@ -1,14 +1,19 @@
 import Link from "next/link"
 import {
   ChevronDownIcon,
+  ImageIcon,
   LibraryIcon,
   LockIcon,
   SparklesIcon,
   TrendingDownIcon,
   TrendingUpIcon,
+  UserPlusIcon,
 } from "lucide-react"
 
-import { insightCopy } from "@/components/channel-trends-copy"
+import {
+  insightCopy,
+  packagingFeatureLabel,
+} from "@/components/channel-trends-copy"
 import {
   EventTypeBadge,
   formatEventTypeLabel,
@@ -27,12 +32,19 @@ import {
   SIGNAL_STRONG_THRESHOLD,
   type ChannelInsight,
   type ChannelKindTrends,
+  type ChannelPackagingPatterns,
   type ChannelRecurrence,
   type ChannelRecurrenceRow,
   type ChannelSignatureRow,
+  type ChannelSubscriberConversion,
   type ChannelTrend,
   type ChannelTrendsData,
   type ChannelVideo,
+  type PackagingFeatureContrast,
+  type PackagingReachVideo,
+  type PackagingTopicReach,
+  type SubscriberPattern,
+  type SubscriberVideoRow,
 } from "@/lib/channel-trends"
 import type { RetentionWindowEventType } from "@/lib/retention-window-events"
 
@@ -286,6 +298,427 @@ function trendForInsight(
         ? data.gains
         : data.hooks
   return kind?.trends.find((trend) => trend.eventType === insight.eventType)
+}
+
+// ---------------------------------------------------------------------------
+// Subscriber conversion — which uploads turn viewers into subscribers, per
+// 1,000 views so big and small videos compare fairly. Neutral bars against a
+// dashed channel-median line; only the outliers get a colour and a badge.
+// When magnet videos exist, the card also shows the gain/hook patterns every
+// magnet had that the rest of the library mostly lacked — phrased as leads,
+// not causes, because subscribing is also topic, packaging and reach.
+
+// Compact human number: 12345 -> "12.3K", 2_400_000 -> "2.4M".
+function formatCompactNumber(value: number): string {
+  return new Intl.NumberFormat("en", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value)
+}
+
+function formatRate(rate: number): string {
+  return rate >= 10 ? rate.toFixed(0) : rate.toFixed(1)
+}
+
+const SUBSCRIBER_OUTCOME_META = {
+  magnet: {
+    badge: "subscriber magnet",
+    badgeClass: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-500",
+    barClass: "bg-emerald-600 dark:bg-teal-600",
+  },
+  leak: {
+    badge: "net loss",
+    badgeClass: "bg-destructive/10 text-destructive",
+    barClass: "bg-destructive",
+  },
+  typical: {
+    badge: null,
+    badgeClass: "",
+    barClass: "bg-muted-foreground/40",
+  },
+} as const
+
+// Bars scale so the largest fills this much of the track — the rest keeps the
+// median line legible even when the median sits near the maximum.
+const CONVERSION_BAR_MAX_PERCENT = 92
+
+function conversionRowTitle(row: SubscriberVideoRow): string {
+  const title = row.title ?? "Untitled video"
+  const net =
+    row.netGained == null
+      ? ""
+      : ` (${row.netGained >= 0 ? "+" : "−"}${Math.abs(row.netGained)} net)`
+  return `${title} — +${row.subscribersGained} subscribers from ${formatCompactNumber(row.views)} views${net}`
+}
+
+function ConversionRow({
+  row,
+  maxRate,
+  medianRate,
+}: {
+  row: SubscriberVideoRow
+  maxRate: number
+  medianRate: number
+}) {
+  const meta = SUBSCRIBER_OUTCOME_META[row.outcome]
+  const scale = (rate: number) =>
+    maxRate > 0 ? (rate / maxRate) * CONVERSION_BAR_MAX_PERCENT : 0
+  return (
+    <div
+      className="grid grid-cols-[minmax(6.5rem,13rem)_1fr_4.5rem] items-center gap-x-3 py-1.5"
+      title={conversionRowTitle(row)}
+    >
+      <div className="flex min-w-0 flex-col items-start gap-0.5">
+        <span className="w-full truncate text-sm">
+          {row.title ?? "Untitled video"}
+        </span>
+        {meta.badge && (
+          <span
+            className={`rounded-full px-1.5 py-px text-[10px] font-medium whitespace-nowrap ${meta.badgeClass}`}
+          >
+            {meta.badge}
+          </span>
+        )}
+      </div>
+      <div className="relative h-4">
+        <div
+          className={`absolute inset-y-0 left-0 rounded-r-sm ${meta.barClass}`}
+          style={{ width: `${scale(row.ratePer1k)}%` }}
+        />
+        <div
+          className="absolute inset-y-0 border-l border-dashed border-foreground/40"
+          style={{ left: `${scale(medianRate)}%` }}
+        />
+      </div>
+      <div className="flex flex-col items-end">
+        <span className="text-sm font-medium tabular-nums">
+          {formatRate(row.ratePer1k)}
+          <span className="text-xs font-normal text-muted-foreground">
+            {" "}
+            /1k
+          </span>
+        </span>
+        <span className="text-[10px] tabular-nums text-muted-foreground">
+          +{row.subscribersGained} subs
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function SubscriberPatternRow({ pattern }: { pattern: SubscriberPattern }) {
+  const where =
+    pattern.side === "hook" ? "in the opening" : "in retention gains"
+  const magnets =
+    pattern.magnetVideoCount === 1
+      ? "your magnet video"
+      : `all ${pattern.magnetVideoCount} magnet videos`
+  const others =
+    pattern.otherVideoCount === 0
+      ? `none of your ${plural(pattern.otherTotal, "other video")}`
+      : `only ${pattern.otherVideoCount} of your ${plural(pattern.otherTotal, "other video")}`
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <EventTypeBadge eventType={pattern.eventType} />
+        <span className="text-xs text-muted-foreground">
+          {where} — in {magnets}, {others}
+        </span>
+      </div>
+      {pattern.events.map((event, index) => (
+        <EventReceipt
+          key={`${event.videoTitle ?? ""}:${event.narrative}:${index}`}
+          narrative={event.narrative}
+          videoTitle={event.videoTitle}
+        />
+      ))}
+    </div>
+  )
+}
+
+function SubscriberConversionCard({
+  conversion,
+}: {
+  conversion: ChannelSubscriberConversion
+}) {
+  const maxRate = Math.max(
+    conversion.medianRatePer1k,
+    ...conversion.rows.map((row) => row.ratePer1k),
+  )
+  const leaks = conversion.rows.filter((row) => row.outcome === "leak")
+  const hasOutliers = conversion.magnetCount > 0 || conversion.leakCount > 0
+
+  return (
+    <Card className="flex flex-col gap-3 p-5">
+      <div>
+        <div className="flex items-center gap-1.5">
+          <UserPlusIcon className="size-4 text-emerald-600 dark:text-emerald-500" />
+          <h3 className="text-sm font-semibold">Subscriber conversion</h3>
+        </div>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Which uploads turn viewers into subscribers — measured per 1,000
+          views so a small video and a big one compare fairly. The dashed line
+          is your channel median ({formatRate(conversion.medianRatePer1k)}{" "}
+          per 1k). Hover a row for the raw numbers.
+        </p>
+      </div>
+      <div>
+        {conversion.rows.map((row) => (
+          <ConversionRow
+            key={row.id}
+            row={row}
+            maxRate={maxRate}
+            medianRate={conversion.medianRatePer1k}
+          />
+        ))}
+      </div>
+      {!hasOutliers && (
+        <p className="text-xs text-muted-foreground">
+          No outliers yet — your uploads convert at a similar rate. When one
+          breaks away from the median, it gets flagged here.
+        </p>
+      )}
+      {conversion.patterns.length > 0 && (
+        <div className="flex flex-col gap-3 rounded-r-md border-l-2 border-l-emerald-600 bg-muted/50 px-3 py-2.5 dark:border-l-teal-600">
+          <div>
+            <span className="text-xs font-semibold tracking-wide text-emerald-600 uppercase dark:text-emerald-500">
+              What your subscriber magnets did differently
+            </span>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Patterns in every magnet&apos;s openings or retention gains that
+              are rare across the rest of your library. Correlation, not proof
+              — but the first place to look.
+            </p>
+          </div>
+          {conversion.patterns.map((pattern) => (
+            <SubscriberPatternRow
+              key={`${pattern.side}:${pattern.eventType}`}
+              pattern={pattern}
+            />
+          ))}
+        </div>
+      )}
+      {leaks.map((row) => (
+        <p key={row.id} className="rounded-md bg-destructive/10 px-3 py-2 text-sm">
+          <span className="font-semibold">Net loss:</span>{" "}
+          {row.title ?? "An untitled video"} lost more subscribers than it
+          gained ({row.netGained} net). Worth re-watching what its title and
+          thumbnail promised against what the video delivered.
+        </p>
+      ))}
+      {conversion.coveredVideoCount < conversion.libraryVideoCount && (
+        <p className="text-xs text-muted-foreground">
+          Based on the {conversion.coveredVideoCount} of your{" "}
+          {plural(conversion.libraryVideoCount, "library video")} with
+          subscriber data. Older analyses pick theirs up the next time you
+          open them.
+        </p>
+      )}
+    </Card>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Packaging patterns — which uploads earn reach, and what their packaging has
+// in common. Reach is views per day at snapshot time (raw views can't compare
+// a two-week-old upload with a two-year-old one); the covered videos split
+// into a high- and low-reach half, and the card reports the packaging traits
+// (title style, thumbnail composition, promise, hook delivery) common in one
+// half and rare in the other, plus topics that over- or under-perform the
+// channel's typical reach. All bars share one neutral hue — banding is
+// labelled, never colour-alone — and everything is phrased as correlation.
+
+const REACH_BAND_META = {
+  high: {
+    badge: "high reach",
+    badgeClass: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-500",
+  },
+  low: { badge: "low reach", badgeClass: "bg-muted text-muted-foreground" },
+  middle: { badge: null, badgeClass: "" },
+} as const
+
+function reachRowTitle(row: PackagingReachVideo): string {
+  const title = row.title ?? "Untitled video"
+  const share =
+    row.browseSuggestedShare == null
+      ? ""
+      : ` · ${Math.round(row.browseSuggestedShare * 100)}% from Browse & Suggested`
+  const pending = row.hasTaxonomy ? "" : " · packaging read pending"
+  return `${title} — ${formatCompactNumber(row.views)} views in ${plural(row.ageDays, "day")} (${formatRate(row.viewsPerDay)}/day)${share}${pending}`
+}
+
+function ReachRow({
+  row,
+  maxRate,
+  medianRate,
+}: {
+  row: PackagingReachVideo
+  maxRate: number
+  medianRate: number
+}) {
+  const meta = REACH_BAND_META[row.band]
+  const scale = (rate: number) =>
+    maxRate > 0 ? (rate / maxRate) * CONVERSION_BAR_MAX_PERCENT : 0
+  return (
+    <div
+      className="grid grid-cols-[minmax(6.5rem,13rem)_1fr_4.5rem] items-center gap-x-3 py-1.5"
+      title={reachRowTitle(row)}
+    >
+      <div className="flex min-w-0 flex-col items-start gap-0.5">
+        <span className="w-full truncate text-sm">
+          {row.title ?? "Untitled video"}
+        </span>
+        {meta.badge && (
+          <span
+            className={`rounded-full px-1.5 py-px text-[10px] font-medium whitespace-nowrap ${meta.badgeClass}`}
+          >
+            {meta.badge}
+          </span>
+        )}
+      </div>
+      <div className="relative h-4">
+        <div
+          className="absolute inset-y-0 left-0 rounded-r-sm bg-muted-foreground/50"
+          style={{ width: `${scale(row.viewsPerDay)}%` }}
+        />
+        <div
+          className="absolute inset-y-0 border-l border-dashed border-foreground/40"
+          style={{ left: `${scale(medianRate)}%` }}
+        />
+      </div>
+      <div className="flex flex-col items-end">
+        <span className="text-sm font-medium tabular-nums">
+          {formatRate(row.viewsPerDay)}
+          <span className="text-xs font-normal text-muted-foreground">
+            {" "}
+            /day
+          </span>
+        </span>
+        <span className="text-[10px] tabular-nums text-muted-foreground">
+          {formatCompactNumber(row.views)} views
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function PackagingFeatureRow({
+  contrast,
+}: {
+  contrast: PackagingFeatureContrast
+}) {
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+      <span className="text-sm font-medium">
+        {packagingFeatureLabel(contrast.feature)}
+      </span>
+      <span className="text-xs tabular-nums text-muted-foreground">
+        in {contrast.highCount} of {contrast.highTotal} high-reach ·{" "}
+        {contrast.lowCount} of {contrast.lowTotal} low-reach
+      </span>
+    </div>
+  )
+}
+
+function TopicReachRow({ topic }: { topic: PackagingTopicReach }) {
+  const above = topic.ratio >= 1
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span className="rounded-full border bg-muted px-2 py-0.5 text-xs">
+        {topic.topic}
+      </span>
+      <span className="text-xs tabular-nums text-muted-foreground">
+        {plural(topic.videoCount, "video")} ·{" "}
+        <span
+          className={
+            above
+              ? "font-medium text-emerald-600 dark:text-emerald-500"
+              : "font-medium"
+          }
+        >
+          {formatRate(topic.ratio)}× your typical reach
+        </span>
+      </span>
+    </div>
+  )
+}
+
+function PackagingPatternsCard({
+  packaging,
+}: {
+  packaging: ChannelPackagingPatterns
+}) {
+  const maxRate = Math.max(
+    packaging.medianViewsPerDay,
+    ...packaging.videos.map((row) => row.viewsPerDay),
+  )
+
+  return (
+    <Card className="flex flex-col gap-3 p-5">
+      <div>
+        <div className="flex items-center gap-1.5">
+          <ImageIcon className="size-4 text-muted-foreground" />
+          <h3 className="text-sm font-semibold">Packaging patterns</h3>
+        </div>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Which uploads earn reach — views per day since upload, as of each
+          video&apos;s analytics snapshot — and what the packaging of your
+          high-reach half has that the low-reach half doesn&apos;t. The dashed
+          line is your channel median ({formatRate(packaging.medianViewsPerDay)}{" "}
+          views/day). Hover a row for the raw numbers.
+        </p>
+      </div>
+      <div>
+        {packaging.videos.map((row) => (
+          <ReachRow
+            key={row.id}
+            row={row}
+            maxRate={maxRate}
+            medianRate={packaging.medianViewsPerDay}
+          />
+        ))}
+      </div>
+      {packaging.features.length > 0 && (
+        <div className="flex flex-col gap-2.5 rounded-r-md border-l-2 border-l-emerald-600 bg-muted/50 px-3 py-2.5 dark:border-l-teal-600">
+          <div>
+            <span className="text-xs font-semibold tracking-wide text-emerald-600 uppercase dark:text-emerald-500">
+              What your high-reach packaging does differently
+            </span>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Packaging traits common in your high-reach half and rare in your
+              low-reach half. Correlation, not proof — but worth testing on
+              purpose in your next upload.
+            </p>
+          </div>
+          {packaging.features.map((contrast) => (
+            <PackagingFeatureRow key={contrast.feature} contrast={contrast} />
+          ))}
+        </div>
+      )}
+      {packaging.topics.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-semibold tracking-wide uppercase">
+            Reach by topic
+          </span>
+          {packaging.topics.map((topic) => (
+            <TopicReachRow key={topic.topic} topic={topic} />
+          ))}
+        </div>
+      )}
+      <p className="text-xs text-muted-foreground">
+        Views per day naturally favours recent uploads, so treat close calls
+        loosely.
+        {packaging.taxonomyVideoCount < packaging.coveredVideoCount && (
+          <>
+            {" "}
+            Packaging reads cover {packaging.taxonomyVideoCount} of these{" "}
+            {plural(packaging.coveredVideoCount, "video")} — older analyses
+            pick theirs up the next time you open them.
+          </>
+        )}
+      </p>
+    </Card>
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -858,6 +1291,12 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
                 />
               ))}
             </div>
+          )}
+          {data.subscribers != null && (
+            <SubscriberConversionCard conversion={data.subscribers} />
+          )}
+          {data.packaging != null && (
+            <PackagingPatternsCard packaging={data.packaging} />
           )}
           {(data.signature != null || data.hooks != null) && (
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">

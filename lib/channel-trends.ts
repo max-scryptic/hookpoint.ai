@@ -24,6 +24,12 @@ import {
   loadChannelEventRecords,
   type ChannelEventRecord,
 } from "@/lib/channel-event-history"
+import type {
+  HookDelivery,
+  PackagingTaxonomy,
+  PromiseType,
+  TitleStyle,
+} from "@/lib/packaging-taxonomy"
 import type { RetentionWindowEventType } from "@/lib/retention-window-events"
 import type { RetentionWindowKind } from "@/lib/retention-windows"
 
@@ -79,12 +85,28 @@ export interface ChannelKindTrends {
   trends: ChannelTrend[]
 }
 
-// A library video, as the derived views need it: title for attribution and
-// analysis date to order the recurrence strip's columns.
+// A library video, as the derived views need it: title for attribution,
+// analysis date to order the recurrence strip's columns, the lifetime totals
+// from the analytics snapshot stored at analyse time (null when the video
+// predates the analytics_summary column or a metric wasn't reported), and the
+// packaging read for the packaging patterns view.
 export interface ChannelVideo {
   id: string
   title: string | null
   dateAnalysed: string | null
+  views: number | null
+  subscribersGained: number | null
+  subscribersLost: number | null
+  // YouTube publish date, from the stored video metadata.
+  publishedAt: string | null
+  // When the analytics snapshot was taken — the "as of" moment views/day is
+  // measured against, so a snapshot's age never skews the rate.
+  analyticsFetchedAt: string | null
+  // Share (0..1) of snapshot views from Browse features + Suggested videos —
+  // the packaging-earned surfaces; null when no traffic breakdown exists.
+  browseSuggestedShare: number | null
+  // The categorical packaging read; null until generated or backfilled.
+  packaging: PackagingTaxonomy | null
 }
 
 // Events with no confidence (rows written before the column existed) weigh in
@@ -186,6 +208,169 @@ export interface ChannelRecurrence {
   rows: ChannelRecurrenceRow[]
 }
 
+// --- Subscriber conversion: which uploads turn viewers into subscribers ----
+
+// Rates are per 1,000 views because raw subscriber counts mostly measure
+// reach: +30 subs on 50k views is a worse conversion than +8 on 2k. The
+// stored analytics snapshot supplies views and subscribers from the same
+// moment, so the ratio stays internally consistent even as a snapshot ages.
+//
+// Everything here is correlational by construction: a "magnet" is a video
+// that converted at a multiple of the channel's typical rate, and the
+// patterns block reports which retention-gain / hook event types every magnet
+// had that the rest of the library mostly lacked. Subscribing is also driven
+// by topic, packaging and who the video reached, so the UI phrases these as
+// leads, never causes.
+
+// The section needs a few videos with subscriber data before a median rate —
+// and outliers against it — mean anything.
+export const SUBSCRIBER_MIN_COVERED_VIDEOS = 3
+// A magnet must convert at several times the channel's typical rate AND gain
+// a non-trivial absolute count; three subscribers on a hundred views is a
+// fluke, not a signal.
+const MAGNET_MIN_RATE_RATIO = 3
+const MAGNET_MIN_GAINED = 10
+// Nearly every video sheds a subscriber or two; a leak verdict needs a
+// meaningful net loss.
+const LEAK_MIN_NET_LOSS = 5
+// A "what the magnets did differently" pattern must appear in EVERY magnet
+// and in at most this share of the other covered videos.
+const PATTERN_MAX_OTHER_SHARE = 0.5
+const MAX_SUBSCRIBER_PATTERNS = 3
+const MAX_PATTERN_EVENTS = 2
+
+export type SubscriberOutcome = "magnet" | "typical" | "leak"
+
+export interface SubscriberVideoRow {
+  id: string
+  title: string | null
+  views: number
+  subscribersGained: number
+  subscribersLost: number | null
+  // gained − lost; null when the snapshot never reported losses.
+  netGained: number | null
+  ratePer1k: number
+  outcome: SubscriberOutcome
+}
+
+export type SubscriberPatternSide = Extract<RetentionWindowKind, "gain" | "hook">
+
+// One event type every magnet video had (in its gains or its hook) that the
+// rest of the covered library mostly lacked — the "what was different about
+// that video" evidence, with receipts from the magnets themselves.
+export interface SubscriberPattern {
+  eventType: RetentionWindowEventType
+  side: SubscriberPatternSide
+  magnetVideoCount: number
+  // How many of the covered non-magnet videos also had it, out of otherTotal.
+  otherVideoCount: number
+  otherTotal: number
+  events: ChannelTrendEvent[]
+}
+
+export interface ChannelSubscriberConversion {
+  // Covered videos only (a stored snapshot with views and subscribers),
+  // sorted by conversion rate, best first.
+  rows: SubscriberVideoRow[]
+  medianRatePer1k: number
+  coveredVideoCount: number
+  libraryVideoCount: number
+  magnetCount: number
+  leakCount: number
+  patterns: SubscriberPattern[]
+}
+
+// --- Packaging patterns: what high-reach packaging does differently --------
+
+// Reach is views per day between publish and the analytics snapshot, because
+// raw view counts can't be compared across a library where one video is two
+// years old and another is two weeks old. Both numbers come from the same
+// snapshot, so the rate is internally consistent — but it still favours
+// recent uploads (views front-load), which the UI says out loud.
+//
+// The comparison itself is the same contrast move the retention machinery
+// uses, applied to the packaging taxonomy: split covered videos into a
+// high-reach and a low-reach half, then report the packaging features common
+// in the high half and rare in the low half. Correlational by construction.
+
+export const PACKAGING_MIN_COVERED_VIDEOS = 4
+// Both reach bands need this many taxonomy-carrying videos before feature
+// prevalence between them says anything.
+const FEATURE_MIN_BAND_VIDEOS = 2
+const FEATURE_MIN_HIGH_SHARE = 2 / 3
+const FEATURE_MAX_LOW_SHARE = 1 / 3
+const MAX_PACKAGING_FEATURES = 4
+// Thumbnail text banding: none, a few words, a wall.
+const THUMB_TEXT_HEAVY_WORDS = 4
+// Alignment score banding for the tight/loose feature flags.
+const ALIGNMENT_TIGHT_SCORE = 0.75
+const ALIGNMENT_LOOSE_SCORE = 0.5
+// A topic needs a couple of videos and a pronounced reach ratio before the
+// page calls it out.
+const TOPIC_MIN_VIDEOS = 2
+const TOPIC_CALLOUT_RATIO = 1.5
+const MAX_TOPIC_ROWS = 3
+
+export type ReachBand = "high" | "middle" | "low"
+
+// A packaging trait as a countable flag. Both directions of a trait exist
+// (face / no face) so whichever side splits the bands can surface.
+export type PackagingFeature =
+  | `title:${TitleStyle}`
+  | "thumb:face"
+  | "thumb:no_face"
+  | "thumb:text_free"
+  | "thumb:text_light"
+  | "thumb:text_heavy"
+  | `promise:${PromiseType}`
+  | `hook:${HookDelivery}`
+  | "alignment:tight"
+  | "alignment:loose"
+
+export interface PackagingReachVideo {
+  id: string
+  title: string | null
+  views: number
+  // Days between publish and the analytics snapshot, floored at 1.
+  ageDays: number
+  viewsPerDay: number
+  browseSuggestedShare: number | null
+  band: ReachBand
+  hasTaxonomy: boolean
+}
+
+export interface PackagingFeatureContrast {
+  feature: PackagingFeature
+  // Prevalence among the taxonomy-carrying videos of each band.
+  highCount: number
+  highTotal: number
+  lowCount: number
+  lowTotal: number
+}
+
+export interface PackagingTopicReach {
+  topic: string
+  videoCount: number
+  medianViewsPerDay: number
+  // vs the covered library's median reach: 2 = twice the typical reach.
+  ratio: number
+}
+
+export interface ChannelPackagingPatterns {
+  // Covered videos sorted by reach, best first.
+  videos: PackagingReachVideo[]
+  medianViewsPerDay: number
+  // Features over-represented in the high-reach band, strongest split first;
+  // empty when either band lacks taxonomy coverage.
+  features: PackagingFeatureContrast[]
+  // Topics whose reach is pronouncedly above or below the channel's typical,
+  // highest ratio first.
+  topics: PackagingTopicReach[]
+  taxonomyVideoCount: number
+  coveredVideoCount: number
+  libraryVideoCount: number
+}
+
 export interface ChannelTrendsData {
   stage: ChannelTrendsStage
   // Distinct videos with a completed event synthesis — the library the
@@ -204,6 +389,10 @@ export interface ChannelTrendsData {
   // those that cleared the insight gates.
   insights: ChannelInsight[]
   recurrence: ChannelRecurrence | null
+  // Null until enough library videos carry an analytics snapshot.
+  subscribers: ChannelSubscriberConversion | null
+  // Null until enough library videos carry views and a publish date.
+  packaging: ChannelPackagingPatterns | null
 }
 
 function kindTrends(
@@ -532,6 +721,349 @@ export function buildChannelRecurrence(
   return { videos: recent, rows }
 }
 
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 1
+    ? sorted[mid]
+    : (sorted[mid - 1] + sorted[mid]) / 2
+}
+
+// The contrast pass behind "what your subscriber magnets did differently":
+// event types present in every magnet's gain or hook windows but rare across
+// the other covered videos. Drop-off events are excluded — something that
+// showed up where viewers left is not a candidate explanation for gained
+// subscribers.
+function subscriberPatterns(
+  records: ChannelEventRecord[],
+  magnetIds: Set<string>,
+  otherIds: Set<string>,
+  videoTitleById: Map<string, string>,
+): SubscriberPattern[] {
+  if (magnetIds.size === 0 || otherIds.size === 0) return []
+
+  interface PatternStats {
+    magnetVideos: Set<string>
+    otherVideos: Set<string>
+    magnetRecords: ChannelEventRecord[]
+  }
+  const byKey = new Map<string, PatternStats>()
+  for (const record of records) {
+    if (record.windowKind !== "gain" && record.windowKind !== "hook") continue
+    const isMagnet = magnetIds.has(record.analysedVideoId)
+    if (!isMagnet && !otherIds.has(record.analysedVideoId)) continue
+    const key = `${record.windowKind} ${record.eventType}`
+    const stats =
+      byKey.get(key) ??
+      ({
+        magnetVideos: new Set(),
+        otherVideos: new Set(),
+        magnetRecords: [],
+      } as PatternStats)
+    if (isMagnet) {
+      stats.magnetVideos.add(record.analysedVideoId)
+      stats.magnetRecords.push(record)
+    } else {
+      stats.otherVideos.add(record.analysedVideoId)
+    }
+    byKey.set(key, stats)
+  }
+
+  return [...byKey.entries()]
+    .filter(
+      ([, stats]) =>
+        stats.magnetVideos.size === magnetIds.size &&
+        stats.otherVideos.size / otherIds.size <= PATTERN_MAX_OTHER_SHARE,
+    )
+    .map(([key, stats]) => {
+      const [side, eventType] = key.split(" ") as [
+        SubscriberPatternSide,
+        RetentionWindowEventType,
+      ]
+      return {
+        eventType,
+        side,
+        magnetVideoCount: stats.magnetVideos.size,
+        otherVideoCount: stats.otherVideos.size,
+        otherTotal: otherIds.size,
+        events: [...stats.magnetRecords]
+          .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))
+          .slice(0, MAX_PATTERN_EVENTS)
+          .map((record) => ({
+            narrative: record.narrative,
+            videoTitle: videoTitleById.get(record.analysedVideoId) ?? null,
+            confidence: record.confidence ?? null,
+          })),
+      }
+    })
+    .sort(
+      (a, b) =>
+        a.otherVideoCount - b.otherVideoCount ||
+        (b.events[0]?.confidence ?? 0) - (a.events[0]?.confidence ?? 0) ||
+        a.eventType.localeCompare(b.eventType),
+    )
+    .slice(0, MAX_SUBSCRIBER_PATTERNS)
+}
+
+// The subscriber conversion view: per-1k-views rates for every covered video,
+// robust outlier flags against the channel median, and the pattern contrast
+// for the magnets. Null until enough videos carry subscriber data.
+export function buildSubscriberConversion(
+  records: ChannelEventRecord[],
+  videos: ChannelVideo[],
+  libraryVideoCount: number,
+): ChannelSubscriberConversion | null {
+  const covered = videos.filter(
+    (video) =>
+      video.views != null && video.views > 0 && video.subscribersGained != null,
+  )
+  if (covered.length < SUBSCRIBER_MIN_COVERED_VIDEOS) return null
+
+  const medianRatePer1k = median(
+    covered.map((video) => (video.subscribersGained! / video.views!) * 1000),
+  )
+
+  const rows: SubscriberVideoRow[] = covered
+    .map((video) => {
+      const views = video.views!
+      const subscribersGained = video.subscribersGained!
+      const subscribersLost = video.subscribersLost
+      const netGained =
+        subscribersLost == null ? null : subscribersGained - subscribersLost
+      const ratePer1k = (subscribersGained / views) * 1000
+      // A net loss outranks a strong gross rate: the channel shrank.
+      const outcome: SubscriberOutcome =
+        netGained != null && netGained <= -LEAK_MIN_NET_LOSS
+          ? "leak"
+          : subscribersGained >= MAGNET_MIN_GAINED &&
+              (medianRatePer1k === 0
+                ? ratePer1k > 0
+                : ratePer1k >= MAGNET_MIN_RATE_RATIO * medianRatePer1k)
+            ? "magnet"
+            : "typical"
+      return {
+        id: video.id,
+        title: video.title,
+        views,
+        subscribersGained,
+        subscribersLost: subscribersLost ?? null,
+        netGained,
+        ratePer1k,
+        outcome,
+      }
+    })
+    .sort((a, b) => b.ratePer1k - a.ratePer1k || a.id.localeCompare(b.id))
+
+  const videoTitleById = new Map<string, string>()
+  for (const video of covered) {
+    if (video.title != null) videoTitleById.set(video.id, video.title)
+  }
+  const magnetIds = new Set(
+    rows.filter((row) => row.outcome === "magnet").map((row) => row.id),
+  )
+  const otherIds = new Set(
+    rows.filter((row) => row.outcome !== "magnet").map((row) => row.id),
+  )
+
+  return {
+    rows,
+    medianRatePer1k,
+    coveredVideoCount: covered.length,
+    libraryVideoCount,
+    magnetCount: magnetIds.size,
+    leakCount: rows.filter((row) => row.outcome === "leak").length,
+    patterns: subscriberPatterns(records, magnetIds, otherIds, videoTitleById),
+  }
+}
+
+// Flattens a taxonomy into the countable trait flags the band contrast runs
+// over.
+export function packagingFeatures(
+  taxonomy: PackagingTaxonomy,
+): PackagingFeature[] {
+  const features: PackagingFeature[] = taxonomy.titleStyles.map(
+    (style): PackagingFeature => `title:${style}`,
+  )
+  features.push(taxonomy.thumbnailHasFace ? "thumb:face" : "thumb:no_face")
+  features.push(
+    taxonomy.thumbnailTextWordCount === 0
+      ? "thumb:text_free"
+      : taxonomy.thumbnailTextWordCount < THUMB_TEXT_HEAVY_WORDS
+        ? "thumb:text_light"
+        : "thumb:text_heavy",
+  )
+  features.push(`promise:${taxonomy.promiseType}`)
+  features.push(`hook:${taxonomy.hookDelivery}`)
+  if (taxonomy.alignmentScore >= ALIGNMENT_TIGHT_SCORE) {
+    features.push("alignment:tight")
+  } else if (taxonomy.alignmentScore < ALIGNMENT_LOOSE_SCORE) {
+    features.push("alignment:loose")
+  }
+  return features
+}
+
+// Packaging features common in the high-reach band and rare in the low-reach
+// band. Both bands must carry enough taxonomies; the middle band (odd counts)
+// never votes.
+function packagingFeatureContrasts(
+  high: PackagingTaxonomy[],
+  low: PackagingTaxonomy[],
+): PackagingFeatureContrast[] {
+  if (high.length < FEATURE_MIN_BAND_VIDEOS || low.length < FEATURE_MIN_BAND_VIDEOS) {
+    return []
+  }
+
+  const count = (band: PackagingTaxonomy[]): Map<PackagingFeature, number> => {
+    const counts = new Map<PackagingFeature, number>()
+    for (const taxonomy of band) {
+      for (const feature of new Set(packagingFeatures(taxonomy))) {
+        counts.set(feature, (counts.get(feature) ?? 0) + 1)
+      }
+    }
+    return counts
+  }
+  const highCounts = count(high)
+  const lowCounts = count(low)
+
+  return [...highCounts.entries()]
+    .map(([feature, highCount]) => ({
+      feature,
+      highCount,
+      highTotal: high.length,
+      lowCount: lowCounts.get(feature) ?? 0,
+      lowTotal: low.length,
+    }))
+    .filter(
+      (row) =>
+        row.highCount / row.highTotal >= FEATURE_MIN_HIGH_SHARE &&
+        row.lowCount / row.lowTotal <= FEATURE_MAX_LOW_SHARE,
+    )
+    .sort(
+      (a, b) =>
+        b.highCount / b.highTotal -
+          b.lowCount / b.lowTotal -
+          (a.highCount / a.highTotal - a.lowCount / a.lowTotal) ||
+        b.highCount - a.highCount ||
+        a.feature.localeCompare(b.feature),
+    )
+    .slice(0, MAX_PACKAGING_FEATURES)
+}
+
+// Topics whose median reach sits pronouncedly above or below the channel's
+// typical reach.
+function packagingTopicReach(
+  videos: { viewsPerDay: number; taxonomy: PackagingTaxonomy | null }[],
+  medianViewsPerDay: number,
+): PackagingTopicReach[] {
+  if (medianViewsPerDay <= 0) return []
+
+  const byTopic = new Map<string, number[]>()
+  for (const video of videos) {
+    if (video.taxonomy == null) continue
+    for (const topic of new Set(video.taxonomy.topics)) {
+      const rates = byTopic.get(topic)
+      if (rates) rates.push(video.viewsPerDay)
+      else byTopic.set(topic, [video.viewsPerDay])
+    }
+  }
+
+  return [...byTopic.entries()]
+    .filter(([, rates]) => rates.length >= TOPIC_MIN_VIDEOS)
+    .map(([topic, rates]) => {
+      const medianRate = median(rates)
+      return {
+        topic,
+        videoCount: rates.length,
+        medianViewsPerDay: medianRate,
+        ratio: medianRate / medianViewsPerDay,
+      }
+    })
+    .filter(
+      (row) =>
+        row.ratio >= TOPIC_CALLOUT_RATIO || row.ratio <= 1 / TOPIC_CALLOUT_RATIO,
+    )
+    .sort((a, b) => b.ratio - a.ratio || a.topic.localeCompare(b.topic))
+    .slice(0, MAX_TOPIC_ROWS)
+}
+
+const DAY_MS = 86_400_000
+
+// The packaging patterns view: per-video reach (views/day at snapshot time),
+// a high/low band split, and the packaging features and topics that separate
+// the bands. Null until enough videos carry both views and a publish date.
+export function buildPackagingPatterns(
+  videos: ChannelVideo[],
+  libraryVideoCount: number,
+): ChannelPackagingPatterns | null {
+  const covered = videos.flatMap((video) => {
+    if (video.views == null || video.views <= 0) return []
+    const published = video.publishedAt ? Date.parse(video.publishedAt) : NaN
+    const fetched = video.analyticsFetchedAt
+      ? Date.parse(video.analyticsFetchedAt)
+      : NaN
+    if (!Number.isFinite(published) || !Number.isFinite(fetched)) return []
+    const ageDays = Math.max(1, Math.round((fetched - published) / DAY_MS))
+    return [
+      {
+        video,
+        views: video.views,
+        ageDays,
+        viewsPerDay: video.views / ageDays,
+      },
+    ]
+  })
+  if (covered.length < PACKAGING_MIN_COVERED_VIDEOS) return null
+
+  covered.sort(
+    (a, b) =>
+      b.viewsPerDay - a.viewsPerDay || a.video.id.localeCompare(b.video.id),
+  )
+  const bandSize = Math.floor(covered.length / 2)
+  const bandFor = (index: number): ReachBand =>
+    index < bandSize
+      ? "high"
+      : index >= covered.length - bandSize
+        ? "low"
+        : "middle"
+
+  const rows: PackagingReachVideo[] = covered.map((entry, index) => ({
+    id: entry.video.id,
+    title: entry.video.title,
+    views: entry.views,
+    ageDays: entry.ageDays,
+    viewsPerDay: entry.viewsPerDay,
+    browseSuggestedShare: entry.video.browseSuggestedShare,
+    band: bandFor(index),
+    hasTaxonomy: entry.video.packaging != null,
+  }))
+
+  const bandTaxonomies = (band: ReachBand): PackagingTaxonomy[] =>
+    covered
+      .filter((entry, index) => bandFor(index) === band)
+      .flatMap((entry) => entry.video.packaging ?? [])
+
+  const medianViewsPerDay = median(covered.map((entry) => entry.viewsPerDay))
+  return {
+    videos: rows,
+    medianViewsPerDay,
+    features: packagingFeatureContrasts(
+      bandTaxonomies("high"),
+      bandTaxonomies("low"),
+    ),
+    topics: packagingTopicReach(
+      covered.map((entry) => ({
+        viewsPerDay: entry.viewsPerDay,
+        taxonomy: entry.video.packaging,
+      })),
+      medianViewsPerDay,
+    ),
+    taxonomyVideoCount: covered.filter((entry) => entry.video.packaging != null)
+      .length,
+    coveredVideoCount: covered.length,
+    libraryVideoCount,
+  }
+}
+
 // Pure aggregation over already-loaded inputs, split from the loader so tests
 // don't need a database.
 export function buildChannelTrends(params: {
@@ -557,6 +1089,8 @@ export function buildChannelTrends(params: {
     signature,
     insights: buildChannelInsights(records, signature, libraryVideoCount),
     recurrence: buildChannelRecurrence(records, videos, signature),
+    subscribers: buildSubscriberConversion(records, videos, libraryVideoCount),
+    packaging: buildPackagingPatterns(videos, libraryVideoCount),
   }
 }
 
@@ -591,8 +1125,32 @@ async function loadLibrarySize(
   }
 }
 
-// Title + analysis date for every video the page touches — event attribution
-// and the recurrence strip's chronological columns both read from this.
+// The traffic-source codes YouTube attributes to its packaging-driven
+// surfaces: Browse features (home/subscriptions feed) and Suggested videos.
+const PACKAGING_TRAFFIC_SOURCES = new Set(["SUBSCRIBER", "RELATED_VIDEO"])
+
+function browseSuggestedShare(
+  trafficSources: { source?: string; views?: number }[] | undefined,
+): number | null {
+  if (!trafficSources || trafficSources.length === 0) return null
+  let total = 0
+  let packagingDriven = 0
+  for (const bucket of trafficSources) {
+    const views = bucket.views ?? 0
+    total += views
+    if (bucket.source && PACKAGING_TRAFFIC_SOURCES.has(bucket.source)) {
+      packagingDriven += views
+    }
+  }
+  return total > 0 ? packagingDriven / total : null
+}
+
+// Title, analysis date, analytics snapshot and packaging taxonomy for every
+// video the page touches — event attribution, the recurrence strip's
+// chronological columns, the subscriber conversion view and the packaging
+// patterns view all read from this. JSON-path selects keep the payload to the
+// fields used instead of shipping whole video_details/packaging_alignment
+// documents.
 async function loadVideos(
   supabase: SupabaseClient,
   userId: string,
@@ -602,7 +1160,9 @@ async function loadVideos(
 
   const { data, error } = await supabase
     .from("analysed_videos")
-    .select("id, video_title, date_analysed")
+    .select(
+      "id, video_title, date_analysed, analytics_summary, published_at:video_details->>publishedAt, packaging_taxonomy:packaging_alignment->taxonomy",
+    )
     .eq("user_id", userId)
     .in("id", videoIds)
 
@@ -611,15 +1171,33 @@ async function loadVideos(
   }
 
   return (
-    (data ?? []) as {
+    (data ?? []) as unknown as {
       id: string
       video_title: string | null
       date_analysed: string | null
+      analytics_summary: {
+        views?: number | null
+        subscribersGained?: number | null
+        subscribersLost?: number | null
+        trafficSources?: { source?: string; views?: number }[]
+        fetchedAt?: string | null
+      } | null
+      published_at: string | null
+      packaging_taxonomy: PackagingTaxonomy | null
     }[]
   ).map((row) => ({
     id: row.id,
     title: row.video_title,
     dateAnalysed: row.date_analysed,
+    views: row.analytics_summary?.views ?? null,
+    subscribersGained: row.analytics_summary?.subscribersGained ?? null,
+    subscribersLost: row.analytics_summary?.subscribersLost ?? null,
+    publishedAt: row.published_at,
+    analyticsFetchedAt: row.analytics_summary?.fetchedAt ?? null,
+    browseSuggestedShare: browseSuggestedShare(
+      row.analytics_summary?.trafficSources,
+    ),
+    packaging: row.packaging_taxonomy,
   }))
 }
 

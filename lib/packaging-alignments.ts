@@ -1,6 +1,13 @@
 // Read/generate helper for the packaging_alignment JSONB column on
 // analysed_videos. Same load-or-claim-then-generate shape as the retention
 // attribution helper, using the shared claim columns for its in-flight guard.
+//
+// The column holds two generated reads of the same packaging: the prose
+// alignment (lib/packaging-alignment.ts) and the categorical taxonomy
+// (lib/packaging-taxonomy.ts). New videos get both in one visit; videos whose
+// alignment predates the taxonomy are healed here with a taxonomy-only call
+// the next time their detail page loads — same opportunistic-backfill pattern
+// as the analytics summary.
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
@@ -9,6 +16,7 @@ import {
   generatePackagingAlignment,
   type PackagingAlignment,
 } from "@/lib/packaging-alignment"
+import { generatePackagingTaxonomy } from "@/lib/packaging-taxonomy"
 import type { TranscriptCue, VideoDetails } from "@/lib/youtube/youtube"
 
 const CLAIM_COLUMNS = {
@@ -55,9 +63,10 @@ async function savePackagingAlignment(
   }
 }
 
-// Loads a saved alignment if one exists; otherwise claims and generates one.
-// Returns null (without calling OpenAI) when there's no thumbnail to look at,
-// or when another caller is already generating it.
+// Loads a saved alignment if one exists (healing in the missing taxonomy for
+// rows that predate it); otherwise claims and generates the alignment and
+// taxonomy together. Returns null (without calling OpenAI) when there's no
+// thumbnail to look at, or when another caller is already generating it.
 export async function getOrGeneratePackagingAlignment(
   supabase: SupabaseClient,
   userId: string,
@@ -66,8 +75,18 @@ export async function getOrGeneratePackagingAlignment(
   transcript: TranscriptCue[],
 ): Promise<PackagingAlignment | null> {
   const existing = await getPackagingAlignment(supabase, userId, analysedVideoId)
-  if (existing) return existing
-  if (!video.thumbnailUrl) return null
+  if (existing?.taxonomy) return existing
+  if (!video.thumbnailUrl) return existing
+  if (existing) {
+    return backfillPackagingTaxonomy(
+      supabase,
+      userId,
+      analysedVideoId,
+      existing,
+      video,
+      transcript,
+    )
+  }
 
   const claimed = await claimAnalysis(
     supabase,
@@ -78,12 +97,22 @@ export async function getOrGeneratePackagingAlignment(
   if (!claimed) return null
 
   try {
-    const alignment = await generatePackagingAlignment(video, transcript)
-    if (alignment) {
-      await savePackagingAlignment(supabase, userId, analysedVideoId, alignment)
+    // Two independent reads of the same inputs; a taxonomy failure never
+    // costs the user the prose alignment.
+    const [alignment, taxonomy] = await Promise.all([
+      generatePackagingAlignment(video, transcript),
+      generatePackagingTaxonomy(video, transcript).catch((error) => {
+        console.error("Failed to generate packaging taxonomy", error)
+        return null
+      }),
+    ])
+    const combined =
+      alignment && taxonomy ? { ...alignment, taxonomy } : alignment
+    if (combined) {
+      await savePackagingAlignment(supabase, userId, analysedVideoId, combined)
     }
     await releaseAnalysisClaim(supabase, userId, analysedVideoId, CLAIM_COLUMNS, "done")
-    return alignment
+    return combined
   } catch (error) {
     await releaseAnalysisClaim(
       supabase,
@@ -93,5 +122,56 @@ export async function getOrGeneratePackagingAlignment(
       "failed",
     ).catch(() => {})
     throw error
+  }
+}
+
+// Adds the taxonomy to an alignment generated before it existed. Best-effort:
+// any failure (including losing the claim to a concurrent visit) serves the
+// stored prose alignment unchanged, and the backfill is retried on the next
+// visit.
+async function backfillPackagingTaxonomy(
+  supabase: SupabaseClient,
+  userId: string,
+  analysedVideoId: string,
+  existing: PackagingAlignment,
+  video: Pick<VideoDetails, "title" | "thumbnailUrl">,
+  transcript: TranscriptCue[],
+): Promise<PackagingAlignment> {
+  try {
+    const claimed = await claimAnalysis(
+      supabase,
+      userId,
+      analysedVideoId,
+      CLAIM_COLUMNS,
+    )
+    if (!claimed) return existing
+
+    try {
+      const taxonomy = await generatePackagingTaxonomy(video, transcript)
+      const healed = taxonomy ? { ...existing, taxonomy } : existing
+      if (taxonomy) {
+        await savePackagingAlignment(supabase, userId, analysedVideoId, healed)
+      }
+      await releaseAnalysisClaim(
+        supabase,
+        userId,
+        analysedVideoId,
+        CLAIM_COLUMNS,
+        "done",
+      )
+      return healed
+    } catch (error) {
+      await releaseAnalysisClaim(
+        supabase,
+        userId,
+        analysedVideoId,
+        CLAIM_COLUMNS,
+        "failed",
+      ).catch(() => {})
+      throw error
+    }
+  } catch (error) {
+    console.error("Failed to backfill packaging taxonomy", error)
+    return existing
   }
 }
