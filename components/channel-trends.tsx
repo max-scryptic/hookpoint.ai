@@ -5,6 +5,7 @@ import {
   ImageIcon,
   LibraryIcon,
   LockIcon,
+  MinusIcon,
   PackageIcon,
   SparklesIcon,
   TrendingDownIcon,
@@ -1170,14 +1171,22 @@ function FullBreakdown({ data }: { data: ChannelTrendsData }) {
       kind: data.dropOffs,
     },
     {
-      value: "holds",
-      label: "What holds viewers",
+      value: "gains",
+      label: "Retention gains",
       icon: (
         <TrendingUpIcon className="size-4 text-emerald-600 dark:text-emerald-500" />
       ),
       description:
-        "The patterns your retention gains keep coming back to - worth repeating on purpose.",
+        "The patterns around moments viewers replayed or returned to.",
       kind: data.gains,
+    },
+    {
+      value: "holds",
+      label: "Audience holds",
+      icon: <MinusIcon className="size-4 text-teal-600 dark:text-teal-400" />,
+      description:
+        "The patterns that recur where your audience stayed unusually steady.",
+      kind: data.holds,
     },
     {
       value: "hooks",
@@ -1234,28 +1243,38 @@ const RETENTION_TRENDS_TAB_LIMIT = 3
 function RetentionTrendsTabs({
   dropOffs,
   gains,
+  holds,
 }: {
   dropOffs: ChannelKindTrends | null
   gains: ChannelKindTrends | null
+  holds: ChannelKindTrends | null
 }) {
   const tabs = [
     {
-      value: "negative",
-      label: "Negative retention",
+      value: "drop-offs",
+      label: "Drop-offs",
       icon: <TrendingDownIcon className="text-destructive" />,
       description:
         "Your top 3 recurring drop-off patterns, most channel-wide first.",
       trends: dropOffs?.trends.slice(0, RETENTION_TRENDS_TAB_LIMIT) ?? [],
     },
     {
-      value: "positive",
-      label: "Positive retention",
+      value: "gains",
+      label: "Gains",
       icon: (
         <TrendingUpIcon className="text-emerald-600 dark:text-emerald-500" />
       ),
       description:
         "Your top 3 recurring retention gains, most channel-wide first.",
       trends: gains?.trends.slice(0, RETENTION_TRENDS_TAB_LIMIT) ?? [],
+    },
+    {
+      value: "holds",
+      label: "Holds",
+      icon: <MinusIcon className="text-teal-600 dark:text-teal-400" />,
+      description:
+        "Your top 3 recurring audience-hold patterns, most channel-wide first.",
+      trends: holds?.trends.slice(0, RETENTION_TRENDS_TAB_LIMIT) ?? [],
     },
   ].filter((tab) => tab.trends.length > 0)
 
@@ -1267,7 +1286,7 @@ function RetentionTrendsTabs({
         <h3 className="text-sm font-semibold">Top retention trends</h3>
         <p className="mt-0.5 text-xs text-muted-foreground">
           The patterns that recur across the most of your uploads, split by
-          whether they lose viewers or hold them.
+          whether viewers leave, return, or remain unusually steady.
         </p>
       </div>
       <Tabs defaultValue={tabs[0].value}>
@@ -1372,6 +1391,7 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
     data.recurrence != null ||
     data.dropOffs != null ||
     data.gains != null ||
+    data.holds != null ||
     data.hooks != null
   const hasPackaging = data.packaging != null || data.subscribers != null
 
@@ -1402,6 +1422,7 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
               <RetentionTrendsTabs
                 dropOffs={data.dropOffs}
                 gains={data.gains}
+                holds={data.holds}
               />
               {data.signature != null && (
                 <SignatureChart

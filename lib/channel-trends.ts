@@ -382,6 +382,7 @@ export interface ChannelTrendsData {
   hooks: ChannelKindTrends | null
   dropOffs: ChannelKindTrends | null
   gains: ChannelKindTrends | null
+  holds: ChannelKindTrends | null
   // Per-type drop-vs-gain shares, most drop-heavy first; null when no drop or
   // gain events exist yet.
   signature: ChannelSignatureRow[] | null
@@ -1086,6 +1087,7 @@ export function buildChannelTrends(params: {
     hooks: kindTrends(records, "hook", videoTitleById),
     dropOffs: kindTrends(records, "drop_off", videoTitleById),
     gains: kindTrends(records, "gain", videoTitleById),
+    holds: kindTrends(records, "hold", videoTitleById),
     signature,
     insights: buildChannelInsights(records, signature, libraryVideoCount),
     recurrence: buildChannelRecurrence(records, videos, signature),

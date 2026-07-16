@@ -108,6 +108,28 @@ describe("buildChannelTrends", () => {
         ],
       },
     ])
+    expect(data.holds).toBeNull()
+  })
+
+  it("keeps audience holds separate from retention gains", () => {
+    const data = buildChannelTrends({
+      records: [
+        record({ analysedVideoId: "av-1", windowKind: "hold" }),
+        record({ analysedVideoId: "av-2", windowKind: "hold" }),
+        record({ analysedVideoId: "av-3", windowKind: "gain" }),
+      ],
+      videos: [
+        video("av-1", "Hold one"),
+        video("av-2", "Hold two"),
+        video("av-3", "Gain one"),
+      ],
+      libraryVideoCount: 3,
+      windowCount: 3,
+    })
+
+    expect(data.holds?.eventCount).toBe(2)
+    expect(data.holds?.trends[0].videoCount).toBe(2)
+    expect(data.gains?.eventCount).toBe(1)
   })
 
   it("orders trends by distinct-video recurrence before raw event volume", () => {

@@ -49,6 +49,7 @@ export interface ChannelEventHistory {
   hooks: ChannelKindHistory | null
   dropOffs: ChannelKindHistory | null
   gains: ChannelKindHistory | null
+  holds: ChannelKindHistory | null
 }
 
 // One or zero other videos is anecdote, not a channel trend — below this the
@@ -63,6 +64,7 @@ const WINDOW_KINDS: readonly RetentionWindowKind[] = [
   "hook",
   "drop_off",
   "gain",
+  "hold",
 ]
 
 function isWindowKind(value: unknown): value is RetentionWindowKind {
@@ -123,6 +125,7 @@ export function summarizeChannelEvents(
     hooks: summarizeKind(records, "hook"),
     dropOffs: summarizeKind(records, "drop_off"),
     gains: summarizeKind(records, "gain"),
+    holds: summarizeKind(records, "hold"),
   }
 }
 
