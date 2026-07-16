@@ -11,11 +11,12 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   computeRetentionWindows,
   detectRetentionGains,
+  detectRetentionHolds,
   detectSignificantDropOffs,
   type RetentionPoint,
 } from "@/lib/youtube/youtube"
 
-export type RetentionWindowKind = "hook" | "drop_off" | "gain"
+export type RetentionWindowKind = "hook" | "drop_off" | "gain" | "hold"
 
 // A single persisted retention window. The shape is a superset across the three
 // kinds; fields that don't apply to a kind are null (see column comments in the
@@ -71,7 +72,7 @@ interface RetentionWindowRow {
 const COLUMNS =
   "id, kind, window_index, window_key, label, from_seconds, to_seconds, start_watch_ratio, end_watch_ratio, delta, relative_performance, steepness, is_abnormally_steep, out_of_range, analysis_from_seconds, analysis_to_seconds"
 
-const KINDS: RetentionWindowKind[] = ["hook", "drop_off", "gain"]
+const KINDS: RetentionWindowKind[] = ["hook", "drop_off", "gain", "hold"]
 
 // How many significant mid-video drop-offs we surface and store. Matches the
 // number the detail view lists under "Biggest drop-offs".
@@ -85,6 +86,8 @@ const DROP_OFF_PADDING_BEFORE_SECONDS = 30
 const DROP_OFF_PADDING_AFTER_SECONDS = 10
 const GAIN_PADDING_BEFORE_SECONDS = 10
 const GAIN_PADDING_AFTER_SECONDS = 20
+const HOLD_PADDING_BEFORE_SECONDS = 10
+const HOLD_PADDING_AFTER_SECONDS = 10
 
 // Derives the padded analysis window for a single retention window row, or
 // null when this row has no analysis window of its own:
@@ -114,6 +117,15 @@ export function computeAnalysisWindow(
     const to =
       durationSeconds > 0 ? Math.min(toSeconds, durationSeconds) : toSeconds
     const from = Math.min(fromSeconds, to)
+    return to > from ? { fromSeconds: from, toSeconds: to } : null
+  }
+
+  if (kind === "hold") {
+    const from = Math.max(0, fromSeconds - HOLD_PADDING_BEFORE_SECONDS)
+    const to =
+      durationSeconds > 0
+        ? Math.min(durationSeconds, toSeconds + HOLD_PADDING_AFTER_SECONDS)
+        : toSeconds + HOLD_PADDING_AFTER_SECONDS
     return to > from ? { fromSeconds: from, toSeconds: to } : null
   }
 
@@ -239,6 +251,33 @@ export function buildRetentionWindows(
       endWatchRatio: null,
       delta: gain.watchRatioGain,
       relativePerformance: null,
+      steepness: null,
+      isAbnormallySteep: null,
+      outOfRange: false,
+      analysisFromSeconds: analysisWindow?.fromSeconds ?? null,
+      analysisToSeconds: analysisWindow?.toSeconds ?? null,
+    })
+  })
+
+  detectRetentionHolds(retention).forEach((hold, windowIndex) => {
+    const analysisWindow = computeAnalysisWindow(
+      "hold",
+      windowIndex,
+      hold.fromTimestampSeconds,
+      hold.toTimestampSeconds,
+      durationSeconds,
+    )
+    windows.push({
+      kind: "hold",
+      windowIndex,
+      windowKey: null,
+      label: null,
+      fromSeconds: hold.fromTimestampSeconds,
+      toSeconds: hold.toTimestampSeconds,
+      startWatchRatio: hold.startWatchRatio,
+      endWatchRatio: hold.endWatchRatio,
+      delta: hold.watchRatioChange,
+      relativePerformance: hold.relativePerformance,
       steepness: null,
       isAbnormallySteep: null,
       outOfRange: false,

@@ -72,6 +72,23 @@ describe("summarizeChannelEvents", () => {
     expect(summary?.hooks).toBeNull()
     expect(summary?.dropOffs).toBeNull()
     expect(summary?.gains?.eventCount).toBe(2)
+    expect(summary?.holds).toBeNull()
+  })
+
+  it("summarizes audience holds separately from replay gains", () => {
+    const summary = summarizeChannelEvents([
+      record({ analysedVideoId: "av-1", windowKind: "hold" }),
+      record({ analysedVideoId: "av-2", windowKind: "hold" }),
+      record({ analysedVideoId: "av-2", windowKind: "gain" }),
+    ])
+
+    expect(summary?.holds?.eventCount).toBe(2)
+    expect(summary?.holds?.trends[0]).toEqual({
+      eventType: "pacing_change",
+      eventCount: 2,
+      videoCount: 2,
+    })
+    expect(summary?.gains?.eventCount).toBe(1)
   })
 
   it("keeps only the highest-confidence narratives as examples, treating null confidence as lowest", () => {

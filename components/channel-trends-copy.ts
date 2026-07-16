@@ -1,4 +1,8 @@
-import type { ChannelInsightKind, PackagingFeature } from "@/lib/channel-trends"
+import type {
+  ChannelInsightKind,
+  ChannelPlaybookKind,
+  PackagingFeature,
+} from "@/lib/channel-trends"
 import type {
   HookDelivery,
   PromiseType,
@@ -147,6 +151,67 @@ export function insightCopy(
   eventType: RetentionWindowEventType,
 ): InsightCopy {
   return COPY_BY_KIND[kind][eventType]
+}
+
+export interface PlaybookCopy extends InsightCopy {
+  whenToUse: string
+}
+
+const KEEP_COPY: Record<RetentionWindowEventType, InsightCopy> = {
+  pacing_change: {
+    headline: "A controlled pace is protecting attention.",
+    action:
+      "Preserve this rhythm through explanation-heavy sections. Plan any speed change as a deliberate reset instead of letting the section drift.",
+  },
+  scene_cut: {
+    headline: "Purposeful cuts are sustaining attention.",
+    action:
+      "Keep using cuts that advance the idea or reveal new information. Your hold evidence suggests continuity matters more than cutting for its own sake.",
+  },
+  topic_shift: {
+    headline: "Clear topic progression keeps viewers with you.",
+    action:
+      "Structure longer sections as a sequence of small, clearly connected ideas so viewers always know why the next point matters.",
+  },
+  visual_change: {
+    headline: "Visual resets are protecting attention.",
+    action:
+      "Plan a relevant visual change into long explanations: a new angle, demonstration, b-roll example, or result that advances the point.",
+  },
+  audio_change: {
+    headline: "Your sound design helps maintain momentum.",
+    action:
+      "Preserve the audio continuity and intentional energy shifts shown in these holds, especially through transitions and slower passages.",
+  },
+  on_screen_text_change: {
+    headline: "Useful on-screen text is keeping viewers oriented.",
+    action:
+      "Continue using concise overlays to land key facts, steps, totals, or rules exactly when viewers need them.",
+  },
+  other: {
+    headline: "A repeatable hold pattern is emerging.",
+    action:
+      "Compare the evidence receipts and preserve the shared behaviour when you plan the next version of this kind of section.",
+  },
+}
+
+export function playbookCopy(
+  kind: ChannelPlaybookKind,
+  eventType: RetentionWindowEventType,
+): PlaybookCopy {
+  const copy =
+    kind === "keep"
+      ? KEEP_COPY[eventType]
+      : kind === "fix"
+        ? FIX_COPY[eventType]
+        : STRENGTH_COPY[eventType]
+  const whenToUse =
+    kind === "keep"
+      ? "Use while a section is already holding attention."
+      : kind === "fix"
+        ? "Check before every transition or slower passage."
+        : "Deploy when a section begins to flatten."
+  return { ...copy, whenToUse }
 }
 
 // --- Packaging feature labels ----------------------------------------------

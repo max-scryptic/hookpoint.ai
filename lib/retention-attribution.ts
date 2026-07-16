@@ -15,9 +15,9 @@ import {
   type VideoDetails,
 } from "@/lib/youtube/youtube"
 
-export type RetentionMomentKind = "hook" | "drop_off" | "gain"
+export type RetentionMomentKind = "hook" | "drop_off" | "gain" | "hold"
 
-export const RETENTION_ATTRIBUTION_SCHEMA_VERSION = 2
+export const RETENTION_ATTRIBUTION_SCHEMA_VERSION = 3
 
 export interface RetentionMomentAttribution {
   kind: RetentionMomentKind
@@ -97,7 +97,7 @@ export function prepareRetentionMoments(
 ): PreparedMoment[] {
   const moments: PreparedMoment[] = []
 
-  for (const kind of ["hook", "drop_off", "gain"] as const) {
+  for (const kind of ["hook", "drop_off", "gain", "hold"] as const) {
     windows
       .filter((window) => window.kind === kind && !window.outOfRange)
       .sort((a, b) => a.windowIndex - b.windowIndex)
