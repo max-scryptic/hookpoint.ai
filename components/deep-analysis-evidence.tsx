@@ -80,6 +80,7 @@ const KIND_LABELS: Record<WindowEvidence["window"]["kind"], string> = {
   hook: "Hook",
   drop_off: "Drop-off",
   gain: "Gain",
+  hold: "Hold",
 }
 
 // The deep-analysis evidence generated for a video, grouped by retention
@@ -170,7 +171,7 @@ function WindowEvidenceCard({ item }: { item: WindowEvidence }) {
           {formatTimestamp(from)} – {formatTimestamp(to)}
         </span>
         <span
-          className={`font-mono text-xs ${window.delta >= 0 ? "text-emerald-600 dark:text-emerald-500" : "text-destructive"}`}
+          className={`font-mono text-xs ${window.kind === "hold" ? "text-teal-600 dark:text-teal-400" : window.delta >= 0 ? "text-emerald-600 dark:text-emerald-500" : "text-destructive"}`}
         >
           {formatSignedPercent(window.delta)}
         </span>
@@ -560,12 +561,14 @@ function editTip(
 }
 
 function takeawayFor({
+  kind,
   dominant,
   visual,
   audio,
   editing,
   baseline,
 }: {
+  kind: WindowEvidence["window"]["kind"]
   dominant: WindowEvidence["events"][number] | null
   visual: VisualSummary | null
   audio: AudioAnalysis | null
@@ -575,6 +578,15 @@ function takeawayFor({
   const at = dominant
     ? ` around ${formatTimestamp(dominant.timestampSeconds)}`
     : ""
+
+  if (kind === "hold") {
+    return {
+      observation:
+        dominant?.narrative ??
+        "Retention stays unusually steady through this stretch without one isolated non-verbal event explaining it.",
+      tip: null,
+    }
+  }
 
   // A non-verbal event leads when there is one, grounded in the concrete
   // signal for its modality so each window reads differently.
@@ -820,6 +832,7 @@ function CardInsightDraft({ item }: { item: WindowEvidence }) {
           </span>
           {(() => {
             const takeaway = takeawayFor({
+              kind: window.kind,
               dominant,
               visual,
               audio: audioAnalysis,

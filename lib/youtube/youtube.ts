@@ -99,6 +99,22 @@ export interface RetentionGain {
   watchRatioGain: number
 }
 
+// A sustained stretch where the curve remains unusually stable. Unlike a
+// gain, a hold does not require viewers to rewind or return; it identifies a
+// section that kept almost all of the audience who entered it.
+export interface RetentionHold {
+  fromTimestampSeconds: number
+  toTimestampSeconds: number
+  startWatchRatio: number
+  endWatchRatio: number
+  // Signed change across the hold. Kept signed because a stable stretch can
+  // drift very slightly up or down while still holding its audience.
+  watchRatioChange: number
+  // Average relative-retention performance across the candidate, when
+  // YouTube supplied it for at least one point.
+  relativePerformance: number | null
+}
+
 // A single timestamped line of spoken text from a video's caption track.
 export interface TranscriptCue {
   startSeconds: number
@@ -948,6 +964,137 @@ export function detectRetentionGains(
     .sort((a, b) => b.watchRatioGain - a.watchRatioGain)
     .slice(0, limit)
     .sort((a, b) => a.fromTimestampSeconds - b.fromTimestampSeconds)
+}
+
+// Finds sustained, near-flat stretches of the retention curve. Candidates
+// span several consecutive Analytics samples so a single noisy step cannot be
+// called a hold. They must remain within a narrow range, avoid the opening hook
+// and not overlap a significant drop or replay gain already surfaced elsewhere.
+// The flattest candidates win, with relative performance and duration used as
+// tie-breakers; selected windows never overlap one another.
+export function detectRetentionHolds(
+  points: RetentionPoint[],
+  {
+    spanSteps = 3,
+    maxNetChange = 0.015,
+    maxRange = 0.025,
+    minDurationSeconds = 10,
+    limit = 3,
+    ignoreBeforeSeconds = HOOK_COVERAGE_END_SECONDS,
+  }: {
+    spanSteps?: number
+    maxNetChange?: number
+    maxRange?: number
+    minDurationSeconds?: number
+    limit?: number
+    ignoreBeforeSeconds?: number
+  } = {},
+): RetentionHold[] {
+  const sorted = [...points].sort(
+    (a, b) => a.timestampSeconds - b.timestampSeconds,
+  )
+  const steps = Math.max(2, Math.floor(spanSteps))
+  if (sorted.length <= steps || limit <= 0) return []
+
+  const excluded = [
+    ...detectSignificantDropOffs(sorted, {
+      limit: sorted.length,
+      ignoreBeforeSeconds,
+    }),
+    ...detectRetentionGains(sorted, { limit: sorted.length }),
+  ].map((window) => ({
+    fromSeconds: window.fromTimestampSeconds,
+    toSeconds: window.toTimestampSeconds,
+  }))
+
+  const overlaps = (
+    fromSeconds: number,
+    toSeconds: number,
+    other: { fromSeconds: number; toSeconds: number },
+  ) => fromSeconds < other.toSeconds && toSeconds > other.fromSeconds
+
+  const candidates: Array<RetentionHold & { range: number; duration: number }> = []
+  for (let startIndex = 0; startIndex + steps < sorted.length; startIndex++) {
+    const endIndex = startIndex + steps
+    const start = sorted[startIndex]
+    const end = sorted[endIndex]
+    if (start.timestampSeconds < ignoreBeforeSeconds) continue
+
+    const duration = end.timestampSeconds - start.timestampSeconds
+    if (duration < minDurationSeconds) continue
+    if (
+      excluded.some((window) =>
+        overlaps(start.timestampSeconds, end.timestampSeconds, window),
+      )
+    ) {
+      continue
+    }
+
+    const within = sorted.slice(startIndex, endIndex + 1)
+    const ratios = within.map((point) => point.watchRatio)
+    const range = Math.max(...ratios) - Math.min(...ratios)
+    const watchRatioChange = end.watchRatio - start.watchRatio
+    if (Math.abs(watchRatioChange) > maxNetChange || range > maxRange) continue
+
+    const relativeValues = within
+      .map((point) => point.relativePerformance)
+      .filter((value): value is number => value != null)
+    const relativePerformance =
+      relativeValues.length > 0
+        ? relativeValues.reduce((sum, value) => sum + value, 0) /
+          relativeValues.length
+        : null
+
+    candidates.push({
+      fromTimestampSeconds: start.timestampSeconds,
+      toTimestampSeconds: end.timestampSeconds,
+      startWatchRatio: start.watchRatio,
+      endWatchRatio: end.watchRatio,
+      watchRatioChange,
+      relativePerformance,
+      range,
+      duration,
+    })
+  }
+
+  const selected: typeof candidates = []
+  for (const candidate of candidates.sort((a, b) => {
+    const aMovement = a.range / a.duration
+    const bMovement = b.range / b.duration
+    if (aMovement !== bMovement) return aMovement - bMovement
+    const relativeDifference =
+      (b.relativePerformance ?? -1) - (a.relativePerformance ?? -1)
+    if (relativeDifference !== 0) return relativeDifference
+    return b.duration - a.duration
+  })) {
+    if (
+      selected.some((window) =>
+        overlaps(
+          candidate.fromTimestampSeconds,
+          candidate.toTimestampSeconds,
+          {
+            fromSeconds: window.fromTimestampSeconds,
+            toSeconds: window.toTimestampSeconds,
+          },
+        ),
+      )
+    ) {
+      continue
+    }
+    selected.push(candidate)
+    if (selected.length >= limit) break
+  }
+
+  return selected
+    .sort((a, b) => a.fromTimestampSeconds - b.fromTimestampSeconds)
+    .map((hold) => ({
+      fromTimestampSeconds: hold.fromTimestampSeconds,
+      toTimestampSeconds: hold.toTimestampSeconds,
+      startWatchRatio: hold.startWatchRatio,
+      endWatchRatio: hold.endWatchRatio,
+      watchRatioChange: hold.watchRatioChange,
+      relativePerformance: hold.relativePerformance,
+    }))
 }
 
 // A drop-off that has been judged "significant" — i.e. steeper than the video's

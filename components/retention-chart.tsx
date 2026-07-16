@@ -6,7 +6,7 @@ import type { RetentionPoint } from "@/lib/youtube/youtube"
 
 export type RetentionChartInsight = {
   id: string
-  kind: "hook" | "drop" | "gain" | "pacing"
+  kind: "hook" | "drop" | "gain" | "hold" | "pacing"
   label: string
   fromSeconds: number
   toSeconds: number
@@ -176,6 +176,11 @@ export function RetentionChart({
       band: "#22c55e",
       badge: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
       name: "Gains",
+    },
+    hold: {
+      band: "#14b8a6",
+      badge: "bg-teal-100 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300",
+      name: "Holds",
     },
     pacing: {
       band: "#3b82f6",
@@ -522,7 +527,7 @@ export function RetentionChart({
       {insights.length > 0 && (
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
           <span>Highlighted windows:</span>
-          {(["hook", "drop", "gain", "pacing"] as const).map((kind) =>
+          {(["hook", "drop", "gain", "hold", "pacing"] as const).map((kind) =>
             insights.some((insight) => insight.kind === kind) ? (
               <span key={kind} className="flex items-center gap-1.5">
                 <span
