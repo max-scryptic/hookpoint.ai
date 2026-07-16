@@ -43,7 +43,7 @@ export function formatPublishedAt(iso: string): string {
 }
 
 export function formatCount(value: number | null): string {
-  if (value == null) return "—"
+  if (value == null) return "N/A"
   return value.toLocaleString()
 }
 
@@ -185,10 +185,15 @@ function VideoActions({
 export function VideoList({
   videos,
   analysedIds,
+  showAnalysedColumn = false,
 }: {
   videos: RecentVideo[]
   // IDs of videos the user has already analysed.
   analysedIds?: Set<string>
+  // Whether to render the "Analysed" column. Off by default: the Analyse Video
+  // page hides analysed uploads, so the column only appears when the user opts
+  // to show them.
+  showAnalysedColumn?: boolean
 }) {
   if (videos.length === 0) {
     return (
@@ -221,9 +226,11 @@ export function VideoList({
             <TableHead className="hidden px-4 py-3 text-right text-accent-foreground lg:table-cell">
               Comments
             </TableHead>
-            <TableHead className="hidden px-4 py-3 text-accent-foreground sm:table-cell">
-              Analysed
-            </TableHead>
+            {showAnalysedColumn && (
+              <TableHead className="hidden px-4 py-3 text-accent-foreground sm:table-cell">
+                Analysed
+              </TableHead>
+            )}
             <TableHead className="w-12 px-4 py-3">
               <span className="sr-only">Actions</span>
             </TableHead>
@@ -287,13 +294,15 @@ export function VideoList({
               <TableCell className="hidden px-4 py-3 align-top text-right text-sm tabular-nums text-muted-foreground lg:table-cell">
                 {formatCount(video.commentCount)}
               </TableCell>
-              <TableCell className="hidden px-4 py-3 align-top sm:table-cell">
-                {isAnalysed ? (
-                  <AnalysedBadge />
-                ) : (
-                  <span className="text-sm text-muted-foreground">—</span>
-                )}
-              </TableCell>
+              {showAnalysedColumn && (
+                <TableCell className="hidden px-4 py-3 align-top sm:table-cell">
+                  {isAnalysed ? (
+                    <AnalysedBadge />
+                  ) : (
+                    <span className="text-sm text-muted-foreground">N/A</span>
+                  )}
+                </TableCell>
+              )}
               <TableCell className="px-4 py-3 align-top text-right">
                 <VideoActions video={video} isAnalysed={isAnalysed} />
               </TableCell>

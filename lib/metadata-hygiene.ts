@@ -75,21 +75,21 @@ export function computeMetadataHygiene(
       id: "title-length",
       label: "Title length",
       status: "warn",
-      detail: `${title.length} characters — likely truncated in search and suggested feeds. Aim for under ${TITLE_MAX_CHARS}.`,
+      detail: `${title.length} characters, likely truncated in search and suggested feeds. Aim for under ${TITLE_MAX_CHARS}.`,
     })
   } else if (title.length < TITLE_MIN_CHARS) {
     checks.push({
       id: "title-length",
       label: "Title length",
       status: "warn",
-      detail: `${title.length} characters — short titles often leave searchable context on the table.`,
+      detail: `${title.length} characters, short titles often leave searchable context on the table.`,
     })
   } else {
     checks.push({
       id: "title-length",
       label: "Title length",
       status: "good",
-      detail: `${title.length} characters — a sensible length that shows in full.`,
+      detail: `${title.length} characters, a sensible length that shows in full.`,
     })
   }
 
@@ -101,7 +101,7 @@ export function computeMetadataHygiene(
       id: "title-caps",
       label: "Title casing",
       status: "warn",
-      detail: "Mostly uppercase — reads as shouting and can suppress click-through.",
+      detail: "Mostly uppercase, reads as shouting and can suppress click-through.",
     })
   }
 
@@ -111,14 +111,14 @@ export function computeMetadataHygiene(
       id: "description",
       label: "Description",
       status: "warn",
-      detail: "Empty — you're missing free searchable context and space for links.",
+      detail: "Empty, you're missing free searchable context and space for links.",
     })
   } else if (descriptionText.length < DESCRIPTION_MIN_CHARS) {
     checks.push({
       id: "description",
       label: "Description",
       status: "warn",
-      detail: `Only ${descriptionText.length} characters — a fuller description helps search and context.`,
+      detail: `Only ${descriptionText.length} characters, a fuller description helps search and context.`,
     })
   } else {
     checks.push({
@@ -136,7 +136,7 @@ export function computeMetadataHygiene(
           id: "chapters",
           label: "Chapters",
           status: "good",
-          detail: "Timestamped chapters detected — easier navigation and extra search surface.",
+          detail: "Timestamped chapters detected, easier navigation and extra search surface.",
         }
       : {
           id: "chapters",
@@ -154,7 +154,7 @@ export function computeMetadataHygiene(
       id: "hashtags",
       label: "Hashtags",
       status: "warn",
-      detail: `${hashtagCount} hashtags — YouTube ignores all of them once there are more than ${HASHTAG_HARD_LIMIT}.`,
+      detail: `${hashtagCount} hashtags, YouTube ignores all of them once there are more than ${HASHTAG_HARD_LIMIT}.`,
     })
   } else if (hashtagCount === 0) {
     checks.push({
@@ -168,7 +168,7 @@ export function computeMetadataHygiene(
       id: "hashtags",
       label: "Hashtags",
       status: "good",
-      detail: `${hashtagCount} hashtag${hashtagCount === 1 ? "" : "s"} — within the limit YouTube honours.`,
+      detail: `${hashtagCount} hashtag${hashtagCount === 1 ? "" : "s"}, within the limit YouTube honours.`,
     })
   }
 

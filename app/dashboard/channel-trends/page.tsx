@@ -74,8 +74,9 @@ export default async function Page() {
             Channel Trends
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            The retention patterns that repeat across your deeply analysed
-            videos. Every deep analysis grows this library.
+            Your evidence-backed playbook for keeping attention, repairing
+            drop-offs and recovering viewers. Every deep analysis makes it
+            sharper.
           </p>
         </div>
 

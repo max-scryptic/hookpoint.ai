@@ -2,7 +2,7 @@
 // COPY GUARDRAIL - HARD RULE, DO NOT REMOVE
 //
 // No text rendered on the Channel Trends page may EVER contain an em dash
-// (U+2014 "—") or an en dash (U+2013 "–"). Plain hyphens ( - ) are fine.
+// (U+2014) or an en dash (U+2013). Plain hyphens ( - ) are fine.
 //
 // This applies to any copy written for the page, whether hard-coded in source
 // (headlines, actions, descriptions, tooltips, comments) or generated at
@@ -24,5 +24,5 @@
  * reaches the Channel Trends page.
  */
 export function stripEmDashes(text: string): string {
-  return text.replace(/\s*—\s*/g, " - ").replace(/–/g, "-")
+  return text.replace(/\s*\u2014\s*/g, " - ").replace(/\u2013/g, "-")
 }
