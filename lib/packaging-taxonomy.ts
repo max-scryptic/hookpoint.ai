@@ -204,11 +204,11 @@ export async function generatePackagingTaxonomy(
             {
               type: "input_text",
               text: [
-                "You classify the packaging of a YouTube video — its title, its thumbnail image, and its spoken hook (the first ~30 seconds of transcript) — into a fixed taxonomy. Classify only from what you genuinely see and read; never invent elements that aren't there.",
+                "You classify the packaging of a YouTube video, its title, its thumbnail image, and its spoken hook (the first ~30 seconds of transcript), into a fixed taxonomy. Classify only from what you genuinely see and read; never invent elements that aren't there.",
                 "titleStyles: the one or two styles the title leans on, dominant first. curiosity_gap withholds the payoff; how_to promises instruction; number_list leads with a count; question is phrased as one; negative_warning warns or leads with a mistake; result_claim states a concrete achieved result; challenge frames a constraint or dare; personal_story signals a first-person narrative; direct_label plainly names the content.",
                 "thumbnailHasFace: whether a human face is clearly visible. thumbnailEmotion: the dominant facial expression, or \"none\" when there is no face. thumbnailTextWordCount: count the words of overlaid text readable on the thumbnail image itself (0 when it carries none).",
                 "promiseType: the single promise the title and thumbnail together make to the viewer, choosing the closest fit.",
-                "hookDelivery: whether the spoken hook picks up that promise — direct when the opening words immediately address it, delayed when it arrives later within the hook, absent when the hook never touches it (or there is no transcript).",
+                "hookDelivery: whether the spoken hook picks up that promise: direct when the opening words immediately address it, delayed when it arrives later within the hook, absent when the hook never touches it (or there is no transcript).",
                 "alignmentScore: 0 to 1, how tightly title, thumbnail and hook communicate one consistent promise (1.0 = all three say the same thing; 0.0 = they promise unrelated things).",
                 "topics: 1 to 3 short lowercase content tags naming what the video is about (e.g. \"gear reviews\", \"video editing\", \"productivity\"). Prefer stable, reusable nouns a channel would repeat across uploads over one-off phrases.",
               ].join(" "),

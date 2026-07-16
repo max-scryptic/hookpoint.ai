@@ -43,7 +43,7 @@ export function formatPublishedAt(iso: string): string {
 }
 
 export function formatCount(value: number | null): string {
-  if (value == null) return "—"
+  if (value == null) return "N/A"
   return value.toLocaleString()
 }
 
@@ -299,7 +299,7 @@ export function VideoList({
                   {isAnalysed ? (
                     <AnalysedBadge />
                   ) : (
-                    <span className="text-sm text-muted-foreground">—</span>
+                    <span className="text-sm text-muted-foreground">N/A</span>
                   )}
                 </TableCell>
               )}

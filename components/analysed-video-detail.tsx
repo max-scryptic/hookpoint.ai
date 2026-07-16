@@ -78,7 +78,7 @@ function formatTimestamp(totalSeconds: number): string {
 
 // Compact human number: 12345 -> "12.3K", 2_400_000 -> "2.4M".
 function formatCompactNumber(value: number | null): string {
-  if (value == null) return "—"
+  if (value == null) return "N/A"
   return new Intl.NumberFormat("en", {
     notation: "compact",
     maximumFractionDigits: 1,
@@ -321,7 +321,7 @@ function PacingAnalysisSection({
         </div>
       ) : analysis.slowOrRepetitiveStretches.length === 0 ? (
         <div className="rounded-xl border bg-muted/30 p-6 text-sm text-muted-foreground">
-          No slow or repetitive stretches stood out — the pacing holds up across
+          No slow or repetitive stretches stood out. The pacing holds up across
           this video.
         </div>
       ) : (
@@ -608,7 +608,7 @@ function DropList({
   if (drops.length === 0) {
     return (
       <div className="rounded-xl border bg-muted/30 p-6 text-sm text-muted-foreground">
-        No abnormal drop-offs detected — retention falls about as evenly as a
+        No abnormal drop-offs detected. Retention falls about as evenly as a
         typical video, with no single moment standing out.
       </div>
     )
@@ -1400,7 +1400,7 @@ export function AnalysedVideoDetail({
                       ? formatTimestamp(
                           analyticsSummary.averageViewDurationSeconds,
                         )
-                      : "—"
+                      : "N/A"
                   }
                 />
               </div>

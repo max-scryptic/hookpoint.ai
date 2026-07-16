@@ -150,7 +150,7 @@ function VideoCostSummary({
         </dl>
         <p className="text-xs text-muted-foreground">
           Transcoding is a one-time cost for producing this video&apos;s proxies;
-          LLM analysis is the sum across every window below. Estimated — actual
+          LLM analysis is the sum across every window below. Estimated; actual
           billing may differ.
         </p>
       </div>
@@ -623,7 +623,7 @@ function takeawayFor({
         const phrase = editPhrase(editing, baseline)
         return {
           observation: phrase
-            ? `The editing is what loses viewers here — ${phrase}.`
+            ? `The editing is what loses viewers here: ${phrase}.`
             : "The cut rhythm is where viewers start slipping at this moment.",
           tip: editTip(editing, baseline, at),
         }
@@ -647,7 +647,7 @@ function takeawayFor({
         const phrase = audioPhrase(audio, baseline.speechRate)
         return {
           observation: phrase
-            ? `The sound is what shifts here — ${phrase}.`
+            ? `The sound is what shifts here: ${phrase}.`
             : "Energy and sound are what shift here.",
           tip: `Lift the delivery or trim the dead air${at} to keep viewers with you.`,
         }
@@ -663,7 +663,7 @@ function takeawayFor({
             phrases.length > 0
               ? `A few things stack up at this moment: ${joinClauses(phrases)}.`
               : "A few signals reinforce each other here, with the edit and delivery both working against attention at once.",
-          tip: `Tighten the pacing and delivery through this stretch${at} — no single change on its own is likely to move it.`,
+          tip: `Tighten the pacing and delivery through this stretch${at}. No single change on its own is likely to move it.`,
         }
       }
       default:
@@ -680,7 +680,7 @@ function takeawayFor({
   const edit = editPhrase(editing, baseline)
   if (edit) {
     return {
-      observation: `No single event stands out, but the editing breaks from the rest of the video here — ${edit}.`,
+      observation: `No single event stands out, but the editing breaks from the rest of the video here: ${edit}.`,
       tip: editTip(editing, baseline, at),
     }
   }
@@ -694,7 +694,7 @@ function takeawayFor({
   ].filter((p): p is string => p != null)
   if (state.length > 0) {
     return {
-      observation: `Nothing in the edit, delivery or visuals breaks from the rest of the video here — ${joinClauses(state)} — so the change tracks the content of the moment itself.`,
+      observation: `Nothing in the edit, delivery or visuals breaks from the rest of the video here: ${joinClauses(state)}. The change tracks the content of the moment itself.`,
       tip: null,
     }
   }
@@ -926,7 +926,7 @@ function BaselineField({
     <div className="flex flex-col">
       <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd className="font-medium tabular-nums">
-        {value != null ? format(value) : "—"}
+        {value != null ? format(value) : "N/A"}
         {value != null && baseline != null && (
           <span className="ml-2 text-xs font-normal text-muted-foreground">
             avg {format(baseline)}
@@ -1193,10 +1193,10 @@ function SnapshotsSection({
                     <TableCell>{formatBoolean(analysis.contains_text)}</TableCell>
                     <TableCell>{formatBoolean(analysis.contains_code)}</TableCell>
                     <TableCell className="max-w-40 text-wrap whitespace-normal text-xs text-muted-foreground">
-                      {snapshot.ocrText ?? "—"}
+                      {snapshot.ocrText ?? "N/A"}
                     </TableCell>
                     <TableCell className="max-w-56 text-wrap whitespace-normal">
-                      {analysis.notable_event ?? "—"}
+                      {analysis.notable_event ?? "N/A"}
                     </TableCell>
                     <TableCell className="max-w-64 min-w-48 text-wrap whitespace-normal">
                       {analysis.description}
@@ -1282,11 +1282,11 @@ function AudioSection({
           />
           <Field
             label="Average volume"
-            value={analysis.average_volume != null ? `${analysis.average_volume.toFixed(1)} dB` : "—"}
+            value={analysis.average_volume != null ? `${analysis.average_volume.toFixed(1)} dB` : "N/A"}
           />
           <Field
             label="Silence"
-            value={analysis.silence != null ? `${(analysis.silence * 100).toFixed(0)}%` : "—"}
+            value={analysis.silence != null ? `${(analysis.silence * 100).toFixed(0)}%` : "N/A"}
           />
           {analysis.notable_events.length > 0 && (
             <Field

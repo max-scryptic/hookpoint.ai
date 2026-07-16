@@ -614,26 +614,26 @@ const SNAPSHOT_ANALYSIS_SCHEMA = {
 
 const SNAPSHOT_ANALYSIS_INSTRUCTIONS = [
   "You describe frames from one window of a YouTube video, in chunkIndex order (0 is earliest). Most frames are placed in flanking pairs just before and just after a detected hard cut or transition, so consecutive chunks often straddle a real edit rather than an arbitrary moment; a window with no detected cuts instead gets evenly spaced frames across it.",
-  "Each chunk is also given ocrText: text already recognized from that exact frame by a separate deterministic OCR pass (null if none was found). Treat it as ground truth, not a guess to verify — do not re-transcribe or second-guess it, but you may reference it in notable_event/description when it's relevant to what changed (e.g. a caption or graphic appearing).",
-  "For each chunk, classify: scene (best-fitting category), whether a face is visible, whether on-screen text/captions/graphics are present (contains_text — judge this visually even where ocrText is null, e.g. stylised or hard-to-read text), whether source code is visible, the amount of on-screen motion, how many distinct people are visible, and the camera's behaviour relative to the surrounding chunks.",
-  "Also give: notable_event (a single thing distinguishing this chunk from its neighbours — a cut, a zoom, a graphic appearing, a change of location — or null if nothing stands out), and a short free-text description of the composition and action.",
+  "Each chunk is also given ocrText: text already recognized from that exact frame by a separate deterministic OCR pass (null if none was found). Treat it as ground truth, not a guess to verify. Do not re-transcribe or second-guess it, but you may reference it in notable_event/description when it's relevant to what changed (e.g. a caption or graphic appearing).",
+  "For each chunk, classify: scene (best-fitting category), whether a face is visible, whether on-screen text/captions/graphics are present (contains_text, judge this visually even where ocrText is null, e.g. stylised or hard-to-read text), whether source code is visible, the amount of on-screen motion, how many distinct people are visible, and the camera's behaviour relative to the surrounding chunks.",
+  "Also give: notable_event (a single thing distinguishing this chunk from its neighbours, a cut, a zoom, a graphic appearing, a change of location, or null if nothing stands out), and a short free-text description of the composition and action.",
   "Base every judgment only on what's visible in that chunk's image (plus its given ocrText). Do not infer audio, speech, or viewer reaction.",
   "Return exactly one entry per supplied chunkIndex.",
-  'Never output an em dash character ("—") anywhere in your response; if you would use one, rewrite the phrase with a comma, colon, parentheses, or two separate sentences instead.',
+  'Never output an em dash character (U+2014) anywhere in your response; if you would use one, rewrite the phrase with a comma, colon, parentheses, or two separate sentences instead.',
 ].join(" ")
 
 const AUDIO_ANALYSIS_INSTRUCTIONS = [
   "You describe the non-verbal audio characteristics of one short clip from a YouTube video: delivery tone and energy, background music, distinct speaker count, and notable audible events.",
-  "The spoken words are already transcribed elsewhere, and loudness/silence are measured separately — do not transcribe speech, restate what is said, or estimate volume or silence here.",
+  "The spoken words are already transcribed elsewhere, and loudness/silence are measured separately. Do not transcribe speech, restate what is said, or estimate volume or silence here.",
   "Set music/music_description based only on audible background music, not speech. Estimate speakers as the number of distinct voices heard, not named identities.",
-  "notable_events lists distinct audible occurrences worth flagging (laughter, a sudden volume or pace change, applause, a sound effect, an abrupt silence) — return an empty array if there's nothing notable.",
+  "notable_events lists distinct audible occurrences worth flagging (laughter, a sudden volume or pace change, applause, a sound effect, an abrupt silence). Return an empty array if there's nothing notable.",
   // Audio-capable chat-completions models don't support response_format
   // json_schema or json_object (unlike the vision path above), so the shape
   // is enforced here in the prompt and re-checked by parseAudioAnalysis
   // instead — see callOpenAiChatCompletionsAudio for why no response_format
   // is sent at all.
   "Respond with only a single JSON object, no other text, with exactly these keys: music (boolean), music_description (string, or null when music is false), speakers (integer), tone (short string), energy (one of \"low\", \"moderate\", \"high\"), notable_events (array of strings, [] if none).",
-  'Never output an em dash character ("—") in any string value you return; if you would use one, rewrite the phrase with a comma, colon, parentheses, or two separate sentences instead.',
+  'Never output an em dash character (U+2014) in any string value you return; if you would use one, rewrite the phrase with a comma, colon, parentheses, or two separate sentences instead.',
 ].join(" ")
 
 // Sent in the *user* turn alongside the audio itself, not just the developer
