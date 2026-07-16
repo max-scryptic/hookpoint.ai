@@ -54,9 +54,10 @@ export default async function Page() {
             <p className="text-sm text-muted-foreground">
               Video Planner is coming soon to{" "}
               <span className="font-semibold text-foreground">
-                Starter and Pro
+                Starter
               </span>{" "}
-              users.
+              and{" "}
+              <span className="font-semibold text-foreground">Pro</span> users.
             </p>
             <p className="mt-3 text-sm text-muted-foreground">
               Upload a video before it goes live on YouTube, and we&apos;ll
