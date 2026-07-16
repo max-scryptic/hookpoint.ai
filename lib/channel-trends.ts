@@ -171,6 +171,49 @@ export interface ChannelInsight {
   signal: number
 }
 
+// --- Playbook: decisions earned by contrasting outcomes against holds ------
+
+// Holds are the control group for the playbook: they show the channel's
+// successful steady-state behaviour. A rule is only actionable when a pattern
+// is materially more common in its target outcome than in that control.
+const PLAYBOOK_MIN_PATTERN_VIDEOS = 2
+const PLAYBOOK_MIN_COVERAGE_VIDEOS = 2
+const PLAYBOOK_MIN_CONFIDENCE = 0.55
+const PLAYBOOK_MIN_RATE_LIFT = 0.2
+const PLAYBOOK_MIN_SIGNAL = 12
+const PLAYBOOK_MAX_RECEIPTS = 3
+
+export type ChannelPlaybookKind = "keep" | "fix" | "recover"
+
+export interface ChannelPlaybookReceipt {
+  analysedVideoId: string
+  videoTitle: string | null
+  timestampSeconds: number | null
+  narrative: string
+  confidence: number | null
+  primaryEvidence: ChannelEventRecord["primaryEvidence"] | null
+  windowDelta: number | null
+}
+
+export interface ChannelPlaybookRule {
+  kind: ChannelPlaybookKind
+  eventType: RetentionWindowEventType
+  signal: number
+  meanConfidence: number
+  evidenceVideoCount: number
+  targetCoveredVideoCount: number
+  controlVideoCount: number
+  controlCoveredVideoCount: number
+  targetRate: number
+  controlRate: number
+  rateLift: number
+  receipts: ChannelPlaybookReceipt[]
+}
+
+export type ChannelKindVideoIds = Partial<
+  Record<RetentionWindowKind, string[]>
+>
+
 // --- Recurrence: per-type presence across the most recent videos -----------
 
 const RECURRENCE_MAX_VIDEOS = 10
@@ -389,6 +432,9 @@ export interface ChannelTrendsData {
   // At most one fix, one strength and one hook pattern, in that order — only
   // those that cleared the insight gates.
   insights: ChannelInsight[]
+  // At most one keep, fix and recover rule, each contrasted against audience
+  // holds and backed by distinct-video evidence receipts.
+  playbook: ChannelPlaybookRule[]
   recurrence: ChannelRecurrence | null
   // Null until enough library videos carry an analytics snapshot.
   subscribers: ChannelSubscriberConversion | null
@@ -634,6 +680,163 @@ export function buildChannelInsights(
     hookInsight(records, libraryVideoCount),
   ]
   return insights.filter((insight): insight is ChannelInsight => insight != null)
+}
+
+function coveredVideoIds(
+  records: ChannelEventRecord[],
+  kind: RetentionWindowKind,
+  supplied: ChannelKindVideoIds | undefined,
+): Set<string> {
+  const suppliedIds = supplied?.[kind]
+  return new Set(
+    suppliedIds ??
+      records
+        .filter((record) => record.windowKind === kind)
+        .map((record) => record.analysedVideoId),
+  )
+}
+
+function playbookReceipts(
+  records: ChannelEventRecord[],
+  videoTitleById: Map<string, string>,
+): ChannelPlaybookReceipt[] {
+  const strongestByVideo = new Map<string, ChannelEventRecord>()
+  for (const record of records) {
+    const current = strongestByVideo.get(record.analysedVideoId)
+    if (
+      current == null ||
+      confidenceWeight(record.confidence) > confidenceWeight(current.confidence)
+    ) {
+      strongestByVideo.set(record.analysedVideoId, record)
+    }
+  }
+
+  return [...strongestByVideo.values()]
+    .sort((a, b) => confidenceWeight(b.confidence) - confidenceWeight(a.confidence))
+    .slice(0, PLAYBOOK_MAX_RECEIPTS)
+    .map((record) => ({
+      analysedVideoId: record.analysedVideoId,
+      videoTitle: videoTitleById.get(record.analysedVideoId) ?? null,
+      timestampSeconds: record.timestampSeconds ?? null,
+      narrative: record.narrative,
+      confidence: record.confidence,
+      primaryEvidence: record.primaryEvidence ?? null,
+      windowDelta: record.windowDelta ?? null,
+    }))
+}
+
+// Builds one decision per creator job. Presence is deduplicated per video, so
+// a densely edited upload cannot outweigh a pattern recurring channel-wide.
+// Empty synthesized windows still count in the denominator when the loader
+// supplies completed-window coverage.
+export function buildChannelPlaybook(
+  records: ChannelEventRecord[],
+  videos: ChannelVideo[],
+  libraryVideoCount: number,
+  kindVideoIds?: ChannelKindVideoIds,
+): ChannelPlaybookRule[] {
+  const videoTitleById = new Map(
+    videos.flatMap((video) =>
+      video.title == null ? [] : ([[video.id, video.title]] as const),
+    ),
+  )
+  const configurations = [
+    { kind: "keep", target: "hold", control: "drop_off" },
+    { kind: "fix", target: "drop_off", control: "hold" },
+    { kind: "recover", target: "gain", control: "hold" },
+  ] as const
+
+  return configurations.flatMap((configuration) => {
+    const targetCoverage = coveredVideoIds(
+      records,
+      configuration.target,
+      kindVideoIds,
+    )
+    const controlCoverage = coveredVideoIds(
+      records,
+      configuration.control,
+      kindVideoIds,
+    )
+    if (
+      targetCoverage.size < PLAYBOOK_MIN_COVERAGE_VIDEOS ||
+      controlCoverage.size < PLAYBOOK_MIN_COVERAGE_VIDEOS
+    ) {
+      return []
+    }
+
+    const eventTypes = new Set(
+      records
+        .filter((record) => record.windowKind === configuration.target)
+        .map((record) => record.eventType),
+    )
+    const candidates: ChannelPlaybookRule[] = []
+    for (const eventType of eventTypes) {
+      const targetRecords = records.filter(
+        (record) =>
+          record.windowKind === configuration.target &&
+          record.eventType === eventType,
+      )
+      const targetVideos = new Set(
+        targetRecords.map((record) => record.analysedVideoId),
+      )
+      const controlVideos = new Set(
+        records
+          .filter(
+            (record) =>
+              record.windowKind === configuration.control &&
+              record.eventType === eventType,
+          )
+          .map((record) => record.analysedVideoId),
+      )
+      const meanConfidence =
+        targetRecords.reduce(
+          (sum, record) => sum + confidenceWeight(record.confidence),
+          0,
+        ) / Math.max(1, targetRecords.length)
+      const targetRate = targetVideos.size / targetCoverage.size
+      const controlRate = controlVideos.size / controlCoverage.size
+      const rateLift = targetRate - controlRate
+      const breadth =
+        libraryVideoCount > 0
+          ? Math.min(1, targetVideos.size / libraryVideoCount)
+          : 0
+      const signal = Math.round(
+        100 * Math.sqrt(breadth) * meanConfidence * Math.max(0, rateLift),
+      )
+
+      if (
+        targetVideos.size < PLAYBOOK_MIN_PATTERN_VIDEOS ||
+        meanConfidence < PLAYBOOK_MIN_CONFIDENCE ||
+        rateLift < PLAYBOOK_MIN_RATE_LIFT ||
+        signal < PLAYBOOK_MIN_SIGNAL
+      ) {
+        continue
+      }
+
+      candidates.push({
+        kind: configuration.kind,
+        eventType,
+        signal,
+        meanConfidence,
+        evidenceVideoCount: targetVideos.size,
+        targetCoveredVideoCount: targetCoverage.size,
+        controlVideoCount: controlVideos.size,
+        controlCoveredVideoCount: controlCoverage.size,
+        targetRate,
+        controlRate,
+        rateLift,
+        receipts: playbookReceipts(targetRecords, videoTitleById),
+      })
+    }
+
+    candidates.sort(
+      (a, b) =>
+        b.signal - a.signal ||
+        b.rateLift - a.rateLift ||
+        a.eventType.localeCompare(b.eventType),
+    )
+    return candidates.slice(0, 1)
+  })
 }
 
 // Orders library videos chronologically by analysis date (undated first, so
@@ -1072,8 +1275,9 @@ export function buildChannelTrends(params: {
   videos: ChannelVideo[]
   libraryVideoCount: number
   windowCount: number
+  kindVideoIds?: ChannelKindVideoIds
 }): ChannelTrendsData {
-  const { records, videos, libraryVideoCount, windowCount } = params
+  const { records, videos, libraryVideoCount, windowCount, kindVideoIds } = params
   const videoTitleById = new Map<string, string>()
   for (const video of videos) {
     if (video.title != null) videoTitleById.set(video.id, video.title)
@@ -1090,6 +1294,12 @@ export function buildChannelTrends(params: {
     holds: kindTrends(records, "hold", videoTitleById),
     signature,
     insights: buildChannelInsights(records, signature, libraryVideoCount),
+    playbook: buildChannelPlaybook(
+      records,
+      videos,
+      libraryVideoCount,
+      kindVideoIds,
+    ),
     recurrence: buildChannelRecurrence(records, videos, signature),
     subscribers: buildSubscriberConversion(records, videos, libraryVideoCount),
     packaging: buildPackagingPatterns(videos, libraryVideoCount),
@@ -1107,10 +1317,11 @@ async function loadLibrarySize(
   libraryVideoCount: number
   windowCount: number
   videoIds: string[]
+  kindVideoIds: ChannelKindVideoIds
 }> {
   const { data, error } = await supabase
     .from("retention_window_event_synthesis")
-    .select("analysed_video_id")
+    .select("analysed_video_id, retention_windows!inner(kind)")
     .eq("user_id", userId)
     .eq("status", "ready")
 
@@ -1118,12 +1329,30 @@ async function loadLibrarySize(
     throw new Error(`Failed to load channel library size: ${error.message}`)
   }
 
-  const rows = (data ?? []) as { analysed_video_id: string }[]
+  const rows = (data ?? []) as unknown as {
+    analysed_video_id: string
+    retention_windows: { kind: string } | { kind: string }[] | null
+  }[]
   const videoIds = [...new Set(rows.map((row) => row.analysed_video_id))]
+  const kinds: RetentionWindowKind[] = ["hook", "drop_off", "gain", "hold"]
+  const kindVideoIds: ChannelKindVideoIds = {}
+  for (const kind of kinds) {
+    kindVideoIds[kind] = [
+      ...new Set(
+        rows.flatMap((row) => {
+          const window = Array.isArray(row.retention_windows)
+            ? row.retention_windows[0]
+            : row.retention_windows
+          return window?.kind === kind ? [row.analysed_video_id] : []
+        }),
+      ),
+    ]
+  }
   return {
     libraryVideoCount: videoIds.length,
     windowCount: rows.length,
     videoIds,
+    kindVideoIds,
   }
 }
 
@@ -1224,5 +1453,6 @@ export async function getChannelTrends(
     videos,
     libraryVideoCount: librarySize.libraryVideoCount,
     windowCount: librarySize.windowCount,
+    kindVideoIds: librarySize.kindVideoIds,
   })
 }

@@ -13,7 +13,10 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import type { RetentionWindowEventType } from "@/lib/retention-window-events"
+import type {
+  RetentionWindowEventPrimaryEvidence,
+  RetentionWindowEventType,
+} from "@/lib/retention-window-events"
 import type { RetentionWindowKind } from "@/lib/retention-windows"
 
 // One historical event joined to its window's kind — the minimal shape the
@@ -24,6 +27,15 @@ export interface ChannelEventRecord {
   eventType: RetentionWindowEventType
   narrative: string
   confidence: number | null
+  // Rich receipt fields used by Channel Trends. Optional keeps historical
+  // pure-aggregation callers compatible while database-loaded rows provide
+  // every value.
+  timestampSeconds?: number
+  primaryEvidence?: RetentionWindowEventPrimaryEvidence
+  windowDelta?: number
+  windowFromSeconds?: number
+  windowToSeconds?: number
+  relativePerformance?: number | null
 }
 
 export interface ChannelEventTypeTrend {
@@ -132,18 +144,35 @@ export function summarizeChannelEvents(
 interface ChannelEventHistoryRow {
   analysed_video_id: string
   event_type: RetentionWindowEventType
+  timestamp_seconds: number
   narrative: string
+  primary_evidence: RetentionWindowEventPrimaryEvidence
   confidence: number | null
   // PostgREST embeds the many-to-one join as an object, but loosely-typed
   // clients can surface it as a single-element array — accept both.
-  retention_windows: { kind: string } | { kind: string }[] | null
+  retention_windows:
+    | {
+        kind: string
+        delta: number
+        from_seconds: number
+        to_seconds: number
+        relative_performance: number | null
+      }
+    | {
+        kind: string
+        delta: number
+        from_seconds: number
+        to_seconds: number
+        relative_performance: number | null
+      }[]
+    | null
 }
 
-function embeddedKind(row: ChannelEventHistoryRow): string | null {
+function embeddedWindow(row: ChannelEventHistoryRow) {
   const embedded = Array.isArray(row.retention_windows)
     ? row.retention_windows[0]
     : row.retention_windows
-  return embedded?.kind ?? null
+  return embedded ?? null
 }
 
 // Loads the user's synthesized events joined to their window's kind, newest
@@ -159,7 +188,7 @@ export async function loadChannelEventRecords(
   let query = supabase
     .from("retention_window_events")
     .select(
-      "analysed_video_id, event_type, narrative, confidence, retention_windows!inner(kind)",
+      "analysed_video_id, event_type, timestamp_seconds, narrative, primary_evidence, confidence, retention_windows!inner(kind, delta, from_seconds, to_seconds, relative_performance)",
     )
     .eq("user_id", userId)
   if (options.excludeAnalysedVideoId != null) {
@@ -175,14 +204,20 @@ export async function loadChannelEventRecords(
 
   const records: ChannelEventRecord[] = []
   for (const row of (data ?? []) as unknown as ChannelEventHistoryRow[]) {
-    const kind = embeddedKind(row)
-    if (!isWindowKind(kind)) continue
+    const window = embeddedWindow(row)
+    if (!isWindowKind(window?.kind)) continue
     records.push({
       analysedVideoId: row.analysed_video_id,
-      windowKind: kind,
+      windowKind: window.kind,
       eventType: row.event_type,
       narrative: row.narrative,
       confidence: row.confidence ?? null,
+      timestampSeconds: row.timestamp_seconds,
+      primaryEvidence: row.primary_evidence,
+      windowDelta: window.delta,
+      windowFromSeconds: window.from_seconds,
+      windowToSeconds: window.to_seconds,
+      relativePerformance: window.relative_performance,
     })
   }
   return records

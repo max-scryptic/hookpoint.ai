@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest"
 
-import { selectDeepAnalysisWindows } from "@/lib/deep-analysis-window-selection"
+import {
+  deepAnalysisPriorityScore,
+  selectDeepAnalysisWindows,
+} from "@/lib/deep-analysis-window-selection"
 import type { PersistedRetentionWindow } from "@/lib/retention-windows"
 
 function window(
@@ -68,6 +71,42 @@ describe("selectDeepAnalysisWindows", () => {
       "initial-hook",
       "hook-delivery",
     ])
+  })
+
+  it("reserves the strongest hold when capacity allows", () => {
+    const windows = [
+      window("hook", "hook", -0.2),
+      window("drop", "drop_off", -0.08),
+      window("gain", "gain", 0.06),
+      window("weak-hold", "hold", -0.014, {
+        fromSeconds: 60,
+        toSeconds: 90,
+        relativePerformance: 0.5,
+      }),
+      window("strong-hold", "hold", -0.002, {
+        fromSeconds: 120,
+        toSeconds: 180,
+        relativePerformance: 0.9,
+      }),
+    ]
+
+    expect(selectDeepAnalysisWindows(windows, 4).map((item) => item.id)).toEqual([
+      "hook",
+      "drop",
+      "gain",
+      "strong-hold",
+    ])
+  })
+
+  it("gives holds a finite priority score", () => {
+    const hold = window("hold", "hold", -0.003, {
+      fromSeconds: 60,
+      toSeconds: 105,
+      relativePerformance: 0.8,
+    })
+
+    expect(Number.isFinite(deepAnalysisPriorityScore(hold))).toBe(true)
+    expect(deepAnalysisPriorityScore(hold)).toBeGreaterThan(0)
   })
 
   it("excludes windows without an analysis range", () => {
