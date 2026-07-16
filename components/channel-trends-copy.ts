@@ -6,9 +6,13 @@ import type {
 } from "@/lib/packaging-taxonomy"
 import type { RetentionWindowEventType } from "@/lib/retention-window-events"
 
+// COPY GUARDRAIL: no em dashes (U+2014), ever, in any copy in this file or
+// anywhere on the Channel Trends page. Hyphens are fine. See
+// lib/copy-guardrails.ts; enforced by lib/__tests__/copy-guardrails.test.ts.
+//
 // The written half of a channel insight: lib/channel-trends.ts decides WHICH
 // patterns have earned a verdict; this map decides what the verdict says. One
-// headline plus one concrete suggestion per event type per insight kind —
+// headline plus one concrete suggestion per event type per insight kind  - 
 // deliberately phrased as correlation ("shows up where viewers leave"), never
 // causation, because the events are evidence-backed but still correlational.
 
@@ -26,7 +30,7 @@ const FIX_COPY: Record<RetentionWindowEventType, InsightCopy> = {
   scene_cut: {
     headline: "Hard scene cuts keep showing up where viewers leave.",
     action:
-      "Give viewers a reason to follow the cut — carry a sentence, a sound, or motion across it so the change feels like a continuation, not a restart.",
+      "Give viewers a reason to follow the cut - carry a sentence, a sound, or motion across it so the change feels like a continuation, not a restart.",
   },
   topic_shift: {
     headline: "Abrupt topic changes are where your viewers bail.",
@@ -36,28 +40,28 @@ const FIX_COPY: Record<RetentionWindowEventType, InsightCopy> = {
   visual_change: {
     headline: "Big visual switches keep costing you viewers.",
     action:
-      "Ease into visual resets. When the whole frame changes — new location, new setup — anchor it with continuity: similar framing, an overlay, or your voice carrying over the change.",
+      "Ease into visual resets. When the whole frame changes - new location, new setup - anchor it with continuity: similar framing, an overlay, or your voice carrying over the change.",
   },
   audio_change: {
     headline: "Audio shifts line up with your drop-offs.",
     action:
-      "Watch your sound transitions. Music ending, tone flattening or a loudness jump reads as a natural exit point — keep an audio bed running through slower moments.",
+      "Watch your sound transitions. Music ending, tone flattening or a loudness jump reads as a natural exit point - keep an audio bed running through slower moments.",
   },
   on_screen_text_change: {
     headline: "On-screen text moments line up with your drop-offs.",
     action:
-      "Check your overlays. Text that arrives dense, fast or off-topic gives viewers a reason to skip — keep overlays short and tied to what you're saying in the moment.",
+      "Check your overlays. Text that arrives dense, fast or off-topic gives viewers a reason to skip - keep overlays short and tied to what you're saying in the moment.",
   },
   other: {
     headline: "One recurring pattern keeps showing up where viewers leave.",
     action:
-      "Read the events below. These moments didn't fit a single cause, but they recur — the narratives usually show what they share.",
+      "Read the events below. These moments didn't fit a single cause, but they recur - the narratives usually show what they share.",
   },
 }
 
 const STRENGTH_COPY: Record<RetentionWindowEventType, InsightCopy> = {
   pacing_change: {
-    headline: "Pace shifts are winning viewers back — use them on purpose.",
+    headline: "Pace shifts are winning viewers back - use them on purpose.",
     action:
       "A deliberate change of speed re-engages your audience. When a section starts to flatten, shift gear instead of pushing through at the same tempo.",
   },
@@ -74,7 +78,7 @@ const STRENGTH_COPY: Record<RetentionWindowEventType, InsightCopy> = {
   visual_change: {
     headline: "Visual variety is holding your audience.",
     action:
-      "New angles, locations and b-roll line up with your retention gains — plan a visual reset into any segment that runs long.",
+      "New angles, locations and b-roll line up with your retention gains - plan a visual reset into any segment that runs long.",
   },
   audio_change: {
     headline: "Sound changes are holding your viewers.",
@@ -82,21 +86,21 @@ const STRENGTH_COPY: Record<RetentionWindowEventType, InsightCopy> = {
       "Music drops, sound effects and tone shifts line up with your gains. Use audio as a re-engagement tool at natural lulls.",
   },
   on_screen_text_change: {
-    headline: "On-screen text keeps your viewers watching — use it on purpose.",
+    headline: "On-screen text keeps your viewers watching - use it on purpose.",
     action:
-      "Retention recovers when a key point lands as an overlay. Plan one for each moment your energy naturally dips — totals, rule changes, day counters.",
+      "Retention recovers when a key point lands as an overlay. Plan one for each moment your energy naturally dips - totals, rule changes, day counters.",
   },
   other: {
     headline: "One recurring pattern keeps showing up in your gains.",
     action:
-      "Read the events below to see what these winning moments share — then do it deliberately.",
+      "Read the events below to see what these winning moments share - then do it deliberately.",
   },
 }
 
 // Hook windows carry no drop/gain polarity, so hook headlines describe the
 // habit and the action points at the evidence instead of prescribing.
 const HOOK_ACTION =
-  "Open the events below and compare them against each video's hook window — repeat what your strongest openings did in the first fifteen seconds."
+  "Open the events below and compare them against each video's hook window - repeat what your strongest openings did in the first fifteen seconds."
 
 const HOOK_COPY: Record<RetentionWindowEventType, InsightCopy> = {
   pacing_change: {
@@ -183,10 +187,10 @@ const FLAT_FEATURE_LABELS: Record<string, string> = {
   "thumb:face": "Face in the thumbnail",
   "thumb:no_face": "No face in the thumbnail",
   "thumb:text_free": "Text-free thumbnail",
-  "thumb:text_light": "Light thumbnail text (1–3 words)",
+  "thumb:text_light": "Light thumbnail text (1-3 words)",
   "thumb:text_heavy": "Text-heavy thumbnail (4+ words)",
-  "alignment:tight": "Tight title–thumbnail–hook alignment",
-  "alignment:loose": "Loose title–thumbnail–hook alignment",
+  "alignment:tight": "Tight title-thumbnail-hook alignment",
+  "alignment:loose": "Loose title-thumbnail-hook alignment",
 }
 
 export function packagingFeatureLabel(feature: PackagingFeature): string {

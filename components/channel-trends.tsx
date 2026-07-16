@@ -46,15 +46,21 @@ import {
   type SubscriberPattern,
   type SubscriberVideoRow,
 } from "@/lib/channel-trends"
+import { stripEmDashes } from "@/lib/copy-guardrails"
 import type { RetentionWindowEventType } from "@/lib/retention-window-events"
 
-// The Channel Trends page body, read top to bottom as verdict → evidence →
-// trajectory: the library header, then the insight cards (written feedback for
-// the few patterns that earned it), the drop-vs-gain signature chart, the
-// recurrence strip across recent uploads, and finally the full per-type
-// breakdown as an appendix. Purely presentational; all aggregation and
+// The Channel Trends page body: the library header, then two titled
+// sections. Retention holds the insight cards (written feedback for the few
+// patterns that earned it), the drop-vs-gain signature chart, the recurrence
+// strip across recent uploads, and the full per-type breakdown as an
+// appendix. Packaging holds which uploads earn reach and which convert
+// viewers into subscribers. Purely presentational; all aggregation and
 // gating lives in lib/channel-trends.ts, all insight copy in
 // components/channel-trends-copy.ts.
+//
+// COPY GUARDRAIL: no em dashes (U+2014), ever, in any text on this page.
+// Hyphens are fine. See lib/copy-guardrails.ts; enforced by
+// lib/__tests__/copy-guardrails.test.ts.
 
 function plural(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? "" : "s"}`
@@ -88,7 +94,7 @@ function StageProgress({ data }: { data: ChannelTrendsData }) {
       <div className="flex items-center gap-2 rounded-lg border bg-muted/30 p-4 text-sm">
         <SparklesIcon className="size-4 shrink-0 text-primary" />
         <span>
-          Trends at full strength — built from{" "}
+          Trends at full strength - built from{" "}
           {plural(data.libraryVideoCount, "deeply analysed video")}.
         </span>
       </div>
@@ -103,7 +109,7 @@ function StageProgress({ data }: { data: ChannelTrendsData }) {
   const remaining = target - data.libraryVideoCount
   const message =
     data.stage === "early"
-      ? `${data.libraryVideoCount} of ${target} videos — trends strengthening as your library grows.`
+      ? `${data.libraryVideoCount} of ${target} videos - trends strengthening as your library grows.`
       : `Deeply analyse ${plural(remaining, "more video")} to unlock early trends.`
 
   return (
@@ -125,7 +131,7 @@ function StageProgress({ data }: { data: ChannelTrendsData }) {
 }
 
 // ---------------------------------------------------------------------------
-// Insight cards — the page's hero: written verdicts for the few patterns that
+// Insight cards - the page's hero: written verdicts for the few patterns that
 // cleared the signal gates, each with its evidence and a concrete suggestion.
 
 const INSIGHT_KIND_META = {
@@ -166,7 +172,7 @@ function Chip({ children }: { children: React.ReactNode }) {
   )
 }
 
-// "Almost never in your gains" / "3× more common in drops than gains" — the
+// "Almost never in your gains" / "3× more common in drops than gains" - the
 // contrast evidence, phrased only when it's pronounced enough to say.
 function contrastChip(insight: ChannelInsight): string | null {
   if (insight.contrast == null) return null
@@ -211,7 +217,7 @@ function EventReceipt({
 }) {
   return (
     <div className="flex flex-col gap-0.5 border-l-2 pl-3 text-xs">
-      <p className="text-muted-foreground">{narrative}</p>
+      <p className="text-muted-foreground">{stripEmDashes(narrative)}</p>
       {videoTitle && (
         <span className="text-muted-foreground/80">{videoTitle}</span>
       )}
@@ -301,11 +307,11 @@ function trendForInsight(
 }
 
 // ---------------------------------------------------------------------------
-// Subscriber conversion — which uploads turn viewers into subscribers, per
+// Subscriber conversion - which uploads turn viewers into subscribers, per
 // 1,000 views so big and small videos compare fairly. Neutral bars against a
 // dashed channel-median line; only the outliers get a colour and a badge.
 // When magnet videos exist, the card also shows the gain/hook patterns every
-// magnet had that the rest of the library mostly lacked — phrased as leads,
+// magnet had that the rest of the library mostly lacked - phrased as leads,
 // not causes, because subscribing is also topic, packaging and reach.
 
 // Compact human number: 12345 -> "12.3K", 2_400_000 -> "2.4M".
@@ -338,7 +344,7 @@ const SUBSCRIBER_OUTCOME_META = {
   },
 } as const
 
-// Bars scale so the largest fills this much of the track — the rest keeps the
+// Bars scale so the largest fills this much of the track - the rest keeps the
 // median line legible even when the median sits near the maximum.
 const CONVERSION_BAR_MAX_PERCENT = 92
 
@@ -347,8 +353,15 @@ function conversionRowTitle(row: SubscriberVideoRow): string {
   const net =
     row.netGained == null
       ? ""
-      : ` (${row.netGained >= 0 ? "+" : "−"}${Math.abs(row.netGained)} net)`
-  return `${title} — +${row.subscribersGained} subscribers from ${formatCompactNumber(row.views)} views${net}`
+      : ` (${row.netGained >= 0 ? "+" : "-"}${Math.abs(row.netGained)} net)`
+  return `${title} - +${row.subscribersGained} subscribers from ${formatCompactNumber(row.views)} views, ${formatRate(row.ratePer1k)} per 1k${net}`
+}
+
+// The row KPI: net subscribers gained, falling back to gross gains when the
+// snapshot never reported losses.
+function formatNetSubscribers(row: SubscriberVideoRow): string {
+  const value = row.netGained ?? row.subscribersGained
+  return value >= 0 ? `+${value}` : `${value}`
 }
 
 function ConversionRow({
@@ -365,7 +378,7 @@ function ConversionRow({
     maxRate > 0 ? (rate / maxRate) * CONVERSION_BAR_MAX_PERCENT : 0
   return (
     <div
-      className="grid grid-cols-[minmax(6.5rem,13rem)_1fr_4.5rem] items-center gap-x-3 py-1.5"
+      className="grid grid-cols-[minmax(6.5rem,13rem)_1fr_5.5rem] items-center gap-x-3 py-1.5"
       title={conversionRowTitle(row)}
     >
       <div className="flex min-w-0 flex-col items-start gap-0.5">
@@ -392,14 +405,14 @@ function ConversionRow({
       </div>
       <div className="flex flex-col items-end">
         <span className="text-sm font-medium tabular-nums">
-          {formatRate(row.ratePer1k)}
+          {formatNetSubscribers(row)}
           <span className="text-xs font-normal text-muted-foreground">
             {" "}
-            /1k
+            {row.netGained == null ? "subs" : "net subs"}
           </span>
         </span>
         <span className="text-[10px] tabular-nums text-muted-foreground">
-          +{row.subscribersGained} subs
+          {formatCompactNumber(row.views)} views
         </span>
       </div>
     </div>
@@ -422,7 +435,7 @@ function SubscriberPatternRow({ pattern }: { pattern: SubscriberPattern }) {
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <EventTypeBadge eventType={pattern.eventType} />
         <span className="text-xs text-muted-foreground">
-          {where} — in {magnets}, {others}
+          {where} - in {magnets}, {others}
         </span>
       </div>
       {pattern.events.map((event, index) => (
@@ -456,10 +469,10 @@ function SubscriberConversionCard({
           <h3 className="text-sm font-semibold">Subscriber conversion</h3>
         </div>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          Which uploads turn viewers into subscribers — measured per 1,000
-          views so a small video and a big one compare fairly. The dashed line
-          is your channel median ({formatRate(conversion.medianRatePer1k)}{" "}
-          per 1k). Hover a row for the raw numbers.
+          Which uploads turn viewers into subscribers. Bars rank each upload
+          by subscribers gained per 1,000 views so a small video and a big one
+          compare fairly; the dashed line is your channel median. Hover a row
+          for the raw numbers.
         </p>
       </div>
       <div>
@@ -474,7 +487,7 @@ function SubscriberConversionCard({
       </div>
       {!hasOutliers && (
         <p className="text-xs text-muted-foreground">
-          No outliers yet — your uploads convert at a similar rate. When one
+          No outliers yet - your uploads convert at a similar rate. When one
           breaks away from the median, it gets flagged here.
         </p>
       )}
@@ -487,7 +500,7 @@ function SubscriberConversionCard({
             <p className="mt-0.5 text-xs text-muted-foreground">
               Patterns in every magnet&apos;s openings or retention gains that
               are rare across the rest of your library. Correlation, not proof
-              — but the first place to look.
+              - but the first place to look.
             </p>
           </div>
           {conversion.patterns.map((pattern) => (
@@ -519,14 +532,14 @@ function SubscriberConversionCard({
 }
 
 // ---------------------------------------------------------------------------
-// Packaging patterns — which uploads earn reach, and what their packaging has
+// Packaging patterns - which uploads earn reach, and what their packaging has
 // in common. Reach is views per day at snapshot time (raw views can't compare
 // a two-week-old upload with a two-year-old one); the covered videos split
 // into a high- and low-reach half, and the card reports the packaging traits
 // (title style, thumbnail composition, promise, hook delivery) common in one
 // half and rare in the other, plus topics that over- or under-perform the
-// channel's typical reach. All bars share one neutral hue — banding is
-// labelled, never colour-alone — and everything is phrased as correlation.
+// channel's typical reach. All bars share one neutral hue - banding is
+// labelled, never colour-alone - and everything is phrased as correlation.
 
 const REACH_BAND_META = {
   high: {
@@ -544,7 +557,7 @@ function reachRowTitle(row: PackagingReachVideo): string {
       ? ""
       : ` · ${Math.round(row.browseSuggestedShare * 100)}% from Browse & Suggested`
   const pending = row.hasTaxonomy ? "" : " · packaging read pending"
-  return `${title} — ${formatCompactNumber(row.views)} views in ${plural(row.ageDays, "day")} (${formatRate(row.viewsPerDay)}/day)${share}${pending}`
+  return `${title} - ${formatCompactNumber(row.views)} views in ${plural(row.ageDays, "day")} (${formatRate(row.viewsPerDay)}/day)${share}${pending}`
 }
 
 function ReachRow({
@@ -561,7 +574,7 @@ function ReachRow({
     maxRate > 0 ? (rate / maxRate) * CONVERSION_BAR_MAX_PERCENT : 0
   return (
     <div
-      className="grid grid-cols-[minmax(6.5rem,13rem)_1fr_4.5rem] items-center gap-x-3 py-1.5"
+      className="grid grid-cols-[minmax(6.5rem,13rem)_1fr_5.5rem] items-center gap-x-3 py-1.5"
       title={reachRowTitle(row)}
     >
       <div className="flex min-w-0 flex-col items-start gap-0.5">
@@ -588,14 +601,14 @@ function ReachRow({
       </div>
       <div className="flex flex-col items-end">
         <span className="text-sm font-medium tabular-nums">
-          {formatRate(row.viewsPerDay)}
+          {formatCompactNumber(row.views)}
           <span className="text-xs font-normal text-muted-foreground">
             {" "}
-            /day
+            views
           </span>
         </span>
         <span className="text-[10px] tabular-nums text-muted-foreground">
-          {formatCompactNumber(row.views)} views
+          in {plural(row.ageDays, "day")}
         </span>
       </div>
     </div>
@@ -625,7 +638,7 @@ function TopicReachRow({ topic }: { topic: PackagingTopicReach }) {
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
       <span className="rounded-full border bg-muted px-2 py-0.5 text-xs">
-        {topic.topic}
+        {stripEmDashes(topic.topic)}
       </span>
       <span className="text-xs tabular-nums text-muted-foreground">
         {plural(topic.videoCount, "video")} ·{" "}
@@ -661,11 +674,11 @@ function PackagingPatternsCard({
           <h3 className="text-sm font-semibold">Packaging patterns</h3>
         </div>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          Which uploads earn reach — views per day since upload, as of each
-          video&apos;s analytics snapshot — and what the packaging of your
-          high-reach half has that the low-reach half doesn&apos;t. The dashed
-          line is your channel median ({formatRate(packaging.medianViewsPerDay)}{" "}
-          views/day). Hover a row for the raw numbers.
+          Which uploads earn reach, and what the packaging of your high-reach
+          half has that the low-reach half doesn&apos;t. Bars rank each upload
+          by views per day since upload (as of each video&apos;s analytics
+          snapshot) so new and old uploads compare fairly; the dashed line is
+          your channel median. Hover a row for the raw numbers.
         </p>
       </div>
       <div>
@@ -686,7 +699,7 @@ function PackagingPatternsCard({
             </span>
             <p className="mt-0.5 text-xs text-muted-foreground">
               Packaging traits common in your high-reach half and rare in your
-              low-reach half. Correlation, not proof — but worth testing on
+              low-reach half. Correlation, not proof - but worth testing on
               purpose in your next upload.
             </p>
           </div>
@@ -712,7 +725,7 @@ function PackagingPatternsCard({
           <>
             {" "}
             Packaging reads cover {packaging.taxonomyVideoCount} of these{" "}
-            {plural(packaging.coveredVideoCount, "video")} — older analyses
+            {plural(packaging.coveredVideoCount, "video")} - older analyses
             pick theirs up the next time you open them.
           </>
         )}
@@ -722,7 +735,7 @@ function PackagingPatternsCard({
 }
 
 // ---------------------------------------------------------------------------
-// The channel signature — one diverging chart instead of separate loses/holds
+// The channel signature - one diverging chart instead of separate loses/holds
 // lists: each event type's confidence-weighted share of drop-off events on
 // the left, of gain events on the right. Balanced rows are editing style;
 // lopsided rows are the signal.
@@ -743,7 +756,7 @@ const VERDICT_META = {
   },
 } as const
 
-// Bars scale so the largest fills this much of its half — the rest is label
+// Bars scale so the largest fills this much of its half - the rest is label
 // room, keeping the percentage outside the bar without ever clipping.
 const SIGNATURE_BAR_MAX_PERCENT = 80
 
@@ -926,38 +939,8 @@ function SignatureChart({
   )
 }
 
-// Hook windows have no drop/gain polarity, so they sit beside the signature
-// as their own compact panel instead of a pair of bars.
-function HookPanel({ hooks }: { hooks: ChannelKindTrends }) {
-  return (
-    <Card className="flex flex-col gap-3 p-5">
-      <div className="flex items-center gap-1.5">
-        <HookIcon className="size-4 text-yellow-500 dark:text-yellow-400" />
-        <h3 className="text-sm font-semibold">Hook patterns</h3>
-      </div>
-      <p className="text-xs text-muted-foreground">
-        What your openings keep coming back to.
-      </p>
-      <div className="flex flex-col gap-2.5">
-        {hooks.trends.slice(0, 4).map((trend) => (
-          <div
-            key={trend.eventType}
-            className="flex flex-wrap items-center justify-between gap-1.5"
-          >
-            <EventTypeBadge eventType={trend.eventType} />
-            <span className="text-xs tabular-nums text-muted-foreground">
-              {plural(trend.videoCount, "video")} ·{" "}
-              {plural(trend.eventCount, "event")}
-            </span>
-          </div>
-        ))}
-      </div>
-    </Card>
-  )
-}
-
 // ---------------------------------------------------------------------------
-// The recurrence strip — the same patterns laid across the most recent
+// The recurrence strip - the same patterns laid across the most recent
 // uploads, so a streak that's still running (or one that's gone quiet after a
 // fix) is visible at a glance.
 
@@ -993,11 +976,11 @@ function recurrenceCellTitle(
 ): string {
   const title = video.title ?? "Untitled video"
   const label = formatEventTypeLabel(row.eventType)
-  if (!hit) return `${title} — ${label.toLowerCase()} not detected`
+  if (!hit) return `${title} - ${label.toLowerCase()} not detected`
   const where = row.side === "drop_off" ? "a drop-off" : "a gain"
   const confidence =
     maxConfidence == null ? "" : ` (confidence ${maxConfidence.toFixed(2)})`
-  return `${title} — ${label.toLowerCase()} appeared in ${where}${confidence}`
+  return `${title} - ${label.toLowerCase()} appeared in ${where}${confidence}`
 }
 
 function hitsInLast(row: ChannelRecurrenceRow, count: number): number {
@@ -1135,7 +1118,7 @@ function RecurrenceStrip({ recurrence }: { recurrence: ChannelRecurrence }) {
 
 // One expandable trend row: the event type and its channel-wide counts on the
 // collapsed line, the individual occurrences (ranked by confidence) revealed on
-// expand — the drill-down from "Pacing Change · 6 events" to those 6 events.
+// expand - the drill-down from "Pacing Change · 6 events" to those 6 events.
 function TrendRow({ trend }: { trend: ChannelTrend }) {
   const hidden = trend.eventCount - trend.events.length
   return (
@@ -1185,7 +1168,7 @@ function FullBreakdown({ data }: { data: ChannelTrendsData }) {
         <TrendingUpIcon className="size-4 text-emerald-600 dark:text-emerald-500" />
       ),
       description:
-        "The patterns your retention gains keep coming back to — worth repeating on purpose.",
+        "The patterns your retention gains keep coming back to - worth repeating on purpose.",
       kind: data.gains,
     },
     {
@@ -1247,7 +1230,7 @@ function BuildingCard({ data }: { data: ChannelTrendsData }) {
           Every deep analysis adds its retention events to a private library of
           your content. Once{" "}
           {EARLY_TRENDS_VIDEO_THRESHOLD} videos are in, this page starts
-          surfacing the patterns that repeat across your channel — what loses
+          surfacing the patterns that repeat across your channel - what loses
           viewers, what holds them, and how your hooks behave.
         </p>
       </div>
@@ -1264,15 +1247,46 @@ function EarlySignalNote({ data }: { data: ChannelTrendsData }) {
   if (data.stage !== "early") return null
   return (
     <p className="text-xs text-muted-foreground">
-      Early signals from {plural(data.libraryVideoCount, "video")} — treat
+      Early signals from {plural(data.libraryVideoCount, "video")} - treat
       these as leads, not verdicts. They firm up as your library approaches{" "}
       {ESTABLISHED_TRENDS_VIDEO_THRESHOLD} videos.
     </p>
   )
 }
 
+// A titled band of the page. The trends body reads as two of these: Retention
+// (what keeps viewers watching) and Packaging (what earns clicks, reach and
+// subscribers).
+function TrendsSection({
+  title,
+  description,
+  children,
+}: {
+  title: string
+  description: string
+  children: React.ReactNode
+}) {
+  return (
+    <section className="flex flex-col gap-3">
+      <div className="border-b pb-2">
+        <h2 className="text-lg font-semibold">{title}</h2>
+        <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
+      </div>
+      {children}
+    </section>
+  )
+}
+
 export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
   const showTrends = data.stage === "early" || data.stage === "established"
+  const hasRetention =
+    data.insights.length > 0 ||
+    data.signature != null ||
+    data.recurrence != null ||
+    data.dropOffs != null ||
+    data.gains != null ||
+    data.hooks != null
+  const hasPackaging = data.packaging != null || data.subscribers != null
 
   return (
     <div className="flex flex-col gap-6">
@@ -1281,44 +1295,49 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
       {showTrends ? (
         <>
           <EarlySignalNote data={data} />
-          {data.insights.length > 0 && (
-            <div className="flex flex-col gap-3">
-              {data.insights.map((insight) => (
-                <InsightCard
-                  key={insight.kind}
-                  insight={insight}
-                  trend={trendForInsight(data, insight)}
-                />
-              ))}
-            </div>
-          )}
-          {data.subscribers != null && (
-            <SubscriberConversionCard conversion={data.subscribers} />
-          )}
-          {data.packaging != null && (
-            <PackagingPatternsCard packaging={data.packaging} />
-          )}
-          {(data.signature != null || data.hooks != null) && (
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-              {data.signature != null && (
-                <div
-                  className={data.hooks != null ? "lg:col-span-2" : "lg:col-span-3"}
-                >
-                  <SignatureChart
-                    rows={data.signature}
-                    libraryVideoCount={data.libraryVideoCount}
-                    dropOffs={data.dropOffs}
-                    gains={data.gains}
-                  />
+          {hasRetention && (
+            <TrendsSection
+              title="Retention"
+              description="What keeps viewers watching and where they leave, across every deeply analysed upload."
+            >
+              {data.insights.length > 0 && (
+                <div className="flex flex-col gap-3">
+                  {data.insights.map((insight) => (
+                    <InsightCard
+                      key={insight.kind}
+                      insight={insight}
+                      trend={trendForInsight(data, insight)}
+                    />
+                  ))}
                 </div>
               )}
-              {data.hooks != null && <HookPanel hooks={data.hooks} />}
-            </div>
+              {data.signature != null && (
+                <SignatureChart
+                  rows={data.signature}
+                  libraryVideoCount={data.libraryVideoCount}
+                  dropOffs={data.dropOffs}
+                  gains={data.gains}
+                />
+              )}
+              {data.recurrence != null && (
+                <RecurrenceStrip recurrence={data.recurrence} />
+              )}
+              <FullBreakdown data={data} />
+            </TrendsSection>
           )}
-          {data.recurrence != null && (
-            <RecurrenceStrip recurrence={data.recurrence} />
+          {hasPackaging && (
+            <TrendsSection
+              title="Packaging"
+              description="How your titles, thumbnails and promises translate into reach and subscribers."
+            >
+              {data.packaging != null && (
+                <PackagingPatternsCard packaging={data.packaging} />
+              )}
+              {data.subscribers != null && (
+                <SubscriberConversionCard conversion={data.subscribers} />
+              )}
+            </TrendsSection>
           )}
-          <FullBreakdown data={data} />
         </>
       ) : (
         <BuildingCard data={data} />
@@ -1342,7 +1361,7 @@ export function ChannelTrendsLocked() {
           On Starter and Pro, every deep analysis adds its retention events to
           a private library of your content. This page then surfaces the
           trends that repeat across your channel: what loses viewers, what
-          holds them, and how your hooks behave — insight no single video can
+          holds them, and how your hooks behave - insight no single video can
           give you.
         </p>
       </div>

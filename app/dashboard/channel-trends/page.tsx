@@ -22,7 +22,7 @@ type ChannelTrendsResult =
 // Cross-video intelligence rides on deep analysis, so access follows the deep
 // credits budget: any plan with credits (Starter, Pro) sees the library, the
 // Free plan sees the locked explainer. An entitlement lookup failure falls
-// back to locked — the same fail-closed default the billing code uses.
+// back to locked - the same fail-closed default the billing code uses.
 async function loadChannelTrends(userId: string): Promise<ChannelTrendsResult> {
   try {
     const entitlement = await getEntitlement(userId)
