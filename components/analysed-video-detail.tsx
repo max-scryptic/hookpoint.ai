@@ -552,7 +552,12 @@ function WindowFeedback({
   recommendation: DeepAnalysisRecommendation | undefined
 }) {
   const hasScript = attribution != null && attribution.explanation !== ""
-  const hasDeep = insight != null
+  // The deep multimodal insight only earns its place — a tab beside the script,
+  // or a flat note when it stands alone — once it carries an actionable "Try:"
+  // tip. A narrative with no recommendation would add a tab (or note) with
+  // nothing to act on, so treat it as absent and fall back to the script-only
+  // layout rather than surfacing an empty second tab.
+  const hasDeep = insight != null && recommendation != null
 
   if (hasScript && hasDeep) {
     return (
@@ -579,7 +584,7 @@ function WindowFeedback({
     <>
       {header(null)}
       <AttributionNote attribution={attribution} />
-      <MultimodalInsight insight={insight} />
+      {hasDeep && <MultimodalInsight insight={insight} />}
       <ActionableRecommendation recommendation={recommendation} />
     </>
   )
