@@ -213,6 +213,23 @@ describe("computeAnalysisWindow", () => {
     })
   })
 
+  it("caps a wide hold to a centred slice so its scan stays within budget", () => {
+    // Padded span would be 80-320 (240s) — far past a single scan's budget.
+    // It collapses to a 60s slice centred on the hold's midpoint (200).
+    const window = computeAnalysisWindow("hold", 0, 90, 310, 400)
+    expect(window).toEqual({ fromSeconds: 170, toSeconds: 230 })
+    expect(window!.toSeconds - window!.fromSeconds).toBe(60)
+  })
+
+  it("keeps a capped hold slice within the video bounds", () => {
+    // A wide hold running to the very end still yields a <=60s slice that never
+    // exceeds [0, duration], because the midpoint sits at least half the cap in.
+    const window = computeAnalysisWindow("hold", 0, 200, 300, 300)
+    expect(window!.toSeconds - window!.fromSeconds).toBeLessThanOrEqual(60)
+    expect(window!.fromSeconds).toBeGreaterThanOrEqual(0)
+    expect(window!.toSeconds).toBeLessThanOrEqual(300)
+  })
+
   it("clamps the upper bound to the video's duration", () => {
     expect(computeAnalysisWindow("drop_off", 0, 290, 295, 300)).toEqual({
       fromSeconds: 262.5,

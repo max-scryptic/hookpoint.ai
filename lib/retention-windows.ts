@@ -89,6 +89,20 @@ const GAIN_PADDING_AFTER_SECONDS = 20
 const HOLD_PADDING_BEFORE_SECONDS = 10
 const HOLD_PADDING_AFTER_SECONDS = 10
 
+// Longest analysis span a single hold may harvest. Holds are the one window
+// kind whose span is the full detected stretch rather than a point anchor ±
+// fixed padding, so on longer/coarsely-sampled videos an unbounded hold can run
+// well past what a single scene-cue scan can decode within budget — the scanner
+// caps *merged* spans at SCAN_MERGE_MAX_SPAN_SECONDS (60s) but never splits a
+// lone scan, and computeSceneCueScanTimeoutMs stops modelling usefully past
+// that point, so one long hold can mint an over-budget, unsplittable scan that
+// times out and burns the whole extraction invocation. A hold is near-flat by
+// definition, so a bounded slice centred on it is a faithful representative.
+// Mirrors the scanner's 60s ceiling so a capped hold sits exactly at the edge
+// of what that budget can model, and a normal hold (a ~30-40s stretch padded to
+// ~50-60s) is left untouched.
+const HOLD_MAX_ANALYSIS_SPAN_SECONDS = 60
+
 // Derives the padded analysis window for a single retention window row, or
 // null when this row has no analysis window of its own:
 //   • hook     – its own fixed bounds, so the initial hook (0-10s) and hook
@@ -105,6 +119,9 @@ const HOLD_PADDING_AFTER_SECONDS = 10
 //   • gain     – 10s before to 20s after the anchor. Unlike drop-offs, gains
 //                aren't gated to start after the hook, so the lower bound can
 //                clamp to 0 for an early gain.
+//   • hold     – the full detected stretch, padded 10s each side, but capped at
+//                HOLD_MAX_ANALYSIS_SPAN_SECONDS (a centred slice) so a wide hold
+//                can't mint a single over-budget scene-cue scan.
 // The drop_off/gain cases clamp to [0, durationSeconds] around their anchor.
 export function computeAnalysisWindow(
   kind: RetentionWindowKind,
@@ -126,7 +143,19 @@ export function computeAnalysisWindow(
       durationSeconds > 0
         ? Math.min(durationSeconds, toSeconds + HOLD_PADDING_AFTER_SECONDS)
         : toSeconds + HOLD_PADDING_AFTER_SECONDS
-    return to > from ? { fromSeconds: from, toSeconds: to } : null
+    if (to <= from) return null
+    // Cap the harvested span so a wide hold can't produce a single
+    // over-budget scene-cue scan (see HOLD_MAX_ANALYSIS_SPAN_SECONDS). A hold
+    // that already fits is kept as-is; a longer one collapses to a centred
+    // slice of that width, which stays within [from, to] — and therefore
+    // within [0, durationSeconds] — since the midpoint is at least half the
+    // cap from either padded edge.
+    if (to - from <= HOLD_MAX_ANALYSIS_SPAN_SECONDS) {
+      return { fromSeconds: from, toSeconds: to }
+    }
+    const midpoint = (from + to) / 2
+    const half = HOLD_MAX_ANALYSIS_SPAN_SECONDS / 2
+    return { fromSeconds: midpoint - half, toSeconds: midpoint + half }
   }
 
   const anchor = (fromSeconds + toSeconds) / 2
