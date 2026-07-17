@@ -53,10 +53,7 @@ export default async function Page() {
           <div className="w-full">
             <p className="text-sm text-muted-foreground">
               Video Planner is coming soon to{" "}
-              <span className="font-semibold text-foreground">
-                Starter
-              </span>{" "}
-              and{" "}
+              <span className="font-semibold text-foreground">Starter</span> and{" "}
               <span className="font-semibold text-foreground">Pro</span> users.
             </p>
             <p className="mt-3 text-sm text-muted-foreground">
