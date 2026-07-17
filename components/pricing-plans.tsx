@@ -100,7 +100,7 @@ function BillingToggle({
       <div
         role="tablist"
         aria-label="Billing period"
-        className="inline-flex items-center gap-1 rounded-lg border bg-muted/40 p-1"
+        className="inline-flex items-center gap-1 rounded-lg border bg-muted p-1"
       >
         <ToggleOption
           selected={period === "monthly"}
@@ -146,7 +146,7 @@ function ToggleOption({
         "inline-flex h-8 items-center rounded-md px-3 text-sm font-medium transition-colors",
         "disabled:pointer-events-none disabled:opacity-60",
         selected
-          ? "bg-background text-foreground shadow-sm"
+          ? "bg-card text-foreground shadow-sm"
           : "text-muted-foreground hover:text-foreground",
       )}
     >

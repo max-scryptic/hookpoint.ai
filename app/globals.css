@@ -12,14 +12,20 @@
    * charts; navy (hue ~270) sets the dark-mode surface to match the logo.
    */
   color-scheme: light;
-  --muted: oklch(0.94 0.012 288);
-  --accent: oklch(0.95 0.03 292);
   /*
-   * Light mode uses a softly tinted (brand-lavender) page background so the
-   * white cards, popovers and sidebar lift off the page and read as distinct
-   * surfaces. Cards are pure white for maximum "pop".
+   * Light mode runs a three-tier surface scale so nothing blends into the
+   * page:
+   *   1. --background  — a brand-lavender tinted page (the darkest tier).
+   *   2. --card/--popover/--sidebar — pure white; primary cards, filter
+   *      controls and empty-state panels sit here so they "pop" off the page.
+   *   3. --muted/--secondary — a soft grey used for sub-cards (stat tiles),
+   *      segmented-control tracks and other widgets nested inside white cards.
+   * The page tier is kept meaningfully darker than the grey tier so a white
+   * surface reads as clearly elevated above both.
    */
-  --background: oklch(0.955 0.013 289);
+  --muted: oklch(0.955 0.009 289);
+  --accent: oklch(0.95 0.03 292);
+  --background: oklch(0.935 0.016 291);
   --foreground: oklch(0.18 0.02 274);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.18 0.02 274);
