@@ -231,7 +231,7 @@ describe("startNormalisation", () => {
       normalisation_status: "processing",
       normalisation_provider: "qencode",
       normalisation_task_token: "task-xyz",
-      proxy_storage_path: "user-1/vid-1/sf-1/proxy-1080p.mp4",
+      proxy_storage_path: "user-1/vid-1/sf-1/proxy-720p.mp4",
       // The 360p analysis proxy rides along in the same job.
       analysis_proxy_storage_path: "user-1/vid-1/sf-1/proxy-360p.mp4",
     })
@@ -260,7 +260,7 @@ describe("startNormalisation", () => {
     // Both tag fields carry the label: Qencode echoes user_tag on the way back
     // (the one we match on), and tag is set too for accounts that echo there.
     expect(query.format[0]).toMatchObject({
-      height: 1080,
+      height: 720,
       tag: "playback",
       user_tag: "playback",
     })

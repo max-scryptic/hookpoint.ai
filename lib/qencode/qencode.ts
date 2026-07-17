@@ -1,6 +1,6 @@
 // Thin, typed client for the Qencode transcoding API. We use Qencode purely as
 // a "transcode-as-a-service" worker: it reads our original via a signed URL,
-// produces a 1080p H.264 proxy, holds it on its own temporary storage, and
+// produces a 720p H.264 proxy, holds it on its own temporary storage, and
 // POSTs a status callback with a download URL when it's done. Our own callback
 // handler pulls the finished proxy into our S3 bucket (see
 // lib/source-files/normalisation-service.ts) rather than handing Qencode a
@@ -19,7 +19,7 @@
 
 const DEFAULT_BASE_URL = "https://api.qencode.com/v1"
 
-// A single output in a Qencode transcode. We emit two (the 1080p playback
+// A single output in a Qencode transcode. We emit two (the 720p playback
 // proxy and the 360p analysis proxy), which the API models as entries in the
 // `format` array.
 export interface QencodeFormat {

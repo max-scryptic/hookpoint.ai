@@ -320,7 +320,7 @@ export async function extractPendingRetentionWindowMedia(
   }
 
   // Surface which copy this run actually decodes. The 360p analysis proxy is
-  // several-fold cheaper to decode frame-by-frame than the 1080p playback
+  // several-fold cheaper to decode frame-by-frame than the 720p playback
   // proxy; a run on the playback proxy is the slow path (an absent analysis
   // proxy — see pullAnalysisProxy), worth a warning so it doesn't stay silent.
   if (analysisSource.storagePath === sourceFile.analysisProxyStoragePath) {

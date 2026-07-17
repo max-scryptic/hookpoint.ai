@@ -1,4 +1,4 @@
-// Configuration for the source-file normalisation step (4K/original → 1080p
+// Configuration for the source-file normalisation step (4K/original → 720p
 // proxy via Qencode). Everything here is env-driven and the whole feature is
 // gated by `isNormalisationEnabled()`: with no Qencode key / S3 connection
 // configured the upload flow behaves exactly as before (the original is kept and
@@ -25,17 +25,17 @@ export function getQencodeBaseUrl(): string | undefined {
 
 // Target height of the proxy. Qencode keeps the aspect ratio and derives the
 // width, so this is a cap on the long-or-short edge depending on orientation —
-// 1080 gives a 1080p landscape / 1080-wide portrait proxy. Override if you want
-// smaller (e.g. 720) cheaper proxies.
+// 720 gives a 720p landscape / 720-wide portrait proxy. Override if you want a
+// larger (e.g. 1080) or smaller proxy.
 export function getProxyTargetHeight(): number {
   const raw = process.env.QENCODE_PROXY_HEIGHT
   const parsed = raw != null ? Number(raw) : NaN
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 1080
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 720
 }
 
 // Target height of the analysis proxy — the second, much smaller output the
 // same Qencode job produces for frame/audio/scene-cue extraction to decode
-// instead of the playback proxy (decoding 360p instead of 1080p cuts that CPU
+// instead of the playback proxy (decoding 360p instead of 720p cuts that CPU
 // cost several-fold, and nothing extraction feeds a model needs more). Set to
 // 0 to disable the second output entirely.
 export function getAnalysisProxyTargetHeight(): number {

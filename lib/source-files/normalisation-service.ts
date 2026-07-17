@@ -1,4 +1,4 @@
-// Orchestrates turning a validated original upload into a 1080p proxy and then
+// Orchestrates turning a validated original upload into a 720p proxy and then
 // dropping the original, using Qencode as the transcode worker.
 //
 // Two halves, mirroring the upload service:
@@ -77,7 +77,7 @@ export function buildProxyObjectPath(
   return `${dir}proxy-${targetHeight}p.mp4`
 }
 
-// Kicks off the 1080p transcode for a validated source file. Returns the source
+// Kicks off the 720p transcode for a validated source file. Returns the source
 // file, updated with the in-flight normalisation state when a job was started,
 // or unchanged when normalisation is disabled or can't run. Never throws on a
 // transcoder failure — it records 'failed' and returns so the upload completes.
@@ -366,7 +366,7 @@ export async function applyNormalisationCallback(
   // the playback proxy when it's absent, so a failed pull here must not fail
   // normalisation — it just clears the recorded path so nothing ever reads a
   // missing/empty object. Its absence used to be silent, which is how every
-  // upload ended up decoding the 1080p playback proxy unnoticed; log the
+  // upload ended up decoding the 720p playback proxy unnoticed; log the
   // outcome (and, when absent, why) so the expensive fallback is visible.
   const analysisProxy = await pullAnalysisProxy(storage, sourceFile, callback)
   if (analysisProxy.ok) {
@@ -377,7 +377,7 @@ export async function applyNormalisationCallback(
     })
   } else {
     console.warn(
-      "No analysis proxy after normalisation — deep analysis will decode the 1080p playback proxy",
+      "No analysis proxy after normalisation — deep analysis will decode the 720p playback proxy",
       {
         analysedVideoId: sourceFile.analysedVideoId,
         sourceFileId: sourceFile.id,
