@@ -23,9 +23,9 @@
    * The page tier is kept meaningfully darker than the grey tier so a white
    * surface reads as clearly elevated above both.
    */
-  --muted: oklch(0.955 0.009 289);
+  --muted: oklch(0.972 0.008 289);
   --accent: oklch(0.95 0.03 292);
-  --background: oklch(0.935 0.016 291);
+  --background: oklch(0.958 0.011 291);
   --foreground: oklch(0.18 0.02 274);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.18 0.02 274);
@@ -33,7 +33,7 @@
   --popover-foreground: oklch(0.18 0.02 274);
   --primary: oklch(0.54 0.2 264);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.96 0.015 285);
+  --secondary: oklch(0.975 0.013 285);
   --secondary-foreground: oklch(0.32 0.05 274);
   --muted-foreground: oklch(0.52 0.025 282);
   --accent-foreground: oklch(0.44 0.15 292);
