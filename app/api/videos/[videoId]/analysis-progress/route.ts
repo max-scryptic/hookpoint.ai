@@ -6,9 +6,16 @@ import { triggerRetentionWindowMediaExtraction } from "@/lib/retention-window-me
 import { getSourceFileForVideo } from "@/lib/source-files/source-files"
 import {
   getDeepAnalysisProgress,
+  shouldResumeDeepAnalysis,
   type DeepAnalysisProgress,
 } from "@/lib/retention-window-media-progress"
 import { getLatestDeepAnalysisPipelineRun } from "@/lib/deep-analysis-pipeline-runs"
+
+// A poll that finds the pipeline stalled re-kicks it via after(), and that
+// resumed work (extraction/analysis/synthesis) runs within this invocation's
+// budget — so give it the same headroom as every other trigger point for this
+// pipeline (see /api/analyze, /api/videos/:id/retry-deep-analysis).
+export const maxDuration = 300
 
 // GET /api/videos/:videoId/analysis-progress
 // Polled by the source-file card while a raw upload's transcode/snapshot/audio
@@ -53,19 +60,16 @@ export async function GET(
     )
 
     // The original pipeline kickoff is a long best-effort after() callback.
-    // Large source files can exhaust that invocation after extraction and AI
-    // analysis have completed but before final event synthesis starts. The
-    // browser is already polling here, so use that heartbeat to self-heal the
-    // cheap final stage once all of its prerequisites have settled. Synthesis
-    // claims jobs atomically, making overlapping polls harmless.
-    const { stages } = progress
-    if (
-      stages?.eventSynthesis === "in_progress" &&
-      Object.entries(stages).every(
-        ([key, status]) =>
-          key === "eventSynthesis" || status === "ready" || status === "failed",
-      )
-    ) {
+    // Large source files can exhaust that invocation partway through — stalling
+    // at extraction (snapshots/audio), AI analysis, or the final event
+    // synthesis — and leave the remaining rows 'pending' with nothing left to
+    // pick them up. The browser is already polling here, so use that heartbeat
+    // to resume whatever stage the pipeline stalled on. Re-triggering is
+    // idempotent: the pipeline-run lease makes an overlapping kick a no-op
+    // while a run is genuinely in flight, and every stage only claims rows that
+    // are still pending, so overlapping polls are harmless. See
+    // shouldResumeDeepAnalysis for the full rationale.
+    if (shouldResumeDeepAnalysis(progress)) {
       triggerRetentionWindowMediaExtraction(sourceFile)
     }
     const pipelineRun = await getLatestDeepAnalysisPipelineRun(

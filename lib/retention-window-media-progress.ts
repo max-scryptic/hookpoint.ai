@@ -137,6 +137,30 @@ function isStageSettled(status: DeepAnalysisStageStatus): boolean {
   return status === "ready" || status === "failed"
 }
 
+// Whether the deep-analysis pipeline should be re-kicked from the browser's
+// progress-poll heartbeat.
+//
+// The pipeline's original kickoff is a single best-effort after() callback
+// (see lib/retention-window-media-trigger.ts). A large source file can exhaust
+// that invocation partway through — stalling at extraction (snapshots/audio),
+// media analysis, or the final event synthesis — and leave the remaining rows
+// 'pending' with nothing left to pick them up, so the checklist sits on a
+// spinner (e.g. "Fetching snapshots") indefinitely. The browser polls
+// analysis-progress on a heartbeat while any stage is still unsettled, so that
+// heartbeat is used to resume a stalled pipeline: re-trigger it whenever it's
+// active but not yet complete, not only when the cheap final synthesis stage
+// is the one left hanging.
+//
+// Re-triggering is idempotent and safe to fire on every poll: the pipeline-run
+// lease (claimDeepAnalysisPipelineRun) makes an overlapping kick a no-op while
+// a run is genuinely still in flight, its 15-minute staleness sweep reclaims a
+// run whose invocation died, and every stage only ever claims rows that are
+// still pending — so a repeated kick resumes a stalled run's leftover work
+// without redoing anything that already settled.
+export function shouldResumeDeepAnalysis(progress: DeepAnalysisProgress): boolean {
+  return progress.active && progress.stages != null && !progress.complete
+}
+
 // Loads the current stage statuses for a video whose source file has finished
 // uploading. Callers must have already confirmed `sourceFile.uploadStatus ===
 // "ready"` — this only reports on what happens after that point.
