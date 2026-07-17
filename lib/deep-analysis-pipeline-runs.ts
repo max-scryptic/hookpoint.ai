@@ -18,7 +18,29 @@ export interface DeepAnalysisPipelineRunSummary {
   finishedAt: string | null
 }
 
-const STALE_RUN_MS = 15 * 60 * 1000
+// How long a 'running' lease may go without its updated_at moving before the
+// next claim treats it as dead and reclaims it. A pipeline invocation runs
+// under a fixed serverless budget (maxDuration = 300s at every trigger point),
+// so a lease untouched for meaningfully longer than that budget cannot still
+// have a live invocation behind it — its process was killed mid-stage, leaving
+// the row 'running' forever with nothing to finish it.
+//
+// This has to stay comfortably above HEARTBEAT_INTERVAL_MS: a live stage bumps
+// updated_at on that heartbeat, so the window only needs to outlast one missed
+// beat (plus jitter) to avoid reclaiming a run that's genuinely still working.
+// It was 15 minutes before the heartbeat existed — necessary then, because a
+// long extraction stage bumped updated_at only at its start and would have been
+// mistaken for dead — but that also meant a genuinely dead lease froze every
+// resume (and the manual retry) for a full 15 minutes, so a large source file
+// that can't finish a stage in one invocation crawled forward one invocation
+// per 15 minutes, indistinguishable from permanently stuck. With the heartbeat
+// proving liveness, this can sit just above the invocation budget.
+const STALE_RUN_MS = 3 * 60 * 1000
+
+// A running stage bumps its lease this often so the staleness sweep above can
+// tell a live long-running stage (a large file's extraction) from a dead
+// invocation. See runObservedPipelineStage.
+const HEARTBEAT_INTERVAL_MS = 30 * 1000
 
 export async function claimDeepAnalysisPipelineRun(
   admin: SupabaseClient,
@@ -54,6 +76,36 @@ export async function claimDeepAnalysisPipelineRun(
   return { id: data.id as string, stages: (data.stages ?? {}) as Record<string, unknown> }
 }
 
+// Bumps a run's updated_at on a fixed interval for as long as the returned
+// stopper hasn't been called. This is what lets STALE_RUN_MS sit just above the
+// invocation budget instead of at a defensive 15 minutes: a stage can run for
+// the whole budget (a large source file's extraction) without reaching the next
+// stage boundary that would otherwise move updated_at, so without a heartbeat a
+// live run and a dead one look identical to the staleness sweep. Each beat is
+// scoped to status = 'running' so it never resurrects a run that finished or was
+// reclaimed in the meantime, and its own failures are swallowed — a missed beat
+// just brings the lease one step closer to looking stale, which is safe.
+function startLeaseHeartbeat(
+  admin: SupabaseClient,
+  runId: string,
+): () => void {
+  const timer = setInterval(() => {
+    void admin
+      .from("deep_analysis_pipeline_runs")
+      .update({ updated_at: new Date().toISOString() })
+      .eq("id", runId)
+      .eq("status", "running")
+      .then(
+        () => {},
+        () => {},
+      )
+  }, HEARTBEAT_INTERVAL_MS)
+  // Never let the heartbeat keep the process alive on its own — the awaited
+  // stage is what holds it open; the timer is cleared the moment that settles.
+  timer.unref?.()
+  return () => clearInterval(timer)
+}
+
 export async function runObservedPipelineStage(
   admin: SupabaseClient,
   run: DeepAnalysisPipelineRun,
@@ -67,6 +119,7 @@ export async function runObservedPipelineStage(
     updated_at: startedAt,
     stages: { ...run.stages, [stage]: { status: "running", startedAt } },
   }).eq("id", run.id)
+  const stopHeartbeat = startLeaseHeartbeat(admin, run.id)
   try {
     await task()
     run.stages[stage] = {
@@ -88,11 +141,44 @@ export async function runObservedPipelineStage(
       updated_at: new Date().toISOString(),
     }).eq("id", run.id)
     throw error
+  } finally {
+    stopHeartbeat()
   }
   await admin.from("deep_analysis_pipeline_runs").update({
     stages: run.stages,
     updated_at: new Date().toISOString(),
   }).eq("id", run.id)
+}
+
+// Forcibly marks any in-flight ('running') run for a video as failed, so the
+// partial unique index that pins one running run per video is cleared and the
+// next claim can start fresh. The heartbeat + STALE_RUN_MS sweep already
+// reclaims a dead lease on its own, but only after the stale window elapses;
+// the manual "retry deep analysis" flow can't wait that out — a user hitting
+// retry expects the pipeline to restart now, not up to STALE_RUN_MS later — so
+// it abandons the current run explicitly before re-triggering. Uses the service
+// role (there's no authenticated write policy on this table); callers must pass
+// an admin client.
+export async function abandonInFlightDeepAnalysisPipelineRun(
+  admin: SupabaseClient,
+  analysedVideoId: string,
+): Promise<void> {
+  const now = new Date().toISOString()
+  const { error } = await admin
+    .from("deep_analysis_pipeline_runs")
+    .update({
+      status: "failed",
+      error: "Superseded by a manual retry",
+      finished_at: now,
+      updated_at: now,
+    })
+    .eq("analysed_video_id", analysedVideoId)
+    .eq("status", "running")
+  if (error) {
+    throw new Error(
+      `Failed to abandon in-flight deep analysis pipeline: ${error.message}`,
+    )
+  }
 }
 
 export async function finishDeepAnalysisPipelineRun(
