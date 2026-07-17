@@ -344,7 +344,7 @@ export async function completeSourceFileUpload(
     failureReason: outcome.failureReason,
   })
 
-  // Once the upload is good, hand the original off to be normalised into a 1080p
+  // Once the upload is good, hand the original off to be normalised into a 720p
   // proxy (after which the original is deleted). Best-effort and gated: when
   // normalisation is disabled this returns the row unchanged, so the original
   // simply remains the served file.

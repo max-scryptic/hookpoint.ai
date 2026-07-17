@@ -7,7 +7,7 @@ import { startNormalisation } from "@/lib/source-files/normalisation-service"
 import { errorResponse, serialiseSourceFile } from "@/lib/source-files/http"
 
 // POST /api/source-files/:sourceFileId/retry-normalisation
-// Re-kicks the 1080p Qencode transcode for a source file whose original is
+// Re-kicks the 720p Qencode transcode for a source file whose original is
 // still on hand (e.g. a prior job got stuck or the transcoder wrote a bad
 // proxy) without requiring the user to re-upload the master. A no-op, returned
 // as an error, once the original has already been deleted (normalisation
