@@ -30,7 +30,7 @@ export function ModeToggle() {
 
   return (
     <div
-      className="inline-grid grid-cols-3 rounded-lg border bg-background p-1"
+      className="inline-grid grid-cols-3 rounded-lg border bg-muted p-1"
       role="radiogroup"
       aria-label="Color theme"
     >
@@ -48,7 +48,7 @@ export function ModeToggle() {
                   size="icon"
                   className={cn(
                     "size-8 rounded-md",
-                    isSelected && "bg-muted text-foreground shadow-xs"
+                    isSelected && "bg-card text-foreground shadow-xs"
                   )}
                   aria-label={`${option.label} theme`}
                   aria-checked={isSelected}

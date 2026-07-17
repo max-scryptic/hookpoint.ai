@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import { getDeepAnalysisProgress } from "@/lib/retention-window-media-progress"
+import {
+  getDeepAnalysisProgress,
+  shouldResumeDeepAnalysis,
+} from "@/lib/retention-window-media-progress"
 import type { SourceFile } from "@/lib/source-files/source-files"
 
 function makeSourceFile(overrides: Partial<SourceFile> = {}): SourceFile {
@@ -327,5 +330,67 @@ describe("getDeepAnalysisProgress", () => {
       audioAnalysis: "ready",
     })
     expect(progress.complete).toBe(true)
+  })
+})
+
+describe("shouldResumeDeepAnalysis", () => {
+  it("resumes a pipeline stalled at snapshot extraction, not just at final synthesis", async () => {
+    const supabase = makeFakeSupabase({
+      retention_window_scene_cue_scans: [{ status: "ready" }],
+      retention_window_snapshots: [
+        { status: "pending", analysis_status: "pending" },
+      ],
+    })
+    const progress = await getDeepAnalysisProgress(
+      supabase,
+      "user-1",
+      "av-1",
+      makeSourceFile(),
+    )
+
+    // The stall the user hits: scene changes done, snapshots hung 'pending'.
+    expect(progress.stages).toMatchObject({
+      sceneCueScan: "ready",
+      snapshots: "in_progress",
+    })
+    expect(shouldResumeDeepAnalysis(progress)).toBe(true)
+  })
+
+  it("resumes a pipeline whose only unsettled stage is event synthesis", async () => {
+    const supabase = makeFakeSupabase({
+      retention_window_event_synthesis: [{ status: "pending" }],
+    })
+    const progress = await getDeepAnalysisProgress(
+      supabase,
+      "user-1",
+      "av-1",
+      makeSourceFile(),
+    )
+
+    expect(shouldResumeDeepAnalysis(progress)).toBe(true)
+  })
+
+  it("does not resume once every stage has settled", async () => {
+    const supabase = makeFakeSupabase({
+      retention_window_snapshots: [
+        { status: "ready", analysis_status: "ready" },
+      ],
+      retention_window_audio: [{ status: "ready", analysis_status: "ready" }],
+    })
+    const progress = await getDeepAnalysisProgress(
+      supabase,
+      "user-1",
+      "av-1",
+      makeSourceFile(),
+    )
+
+    expect(progress.complete).toBe(true)
+    expect(shouldResumeDeepAnalysis(progress)).toBe(false)
+  })
+
+  it("does not resume when there is nothing to poll about yet", () => {
+    expect(
+      shouldResumeDeepAnalysis({ active: false, complete: true, stages: null }),
+    ).toBe(false)
   })
 })

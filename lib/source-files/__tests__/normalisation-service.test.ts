@@ -6,6 +6,7 @@ import {
   applyNormalisationCallback,
   buildProxyObjectPath,
   parseQencodeCallback,
+  pickCallbackVideo,
   startNormalisation,
   type NormalisationDeps,
 } from "@/lib/source-files/normalisation-service"
@@ -230,7 +231,7 @@ describe("startNormalisation", () => {
       normalisation_status: "processing",
       normalisation_provider: "qencode",
       normalisation_task_token: "task-xyz",
-      proxy_storage_path: "user-1/vid-1/sf-1/proxy-1080p.mp4",
+      proxy_storage_path: "user-1/vid-1/sf-1/proxy-720p.mp4",
       // The 360p analysis proxy rides along in the same job.
       analysis_proxy_storage_path: "user-1/vid-1/sf-1/proxy-360p.mp4",
     })
@@ -256,8 +257,18 @@ describe("startNormalisation", () => {
 
     const query = submitted as { format: Array<Record<string, unknown>> }
     expect(query.format).toHaveLength(2)
-    expect(query.format[0]).toMatchObject({ height: 1080, tag: "playback" })
-    expect(query.format[1]).toMatchObject({ height: 360, tag: "analysis" })
+    // Both tag fields carry the label: Qencode echoes user_tag on the way back
+    // (the one we match on), and tag is set too for accounts that echo there.
+    expect(query.format[0]).toMatchObject({
+      height: 720,
+      tag: "playback",
+      user_tag: "playback",
+    })
+    expect(query.format[1]).toMatchObject({
+      height: 360,
+      tag: "analysis",
+      user_tag: "analysis",
+    })
   })
 
   it("skips the analysis output when disabled via height 0", async () => {
@@ -308,7 +319,11 @@ describe("startNormalisation", () => {
 describe("parseQencodeCallback", () => {
   // Qencode POSTs application/x-www-form-urlencoded fields, with the bulk of
   // the payload nested in a JSON-encoded `status` string — not a JSON body.
-  it("maps a completed event and extracts every output URL with its tag", () => {
+  it("prefers our user_tag over Qencode's own system tag on each output", () => {
+    // A real completed callback: Qencode stamps its own value into the system
+    // `tag` field of every output and echoes the label we submitted into
+    // `user_tag`. Reading `tag` first (the old behaviour) matched neither the
+    // playback nor the analysis label, so the analysis proxy was never pulled.
     expect(
       parseQencodeCallback({
         task_token: "t",
@@ -316,9 +331,15 @@ describe("parseQencodeCallback", () => {
         status: JSON.stringify({
           error: 0,
           videos: [
-            { url: "https://storage.qencode.com/out.mp4", tag: "playback" },
+            {
+              url: "https://storage.qencode.com/out.mp4",
+              tag: "1080p_mp4",
+              user_tag: "playback",
+              height: 1080,
+            },
             {
               url: "https://storage.qencode.com/out-360.mp4",
+              tag: "360p_mp4",
               user_tag: "analysis",
               height: 360,
             },
@@ -333,7 +354,7 @@ describe("parseQencodeCallback", () => {
         {
           url: "https://storage.qencode.com/out.mp4",
           tag: "playback",
-          height: null,
+          height: 1080,
         },
         {
           url: "https://storage.qencode.com/out-360.mp4",
@@ -342,6 +363,20 @@ describe("parseQencodeCallback", () => {
         },
       ],
     })
+  })
+
+  it("falls back to the system tag when no user_tag was echoed", () => {
+    const parsed = parseQencodeCallback({
+      task_token: "t",
+      event: "saved",
+      status: JSON.stringify({
+        error: 0,
+        videos: [{ url: "https://storage.qencode.com/out.mp4", tag: "playback" }],
+      }),
+    })
+    expect(parsed?.videos).toEqual([
+      { url: "https://storage.qencode.com/out.mp4", tag: "playback", height: null },
+    ])
   })
 
   it("also treats a 'completed' event as completed", () => {
@@ -385,6 +420,49 @@ describe("parseQencodeCallback", () => {
   it("returns null without a task token", () => {
     expect(parseQencodeCallback({ event: "completed" })).toBeNull()
     expect(parseQencodeCallback({})).toBeNull()
+  })
+})
+
+describe("pickCallbackVideo", () => {
+  const playback = { url: "p", tag: "playback", height: 1080 }
+  const analysis = { url: "a", tag: "analysis", height: 360 }
+
+  it("matches by (already user_tag-preferred) tag", () => {
+    expect(pickCallbackVideo([playback, analysis], "playback")).toBe(playback)
+    expect(pickCallbackVideo([playback, analysis], "analysis")).toBe(analysis)
+  })
+
+  it("falls back to height when tags are absent — tallest is playback, shortest analysis", () => {
+    const p = { url: "p", tag: null, height: 1080 }
+    const a = { url: "a", tag: null, height: 360 }
+    // Order shuffled to prove it's height, not position, doing the work here.
+    expect(pickCallbackVideo([a, p], "playback")).toBe(p)
+    expect(pickCallbackVideo([a, p], "analysis")).toBe(a)
+  })
+
+  it("falls back to submission order for exactly two untagged, height-less outputs", () => {
+    const first = { url: "first", tag: null, height: null }
+    const second = { url: "second", tag: null, height: null }
+    expect(pickCallbackVideo([first, second], "playback")).toBe(first)
+    expect(pickCallbackVideo([first, second], "analysis")).toBe(second)
+  })
+
+  it("treats a lone output as playback-only, with no analysis proxy", () => {
+    const only = { url: "only", tag: null, height: null }
+    expect(pickCallbackVideo([only], "playback")).toBe(only)
+    expect(pickCallbackVideo([only], "analysis")).toBeNull()
+  })
+
+  it("won't guess the analysis proxy from an unexpected output count", () => {
+    // Three untagged, height-less outputs: trust only the required playback
+    // pick, never risk pulling the wrong file as the analysis proxy.
+    const vids = [
+      { url: "0", tag: null, height: null },
+      { url: "1", tag: null, height: null },
+      { url: "2", tag: null, height: null },
+    ]
+    expect(pickCallbackVideo(vids, "playback")).toBe(vids[0])
+    expect(pickCallbackVideo(vids, "analysis")).toBeNull()
   })
 })
 

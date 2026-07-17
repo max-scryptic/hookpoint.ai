@@ -74,15 +74,16 @@ export default async function Page() {
             Channel Trends
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            The retention patterns that repeat across your deeply analysed
-            videos. Every deep analysis grows this library.
+            Your evidence-backed playbook for keeping attention, repairing
+            drop-offs and recovering viewers. Every deep analysis makes it
+            sharper.
           </p>
         </div>
 
         {result.status === "ok" && <ChannelTrends data={result.data} />}
         {result.status === "locked" && <ChannelTrendsLocked />}
         {result.status === "error" && (
-          <div className="rounded-xl border bg-muted/30 p-8 text-sm text-muted-foreground">
+          <div className="rounded-xl border bg-card p-8 text-sm text-muted-foreground">
             We couldn&apos;t load your channel trends right now. Please try
             again later.
           </div>

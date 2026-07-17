@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import type { ChannelEventRecord } from "@/lib/channel-event-history"
 import {
   buildChannelInsights,
+  buildChannelPlaybook,
   buildChannelRecurrence,
   buildChannelSignature,
   buildChannelTrends,
@@ -108,6 +109,28 @@ describe("buildChannelTrends", () => {
         ],
       },
     ])
+    expect(data.holds).toBeNull()
+  })
+
+  it("keeps audience holds separate from retention gains", () => {
+    const data = buildChannelTrends({
+      records: [
+        record({ analysedVideoId: "av-1", windowKind: "hold" }),
+        record({ analysedVideoId: "av-2", windowKind: "hold" }),
+        record({ analysedVideoId: "av-3", windowKind: "gain" }),
+      ],
+      videos: [
+        video("av-1", "Hold one"),
+        video("av-2", "Hold two"),
+        video("av-3", "Gain one"),
+      ],
+      libraryVideoCount: 3,
+      windowCount: 3,
+    })
+
+    expect(data.holds?.eventCount).toBe(2)
+    expect(data.holds?.trends[0].videoCount).toBe(2)
+    expect(data.gains?.eventCount).toBe(1)
   })
 
   it("orders trends by distinct-video recurrence before raw event volume", () => {
@@ -180,9 +203,104 @@ describe("buildChannelTrends", () => {
     expect(data.gains).toBeNull()
     expect(data.signature).toBeNull()
     expect(data.insights).toEqual([])
+    expect(data.playbook).toEqual([])
     expect(data.recurrence).toBeNull()
     expect(data.subscribers).toBeNull()
     expect(data.packaging).toBeNull()
+  })
+})
+
+describe("buildChannelPlaybook", () => {
+  it("builds keep, fix and recover rules against hold coverage", () => {
+    const records = [
+      record({
+        analysedVideoId: "h-1",
+        windowKind: "hold",
+        eventType: "visual_change",
+        timestampSeconds: 65,
+        primaryEvidence: "visual",
+        windowDelta: -0.002,
+        confidence: 0.9,
+      }),
+      record({
+        analysedVideoId: "h-2",
+        windowKind: "hold",
+        eventType: "visual_change",
+        timestampSeconds: 92,
+        confidence: 0.8,
+      }),
+      record({
+        analysedVideoId: "d-1",
+        windowKind: "drop_off",
+        eventType: "pacing_change",
+        confidence: 0.9,
+      }),
+      record({
+        analysedVideoId: "d-2",
+        windowKind: "drop_off",
+        eventType: "pacing_change",
+        confidence: 0.8,
+      }),
+      record({
+        analysedVideoId: "g-1",
+        windowKind: "gain",
+        eventType: "scene_cut",
+        confidence: 0.85,
+      }),
+      record({
+        analysedVideoId: "g-2",
+        windowKind: "gain",
+        eventType: "scene_cut",
+        confidence: 0.75,
+      }),
+    ]
+    const rules = buildChannelPlaybook(
+      records,
+      [video("h-1", "Hold receipt")],
+      6,
+      {
+        hold: ["h-1", "h-2", "h-3"],
+        drop_off: ["d-1", "d-2", "d-3"],
+        gain: ["g-1", "g-2", "g-3"],
+      },
+    )
+
+    expect(rules.map((rule) => [rule.kind, rule.eventType])).toEqual([
+      ["keep", "visual_change"],
+      ["fix", "pacing_change"],
+      ["recover", "scene_cut"],
+    ])
+    expect(rules[0]).toMatchObject({
+      evidenceVideoCount: 2,
+      targetCoveredVideoCount: 3,
+      controlVideoCount: 0,
+      controlCoveredVideoCount: 3,
+      targetRate: 2 / 3,
+      controlRate: 0,
+    })
+    expect(rules[0].receipts[0]).toMatchObject({
+      analysedVideoId: "h-1",
+      videoTitle: "Hold receipt",
+      timestampSeconds: 65,
+      primaryEvidence: "visual",
+      windowDelta: -0.002,
+    })
+  })
+
+  it("withholds a channel-style pattern that is equally common in holds and drops", () => {
+    const records = [
+      record({ analysedVideoId: "h-1", windowKind: "hold", eventType: "scene_cut" }),
+      record({ analysedVideoId: "h-2", windowKind: "hold", eventType: "scene_cut" }),
+      record({ analysedVideoId: "d-1", windowKind: "drop_off", eventType: "scene_cut" }),
+      record({ analysedVideoId: "d-2", windowKind: "drop_off", eventType: "scene_cut" }),
+    ]
+
+    expect(
+      buildChannelPlaybook(records, [], 4, {
+        hold: ["h-1", "h-2"],
+        drop_off: ["d-1", "d-2"],
+      }),
+    ).toEqual([])
   })
 })
 

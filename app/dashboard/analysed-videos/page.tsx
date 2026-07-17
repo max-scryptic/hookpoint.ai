@@ -2,6 +2,7 @@ import { AnalysedVideoBrowser } from "@/components/analysed-video-browser"
 import { requireAuthenticatedUser } from "@/lib/auth"
 import { createClient } from "@/lib/supabase/server"
 import { listAnalysedVideos, type AnalysedVideo } from "@/lib/analysed-videos"
+import { listReadySourceFileVideoIds } from "@/lib/source-files/source-files"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -30,9 +31,25 @@ async function loadAnalysedVideos(
   }
 }
 
+// Best-effort fetch of the YouTube video IDs whose raw source file has finished
+// uploading. Used to flag which analysed videos have been deeply analysed; the
+// list still renders if this fails — videos just won't be flagged.
+async function loadRawFileVideoIds(userId: string): Promise<string[]> {
+  try {
+    const supabase = await createClient()
+    return await listReadySourceFileVideoIds(supabase, userId)
+  } catch (error) {
+    console.error("Failed to load raw source file video ids", error)
+    return []
+  }
+}
+
 export default async function Page() {
   const user = await requireAuthenticatedUser()
-  const result = await loadAnalysedVideos(user.id)
+  const [result, rawFileVideoIds] = await Promise.all([
+    loadAnalysedVideos(user.id),
+    loadRawFileVideoIds(user.id),
+  ])
 
   return (
     <>
@@ -68,11 +85,14 @@ export default async function Page() {
         </div>
 
         {result.status === "ok" && (
-          <AnalysedVideoBrowser videos={result.videos} />
+          <AnalysedVideoBrowser
+            videos={result.videos}
+            rawFileVideoIds={rawFileVideoIds}
+          />
         )}
 
         {result.status === "error" && (
-          <div className="rounded-xl border bg-muted/30 p-8 text-sm text-muted-foreground">
+          <div className="rounded-xl border bg-card p-8 text-sm text-muted-foreground">
             We couldn&apos;t load your analysed videos right now. Please try
             again later.
           </div>

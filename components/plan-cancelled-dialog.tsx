@@ -63,7 +63,7 @@ export function PlanCancelledDialog({
           <p>
             You keep full {details.planName} access until{" "}
             <span className="font-medium text-foreground">{accessUntil}</span>.
-            After that your account moves to the Free plan — nothing more to do,
+            After that your account moves to the Free plan. Nothing more to do,
             and you won&rsquo;t be charged again.
           </p>
           <p className="mt-3 text-muted-foreground">

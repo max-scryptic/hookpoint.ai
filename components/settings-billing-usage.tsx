@@ -78,7 +78,7 @@ export function SettingsBillingUsage({
   const isFree = (snapshot?.planId ?? "free") === "free"
   const isCancelling = Boolean(snapshot?.cancelAtPeriodEnd && !isFree)
   const includesDeepDives = (snapshot?.plan.deepCreditsPerMonth ?? 0) > 0
-  const renewsLabel = snapshot ? formatDate(snapshot.periodEnd.toISOString()) : "—"
+  const renewsLabel = snapshot ? formatDate(snapshot.periodEnd.toISOString()) : "N/A"
   const renewsCaption = snapshot?.cancelAtPeriodEnd
     ? "Access ends"
     : isFree || snapshot?.billingPeriod === "annual"
@@ -105,14 +105,14 @@ export function SettingsBillingUsage({
     },
     {
       label: "Video analyses",
-      value: snapshot ? formatMeter(snapshot.videoAnalyses) : "—",
+      value: snapshot ? formatMeter(snapshot.videoAnalyses) : "N/A",
       tabular: true,
     },
     ...(includesDeepDives
       ? [
           {
             label: "Deep-dive credits",
-            value: snapshot ? formatMeter(snapshot.deepCredits) : "—",
+            value: snapshot ? formatMeter(snapshot.deepCredits) : "N/A",
             tabular: true,
           },
         ]

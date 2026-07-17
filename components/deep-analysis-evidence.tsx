@@ -81,6 +81,7 @@ const KIND_LABELS: Record<WindowEvidence["window"]["kind"], string> = {
   hook: "Hook",
   drop_off: "Drop-off",
   gain: "Gain",
+  hold: "Hold",
 }
 
 // The deep-analysis evidence generated for a video, grouped by retention
@@ -149,7 +150,7 @@ function VideoCostSummary({
         </dl>
         <p className="text-xs text-muted-foreground">
           Transcoding is a one-time cost for producing this video&apos;s proxies;
-          LLM analysis is the sum across every window below. Estimated — actual
+          LLM analysis is the sum across every window below. Estimated; actual
           billing may differ.
         </p>
       </div>
@@ -179,7 +180,7 @@ function WindowEvidenceCard({
           {formatTimestamp(from)} – {formatTimestamp(to)}
         </span>
         <span
-          className={`font-mono text-xs ${window.delta >= 0 ? "text-emerald-600 dark:text-emerald-500" : "text-destructive"}`}
+          className={`font-mono text-xs ${window.kind === "hold" ? "text-teal-600 dark:text-teal-400" : window.delta >= 0 ? "text-emerald-600 dark:text-emerald-500" : "text-destructive"}`}
         >
           {formatSignedPercent(window.delta)}
         </span>
@@ -587,12 +588,14 @@ function editTip(
 }
 
 function takeawayFor({
+  kind,
   dominant,
   visual,
   audio,
   editing,
   baseline,
 }: {
+  kind: WindowEvidence["window"]["kind"]
   dominant: WindowEvidence["events"][number] | null
   visual: VisualSummary | null
   audio: AudioAnalysis | null
@@ -603,6 +606,15 @@ function takeawayFor({
     ? ` around ${formatTimestamp(dominant.timestampSeconds)}`
     : ""
 
+  if (kind === "hold") {
+    return {
+      observation:
+        dominant?.narrative ??
+        "Retention stays unusually steady through this stretch without one isolated non-verbal event explaining it.",
+      tip: null,
+    }
+  }
+
   // A non-verbal event leads when there is one, grounded in the concrete
   // signal for its modality so each window reads differently.
   if (dominant && dominant.primaryEvidence !== "transcript") {
@@ -611,7 +623,7 @@ function takeawayFor({
         const phrase = editPhrase(editing, baseline)
         return {
           observation: phrase
-            ? `The editing is what loses viewers here — ${phrase}.`
+            ? `The editing is what loses viewers here: ${phrase}.`
             : "The cut rhythm is where viewers start slipping at this moment.",
           tip: editTip(editing, baseline, at),
         }
@@ -635,7 +647,7 @@ function takeawayFor({
         const phrase = audioPhrase(audio, baseline.speechRate)
         return {
           observation: phrase
-            ? `The sound is what shifts here — ${phrase}.`
+            ? `The sound is what shifts here: ${phrase}.`
             : "Energy and sound are what shift here.",
           tip: `Lift the delivery or trim the dead air${at} to keep viewers with you.`,
         }
@@ -651,7 +663,7 @@ function takeawayFor({
             phrases.length > 0
               ? `A few things stack up at this moment: ${joinClauses(phrases)}.`
               : "A few signals reinforce each other here, with the edit and delivery both working against attention at once.",
-          tip: `Tighten the pacing and delivery through this stretch${at} — no single change on its own is likely to move it.`,
+          tip: `Tighten the pacing and delivery through this stretch${at}. No single change on its own is likely to move it.`,
         }
       }
       default:
@@ -668,7 +680,7 @@ function takeawayFor({
   const edit = editPhrase(editing, baseline)
   if (edit) {
     return {
-      observation: `No single event stands out, but the editing breaks from the rest of the video here — ${edit}.`,
+      observation: `No single event stands out, but the editing breaks from the rest of the video here: ${edit}.`,
       tip: editTip(editing, baseline, at),
     }
   }
@@ -682,7 +694,7 @@ function takeawayFor({
   ].filter((p): p is string => p != null)
   if (state.length > 0) {
     return {
-      observation: `Nothing in the edit, delivery or visuals breaks from the rest of the video here — ${joinClauses(state)} — so the change tracks the content of the moment itself.`,
+      observation: `Nothing in the edit, delivery or visuals breaks from the rest of the video here: ${joinClauses(state)}. The change tracks the content of the moment itself.`,
       tip: null,
     }
   }
@@ -854,6 +866,7 @@ function CardInsightDraft({ item }: { item: WindowEvidence }) {
           </span>
           {(() => {
             const takeaway = takeawayFor({
+              kind: window.kind,
               dominant,
               visual,
               audio: audioAnalysis,
@@ -913,7 +926,7 @@ function BaselineField({
     <div className="flex flex-col">
       <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd className="font-medium tabular-nums">
-        {value != null ? format(value) : "—"}
+        {value != null ? format(value) : "N/A"}
         {value != null && baseline != null && (
           <span className="ml-2 text-xs font-normal text-muted-foreground">
             avg {format(baseline)}
@@ -1180,10 +1193,10 @@ function SnapshotsSection({
                     <TableCell>{formatBoolean(analysis.contains_text)}</TableCell>
                     <TableCell>{formatBoolean(analysis.contains_code)}</TableCell>
                     <TableCell className="max-w-40 text-wrap whitespace-normal text-xs text-muted-foreground">
-                      {snapshot.ocrText ?? "—"}
+                      {snapshot.ocrText ?? "N/A"}
                     </TableCell>
                     <TableCell className="max-w-56 text-wrap whitespace-normal">
-                      {analysis.notable_event ?? "—"}
+                      {analysis.notable_event ?? "N/A"}
                     </TableCell>
                     <TableCell className="max-w-64 min-w-48 text-wrap whitespace-normal">
                       {analysis.description}
@@ -1269,11 +1282,11 @@ function AudioSection({
           />
           <Field
             label="Average volume"
-            value={analysis.average_volume != null ? `${analysis.average_volume.toFixed(1)} dB` : "—"}
+            value={analysis.average_volume != null ? `${analysis.average_volume.toFixed(1)} dB` : "N/A"}
           />
           <Field
             label="Silence"
-            value={analysis.silence != null ? `${(analysis.silence * 100).toFixed(0)}%` : "—"}
+            value={analysis.silence != null ? `${(analysis.silence * 100).toFixed(0)}%` : "N/A"}
           />
           {analysis.notable_events.length > 0 && (
             <Field

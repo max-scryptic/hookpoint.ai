@@ -8,6 +8,7 @@ import {
   GaugeIcon,
   ImageIcon,
   ListChecksIcon,
+  MinusIcon,
   PackageIcon,
   QuoteIcon,
   SparklesIcon,
@@ -77,7 +78,7 @@ function formatTimestamp(totalSeconds: number): string {
 
 // Compact human number: 12345 -> "12.3K", 2_400_000 -> "2.4M".
 function formatCompactNumber(value: number | null): string {
-  if (value == null) return "—"
+  if (value == null) return "N/A"
   return new Intl.NumberFormat("en", {
     notation: "compact",
     maximumFractionDigits: 1,
@@ -93,6 +94,7 @@ const TAB_FOR_INSIGHT_KIND: Record<
   hook: "hook",
   drop: "drop-offs",
   gain: "gains",
+  hold: "holds",
   pacing: "pacing",
 }
 
@@ -100,10 +102,11 @@ const TAB_FOR_INSIGHT_KIND: Record<
 // the list below is tinted in that insight's colour so the reader can see which
 // item the moment they clicked relates to. The tint fades out again (via the
 // always-on `transition-colors`) once the selection is cleared.
-const ROW_HIGHLIGHT: Record<"hook" | "drop" | "gain" | "pacing", string> = {
+const ROW_HIGHLIGHT: Record<"hook" | "drop" | "gain" | "hold" | "pacing", string> = {
   hook: "bg-yellow-50 ring-1 ring-inset ring-yellow-400/40 dark:bg-yellow-500/10",
   drop: "bg-red-50 ring-1 ring-inset ring-red-400/40 dark:bg-red-500/10",
   gain: "bg-emerald-50 ring-1 ring-inset ring-emerald-400/40 dark:bg-emerald-500/10",
+  hold: "bg-teal-50 ring-1 ring-inset ring-teal-400/40 dark:bg-teal-500/10",
   pacing: "bg-blue-50 ring-1 ring-inset ring-blue-400/40 dark:bg-blue-500/10",
 }
 
@@ -320,7 +323,7 @@ function PacingAnalysisSection({
         </div>
       ) : analysis.slowOrRepetitiveStretches.length === 0 ? (
         <div className="rounded-xl border bg-muted/30 p-6 text-sm text-muted-foreground">
-          No slow or repetitive stretches stood out — the pacing holds up across
+          No slow or repetitive stretches stood out. The pacing holds up across
           this video.
         </div>
       ) : (
@@ -658,7 +661,7 @@ function DropList({
   if (drops.length === 0) {
     return (
       <div className="rounded-xl border bg-muted/30 p-6 text-sm text-muted-foreground">
-        No abnormal drop-offs detected — retention falls about as evenly as a
+        No abnormal drop-offs detected. Retention falls about as evenly as a
         typical video, with no single moment standing out.
       </div>
     )
@@ -816,6 +819,69 @@ function GainList({
                 </div>
               )}
             />
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Holds list (sustained, near-flat retention stretches)
+// ---------------------------------------------------------------------------
+
+function HoldList({
+  holds,
+  transcript,
+  attribution,
+  highlightedId,
+}: {
+  holds: RetentionWindow[]
+  transcript: TranscriptCue[]
+  attribution: Map<number, RetentionMomentAttribution>
+  highlightedId?: string | null
+}) {
+  const highlightedRef = useHighlightScroll(highlightedId)
+
+  return (
+    <ul className="divide-y overflow-hidden rounded-xl border bg-card [&>li:first-child]:rounded-t-xl [&>li:last-child]:rounded-b-xl">
+      {holds.map((hold, index) => {
+        const rowId = `hold-${hold.windowIndex}`
+        const isHighlighted = rowId === highlightedId
+        const entering = hold.startWatchRatio ?? 0
+        const leaving = hold.endWatchRatio ?? entering
+        const retained = entering > 0 ? Math.min(1, leaving / entering) : 1
+        return (
+          <li
+            key={rowId}
+            ref={isHighlighted ? highlightedRef : undefined}
+            className={rowHighlightClass(
+              "hold",
+              isHighlighted,
+              "flex flex-col gap-2 p-4",
+            )}
+          >
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                  {index + 1}
+                </span>
+                <span className="font-mono text-sm">
+                  {formatTimestamp(hold.fromSeconds)} –{" "}
+                  {formatTimestamp(hold.toSeconds)}
+                </span>
+                <ScriptSegmentTooltip
+                  transcript={transcript}
+                  fromSeconds={hold.fromSeconds}
+                  toSeconds={hold.toSeconds}
+                />
+              </div>
+              <span className="text-sm font-medium text-teal-600 dark:text-teal-400">
+                {(retained * 100).toFixed(1)}% held
+              </span>
+            </div>
+
+            <AttributionNote attribution={attribution.get(hold.windowIndex)} />
           </li>
         )
       })}
@@ -1157,6 +1223,7 @@ export function AnalysedVideoDetail({
     : null
   const drops = retentionWindows.filter((w) => w.kind === "drop_off")
   const gains = retentionWindows.filter((w) => w.kind === "gain")
+  const holds = retentionWindows.filter((w) => w.kind === "hold")
   const pacingStretches = pacingAnalysis?.slowOrRepetitiveStretches ?? []
   const defaultRetentionTab =
     hookWindows.length > 0
@@ -1165,9 +1232,11 @@ export function AnalysedVideoDetail({
         ? "drop-offs"
         : gains.length > 0
           ? "gains"
-          : pacingStretches.length > 0
-            ? "pacing"
-            : null
+          : holds.length > 0
+            ? "holds"
+            : pacingStretches.length > 0
+              ? "pacing"
+              : null
 
   // The retention tab is controlled so that clicking an insight marker on the
   // chart can switch to the tab holding that insight (see onInsightSelect).
@@ -1188,6 +1257,7 @@ export function AnalysedVideoDetail({
   }
   const dropAttribution = attributionByKind("drop_off")
   const gainAttribution = attributionByKind("gain")
+  const holdAttribution = attributionByKind("hold")
   const hookAttribution = attributionByKind("hook")
   const deepFeedbackByKind = (
     kind: RetentionMomentKind,
@@ -1295,6 +1365,32 @@ export function AnalysedVideoDetail({
         transcript: said || undefined,
       }
     }),
+    ...holds.map((window) => {
+      const said = transcriptForSegment(
+        transcript,
+        window.fromSeconds,
+        window.toSeconds,
+      )
+      const entering = window.startWatchRatio ?? 0
+      const leaving = window.endWatchRatio ?? entering
+      const retained = entering > 0 ? Math.min(1, leaving / entering) : 1
+
+      return {
+        id: `hold-${window.windowIndex}`,
+        kind: "hold" as const,
+        label: `Audience hold ${window.windowIndex + 1}`,
+        fromSeconds: window.fromSeconds,
+        toSeconds: window.toSeconds,
+        metric: `${(retained * 100).toFixed(1)}%`,
+        metricLabel: "of entering viewers held",
+        details: [
+          ...(window.relativePerformance != null
+            ? [`${Math.round(window.relativePerformance * 100)}% vs. similar videos`]
+            : []),
+        ],
+        transcript: said || undefined,
+      }
+    }),
     ...(pacingAnalysis?.slowOrRepetitiveStretches ?? []).map(
       (stretch, index) => ({
         id: `pacing-${stretch.startSeconds}-${stretch.endSeconds}`,
@@ -1347,7 +1443,7 @@ export function AnalysedVideoDetail({
                       ? formatTimestamp(
                           analyticsSummary.averageViewDurationSeconds,
                         )
-                      : "—"
+                      : "N/A"
                   }
                 />
               </div>
@@ -1462,6 +1558,12 @@ export function AnalysedVideoDetail({
                     Gains
                   </TabsTrigger>
                 )}
+                {holds.length > 0 && (
+                  <TabsTrigger value="holds">
+                    <MinusIcon className="text-teal-600 dark:text-teal-400" />
+                    Holds
+                  </TabsTrigger>
+                )}
                 {pacingStretches.length > 0 && (
                   <TabsTrigger value="pacing">
                     <GaugeIcon className="text-blue-600 dark:text-blue-400" />
@@ -1501,6 +1603,17 @@ export function AnalysedVideoDetail({
                     transcript={transcript}
                     attribution={gainAttribution}
                     deepFeedback={gainDeepFeedback}
+                    highlightedId={playbackWindow?.id ?? null}
+                  />
+                </TabsContent>
+              )}
+
+              {holds.length > 0 && (
+                <TabsContent value="holds">
+                  <HoldList
+                    holds={holds}
+                    transcript={transcript}
+                    attribution={holdAttribution}
                     highlightedId={playbackWindow?.id ?? null}
                   />
                 </TabsContent>

@@ -25,7 +25,7 @@ export interface SerialisedSourceFile {
     | "processing"
     | "ready"
     | "failed"
-  // Transcode (1080p proxy) lifecycle, so the UI can show "Optimising…" while a
+  // Transcode (720p proxy) lifecycle, so the UI can show "Optimising…" while a
   // job runs. The raw proxy/original storage paths are never exposed.
   normalisationStatus:
     | "pending"

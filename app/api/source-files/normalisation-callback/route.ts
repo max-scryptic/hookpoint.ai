@@ -22,7 +22,7 @@ export const maxDuration = 300
 // progresses or finishes. Unauthenticated (no user session), so it's protected
 // by a shared secret and uses the service-role admin client to find and update
 // the row. On success the original master is deleted and playback flips to the
-// 1080p proxy; on error the original is kept as the fallback.
+// 720p proxy; on error the original is kept as the fallback.
 //
 // Always returns 200 for events we can't act on (bad secret aside) so the
 // transcoder doesn't pointlessly retry a callback we've already handled or that

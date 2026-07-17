@@ -122,12 +122,17 @@ async function analyse(
         userId,
         cached.id,
       )
-      if (retentionWindows.length === 0) {
-        const built = buildRetentionWindows(
-          cached.retention,
-          cached.videoDetails.durationSeconds,
-        )
-        retentionWindows = built
+      const built = buildRetentionWindows(
+        cached.retention,
+        cached.videoDetails.durationSeconds,
+      )
+      const needsFullWindowBackfill = retentionWindows.length === 0
+      const needsHoldBackfill =
+        !needsFullWindowBackfill &&
+        !retentionWindows.some((window) => window.kind === "hold") &&
+        built.some((window) => window.kind === "hold")
+      if (needsFullWindowBackfill || needsHoldBackfill) {
+        if (needsFullWindowBackfill) retentionWindows = built
         try {
           const savedWindows = await saveRetentionWindows(
             supabase,
@@ -135,31 +140,38 @@ async function analyse(
             cached.id,
             built,
           )
+          // A legacy report that already has hooks, gains and drop-offs only
+          // needs jobs for its newly-added holds. Passing every saved window to
+          // the upsert helpers would reset settled paid work back to pending.
+          const windowsToAnalyse = needsFullWindowBackfill
+            ? savedWindows
+            : savedWindows.filter((window) => window.kind === "hold")
           await createPendingRetentionWindowAudio(
             supabase,
             userId,
             cached.id,
-            savedWindows,
+            windowsToAnalyse,
           )
           await createPendingRetentionWindowSceneCueScans(
             supabase,
             userId,
             cached.id,
-            savedWindows,
+            windowsToAnalyse,
           )
           await createPendingRetentionWindowEventSynthesis(
             supabase,
             userId,
             cached.id,
-            savedWindows,
+            windowsToAnalyse,
           )
           await saveRetentionWindowTranscripts(
             supabase,
             userId,
             cached.id,
-            savedWindows,
+            windowsToAnalyse,
             transcript,
           )
+          retentionWindows = savedWindows
           triggerRetentionWindowMediaExtraction(
             await getSourceFileForVideo(supabase, userId, videoId),
           )
@@ -501,26 +513,26 @@ export default async function Page({
         )}
 
         {result.status === "not_found" && (
-          <div className="rounded-xl border bg-muted/30 p-8 text-sm text-muted-foreground">
+          <div className="rounded-xl border bg-card p-8 text-sm text-muted-foreground">
             We couldn&apos;t find that video on YouTube.
           </div>
         )}
 
         {result.status === "no_data" && (
-          <div className="rounded-xl border bg-muted/30 p-8 text-sm text-muted-foreground">
+          <div className="rounded-xl border bg-card p-8 text-sm text-muted-foreground">
             No retention data available. Make sure this video is on the YouTube
             channel you signed in with and has enough views.
           </div>
         )}
 
         {result.status === "reconnect" && (
-          <div className="rounded-xl border bg-muted/30 p-8 text-sm text-muted-foreground">
+          <div className="rounded-xl border bg-card p-8 text-sm text-muted-foreground">
             Please reconnect your YouTube account to grant analytics access.
           </div>
         )}
 
         {result.status === "error" && (
-          <div className="rounded-xl border bg-muted/30 p-8 text-sm text-muted-foreground">
+          <div className="rounded-xl border bg-card p-8 text-sm text-muted-foreground">
             We couldn&apos;t analyse that video right now. Please try again
             later.
           </div>

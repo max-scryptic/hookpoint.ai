@@ -1,20 +1,27 @@
 import Link from "next/link"
 import {
   AreaChartIcon,
+  BookOpenIcon,
   ChevronDownIcon,
+  Clock3Icon,
   ImageIcon,
   LibraryIcon,
   LockIcon,
+  MinusIcon,
   PackageIcon,
+  RefreshCwIcon,
+  ShieldCheckIcon,
   SparklesIcon,
   TrendingDownIcon,
   TrendingUpIcon,
   UserPlusIcon,
+  WrenchIcon,
 } from "lucide-react"
 
 import {
   insightCopy,
   packagingFeatureLabel,
+  playbookCopy,
 } from "@/components/channel-trends-copy"
 import {
   EventTypeBadge,
@@ -41,6 +48,7 @@ import {
   type ChannelInsight,
   type ChannelKindTrends,
   type ChannelPackagingPatterns,
+  type ChannelPlaybookRule,
   type ChannelRecurrence,
   type ChannelRecurrenceRow,
   type ChannelSignatureRow,
@@ -74,9 +82,19 @@ function plural(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? "" : "s"}`
 }
 
+function formatTimestamp(totalSeconds: number): string {
+  const safe = Math.max(0, Math.round(totalSeconds))
+  const hours = Math.floor(safe / 3600)
+  const minutes = Math.floor((safe % 3600) / 60)
+  const seconds = safe % 60
+  return hours > 0
+    ? `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
+    : `${minutes}:${String(seconds).padStart(2, "0")}`
+}
+
 function StatTile({ label, value }: { label: string; value: number }) {
   return (
-    <div className="flex flex-col gap-1 rounded-lg border p-4">
+    <div className="flex flex-col gap-1 rounded-lg border bg-card p-4">
       <span className="text-2xl font-semibold tabular-nums">{value}</span>
       <span className="text-xs text-muted-foreground">{label}</span>
     </div>
@@ -99,7 +117,7 @@ function LibraryStats({ data }: { data: ChannelTrendsData }) {
 function StageProgress({ data }: { data: ChannelTrendsData }) {
   if (data.stage === "established") {
     return (
-      <div className="flex items-center gap-2 rounded-lg border bg-muted/30 p-4 text-sm">
+      <div className="flex items-center gap-2 rounded-lg border bg-card p-4 text-sm">
         <SparklesIcon className="size-4 shrink-0 text-primary" />
         <span>
           Trends at full strength - built from{" "}
@@ -118,10 +136,12 @@ function StageProgress({ data }: { data: ChannelTrendsData }) {
   const message =
     data.stage === "early"
       ? `${data.libraryVideoCount} of ${target} videos - trends strengthening as your library grows.`
-      : `Deeply analyse ${plural(remaining, "more video")} to unlock early trends.`
+      : data.libraryVideoCount === 0
+        ? `Analyse ${target} videos with their raw source files to unlock early trends.`
+        : `Deeply analyse ${plural(remaining, "more video")} to unlock early trends.`
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-4">
+    <div className="flex flex-col gap-2 rounded-lg border bg-card p-4">
       <div className="flex items-center justify-between gap-2 text-sm">
         <span>{message}</span>
         <span className="font-mono text-xs tabular-nums text-muted-foreground">
@@ -216,18 +236,156 @@ function SignalMeter({
   )
 }
 
+const PLAYBOOK_KIND_META = {
+  keep: {
+    label: "Keep doing this",
+    comparison: "audience holds vs drop-offs",
+    Icon: ShieldCheckIcon,
+    text: "text-teal-700 dark:text-teal-400",
+    border: "border-t-teal-600",
+    edge: "border-l-teal-600",
+    fill: "bg-teal-600",
+  },
+  fix: {
+    label: "Fix this next",
+    comparison: "drop-offs vs audience holds",
+    Icon: WrenchIcon,
+    text: "text-destructive",
+    border: "border-t-destructive",
+    edge: "border-l-destructive",
+    fill: "bg-destructive",
+  },
+  recover: {
+    label: "Recover attention",
+    comparison: "retention gains vs audience holds",
+    Icon: RefreshCwIcon,
+    text: "text-emerald-700 dark:text-emerald-400",
+    border: "border-t-emerald-600",
+    edge: "border-l-emerald-600",
+    fill: "bg-emerald-600",
+  },
+} as const
+
+function percent(value: number): string {
+  return `${Math.round(value * 100)}%`
+}
+
+function PlaybookRuleCard({ rule }: { rule: ChannelPlaybookRule }) {
+  const meta = PLAYBOOK_KIND_META[rule.kind]
+  const copy = playbookCopy(rule.kind, rule.eventType)
+
+  return (
+    <Card className={`flex flex-col gap-3 border-t-2 p-5 ${meta.border}`}>
+      <div
+        className={`flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase ${meta.text}`}
+      >
+        <meta.Icon className="size-3.5" />
+        {meta.label}
+      </div>
+      <div>
+        <EventTypeBadge eventType={rule.eventType} />
+        <h3 className="mt-2 text-base font-semibold">{copy.headline}</h3>
+      </div>
+      <p className="text-sm text-muted-foreground">{copy.action}</p>
+      <div className={`rounded-r-md border-l-2 bg-muted/50 px-3 py-2 ${meta.edge}`}>
+        <span className={`block text-xs font-semibold ${meta.text}`}>
+          Next-video rule
+        </span>
+        <span className="text-sm">{copy.whenToUse}</span>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        <Chip>
+          {rule.evidenceVideoCount}/{rule.targetCoveredVideoCount} target videos
+        </Chip>
+        <Chip>
+          {rule.controlVideoCount}/{rule.controlCoveredVideoCount} control videos
+        </Chip>
+        <Chip>avg confidence {rule.meanConfidence.toFixed(2)}</Chip>
+      </div>
+      <div className="text-xs text-muted-foreground">
+        <span className="font-medium text-foreground">
+          {percent(rule.targetRate)} vs {percent(rule.controlRate)}
+        </span>{" "}
+        across {meta.comparison}
+      </div>
+      <SignalMeter signal={rule.signal} fillClass={meta.fill} />
+      {rule.receipts.length > 0 && (
+        <Collapsible>
+          <CollapsibleTrigger className="group flex items-center gap-1 text-xs font-medium text-muted-foreground">
+            <ChevronDownIcon className="size-3.5 transition-transform duration-200 group-data-[panel-open]:rotate-180" />
+            Open evidence from {plural(rule.receipts.length, "video")}
+          </CollapsibleTrigger>
+          <CollapsibleContent className="flex flex-col gap-2 pt-2 pl-4">
+            {rule.receipts.map((receipt) => (
+              <EventReceipt
+                key={`${receipt.analysedVideoId}:${receipt.timestampSeconds ?? "unknown"}`}
+                narrative={receipt.narrative}
+                videoTitle={receipt.videoTitle}
+                analysedVideoId={receipt.analysedVideoId}
+                timestampSeconds={receipt.timestampSeconds}
+              />
+            ))}
+          </CollapsibleContent>
+        </Collapsible>
+      )}
+    </Card>
+  )
+}
+
+function ChannelPlaybook({ rules }: { rules: ChannelPlaybookRule[] }) {
+  return (
+    <section className="flex flex-col gap-3">
+      <div className="rounded-xl border bg-card p-5">
+        <div className="flex items-center gap-2">
+          <BookOpenIcon className="size-5 text-primary" />
+          <h2 className="text-lg font-semibold">Your next-video playbook</h2>
+        </div>
+        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+          The clearest repeat, repair and recovery rules from your channel.
+          Audience holds act as the control, so common editing habits are not
+          mistaken for useful signals.
+        </p>
+      </div>
+      <div className="grid gap-3 lg:grid-cols-3">
+        {rules.map((rule) => (
+          <PlaybookRuleCard key={rule.kind} rule={rule} />
+        ))}
+      </div>
+    </section>
+  )
+}
+
 function EventReceipt({
   narrative,
   videoTitle,
+  analysedVideoId,
+  timestampSeconds,
 }: {
   narrative: string
   videoTitle: string | null
+  analysedVideoId?: string
+  timestampSeconds?: number | null
 }) {
+  const sourceLabel = [
+    videoTitle,
+    timestampSeconds == null ? null : formatTimestamp(timestampSeconds),
+  ]
+    .filter(Boolean)
+    .join(" · ")
   return (
     <div className="flex flex-col gap-0.5 border-l-2 pl-3 text-xs">
       <p className="text-muted-foreground">{stripEmDashes(narrative)}</p>
-      {videoTitle && (
-        <span className="text-muted-foreground/80">{videoTitle}</span>
+      {sourceLabel && analysedVideoId && (
+        <Link
+          href={`/dashboard/analysed-video/${analysedVideoId}`}
+          className="inline-flex items-center gap-1 text-muted-foreground/80 underline-offset-2 hover:text-foreground hover:underline"
+        >
+          {timestampSeconds != null && <Clock3Icon className="size-3" />}
+          {sourceLabel}
+        </Link>
+      )}
+      {sourceLabel && !analysedVideoId && (
+        <span className="text-muted-foreground/80">{sourceLabel}</span>
       )}
     </div>
   )
@@ -1170,14 +1328,22 @@ function FullBreakdown({ data }: { data: ChannelTrendsData }) {
       kind: data.dropOffs,
     },
     {
-      value: "holds",
-      label: "What holds viewers",
+      value: "gains",
+      label: "Retention gains",
       icon: (
         <TrendingUpIcon className="size-4 text-emerald-600 dark:text-emerald-500" />
       ),
       description:
-        "The patterns your retention gains keep coming back to - worth repeating on purpose.",
+        "The patterns around moments viewers replayed or returned to.",
       kind: data.gains,
+    },
+    {
+      value: "holds",
+      label: "Audience holds",
+      icon: <MinusIcon className="size-4 text-teal-600 dark:text-teal-400" />,
+      description:
+        "The patterns that recur where your audience stayed unusually steady.",
+      kind: data.holds,
     },
     {
       value: "hooks",
@@ -1194,7 +1360,7 @@ function FullBreakdown({ data }: { data: ChannelTrendsData }) {
   if (sections.length === 0) return null
 
   return (
-    <Collapsible className="rounded-lg border">
+    <Collapsible className="rounded-lg border bg-card">
       <CollapsibleTrigger className="group flex w-full items-center gap-2 p-4 text-left text-sm font-medium">
         <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[panel-open]:rotate-180" />
         Full breakdown
@@ -1234,28 +1400,38 @@ const RETENTION_TRENDS_TAB_LIMIT = 3
 function RetentionTrendsTabs({
   dropOffs,
   gains,
+  holds,
 }: {
   dropOffs: ChannelKindTrends | null
   gains: ChannelKindTrends | null
+  holds: ChannelKindTrends | null
 }) {
   const tabs = [
     {
-      value: "negative",
-      label: "Negative retention",
+      value: "drop-offs",
+      label: "Drop-offs",
       icon: <TrendingDownIcon className="text-destructive" />,
       description:
         "Your top 3 recurring drop-off patterns, most channel-wide first.",
       trends: dropOffs?.trends.slice(0, RETENTION_TRENDS_TAB_LIMIT) ?? [],
     },
     {
-      value: "positive",
-      label: "Positive retention",
+      value: "gains",
+      label: "Gains",
       icon: (
         <TrendingUpIcon className="text-emerald-600 dark:text-emerald-500" />
       ),
       description:
         "Your top 3 recurring retention gains, most channel-wide first.",
       trends: gains?.trends.slice(0, RETENTION_TRENDS_TAB_LIMIT) ?? [],
+    },
+    {
+      value: "holds",
+      label: "Holds",
+      icon: <MinusIcon className="text-teal-600 dark:text-teal-400" />,
+      description:
+        "Your top 3 recurring audience-hold patterns, most channel-wide first.",
+      trends: holds?.trends.slice(0, RETENTION_TRENDS_TAB_LIMIT) ?? [],
     },
   ].filter((tab) => tab.trends.length > 0)
 
@@ -1267,7 +1443,7 @@ function RetentionTrendsTabs({
         <h3 className="text-sm font-semibold">Top retention trends</h3>
         <p className="mt-0.5 text-xs text-muted-foreground">
           The patterns that recur across the most of your uploads, split by
-          whether they lose viewers or hold them.
+          whether viewers leave, return, or remain unusually steady.
         </p>
       </div>
       <Tabs defaultValue={tabs[0].value}>
@@ -1298,20 +1474,18 @@ function RetentionTrendsTabs({
   )
 }
 
-function BuildingCard({ data }: { data: ChannelTrendsData }) {
+function BuildingCard() {
   return (
     <Card className="flex flex-col items-start gap-3 p-6">
       <LibraryIcon className="size-5 text-muted-foreground" />
-      <div>
-        <h2 className="text-base font-semibold">
-          {data.stage === "empty"
-            ? "Start your content library"
-            : "Your library is growing"}
-        </h2>
-        <p className="mt-1 max-w-prose text-sm text-muted-foreground">
-          Every deep analysis adds its retention events to a private library of
-          your content. Once{" "}
-          {EARLY_TRENDS_VIDEO_THRESHOLD} videos are in, this page starts
+      <div className="w-full">
+        <p className="text-sm text-muted-foreground">
+          Every deep analysis adds its retention events to a private{" "}
+          <span className="font-semibold text-foreground">Content Library</span>{" "}
+          of your content.
+        </p>
+        <p className="mt-3 text-sm text-muted-foreground">
+          Once {EARLY_TRENDS_VIDEO_THRESHOLD} videos are in, this page starts
           surfacing the patterns that repeat across your channel - what loses
           viewers, what holds them, and how your hooks behave.
         </p>
@@ -1372,11 +1546,15 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
     data.recurrence != null ||
     data.dropOffs != null ||
     data.gains != null ||
+    data.holds != null ||
     data.hooks != null
   const hasPackaging = data.packaging != null || data.subscribers != null
 
   return (
     <div className="flex flex-col gap-6">
+      {showTrends && data.playbook.length > 0 && (
+        <ChannelPlaybook rules={data.playbook} />
+      )}
       <LibraryStats data={data} />
       <StageProgress data={data} />
       {showTrends ? (
@@ -1402,6 +1580,7 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
               <RetentionTrendsTabs
                 dropOffs={data.dropOffs}
                 gains={data.gains}
+                holds={data.holds}
               />
               {data.signature != null && (
                 <SignatureChart
@@ -1433,7 +1612,7 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
           )}
         </>
       ) : (
-        <BuildingCard data={data} />
+        <BuildingCard />
       )}
     </div>
   )

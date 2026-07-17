@@ -6,9 +6,9 @@ import { useRouter } from "next/navigation"
 import { format } from "date-fns"
 import {
   ArrowUpDownIcon,
-  BarChart3Icon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  CircleCheckIcon,
   GlobeIcon,
   LinkIcon,
   ListFilterIcon,
@@ -169,9 +169,32 @@ function formatAnalysedAt(iso: string): string {
   })
 }
 
-export function AnalysedVideoBrowser({ videos }: { videos: AnalysedVideo[] }) {
+// A green tick shown for videos whose raw source file has been uploaded — the
+// signal that a video has been deeply analysed rather than only retention-scanned.
+function RawFileBadge() {
+  return (
+    <span className="inline-flex items-center text-sm font-medium text-emerald-600 dark:text-emerald-500">
+      <CircleCheckIcon className="size-4" />
+      <span className="sr-only">Uploaded</span>
+    </span>
+  )
+}
+
+export function AnalysedVideoBrowser({
+  videos,
+  rawFileVideoIds = [],
+}: {
+  videos: AnalysedVideo[]
+  // YouTube video IDs whose raw source file has finished uploading. Checked per
+  // row to flag which analysed videos have had their raw file uploaded.
+  rawFileVideoIds?: string[]
+}) {
   const router = useRouter()
   const rows = useMemo(() => videos.map(toRow), [videos])
+  const rawFileIds = useMemo(
+    () => new Set(rawFileVideoIds),
+    [rawFileVideoIds],
+  )
 
   // Filter inputs. All filtering is client-side because the full set is already
   // in memory. Search by title, visibility, and two independent date ranges:
@@ -396,7 +419,7 @@ export function AnalysedVideoBrowser({ videos }: { videos: AnalysedVideo[] }) {
 
       {/* Results */}
       {isEmpty ? (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-xl border bg-muted/30 px-6 py-16 text-center">
+        <div className="flex flex-col items-center justify-center gap-3 rounded-xl border bg-card px-6 py-16 text-center">
           <div className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
             <VideoOffIcon className="size-6" />
           </div>
@@ -436,11 +459,15 @@ export function AnalysedVideoBrowser({ videos }: { videos: AnalysedVideo[] }) {
                 <TableHead className="hidden px-4 py-3 text-accent-foreground sm:table-cell">
                   Analysed
                 </TableHead>
+                <TableHead className="hidden px-4 py-3 text-accent-foreground sm:table-cell">
+                  Raw file uploaded
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {pageRows.map(({ video, dateAnalysed, privacyKnown }) => {
                 const href = `/dashboard/analysed-video/${video.id}`
+                const rawFileUploaded = rawFileIds.has(video.id)
                 return (
                 <TableRow
                   key={video.id}
@@ -485,6 +512,11 @@ export function AnalysedVideoBrowser({ videos }: { videos: AnalysedVideo[] }) {
                           <span className="sm:hidden">
                             Analysed {formatAnalysedAt(dateAnalysed)}
                           </span>
+                          {rawFileUploaded && (
+                            <span className="sm:hidden">
+                              <RawFileBadge />
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -493,7 +525,7 @@ export function AnalysedVideoBrowser({ videos }: { videos: AnalysedVideo[] }) {
                     {privacyKnown ? (
                       <VisibilityCell status={video.privacyStatus} />
                     ) : (
-                      <span className="text-sm text-muted-foreground">—</span>
+                      <span className="text-sm text-muted-foreground">N/A</span>
                     )}
                   </TableCell>
                   <TableCell className="hidden px-4 py-3 align-top text-sm text-muted-foreground lg:table-cell">
@@ -510,6 +542,13 @@ export function AnalysedVideoBrowser({ videos }: { videos: AnalysedVideo[] }) {
                   </TableCell>
                   <TableCell className="hidden px-4 py-3 align-top text-sm text-muted-foreground sm:table-cell">
                     {formatAnalysedAt(dateAnalysed)}
+                  </TableCell>
+                  <TableCell className="hidden px-4 py-3 align-top sm:table-cell">
+                    {rawFileUploaded ? (
+                      <RawFileBadge />
+                    ) : (
+                      <span className="text-sm text-muted-foreground">—</span>
+                    )}
                   </TableCell>
                 </TableRow>
                 )

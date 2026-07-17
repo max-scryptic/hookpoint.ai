@@ -1,6 +1,6 @@
 // Thin, typed client for the Qencode transcoding API. We use Qencode purely as
 // a "transcode-as-a-service" worker: it reads our original via a signed URL,
-// produces a 1080p H.264 proxy, holds it on its own temporary storage, and
+// produces a 720p H.264 proxy, holds it on its own temporary storage, and
 // POSTs a status callback with a download URL when it's done. Our own callback
 // handler pulls the finished proxy into our S3 bucket (see
 // lib/source-files/normalisation-service.ts) rather than handing Qencode a
@@ -19,14 +19,22 @@
 
 const DEFAULT_BASE_URL = "https://api.qencode.com/v1"
 
-// A single output in a Qencode transcode. We only ever emit one (the 1080p
-// proxy), but the API models `format` as an array.
+// A single output in a Qencode transcode. We emit two (the 720p playback
+// proxy and the 360p analysis proxy), which the API models as entries in the
+// `format` array.
 export interface QencodeFormat {
   output: string
   video_codec?: string
   // Qencode scales to this height and derives the width to preserve aspect
   // ratio, so portrait and landscape sources both come out correctly.
   height?: number
+  // A user-defined label echoed back on the matching entry of the completion
+  // callback's `videos` array (as `user_tag`) so we can tell the outputs apart
+  // — Qencode stamps its own value into the separate system `tag` field, so
+  // that one is not ours to match on. Both are set to the same value on submit
+  // as belt-and-suspenders against which field a given account echoes.
+  tag?: string
+  user_tag?: string
   // Where the finished file is written. For a generic/S3-compatible bucket this
   // is an `s3://host/bucket/key` URL plus the access key and secret.
   destination?: QencodeDestination

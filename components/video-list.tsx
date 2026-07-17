@@ -43,7 +43,7 @@ export function formatPublishedAt(iso: string): string {
 }
 
 export function formatCount(value: number | null): string {
-  if (value == null) return "—"
+  if (value == null) return "N/A"
   return value.toLocaleString()
 }
 
@@ -110,9 +110,9 @@ export function Thumbnail({ video }: { video: RecentVideo }) {
 // A green tick shown for videos that have already been analysed.
 function AnalysedBadge() {
   return (
-    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-600 dark:text-emerald-500">
+    <span className="inline-flex items-center text-emerald-600 dark:text-emerald-500">
       <CircleCheckIcon className="size-4" />
-      Analysed
+      <span className="sr-only">Analysed</span>
     </span>
   )
 }
@@ -185,14 +185,19 @@ function VideoActions({
 export function VideoList({
   videos,
   analysedIds,
+  showAnalysedColumn = false,
 }: {
   videos: RecentVideo[]
   // IDs of videos the user has already analysed.
   analysedIds?: Set<string>
+  // Whether to render the "Analysed" column. Off by default: the Analyse Video
+  // page hides analysed uploads, so the column only appears when the user opts
+  // to show them.
+  showAnalysedColumn?: boolean
 }) {
   if (videos.length === 0) {
     return (
-      <div className="rounded-xl border bg-muted/30 p-8 text-center text-sm text-muted-foreground">
+      <div className="rounded-xl border bg-card p-8 text-center text-sm text-muted-foreground">
         No videos found on your YouTube channel yet.
       </div>
     )
@@ -221,9 +226,11 @@ export function VideoList({
             <TableHead className="hidden px-4 py-3 text-right text-accent-foreground lg:table-cell">
               Comments
             </TableHead>
-            <TableHead className="hidden px-4 py-3 text-accent-foreground sm:table-cell">
-              Analysed
-            </TableHead>
+            {showAnalysedColumn && (
+              <TableHead className="hidden px-4 py-3 text-accent-foreground sm:table-cell">
+                Analysed
+              </TableHead>
+            )}
             <TableHead className="w-12 px-4 py-3">
               <span className="sr-only">Actions</span>
             </TableHead>
@@ -287,13 +294,15 @@ export function VideoList({
               <TableCell className="hidden px-4 py-3 align-top text-right text-sm tabular-nums text-muted-foreground lg:table-cell">
                 {formatCount(video.commentCount)}
               </TableCell>
-              <TableCell className="hidden px-4 py-3 align-top sm:table-cell">
-                {isAnalysed ? (
-                  <AnalysedBadge />
-                ) : (
-                  <span className="text-sm text-muted-foreground">—</span>
-                )}
-              </TableCell>
+              {showAnalysedColumn && (
+                <TableCell className="hidden px-4 py-3 align-top sm:table-cell">
+                  {isAnalysed ? (
+                    <AnalysedBadge />
+                  ) : (
+                    <span className="text-sm text-muted-foreground">-</span>
+                  )}
+                </TableCell>
+              )}
               <TableCell className="px-4 py-3 align-top text-right">
                 <VideoActions video={video} isAnalysed={isAnalysed} />
               </TableCell>
