@@ -1479,12 +1479,12 @@ function BuildingCard() {
     <Card className="flex flex-col items-start gap-3 p-6">
       <LibraryIcon className="size-5 text-muted-foreground" />
       <div className="w-full">
-        <p className="max-w-prose text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           Every deep analysis adds its retention events to a private{" "}
           <span className="font-semibold text-foreground">Content Library</span>{" "}
           of your content.
         </p>
-        <p className="mt-3 max-w-prose text-sm text-muted-foreground">
+        <p className="mt-3 text-sm text-muted-foreground">
           Once {EARLY_TRENDS_VIDEO_THRESHOLD} videos are in, this page starts
           surfacing the patterns that repeat across your channel - what loses
           viewers, what holds them, and how your hooks behave.
