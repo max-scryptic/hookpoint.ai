@@ -12,13 +12,18 @@
    * charts; navy (hue ~270) sets the dark-mode surface to match the logo.
    */
   color-scheme: light;
-  --muted: oklch(0.97 0.008 285);
+  --muted: oklch(0.94 0.012 288);
   --accent: oklch(0.95 0.03 292);
-  --background: oklch(1 0 0);
+  /*
+   * Light mode uses a softly tinted (brand-lavender) page background so the
+   * white cards, popovers and sidebar lift off the page and read as distinct
+   * surfaces. Cards are pure white for maximum "pop".
+   */
+  --background: oklch(0.955 0.013 289);
   --foreground: oklch(0.18 0.02 274);
-  --card: oklch(0.975 0.008 285);
+  --card: oklch(1 0 0);
   --card-foreground: oklch(0.18 0.02 274);
-  --popover: oklch(0.975 0.008 285);
+  --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.18 0.02 274);
   --primary: oklch(0.54 0.2 264);
   --primary-foreground: oklch(0.985 0 0);
@@ -36,7 +41,7 @@
   --chart-4: oklch(0.66 0.16 250);
   --chart-5: oklch(0.58 0.13 280);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0.005 285);
+  --sidebar: oklch(1 0 0);
   --sidebar-foreground: oklch(0.18 0.02 274);
   --sidebar-primary: oklch(0.55 0.16 292);
   --sidebar-primary-foreground: oklch(0.985 0 0);
