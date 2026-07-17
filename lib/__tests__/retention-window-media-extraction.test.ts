@@ -1130,4 +1130,95 @@ describe("extractPendingRetentionWindowMedia — merged scans and shared frames"
     )
     expect(cleanup).toHaveBeenCalledTimes(1)
   })
+
+  it("harvests snapshots and audio before the best-effort baseline, so a baseline that never returns can't strand them", async () => {
+    const { supabase: base, updates } = makeFakeSupabase(
+      [
+        {
+          id: "snap-1",
+          retention_window_id: "rw-1",
+          chunk_index: 0,
+          timestamp_seconds: 5,
+          storage_path: null,
+          status: "pending",
+          error: null,
+        },
+      ],
+      [
+        {
+          id: "aud-1",
+          retention_window_id: "rw-1",
+          from_seconds: 0,
+          to_seconds: 30,
+          storage_path: null,
+          status: "pending",
+          error: null,
+        },
+      ],
+      // No pending scene-cue scans: the whole-video baseline pass is then the
+      // only caller of sceneCueScanner.scan left, so a hang there is
+      // unambiguously the baseline's and not the per-window scan loop's.
+    )
+
+    // analysed_videos is read only by the baseline; route it through a tiny
+    // double (no existing baseline, empty transcript) so the baseline actually
+    // reaches its scan step instead of short-circuiting, while every other
+    // table keeps the shared fake's behaviour.
+    const supabase = {
+      from(table: string) {
+        if (table === "analysed_videos") {
+          const builder: Record<string, unknown> = {
+            select: () => builder,
+            eq: () => builder,
+            update: () => Promise.resolve({ error: null }),
+            maybeSingle: () =>
+              Promise.resolve({ data: { deep_feature_baseline: null }, error: null }),
+            single: () => Promise.resolve({ data: { transcript: [] }, error: null }),
+          }
+          return builder
+        }
+        return (base as unknown as { from: (t: string) => unknown }).from(table)
+      },
+    } as unknown as SupabaseClient
+
+    // The baseline's full-video scan never resolves — standing in for a source
+    // so expensive to decode that the pass alone blows the serverless budget,
+    // exactly the failure that left a real 8.5-minute upload spinning on
+    // "Fetching snapshots" forever: the budget-consuming baseline ran ahead of
+    // the harvest and no snapshot/audio row was ever reached.
+    let baselineScanStarted = false
+    const scanner: SceneCueScanner = {
+      scan: vi.fn(() => {
+        baselineScanStarted = true
+        return new Promise<never>(() => {})
+      }),
+    }
+
+    // Deliberately not awaited to completion: with the fix the harvest is
+    // awaited *before* the never-resolving baseline, so the harvest's row
+    // updates land while the outer call stays pending on the baseline — the
+    // same state production ends up in when the invocation is later killed
+    // mid-baseline with the harvest already durably persisted.
+    void extractPendingRetentionWindowMedia(supabase, fakeStorage(), makeSourceFile(), {
+      extractor: {
+        extractThumbnail: vi.fn(async () => Buffer.from("jpeg-bytes")),
+        extractAudioSegment: vi.fn(async () => Buffer.from("mp3-bytes")),
+      },
+      mediaStorage: fakeStorage(),
+      sceneCueScanner: scanner,
+      createOcrEngine: async () => fakeOcrEngine(),
+      acquireLocalSource: async () => null,
+    })
+
+    // A macrotask turn: the awaited harvest loops drain their microtasks and
+    // settle, then the call suspends on the never-resolving baseline scan.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(baselineScanStarted).toBe(true)
+    const readyIds = updates
+      .filter((update) => update.payload.status === "ready")
+      .map((update) => update.id)
+    expect(readyIds).toContain("snap-1")
+    expect(readyIds).toContain("aud-1")
+  })
 })

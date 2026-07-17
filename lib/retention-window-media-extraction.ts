@@ -343,23 +343,6 @@ export async function extractPendingRetentionWindowMedia(
       (span) => scanMergedSpan(admin, sourceFile, source, span, deps),
     )
 
-    // Sample eight seconds per minute across the full video to establish the
-    // creator's actual editing/motion norm. This is deterministic ffmpeg work
-    // against the 360p proxy and makes no model call. It runs once per video
-    // and is best-effort so baseline failure cannot strand window extraction.
-    const durationSeconds =
-      sourceFile.youtubeDurationSeconds ?? sourceFile.uploadedDurationSeconds
-    if (durationSeconds && durationSeconds > 0) {
-      await generateSparseVideoFeatureBaseline({
-        supabase: admin,
-        userId: sourceFile.userId,
-        analysedVideoId: sourceFile.analysedVideoId,
-        durationSeconds,
-        scan: (fromSeconds, toSeconds) =>
-          deps.sceneCueScanner.scan(source, fromSeconds, toSeconds),
-      }).catch((error) => console.error("Failed to generate sparse video baseline", error))
-    }
-
     // Re-read pending snapshots after the scan loop above: it may have just
     // created fresh rows (derived from cues) for whichever windows it scanned,
     // which the earlier read couldn't have seen yet.
@@ -508,6 +491,38 @@ export async function extractPendingRetentionWindowMedia(
         ).catch(() => {})
       }
     })
+
+    // Sample eight seconds per minute across the full video to establish the
+    // creator's actual editing/motion norm. This is deterministic ffmpeg work
+    // against the 360p proxy and makes no model call. It runs once per video
+    // and is best-effort so baseline failure cannot strand window extraction.
+    //
+    // It runs *last*, after the snapshot/audio harvest above, on purpose. A
+    // full-video sparse scan is ~one ffmpeg decode per sampled minute, and on
+    // an expensive-to-decode source that whole-video pass can exceed the
+    // serverless invocation budget on its own — and unlike the per-row harvest,
+    // it's all-or-nothing (it only persists once every sample has run). Placed
+    // before the harvest, a source slow enough to blow the budget here would
+    // consume the whole invocation *before* a single snapshot/audio row was
+    // extracted, restart from scratch on every resume, and leave the harvest
+    // (and everything downstream of it) stuck 'pending' forever — the budget
+    // starved it just as surely as a throw would have. Running it after means
+    // the harvest — the media the rest of the pipeline actually depends on — is
+    // always attempted and its per-row progress persisted first; the baseline
+    // then gets whatever budget is left, and its failing to finish costs only
+    // itself.
+    const durationSeconds =
+      sourceFile.youtubeDurationSeconds ?? sourceFile.uploadedDurationSeconds
+    if (durationSeconds && durationSeconds > 0) {
+      await generateSparseVideoFeatureBaseline({
+        supabase: admin,
+        userId: sourceFile.userId,
+        analysedVideoId: sourceFile.analysedVideoId,
+        durationSeconds,
+        scan: (fromSeconds, toSeconds) =>
+          deps.sceneCueScanner.scan(source, fromSeconds, toSeconds),
+      }).catch((error) => console.error("Failed to generate sparse video baseline", error))
+    }
   } finally {
     await localSource?.cleanup()
   }
