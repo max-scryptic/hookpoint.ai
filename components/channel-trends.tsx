@@ -94,7 +94,7 @@ function formatTimestamp(totalSeconds: number): string {
 
 function StatTile({ label, value }: { label: string; value: number }) {
   return (
-    <div className="flex flex-col gap-1 rounded-lg border p-4">
+    <div className="flex flex-col gap-1 rounded-lg border bg-card p-4">
       <span className="text-2xl font-semibold tabular-nums">{value}</span>
       <span className="text-xs text-muted-foreground">{label}</span>
     </div>
@@ -117,7 +117,7 @@ function LibraryStats({ data }: { data: ChannelTrendsData }) {
 function StageProgress({ data }: { data: ChannelTrendsData }) {
   if (data.stage === "established") {
     return (
-      <div className="flex items-center gap-2 rounded-lg border bg-muted/30 p-4 text-sm">
+      <div className="flex items-center gap-2 rounded-lg border bg-card p-4 text-sm">
         <SparklesIcon className="size-4 shrink-0 text-primary" />
         <span>
           Trends at full strength - built from{" "}
@@ -141,7 +141,7 @@ function StageProgress({ data }: { data: ChannelTrendsData }) {
         : `Deeply analyse ${plural(remaining, "more video")} to unlock early trends.`
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-4">
+    <div className="flex flex-col gap-2 rounded-lg border bg-card p-4">
       <div className="flex items-center justify-between gap-2 text-sm">
         <span>{message}</span>
         <span className="font-mono text-xs tabular-nums text-muted-foreground">
@@ -335,7 +335,7 @@ function PlaybookRuleCard({ rule }: { rule: ChannelPlaybookRule }) {
 function ChannelPlaybook({ rules }: { rules: ChannelPlaybookRule[] }) {
   return (
     <section className="flex flex-col gap-3">
-      <div className="rounded-xl border bg-muted/20 p-5">
+      <div className="rounded-xl border bg-card p-5">
         <div className="flex items-center gap-2">
           <BookOpenIcon className="size-5 text-primary" />
           <h2 className="text-lg font-semibold">Your next-video playbook</h2>
@@ -1360,7 +1360,7 @@ function FullBreakdown({ data }: { data: ChannelTrendsData }) {
   if (sections.length === 0) return null
 
   return (
-    <Collapsible className="rounded-lg border">
+    <Collapsible className="rounded-lg border bg-card">
       <CollapsibleTrigger className="group flex w-full items-center gap-2 p-4 text-left text-sm font-medium">
         <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[panel-open]:rotate-180" />
         Full breakdown

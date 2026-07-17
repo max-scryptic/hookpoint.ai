@@ -113,7 +113,7 @@ export default async function Page({
         {hasAnalysed && kpis ? (
           <DashboardKpiCards kpis={kpis} />
         ) : (
-          <div className="flex flex-col items-start gap-3 rounded-xl border bg-muted/30 p-8">
+          <div className="flex flex-col items-start gap-3 rounded-xl border bg-card p-8">
             <div>
               <p className="font-medium">Analyse a video</p>
               <p className="mt-1 text-sm text-muted-foreground">

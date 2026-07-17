@@ -513,26 +513,26 @@ export default async function Page({
         )}
 
         {result.status === "not_found" && (
-          <div className="rounded-xl border bg-muted/30 p-8 text-sm text-muted-foreground">
+          <div className="rounded-xl border bg-card p-8 text-sm text-muted-foreground">
             We couldn&apos;t find that video on YouTube.
           </div>
         )}
 
         {result.status === "no_data" && (
-          <div className="rounded-xl border bg-muted/30 p-8 text-sm text-muted-foreground">
+          <div className="rounded-xl border bg-card p-8 text-sm text-muted-foreground">
             No retention data available. Make sure this video is on the YouTube
             channel you signed in with and has enough views.
           </div>
         )}
 
         {result.status === "reconnect" && (
-          <div className="rounded-xl border bg-muted/30 p-8 text-sm text-muted-foreground">
+          <div className="rounded-xl border bg-card p-8 text-sm text-muted-foreground">
             Please reconnect your YouTube account to grant analytics access.
           </div>
         )}
 
         {result.status === "error" && (
-          <div className="rounded-xl border bg-muted/30 p-8 text-sm text-muted-foreground">
+          <div className="rounded-xl border bg-card p-8 text-sm text-muted-foreground">
             We couldn&apos;t analyse that video right now. Please try again
             later.
           </div>
