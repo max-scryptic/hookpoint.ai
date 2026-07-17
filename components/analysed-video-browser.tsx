@@ -419,7 +419,7 @@ export function AnalysedVideoBrowser({
 
       {/* Results */}
       {isEmpty ? (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-xl border bg-muted/30 px-6 py-16 text-center">
+        <div className="flex flex-col items-center justify-center gap-3 rounded-xl border bg-card px-6 py-16 text-center">
           <div className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
             <VideoOffIcon className="size-6" />
           </div>

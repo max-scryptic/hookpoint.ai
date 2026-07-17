@@ -222,7 +222,7 @@ export function RetentionChart({
 
   if (model.sorted.length === 0) {
     return (
-      <div className="rounded-xl border bg-muted/30 p-8 text-sm text-muted-foreground">
+      <div className="rounded-xl border bg-card p-8 text-sm text-muted-foreground">
         No retention curve available for this video.
       </div>
     )

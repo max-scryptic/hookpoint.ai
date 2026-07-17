@@ -197,7 +197,7 @@ export function VideoList({
 }) {
   if (videos.length === 0) {
     return (
-      <div className="rounded-xl border bg-muted/30 p-8 text-center text-sm text-muted-foreground">
+      <div className="rounded-xl border bg-card p-8 text-center text-sm text-muted-foreground">
         No videos found on your YouTube channel yet.
       </div>
     )
