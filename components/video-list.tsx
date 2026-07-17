@@ -110,9 +110,9 @@ export function Thumbnail({ video }: { video: RecentVideo }) {
 // A green tick shown for videos that have already been analysed.
 function AnalysedBadge() {
   return (
-    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-600 dark:text-emerald-500">
+    <span className="inline-flex items-center text-emerald-600 dark:text-emerald-500">
       <CircleCheckIcon className="size-4" />
-      Analysed
+      <span className="sr-only">Analysed</span>
     </span>
   )
 }
@@ -299,7 +299,7 @@ export function VideoList({
                   {isAnalysed ? (
                     <AnalysedBadge />
                   ) : (
-                    <span className="text-sm text-muted-foreground">N/A</span>
+                    <span className="text-sm text-muted-foreground">-</span>
                   )}
                 </TableCell>
               )}
