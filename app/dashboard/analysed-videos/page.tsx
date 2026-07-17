@@ -92,7 +92,7 @@ export default async function Page() {
         )}
 
         {result.status === "error" && (
-          <div className="rounded-xl border bg-muted/30 p-8 text-sm text-muted-foreground">
+          <div className="rounded-xl border bg-card p-8 text-sm text-muted-foreground">
             We couldn&apos;t load your analysed videos right now. Please try
             again later.
           </div>

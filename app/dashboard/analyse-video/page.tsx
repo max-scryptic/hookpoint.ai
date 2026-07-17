@@ -113,7 +113,7 @@ export default async function Page() {
         )}
 
         {result.status === "reconnect" && (
-          <div className="flex flex-col items-start gap-3 rounded-xl border bg-muted/30 p-8">
+          <div className="flex flex-col items-start gap-3 rounded-xl border bg-card p-8">
             <div>
               <p className="font-medium">Connect your YouTube account</p>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -126,7 +126,7 @@ export default async function Page() {
         )}
 
         {result.status === "error" && (
-          <div className="rounded-xl border bg-muted/30 p-8 text-sm text-muted-foreground">
+          <div className="rounded-xl border bg-card p-8 text-sm text-muted-foreground">
             We couldn&apos;t load your videos right now. Please try again later.
           </div>
         )}
