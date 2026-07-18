@@ -14,9 +14,14 @@ import { stripEmDashes } from "@/lib/copy-guardrails"
 
 const CHANNEL_TRENDS_SOURCE_FILES = [
   "app/dashboard/channel-trends/page.tsx",
+  "app/dashboard/channel-trends/compare/page.tsx",
   "components/channel-trends.tsx",
   "components/channel-trends-copy.ts",
   "components/event-type-badge.tsx",
+  "components/retention-comparison.tsx",
+  "components/retention-comparison-chart.tsx",
+  "components/retention-compare-picker.tsx",
+  "lib/retention-comparison.ts",
 ]
 
 const EM_DASH = "—"

@@ -1,6 +1,7 @@
 import Link from "next/link"
 import {
   AreaChartIcon,
+  ArrowLeftRightIcon,
   BookOpenIcon,
   ChevronDownIcon,
   Clock3Icon,
@@ -1474,6 +1475,29 @@ function RetentionTrendsTabs({
   )
 }
 
+// The doorway into the video-vs-video drill-down: any two library videos,
+// curves overlaid, hooks compared, event evidence per stretch.
+function CompareVideosCard() {
+  return (
+    <Card className="flex flex-wrap items-center gap-3 p-5">
+      <ArrowLeftRightIcon className="size-4 shrink-0 text-muted-foreground" />
+      <div className="min-w-0 flex-1">
+        <h3 className="text-sm font-semibold">Video vs video</h3>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Put any two uploads side by side: where their retention curves
+          diverge, how their hooks compare, and the evidence for each stretch.
+        </p>
+      </div>
+      <Link
+        href="/dashboard/channel-trends/compare"
+        className={buttonVariants({ variant: "outline", size: "sm" })}
+      >
+        Open the comparison
+      </Link>
+    </Card>
+  )
+}
+
 function BuildingCard() {
   return (
     <Card className="flex flex-col items-start gap-3 p-6">
@@ -1582,6 +1606,7 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
                 gains={data.gains}
                 holds={data.holds}
               />
+              <CompareVideosCard />
               {data.signature != null && (
                 <SignatureChart
                   rows={data.signature}
