@@ -343,7 +343,7 @@ function PacingAnalysisSection({
                 "flex flex-col gap-2 p-4",
               )}
             >
-              <div className="flex items-center gap-3">
+              <div className="flex min-h-[2.625rem] items-center gap-3">
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
                   {index + 1}
                 </span>
