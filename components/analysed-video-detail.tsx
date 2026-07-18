@@ -548,15 +548,39 @@ function deepFeedbackTabLabel(
   return matchingFeedback.length > 1 ? `${label} ${duplicateIndex + 1}` : label
 }
 
+// Reduce a window's raw per-event deep feedback to just the entries that earn
+// their own tab. Only an insight that produced an actionable tip is worth a
+// tab (the reasoning is shown above the tip inside it), and each distinct tip
+// gets a single tab — several events in one window often synthesise the same
+// recommendation, and a tipless event would render an empty tab. Tips already
+// carried by the Script tab are excluded too, so a deep tab never just repeats
+// the script feedback.
+function dedupeDeepFeedback(
+  deepFeedback: DeepWindowFeedback[],
+  scriptTip: string | null | undefined,
+): DeepWindowFeedback[] {
+  const seenTips = new Set<string>()
+  const scriptTipText = scriptTip?.trim()
+  if (scriptTipText) seenTips.add(scriptTipText)
+
+  return deepFeedback.filter(({ recommendation }) => {
+    const tip = recommendation?.action.trim()
+    if (!tip || seenTips.has(tip)) return false
+    seenTips.add(tip)
+    return true
+  })
+}
+
 // A window's feedback block, rendered together with the row's header so the
 // Script/deep tab switcher can sit inline on the top row (after the transcript
 // quote) rather than below it. `header` is given the tab list to place in that
 // row — or null when there are no tabs to show — and returns the full header.
 //
-// When the window has transcript-only script feedback and one or more deep
-// multimodal insights, every source gets its own tab so each generated tip
-// stays reachable without stacking into a tall, noisy column. When only one
-// source is present, it renders flat below the header exactly as before.
+// The Script tab always carries the transcript-based tip. Each *unique* deep
+// tip synthesised from the window's events then earns its own additional tab
+// (reasoning above the tip); duplicate and tipless events are dropped so the
+// switcher only ever holds distinct, actionable feedback. When just one source
+// of feedback survives, it renders flat below the header exactly as before.
 function WindowFeedback({
   header,
   attribution,
@@ -567,7 +591,11 @@ function WindowFeedback({
   deepFeedback: DeepWindowFeedback[]
 }) {
   const hasScript = attribution != null && attribution.explanation !== ""
-  const hasDeep = deepFeedback.length > 0
+  const uniqueDeep = dedupeDeepFeedback(
+    deepFeedback,
+    hasScript ? attribution.tip : undefined,
+  )
+  const hasDeep = uniqueDeep.length > 0
 
   if (hasScript && hasDeep) {
     return (
@@ -575,9 +603,9 @@ function WindowFeedback({
         {header(
           <TabsList>
             <TabsTrigger value="script">Script</TabsTrigger>
-            {deepFeedback.map(({ insight }, index) => (
+            {uniqueDeep.map(({ insight }, index) => (
               <TabsTrigger key={insight.id} value={`deep-${insight.id}`}>
-                {deepFeedbackTabLabel(insight, index, deepFeedback)}
+                {deepFeedbackTabLabel(insight, index, uniqueDeep)}
               </TabsTrigger>
             ))}
           </TabsList>
@@ -585,7 +613,7 @@ function WindowFeedback({
         <TabsContent value="script" className="pl-10">
           <ScriptFeedbackBody attribution={attribution} />
         </TabsContent>
-        {deepFeedback.map(({ insight, recommendation }) => (
+        {uniqueDeep.map(({ insight, recommendation }) => (
           <TabsContent
             key={insight.id}
             value={`deep-${insight.id}`}
@@ -601,20 +629,20 @@ function WindowFeedback({
     )
   }
 
-  if (!hasScript && deepFeedback.length > 1) {
-    const defaultValue = `deep-${deepFeedback[0].insight.id}`
+  if (!hasScript && uniqueDeep.length > 1) {
+    const defaultValue = `deep-${uniqueDeep[0].insight.id}`
     return (
       <Tabs defaultValue={defaultValue} className="gap-2">
         {header(
           <TabsList>
-            {deepFeedback.map(({ insight }, index) => (
+            {uniqueDeep.map(({ insight }, index) => (
               <TabsTrigger key={insight.id} value={`deep-${insight.id}`}>
-                {deepFeedbackTabLabel(insight, index, deepFeedback)}
+                {deepFeedbackTabLabel(insight, index, uniqueDeep)}
               </TabsTrigger>
             ))}
           </TabsList>
         )}
-        {deepFeedback.map(({ insight, recommendation }) => (
+        {uniqueDeep.map(({ insight, recommendation }) => (
           <TabsContent
             key={insight.id}
             value={`deep-${insight.id}`}
@@ -634,8 +662,8 @@ function WindowFeedback({
     <>
       {header(null)}
       <AttributionNote attribution={attribution} />
-      <MultimodalInsight insight={deepFeedback[0]?.insight} />
-      <ActionableRecommendation recommendation={deepFeedback[0]?.recommendation} />
+      <MultimodalInsight insight={uniqueDeep[0]?.insight} />
+      <ActionableRecommendation recommendation={uniqueDeep[0]?.recommendation} />
     </>
   )
 }
@@ -834,11 +862,13 @@ function HoldList({
   holds,
   transcript,
   attribution,
+  deepFeedback,
   highlightedId,
 }: {
   holds: RetentionWindow[]
   transcript: TranscriptCue[]
   attribution: Map<number, RetentionMomentAttribution>
+  deepFeedback: Map<number, DeepWindowFeedback[]>
   highlightedId?: string | null
 }) {
   const highlightedRef = useHighlightScroll(highlightedId)
@@ -861,27 +891,32 @@ function HoldList({
               "flex flex-col gap-2 p-4",
             )}
           >
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
-                  {index + 1}
-                </span>
-                <span className="font-mono text-sm">
-                  {formatTimestamp(hold.fromSeconds)} –{" "}
-                  {formatTimestamp(hold.toSeconds)}
-                </span>
-                <ScriptSegmentTooltip
-                  transcript={transcript}
-                  fromSeconds={hold.fromSeconds}
-                  toSeconds={hold.toSeconds}
-                />
-              </div>
-              <span className="text-sm font-medium text-teal-600 dark:text-teal-400">
-                {(retained * 100).toFixed(1)}% held
-              </span>
-            </div>
-
-            <AttributionNote attribution={attribution.get(hold.windowIndex)} />
+            <WindowFeedback
+              attribution={attribution.get(hold.windowIndex)}
+              deepFeedback={deepFeedback.get(hold.windowIndex) ?? []}
+              header={(tabs) => (
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                      {index + 1}
+                    </span>
+                    <span className="font-mono text-sm">
+                      {formatTimestamp(hold.fromSeconds)} –{" "}
+                      {formatTimestamp(hold.toSeconds)}
+                    </span>
+                    <ScriptSegmentTooltip
+                      transcript={transcript}
+                      fromSeconds={hold.fromSeconds}
+                      toSeconds={hold.toSeconds}
+                    />
+                    {tabs}
+                  </div>
+                  <span className="text-sm font-medium text-teal-600 dark:text-teal-400">
+                    {(retained * 100).toFixed(1)}% held
+                  </span>
+                </div>
+              )}
+            />
           </li>
         )
       })}
@@ -1285,6 +1320,7 @@ export function AnalysedVideoDetail({
   const hookDeepFeedback = deepFeedbackByKind("hook")
   const dropDeepFeedback = deepFeedbackByKind("drop_off")
   const gainDeepFeedback = deepFeedbackByKind("gain")
+  const holdDeepFeedback = deepFeedbackByKind("hold")
   const chartInsights: RetentionChartInsight[] = [
     ...hookWindows
       .filter((window) => !window.outOfRange)
@@ -1614,6 +1650,7 @@ export function AnalysedVideoDetail({
                     holds={holds}
                     transcript={transcript}
                     attribution={holdAttribution}
+                    deepFeedback={holdDeepFeedback}
                     highlightedId={playbackWindow?.id ?? null}
                   />
                 </TabsContent>
