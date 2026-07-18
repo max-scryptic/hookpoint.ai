@@ -1552,11 +1552,11 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
 
   return (
     <div className="flex flex-col gap-6">
+      <LibraryStats data={data} />
+      <StageProgress data={data} />
       {showTrends && data.playbook.length > 0 && (
         <ChannelPlaybook rules={data.playbook} />
       )}
-      <LibraryStats data={data} />
-      <StageProgress data={data} />
       {showTrends ? (
         <>
           <EarlySignalNote data={data} />
