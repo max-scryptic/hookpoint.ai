@@ -324,6 +324,18 @@ export async function checkVideoAnalysisAllowed(
   return { allowed: true, entitlement }
 }
 
+// Formats a billing-window boundary as a friendly date ("18 August 2026") for
+// user-facing copy. Uses UTC so the day matches the stored window boundary
+// regardless of the server's local timezone.
+function formatResetDate(date: Date): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date)
+}
+
 // Can the user upload a source file of `sizeBytes` for a video of
 // `durationSeconds`? Enforces three things in order: the plan must include
 // uploads at all, the file must fit the plan's size cap, and the user must have
@@ -368,10 +380,14 @@ export async function checkUploadAllowed(
     const usage = await getUsageForWindow(userId, entitlement.periodStart)
     const remaining = plan.deepCreditsPerMonth - usage.deepCreditsUsed
     if (remaining < cost) {
+      // Starter is the only tier that can reach this branch with somewhere to go:
+      // Free never includes deep-dive credits (handled above) and Pro is the top
+      // tier, so only Starter gets the "upgrade to Pro" nudge.
+      const upgradeHint = plan.id === "starter" ? ", or upgrade to Pro" : ""
       return {
         allowed: false,
         reason: "insufficient_credits",
-        message: `This ${Math.ceil(input.durationSeconds / 60)}-minute video needs ${cost} deep-dive credits but you only have ${Math.max(0, remaining)} left this period.`,
+        message: `You do not have enough deep-dive credits to analyse this video. Please try again on ${formatResetDate(entitlement.periodEnd)}${upgradeHint}.`,
         entitlement,
       }
     }

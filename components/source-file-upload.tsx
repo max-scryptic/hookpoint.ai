@@ -10,8 +10,10 @@ import {
   TrashIcon,
   UploadIcon,
   XCircleIcon,
+  XIcon,
 } from "lucide-react"
 
+import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -318,6 +320,10 @@ export function SourceFileUpload({
   // Shows the "upload succeeded, analysis started in the background" dialog once
   // a fresh upload completes validation.
   const [showUploadedDialog, setShowUploadedDialog] = useState(false)
+  // A running-out-of-deep-dive-credits message, surfaced as a dismissible error
+  // notification in the corner (mirroring the "fully analysed" alert) rather than
+  // inline under the upload button.
+  const [creditNotice, setCreditNotice] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Whether a stored record is in a settled (non-in-flight) state.
@@ -344,6 +350,8 @@ export function SourceFileUpload({
   }, [isBusy])
 
   async function preflightFile(file: File) {
+    // A fresh attempt clears any stale credit notice from a previous try.
+    setCreditNotice(null)
     // Inspect the local file before creating an upload or transferring bytes.
     setClient({ phase: "preparing", filename: file.name })
 
@@ -419,12 +427,19 @@ export function SourceFileUpload({
       const hasTarget =
         "upload" in initData || "multipartUpload" in initData
       if (!initRes.ok || !hasTarget) {
-        setClient({
-          phase: "error",
-          message:
-            ("message" in initData && initData.message) ||
-            "Could not start the upload.",
-        })
+        const message =
+          ("message" in initData && initData.message) ||
+          "Could not start the upload."
+        // Running out of deep-dive credits isn't really an "upload failed"
+        // problem, so surface it as a corner error notification (like the
+        // "fully analysed" alert) instead of inline red text, and leave the
+        // upload CTA in place.
+        if ("error" in initData && initData.error === "insufficient_credits") {
+          setCreditNotice(message)
+          setClient({ phase: "idle" })
+          return
+        }
+        setClient({ phase: "error", message })
         return
       }
 
@@ -650,6 +665,29 @@ export function SourceFileUpload({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {creditNotice && (
+        <aside
+          aria-label="Notifications"
+          className="fixed bottom-4 right-4 z-50 flex w-[calc(100%-2rem)] max-w-sm flex-col gap-3"
+        >
+          <Alert variant="destructive" className="pr-12 shadow-lg">
+            <AlertTriangleIcon />
+            <AlertTitle>Not enough deep-dive credits</AlertTitle>
+            <AlertDescription>{creditNotice}</AlertDescription>
+            <AlertAction>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Dismiss notification"
+                onClick={() => setCreditNotice(null)}
+              >
+                <XIcon />
+              </Button>
+            </AlertAction>
+          </Alert>
+        </aside>
+      )}
     </section>
   )
 }
