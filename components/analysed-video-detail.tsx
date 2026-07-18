@@ -228,7 +228,7 @@ function RetentionWindows({
           >
             {window.outOfRange ? (
               <>
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex min-h-[2.625rem] items-center justify-between gap-2">
                   <div className="flex items-center gap-3">
                     <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
                       {index + 1}
@@ -253,7 +253,7 @@ function RetentionWindows({
                 attribution={attribution.get(window.windowIndex)}
                 deepFeedback={deepFeedback.get(window.windowIndex) ?? []}
                 header={(tabs) => (
-                  <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2">
+                  <div className="flex min-h-[2.625rem] flex-wrap items-center justify-between gap-x-2 gap-y-2">
                     <div className="flex flex-wrap items-center gap-3">
                       <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
                         {index + 1}
@@ -714,7 +714,7 @@ function DropList({
               attribution={attribution.get(drop.windowIndex)}
               deepFeedback={deepFeedback.get(drop.windowIndex) ?? []}
               header={(tabs) => (
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex min-h-[2.625rem] items-center justify-between gap-4">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                     <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
                       {index + 1}
@@ -825,7 +825,7 @@ function GainList({
               attribution={attribution.get(gain.windowIndex)}
               deepFeedback={deepFeedback.get(gain.windowIndex) ?? []}
               header={(tabs) => (
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex min-h-[2.625rem] items-center justify-between gap-4">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                     <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
                       {index + 1}
@@ -895,7 +895,7 @@ function HoldList({
               attribution={attribution.get(hold.windowIndex)}
               deepFeedback={deepFeedback.get(hold.windowIndex) ?? []}
               header={(tabs) => (
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex min-h-[2.625rem] items-center justify-between gap-4">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                     <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
                       {index + 1}
