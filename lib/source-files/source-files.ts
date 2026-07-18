@@ -47,7 +47,7 @@ export interface SourceFile {
   uploadStatus: UploadStatus
   failureReason: string | null
   deleteAfter: string | null
-  // --- Normalisation (720p proxy transcode) ---
+  // --- Normalisation (360p proxy transcode) ---
   proxyStoragePath: string | null
   proxySizeBytes: number | null
   // 360p analysis proxy produced by the same transcode job — the low-res
@@ -140,7 +140,7 @@ export function mapSourceFileRow(row: SourceFileRow): SourceFile {
   }
 }
 
-// The object key playback and frame extraction should read: the normalised 720p
+// The object key playback and frame extraction should read: the normalised 360p
 // proxy once normalisation has completed, falling back to the original master
 // while the transcode is still pending/processing/failed (or disabled). The
 // proxy path is only consulted at 'ready' so a job in flight (which records the

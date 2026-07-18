@@ -82,7 +82,7 @@ export async function POST(
       sourceFile,
     )
     // Deep analysis can start decoding the just-uploaded original right now,
-    // in parallel with the 720p/360p proxy transcode that was kicked off
+    // in parallel with the 360p proxy transcode that was kicked off
     // above — the retention windows may already exist (analyze usually runs
     // before the upload), and waiting for the normalisation callback would
     // leave the whole extraction pipeline idle through an external transcode
