@@ -17,7 +17,7 @@ import {
 
 export type RetentionMomentKind = "hook" | "drop_off" | "gain" | "hold"
 
-export const RETENTION_ATTRIBUTION_SCHEMA_VERSION = 3
+export const RETENTION_ATTRIBUTION_SCHEMA_VERSION = 4
 
 export interface RetentionMomentAttribution {
   kind: RetentionMomentKind
@@ -27,8 +27,9 @@ export interface RetentionMomentAttribution {
   fromSeconds: number
   toSeconds: number
   explanation: string
-  // A concrete, actionable suggestion. Null when there's nothing worth
-  // changing (e.g. a healthy gain that just documents what to keep doing).
+  // A concrete, actionable suggestion. Gains always carry one (what proven
+  // thing to keep doing or reuse); it may still be null for other kinds when
+  // there's genuinely nothing worth changing.
   tip: string | null
   confidence: number
 }
@@ -181,7 +182,7 @@ export async function generateRetentionAttribution(
                 "Reason only from the supplied transcript, timestamps and retention numbers. Do not infer visuals, editing, music, thumbnails or vocal delivery; you cannot see or hear the video.",
                 "For a hook, explain how effectively the words create curiosity, establish the promise, and move toward delivering it. Ground the explanation in the supplied transcript and give one concrete way to make the opening hold more viewers.",
                 "For a drop_off, explain the most likely reason viewers left based on what was being said (e.g. a topic change, a slow tangent, an unmet promise, an ad or sponsor read, a natural stopping point), and give one concrete tip to reduce that loss next time.",
-                "For a gain, explain what likely pulled viewers back or made them re-watch, and set tip to a short note on what to keep doing, or null if there's nothing actionable.",
+                "For a gain, explain what likely pulled viewers back or made them re-watch, and always give a concrete tip (never null for a gain): name the specific thing that worked here and tell the uploader how to deliberately reuse it, phrased as an action they can take again elsewhere in this or a future video rather than generic praise.",
                 "For a hold, explain what in the supplied words likely sustained attention without a meaningful gain or loss, and set tip to a short note on what to preserve.",
                 "relativePerformance (0..1) compares this moment to similar videos; below 0.5 is underperforming. Use it to judge severity, not as the explanation itself.",
                 "Keep each explanation to 1-2 specific sentences that reference what is actually said. Never invent dialogue that isn't in the transcript.",
@@ -252,13 +253,22 @@ export async function generateRetentionAttribution(
     overview: parsed.overview,
     moments: moments.map((moment, index) => {
       const analysis = byIndex.get(index)
+      const tip = analysis?.tip?.trim() ? analysis.tip : null
       return {
         kind: moment.kind,
         windowIndex: moment.windowIndex,
         fromSeconds: moment.fromSeconds,
         toSeconds: moment.toSeconds,
         explanation: analysis?.explanation ?? "",
-        tip: analysis?.tip ?? null,
+        // A gain documents a proven pattern, so it must always leave the
+        // uploader with something to reuse. If the model still returns no tip
+        // despite the instruction, fall back to a deterministic reuse prompt so
+        // the "Try:" recommendation never goes missing on a gain.
+        tip:
+          tip ??
+          (moment.kind === "gain"
+            ? "Note what worked in this moment and deliberately reuse the same approach elsewhere in this or a future video."
+            : null),
         confidence: Math.min(1, Math.max(0, analysis?.confidence ?? 0)),
       }
     }),
