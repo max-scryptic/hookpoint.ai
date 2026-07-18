@@ -1,4 +1,4 @@
-// Configuration for the source-file normalisation step (4K/original → 720p
+// Configuration for the source-file normalisation step (4K/original → 360p
 // proxy via Qencode). Everything here is env-driven and the whole feature is
 // gated by `isNormalisationEnabled()`: with no Qencode key / S3 connection
 // configured the upload flow behaves exactly as before (the original is kept and
@@ -25,19 +25,26 @@ export function getQencodeBaseUrl(): string | undefined {
 
 // Target height of the proxy. Qencode keeps the aspect ratio and derives the
 // width, so this is a cap on the long-or-short edge depending on orientation —
-// 720 gives a 720p landscape / 720-wide portrait proxy. Override if you want a
-// larger (e.g. 1080) or smaller proxy.
+// 360 gives a 360p landscape / 360-wide portrait proxy. This single proxy is
+// used for both playback and deep-analysis extraction: transcoding is the most
+// expensive part of deep analysis, so we deliberately produce one small
+// rendition rather than a larger playback proxy plus a separate analysis one.
+// Override if you want a larger playback proxy (e.g. 720) — the analysis proxy
+// below then automatically rides along as a cheaper second output to decode.
 export function getProxyTargetHeight(): number {
   const raw = process.env.QENCODE_PROXY_HEIGHT
   const parsed = raw != null ? Number(raw) : NaN
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 720
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 360
 }
 
-// Target height of the analysis proxy — the second, much smaller output the
-// same Qencode job produces for frame/audio/scene-cue extraction to decode
-// instead of the playback proxy (decoding 360p instead of 720p cuts that CPU
-// cost several-fold, and nothing extraction feeds a model needs more). Set to
-// 0 to disable the second output entirely.
+// Target height of the analysis proxy — a second, smaller output the same
+// Qencode job produces for frame/audio/scene-cue extraction to decode instead
+// of the playback proxy (decoding a smaller rendition cuts that CPU cost
+// several-fold, and nothing extraction feeds a model needs more). Only emitted
+// when it would actually be smaller than the playback proxy, so at the default
+// 360p playback height it's inert — the one playback proxy serves analysis too.
+// It re-engages automatically if the playback proxy is raised above this height.
+// Set to 0 to disable the second output entirely.
 export function getAnalysisProxyTargetHeight(): number {
   const raw = process.env.QENCODE_ANALYSIS_PROXY_HEIGHT
   const parsed = raw != null ? Number(raw) : NaN

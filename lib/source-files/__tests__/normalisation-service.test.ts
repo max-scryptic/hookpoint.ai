@@ -231,14 +231,15 @@ describe("startNormalisation", () => {
       normalisation_status: "processing",
       normalisation_provider: "qencode",
       normalisation_task_token: "task-xyz",
-      proxy_storage_path: "user-1/vid-1/sf-1/proxy-720p.mp4",
-      // The 360p analysis proxy rides along in the same job.
-      analysis_proxy_storage_path: "user-1/vid-1/sf-1/proxy-360p.mp4",
+      // One 360p proxy by default, serving both playback and analysis — no
+      // separate analysis output when the playback proxy is already that small.
+      proxy_storage_path: "user-1/vid-1/sf-1/proxy-360p.mp4",
+      analysis_proxy_storage_path: null,
     })
     expect(result.normalisationStatus).toBe("processing")
   })
 
-  it("submits both a tagged playback output and a tagged analysis output", async () => {
+  it("submits a single tagged 360p output by default", async () => {
     enableNormalisation()
     const sf = makeSourceFile()
     const { supabase } = makeUpdateSupabase(sf)
@@ -256,9 +257,40 @@ describe("startNormalisation", () => {
     await startNormalisation(supabase, fakeStorage(), sf, deps)
 
     const query = submitted as { format: Array<Record<string, unknown>> }
-    expect(query.format).toHaveLength(2)
+    // The default single 360p rendition: no separate analysis output rides
+    // along because it wouldn't be any smaller than the playback proxy.
+    expect(query.format).toHaveLength(1)
     // Both tag fields carry the label: Qencode echoes user_tag on the way back
     // (the one we match on), and tag is set too for accounts that echo there.
+    expect(query.format[0]).toMatchObject({
+      height: 360,
+      tag: "playback",
+      user_tag: "playback",
+    })
+  })
+
+  it("adds a smaller analysis output when the playback proxy is raised", async () => {
+    enableNormalisation()
+    // Raising the playback proxy above the analysis height re-engages the
+    // second, cheaper-to-decode analysis output alongside it.
+    vi.stubEnv("QENCODE_PROXY_HEIGHT", "720")
+    const sf = makeSourceFile()
+    const { supabase, updates } = makeUpdateSupabase(sf)
+    let submitted: unknown
+    const deps: NormalisationDeps = {
+      createClient: () =>
+        ({
+          submitJob: async (query: unknown) => {
+            submitted = query
+            return "task-xyz"
+          },
+        }) as unknown as QencodeClient,
+    }
+
+    await startNormalisation(supabase, fakeStorage(), sf, deps)
+
+    const query = submitted as { format: Array<Record<string, unknown>> }
+    expect(query.format).toHaveLength(2)
     expect(query.format[0]).toMatchObject({
       height: 720,
       tag: "playback",
@@ -268,6 +300,10 @@ describe("startNormalisation", () => {
       height: 360,
       tag: "analysis",
       user_tag: "analysis",
+    })
+    expect(updates[0]).toMatchObject({
+      proxy_storage_path: "user-1/vid-1/sf-1/proxy-720p.mp4",
+      analysis_proxy_storage_path: "user-1/vid-1/sf-1/proxy-360p.mp4",
     })
   })
 

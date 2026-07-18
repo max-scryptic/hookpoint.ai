@@ -80,6 +80,10 @@ import {
   getSourceVideoReadUrlExpirySeconds,
 } from "@/lib/retention-window-media-config"
 import {
+  getAnalysisProxyTargetHeight,
+  getProxyTargetHeight,
+} from "@/lib/source-files/normalisation-config"
+import {
   resolveAnalysisSourceStoragePath,
   resolvePlaybackStoragePath,
   type SourceFile,
@@ -319,17 +323,30 @@ export async function extractPendingRetentionWindowMedia(
     return
   }
 
-  // Surface which copy this run actually decodes. The 360p analysis proxy is
-  // several-fold cheaper to decode frame-by-frame than the 720p playback
-  // proxy; a run on the playback proxy is the slow path (an absent analysis
-  // proxy — see pullAnalysisProxy), worth a warning so it doesn't stay silent.
-  if (analysisSource.storagePath === sourceFile.analysisProxyStoragePath) {
-    console.info("Deep analysis decoding the 360p analysis proxy", {
+  // Surface which copy this run decodes, and warn only on the genuinely slow
+  // path. Deep analysis decodes frame-by-frame, so the copy's resolution drives
+  // cost. Cheap copies: a dedicated analysis proxy, or the playback proxy when
+  // it's already that small — our single-rendition default, where one 360p
+  // proxy serves both playback and analysis, so no separate analysis output is
+  // even asked for. Slow copies: a larger playback proxy whose analysis proxy
+  // pull failed (see pullAnalysisProxy), or the original master when
+  // normalisation didn't run — both worth a warning so they don't stay silent.
+  const analysisHeight = getAnalysisProxyTargetHeight()
+  const separateAnalysisProxyExpected =
+    analysisHeight > 0 && analysisHeight < getProxyTargetHeight()
+  const decodingDedicatedAnalysisProxy =
+    analysisSource.storagePath === sourceFile.analysisProxyStoragePath
+  const decodingSmallPlaybackProxy =
+    analysisSource.storagePath === sourceFile.proxyStoragePath &&
+    !separateAnalysisProxyExpected
+  if (decodingDedicatedAnalysisProxy || decodingSmallPlaybackProxy) {
+    console.info("Deep analysis decoding a small proxy copy", {
       analysedVideoId: sourceFile.analysedVideoId,
+      dedicatedAnalysisProxy: decodingDedicatedAnalysisProxy,
     })
   } else {
     console.warn(
-      "Deep analysis decoding the full playback proxy — no 360p analysis proxy available (slower, higher timeout risk)",
+      "Deep analysis decoding a large copy — no small analysis proxy available (slower, higher timeout risk)",
       {
         analysedVideoId: sourceFile.analysedVideoId,
         sizeBytes: analysisSource.sizeBytes,

@@ -1,4 +1,4 @@
-// Orchestrates turning a validated original upload into a 720p proxy and then
+// Orchestrates turning a validated original upload into a 360p proxy and then
 // dropping the original, using Qencode as the transcode worker.
 //
 // Two halves, mirroring the upload service:
@@ -77,7 +77,7 @@ export function buildProxyObjectPath(
   return `${dir}proxy-${targetHeight}p.mp4`
 }
 
-// Kicks off the 720p transcode for a validated source file. Returns the source
+// Kicks off the 360p transcode for a validated source file. Returns the source
 // file, updated with the in-flight normalisation state when a job was started,
 // or unchanged when normalisation is disabled or can't run. Never throws on a
 // transcoder failure — it records 'failed' and returns so the upload completes.
@@ -95,10 +95,12 @@ export async function startNormalisation(
 
   const targetHeight = getProxyTargetHeight()
   const proxyPath = buildProxyObjectPath(sourceFile.storagePath, targetHeight)
-  // The 360p analysis proxy rides along in the same job as a second output.
+  // A smaller analysis proxy can ride along in the same job as a second output.
   // Skipped when disabled (height 0) or when it wouldn't actually be smaller
   // than the playback proxy — a duplicate output would also collide on the
-  // height-tagged object path.
+  // height-tagged object path. At the default 360p playback height this is the
+  // no-op case: one 360p rendition is produced and serves analysis too. It only
+  // kicks in when the playback proxy is raised above the analysis height.
   const analysisHeight = getAnalysisProxyTargetHeight()
   const wantAnalysisProxy = analysisHeight > 0 && analysisHeight < targetHeight
   const analysisProxyPath = wantAnalysisProxy
@@ -362,12 +364,13 @@ export async function applyNormalisationCallback(
     return
   }
 
-  // The 360p analysis proxy is strictly best-effort: extraction falls back to
-  // the playback proxy when it's absent, so a failed pull here must not fail
-  // normalisation — it just clears the recorded path so nothing ever reads a
-  // missing/empty object. Its absence used to be silent, which is how every
-  // upload ended up decoding the 720p playback proxy unnoticed; log the
-  // outcome (and, when absent, why) so the expensive fallback is visible.
+  // The analysis proxy is strictly best-effort: it's only asked for when the
+  // playback proxy is larger than it (not at the default single 360p rendition),
+  // and extraction falls back to the playback proxy when it's absent — so a
+  // failed pull here must not fail normalisation. It just clears the recorded
+  // path so nothing ever reads a missing/empty object. Its absence used to be
+  // silent, which is how a larger playback proxy could end up decoded unnoticed;
+  // log the outcome (and, when absent, why) so the expensive fallback is visible.
   const analysisProxy = await pullAnalysisProxy(storage, sourceFile, callback)
   if (analysisProxy.ok) {
     console.info("Analysis proxy ready after normalisation", {
@@ -375,9 +378,20 @@ export async function applyNormalisationCallback(
       sourceFileId: sourceFile.id,
       sizeBytes: analysisProxy.sizeBytes,
     })
+  } else if (analysisProxy.reason === "not-requested") {
+    // The default single-rendition setup: no separate analysis proxy was asked
+    // for because the playback proxy is already small enough to serve analysis.
+    // Expected, not a fallback — just note it.
+    console.info("No separate analysis proxy — playback proxy serves analysis", {
+      analysedVideoId: sourceFile.analysedVideoId,
+      sourceFileId: sourceFile.id,
+    })
   } else {
+    // A separate analysis proxy was wanted (the playback proxy is larger) but
+    // couldn't be produced, so deep analysis will decode the larger playback
+    // proxy — the expensive fallback, worth surfacing.
     console.warn(
-      "No analysis proxy after normalisation — deep analysis will decode the 720p playback proxy",
+      "No analysis proxy after normalisation — deep analysis will decode the larger playback proxy",
       {
         analysedVideoId: sourceFile.analysedVideoId,
         sourceFileId: sourceFile.id,
