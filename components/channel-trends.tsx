@@ -21,7 +21,6 @@ import {
 
 import {
   insightCopy,
-  packagingFeatureLabel,
   playbookCopy,
 } from "@/components/channel-trends-copy"
 import { EventTypeBadge } from "@/components/event-type-badge"
@@ -50,9 +49,7 @@ import {
   type ChannelSubscriberConversion,
   type ChannelTrend,
   type ChannelTrendsData,
-  type PackagingFeatureContrast,
   type PackagingReachVideo,
-  type PackagingTopicReach,
   type SubscriberPattern,
   type SubscriberVideoRow,
 } from "@/lib/channel-trends"
@@ -774,47 +771,6 @@ function ReachRow({
   )
 }
 
-function PackagingFeatureRow({
-  contrast,
-}: {
-  contrast: PackagingFeatureContrast
-}) {
-  return (
-    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-      <span className="text-sm font-medium">
-        {packagingFeatureLabel(contrast.feature)}
-      </span>
-      <span className="text-xs tabular-nums text-muted-foreground">
-        in {contrast.highCount} of {contrast.highTotal} high-reach ·{" "}
-        {contrast.lowCount} of {contrast.lowTotal} low-reach
-      </span>
-    </div>
-  )
-}
-
-function TopicReachRow({ topic }: { topic: PackagingTopicReach }) {
-  const above = topic.ratio >= 1
-  return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-      <span className="rounded-full border bg-muted px-2 py-0.5 text-xs">
-        {stripEmDashes(topic.topic)}
-      </span>
-      <span className="text-xs tabular-nums text-muted-foreground">
-        {plural(topic.videoCount, "video")} ·{" "}
-        <span
-          className={
-            above
-              ? "font-medium text-emerald-600 dark:text-emerald-500"
-              : "font-medium"
-          }
-        >
-          {formatRate(topic.ratio)}× your typical reach
-        </span>
-      </span>
-    </div>
-  )
-}
-
 function PackagingPatternsCard({
   packaging,
 }: {
@@ -850,45 +806,6 @@ function PackagingPatternsCard({
           />
         ))}
       </div>
-      {packaging.features.length > 0 && (
-        <div className="flex flex-col gap-2.5 rounded-r-md border-l-2 border-l-emerald-600 bg-muted/50 px-3 py-2.5 dark:border-l-teal-600">
-          <div>
-            <span className="text-xs font-semibold tracking-wide text-emerald-600 uppercase dark:text-emerald-500">
-              What your high-reach packaging does differently
-            </span>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Packaging traits common in your high-reach half and rare in your
-              low-reach half. Correlation, not proof - but worth testing on
-              purpose in your next upload.
-            </p>
-          </div>
-          {packaging.features.map((contrast) => (
-            <PackagingFeatureRow key={contrast.feature} contrast={contrast} />
-          ))}
-        </div>
-      )}
-      {packaging.topics.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-semibold tracking-wide uppercase">
-            Reach by topic
-          </span>
-          {packaging.topics.map((topic) => (
-            <TopicReachRow key={topic.topic} topic={topic} />
-          ))}
-        </div>
-      )}
-      <p className="text-xs text-muted-foreground">
-        Views per day naturally favours recent uploads, so treat close calls
-        loosely.
-        {packaging.taxonomyVideoCount < packaging.coveredVideoCount && (
-          <>
-            {" "}
-            Packaging reads cover {packaging.taxonomyVideoCount} of these{" "}
-            {plural(packaging.coveredVideoCount, "video")} - older analyses
-            pick theirs up the next time you open them.
-          </>
-        )}
-      </p>
     </Card>
   )
 }
