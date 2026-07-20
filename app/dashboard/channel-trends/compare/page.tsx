@@ -1,12 +1,17 @@
 import Link from "next/link"
 import { LockIcon } from "lucide-react"
 
+import { PackagingComparison } from "@/components/packaging-comparison"
 import { RetentionComparePicker } from "@/components/retention-compare-picker"
 import { RetentionComparison } from "@/components/retention-comparison"
 import { buttonVariants } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { requireAuthenticatedUser } from "@/lib/auth"
 import { getEntitlement } from "@/lib/billing/entitlements"
+import {
+  getPackagingComparison,
+  type PackagingComparison as PackagingComparisonData,
+} from "@/lib/packaging-comparison"
 import {
   defaultComparisonPair,
   getRetentionComparison,
@@ -43,6 +48,7 @@ type CompareResult =
       a: string
       b: string
       data: RetentionComparisonData
+      packaging: PackagingComparisonData | null
     }
   | { status: "error" }
 
@@ -89,14 +95,19 @@ async function loadComparePage(
     const pair = pickPair(videos, requestedA, requestedB)
     if (pair == null) return { status: "empty", videoCount: videos.length }
 
-    const data = await getRetentionComparison(
-      supabase,
-      userId,
-      pair.a,
-      pair.b,
-    )
+    // Packaging rides on the same stored analysis; a packaging failure or gap
+    // must never cost the user the retention comparison, so it is best-effort.
+    const [data, packaging] = await Promise.all([
+      getRetentionComparison(supabase, userId, pair.a, pair.b),
+      getPackagingComparison(supabase, userId, pair.a, pair.b).catch(
+        (error) => {
+          console.error("Failed to load packaging comparison", error)
+          return null
+        },
+      ),
+    ])
     if (data == null) return { status: "empty", videoCount: videos.length }
-    return { status: "ok", videos, a: pair.a, b: pair.b, data }
+    return { status: "ok", videos, a: pair.a, b: pair.b, data, packaging }
   } catch (error) {
     console.error("Failed to load retention comparison", error)
     return { status: "error" }
@@ -167,6 +178,9 @@ export default async function Page({
               selectedB={result.b}
             />
             <RetentionComparison data={result.data} />
+            {result.packaging && (
+              <PackagingComparison data={result.packaging} />
+            )}
           </>
         )}
         {result.status === "empty" && (

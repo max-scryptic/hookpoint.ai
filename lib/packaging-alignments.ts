@@ -16,7 +16,10 @@ import {
   generatePackagingAlignment,
   type PackagingAlignment,
 } from "@/lib/packaging-alignment"
-import { generatePackagingTaxonomy } from "@/lib/packaging-taxonomy"
+import {
+  generatePackagingTaxonomy,
+  isCurrentTaxonomy,
+} from "@/lib/packaging-taxonomy"
 import type { TranscriptCue, VideoDetails } from "@/lib/youtube/youtube"
 
 const CLAIM_COLUMNS = {
@@ -63,10 +66,11 @@ async function savePackagingAlignment(
   }
 }
 
-// Loads a saved alignment if one exists (healing in the missing taxonomy for
-// rows that predate it); otherwise claims and generates the alignment and
-// taxonomy together. Returns null (without calling OpenAI) when there's no
-// thumbnail to look at, or when another caller is already generating it.
+// Loads a saved alignment if one exists (healing in a missing or out-of-date
+// taxonomy for rows that predate the current schema); otherwise claims and
+// generates the alignment and taxonomy together. Returns null (without calling
+// OpenAI) when there's no thumbnail to look at, or when another caller is
+// already generating it.
 export async function getOrGeneratePackagingAlignment(
   supabase: SupabaseClient,
   userId: string,
@@ -75,9 +79,11 @@ export async function getOrGeneratePackagingAlignment(
   transcript: TranscriptCue[],
 ): Promise<PackagingAlignment | null> {
   const existing = await getPackagingAlignment(supabase, userId, analysedVideoId)
-  if (existing?.taxonomy) return existing
+  if (existing?.taxonomy && isCurrentTaxonomy(existing.taxonomy)) return existing
   if (!video.thumbnailUrl) return existing
   if (existing) {
+    // Present but missing or below the current schema version: regenerate the
+    // taxonomy so older rows pick up the enriched detail on this visit.
     return backfillPackagingTaxonomy(
       supabase,
       userId,
@@ -125,7 +131,8 @@ export async function getOrGeneratePackagingAlignment(
   }
 }
 
-// Adds the taxonomy to an alignment generated before it existed. Best-effort:
+// Adds (or refreshes) the taxonomy on an alignment whose taxonomy is missing
+// or predates the current schema version. Best-effort:
 // any failure (including losing the claim to a concurrent visit) serves the
 // stored prose alignment unchanged, and the backfill is retried on the next
 // visit.
