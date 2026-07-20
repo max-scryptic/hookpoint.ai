@@ -524,11 +524,13 @@ function conversionRowTitle(row: SubscriberVideoRow): string {
   return `${title} - +${row.subscribersGained} subscribers from ${formatCompactNumber(row.views)} views, ${formatRate(row.ratePer1k)} per 1k${net}`
 }
 
-// The row KPI: net subscribers gained, falling back to gross gains when the
-// snapshot never reported losses.
-function formatNetSubscribers(row: SubscriberVideoRow): string {
-  const value = row.netGained ?? row.subscribersGained
-  return value >= 0 ? `+${value}` : `${value}`
+// The row KPI: net subscribers gained per 100 views, falling back to gross
+// gains when the snapshot never reported losses. Normalising by views lets a
+// small upload and a big one be compared on the same footing.
+function formatNetSubscriberRatePer100(row: SubscriberVideoRow): string {
+  const gained = row.netGained ?? row.subscribersGained
+  const rate = row.views > 0 ? (gained / row.views) * 100 : 0
+  return rate >= 0 ? `+${formatRate(rate)}` : `-${formatRate(Math.abs(rate))}`
 }
 
 function ConversionRow({
@@ -545,7 +547,7 @@ function ConversionRow({
     maxRate > 0 ? (rate / maxRate) * CONVERSION_BAR_MAX_PERCENT : 0
   return (
     <div
-      className="grid grid-cols-[minmax(6.5rem,13rem)_1fr_5.5rem] items-center gap-x-3 py-1.5"
+      className="grid grid-cols-[minmax(6.5rem,13rem)_1fr_7rem] items-center gap-x-3 py-1.5"
       title={conversionRowTitle(row)}
     >
       <div className="flex min-w-0 flex-col items-start gap-0.5">
@@ -572,10 +574,10 @@ function ConversionRow({
       </div>
       <div className="flex flex-col items-end">
         <span className="text-sm font-medium tabular-nums">
-          {formatNetSubscribers(row)}
+          {formatNetSubscriberRatePer100(row)}
           <span className="text-xs font-normal text-muted-foreground">
             {" "}
-            {row.netGained == null ? "subs" : "net subs"}
+            {row.netGained == null ? "subs" : "net subs"} / 100 views
           </span>
         </span>
         <span className="text-[10px] tabular-nums text-muted-foreground">
