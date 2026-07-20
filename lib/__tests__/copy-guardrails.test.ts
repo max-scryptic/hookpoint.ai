@@ -18,9 +18,11 @@ const CHANNEL_TRENDS_SOURCE_FILES = [
   "components/channel-trends.tsx",
   "components/channel-trends-copy.ts",
   "components/event-type-badge.tsx",
+  "components/packaging-comparison.tsx",
   "components/retention-comparison.tsx",
   "components/retention-comparison-chart.tsx",
   "components/retention-compare-picker.tsx",
+  "lib/packaging-comparison.ts",
   "lib/retention-comparison.ts",
 ]
 
