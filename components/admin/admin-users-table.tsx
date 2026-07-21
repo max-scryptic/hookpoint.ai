@@ -73,25 +73,31 @@ export function AdminUsersTable({ users }: { users: AdminUserRow[] }) {
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border">
-      <Table>
+    <div className="overflow-hidden rounded-xl border bg-card">
+      <Table className="text-left">
         <TableHeader>
-          <TableRow>
-            <TableHead>User</TableHead>
-            <TableHead>Plan</TableHead>
-            <TableHead>Joined</TableHead>
+          <TableRow className="bg-accent text-xs text-accent-foreground hover:bg-accent">
+            <TableHead className="px-4 py-3 text-accent-foreground">
+              User
+            </TableHead>
+            <TableHead className="px-4 py-3 text-accent-foreground">
+              Plan
+            </TableHead>
+            <TableHead className="px-4 py-3 text-accent-foreground">
+              Joined
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {users.map((user) => (
-            <TableRow key={user.id}>
-              <TableCell>
+            <TableRow key={user.id} className="hover:bg-muted/40">
+              <TableCell className="px-4 py-3">
                 <UserCell user={user} />
               </TableCell>
-              <TableCell>
+              <TableCell className="px-4 py-3">
                 <PlanBadge user={user} />
               </TableCell>
-              <TableCell className="text-sm text-muted-foreground">
+              <TableCell className="px-4 py-3 text-sm text-muted-foreground">
                 {format(new Date(user.createdAt), "d MMM yyyy")}
               </TableCell>
             </TableRow>
