@@ -10,6 +10,11 @@ export interface CostLogRow {
   id: string
   userId: string | null
   userEmail: string | null
+  // The analysed video this cost was part of, when there is one, so the admin
+  // table can link back to the video detail page. Null for costs not attributed
+  // to a specific video.
+  analysedVideoId: string | null
+  videoTitle: string | null
   costType: CostType
   // Null for costs with no call breakdown (e.g. a Qencode transcode).
   callType: LlmCallType | null
@@ -58,7 +63,7 @@ interface CostLogDbRow {
 }
 
 const COLUMNS =
-  "id, user_id, user_email, cost_type, call_type, provider, model, input_tokens, output_tokens, cost_usd, created_at"
+  "id, user_id, user_email, analysed_video_id, cost_type, call_type, provider, model, input_tokens, output_tokens, cost_usd, created_at"
 
 // Lists cost logs matching the filters, newest first, with each row's user
 // email resolved from the users table (falling back to the denormalised email
@@ -90,16 +95,26 @@ export async function listCostLogs(
   const truncated = dbRows.length > ROW_LIMIT
   const capped = truncated ? dbRows.slice(0, ROW_LIMIT) : dbRows
 
-  const emailById = await resolveUserEmails(
-    supabase,
-    capped.map((row) => row.user_id),
-  )
+  const [emailById, titleByVideoId] = await Promise.all([
+    resolveUserEmails(
+      supabase,
+      capped.map((row) => row.user_id),
+    ),
+    resolveVideoTitles(
+      supabase,
+      capped.map((row) => row.analysed_video_id),
+    ),
+  ])
 
   const rows: CostLogRow[] = capped.map((row) => ({
     id: row.id,
     userId: row.user_id,
     userEmail:
       (row.user_id ? emailById.get(row.user_id) : null) ?? row.user_email ?? null,
+    analysedVideoId: row.analysed_video_id,
+    videoTitle: row.analysed_video_id
+      ? titleByVideoId.get(row.analysed_video_id) ?? null
+      : null,
     costType: row.cost_type,
     callType: row.call_type,
     provider: row.provider,
@@ -158,6 +173,36 @@ async function resolveUserEmails(
 
   for (const row of (data ?? []) as { id: string; email: string | null }[]) {
     if (row.email) map.set(row.id, row.email)
+  }
+  return map
+}
+
+// Resolves analysed_video_id -> video title for the given ids in a single
+// query, so the cost log can name (and link to) the video each cost was part
+// of. A lookup failure just leaves the titles unresolved rather than sinking
+// the listing.
+async function resolveVideoTitles(
+  supabase: ReturnType<typeof createAdminClient>,
+  videoIds: (string | null)[],
+): Promise<Map<string, string>> {
+  const ids = Array.from(
+    new Set(videoIds.filter((id): id is string => Boolean(id))),
+  )
+  const map = new Map<string, string>()
+  if (ids.length === 0) return map
+
+  const { data, error } = await supabase
+    .from("analysed_videos")
+    .select("id, video_title")
+    .in("id", ids)
+
+  if (error) {
+    console.error("Failed to resolve video titles for cost logs", error.message)
+    return map
+  }
+
+  for (const row of (data ?? []) as { id: string; video_title: string | null }[]) {
+    if (row.video_title) map.set(row.id, row.video_title)
   }
   return map
 }

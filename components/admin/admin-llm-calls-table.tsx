@@ -1,4 +1,5 @@
 import { format } from "date-fns"
+import Link from "next/link"
 
 import { COST_TYPE_LABELS, LLM_CALL_TYPE_LABELS } from "@/lib/llm-call-types"
 import type { CostLogRow } from "@/lib/admin/llm-calls"
@@ -34,6 +35,7 @@ export function AdminLlmCallsTable({ rows }: { rows: CostLogRow[] }) {
         <TableHeader>
           <TableRow>
             <TableHead>User</TableHead>
+            <TableHead>Video</TableHead>
             <TableHead>Cost type</TableHead>
             <TableHead>Type of call</TableHead>
             <TableHead>Model</TableHead>
@@ -46,8 +48,32 @@ export function AdminLlmCallsTable({ rows }: { rows: CostLogRow[] }) {
           {rows.map((row) => (
             <TableRow key={row.id}>
               <TableCell className="max-w-[220px] truncate">
-                {row.userEmail ?? (
+                {row.userEmail ? (
+                  row.userId ? (
+                    <Link
+                      href={`/admin/users/${row.userId}`}
+                      className="font-medium hover:underline focus-visible:underline focus-visible:outline-none"
+                    >
+                      {row.userEmail}
+                    </Link>
+                  ) : (
+                    row.userEmail
+                  )
+                ) : (
                   <span className="text-muted-foreground">Unknown user</span>
+                )}
+              </TableCell>
+              <TableCell className="max-w-[220px] truncate">
+                {row.analysedVideoId && row.userId ? (
+                  <Link
+                    href={`/admin/users/${row.userId}/videos/${row.analysedVideoId}`}
+                    className="hover:underline focus-visible:underline focus-visible:outline-none"
+                    title={row.videoTitle ?? undefined}
+                  >
+                    {row.videoTitle ?? "View video"}
+                  </Link>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
                 )}
               </TableCell>
               <TableCell>{COST_TYPE_LABELS[row.costType] ?? row.costType}</TableCell>
