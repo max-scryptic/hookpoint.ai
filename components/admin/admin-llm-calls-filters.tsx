@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation"
 import { endOfDay, startOfDay } from "date-fns"
-import { ListFilterIcon, UsersIcon, XIcon } from "lucide-react"
+import { ListFilterIcon, UsersIcon, VideoIcon, XIcon } from "lucide-react"
 import { type DateRange } from "react-day-picker"
 
 import { Button } from "@/components/ui/button"
@@ -22,10 +22,14 @@ import {
   type CostType,
   type LlmCallType,
 } from "@/lib/llm-call-types"
-import type { CostLogUserOption } from "@/lib/admin/llm-calls"
+import type {
+  CostLogUserOption,
+  CostLogVideoOption,
+} from "@/lib/admin/llm-calls"
 
 export interface CostLogFilterValues {
   userId?: string
+  videoId?: string
   costType?: CostType
   callType?: LlmCallType
   from?: string
@@ -51,9 +55,11 @@ function toDateRange(from?: string, to?: string): DateRange | undefined {
 // instant filtering on the front-end.
 export function AdminLlmCallsFilters({
   userOptions,
+  videoOptions,
   current,
 }: {
   userOptions: CostLogUserOption[]
+  videoOptions: CostLogVideoOption[]
   current: CostLogFilterValues
 }) {
   const router = useRouter()
@@ -63,6 +69,7 @@ export function AdminLlmCallsFilters({
   function pushWith(overrides: Partial<Record<keyof CostLogFilterValues, string | null>>) {
     const next: Record<keyof CostLogFilterValues, string | undefined> = {
       userId: current.userId,
+      videoId: current.videoId,
       costType: current.costType,
       callType: current.callType,
       from: current.from,
@@ -73,6 +80,7 @@ export function AdminLlmCallsFilters({
     }
     const params = new URLSearchParams()
     if (next.userId) params.set("userId", next.userId)
+    if (next.videoId) params.set("videoId", next.videoId)
     if (next.costType) params.set("costType", next.costType)
     if (next.callType) params.set("callType", next.callType)
     if (next.from) params.set("from", next.from)
@@ -94,6 +102,13 @@ export function AdminLlmCallsFilters({
 
   const selectedUser = userOptions.find((option) => option.id === current.userId)
   const userLabel = selectedUser?.email ?? "All users"
+  // The video filter only makes sense once a user is picked, so it stays
+  // disabled until then (a video belongs to exactly one user).
+  const videoFilterEnabled = Boolean(current.userId)
+  const selectedVideo = videoOptions.find(
+    (option) => option.id === current.videoId,
+  )
+  const videoLabel = selectedVideo?.title ?? "All videos"
   const costTypeLabel = current.costType
     ? COST_TYPE_LABELS[current.costType]
     : "All cost types"
@@ -103,6 +118,7 @@ export function AdminLlmCallsFilters({
 
   const hasActiveFilters =
     Boolean(current.userId) ||
+    Boolean(current.videoId) ||
     Boolean(current.costType) ||
     Boolean(current.callType) ||
     Boolean(current.from) ||
@@ -123,7 +139,11 @@ export function AdminLlmCallsFilters({
         >
           <DropdownMenuRadioGroup
             value={current.userId ?? ""}
-            onValueChange={(value) => pushWith({ userId: value || null })}
+            onValueChange={(value) =>
+              // Switching (or clearing) the user invalidates any video choice,
+              // since a video belongs to exactly one user.
+              pushWith({ userId: value || null, videoId: null })
+            }
           >
             <DropdownMenuRadioItem value="" className="whitespace-nowrap">
               All users
@@ -135,6 +155,42 @@ export function AdminLlmCallsFilters({
                 className="whitespace-nowrap"
               >
                 {option.email}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          disabled={!videoFilterEnabled}
+          render={
+            <Button variant="outline" size="sm" className="h-9 gap-2" />
+          }
+        >
+          <VideoIcon className="size-4" />
+          <span className="max-w-[12rem] truncate">
+            {videoFilterEnabled ? videoLabel : "All videos"}
+          </span>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          className="max-h-72 w-auto min-w-(--anchor-width) max-w-[min(28rem,var(--available-width))]"
+        >
+          <DropdownMenuRadioGroup
+            value={current.videoId ?? ""}
+            onValueChange={(value) => pushWith({ videoId: value || null })}
+          >
+            <DropdownMenuRadioItem value="" className="whitespace-nowrap">
+              All videos
+            </DropdownMenuRadioItem>
+            {videoOptions.map((option) => (
+              <DropdownMenuRadioItem
+                key={option.id}
+                value={option.id}
+                className="whitespace-nowrap"
+              >
+                {option.title}
               </DropdownMenuRadioItem>
             ))}
           </DropdownMenuRadioGroup>
