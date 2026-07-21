@@ -37,6 +37,21 @@ function CostCell({ value }: { value: number }) {
   )
 }
 
+// A timestamp cell that mutes an em-dash when the date is absent (e.g. a video
+// whose raw source file hasn't been uploaded yet), matching how empty cost and
+// event cells read.
+function DateCell({ value }: { value: string | null }) {
+  return (
+    <TableCell className="px-4 py-3 text-sm text-muted-foreground">
+      {value ? (
+        format(new Date(value), "d MMM yyyy, HH:mm")
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      )}
+    </TableCell>
+  )
+}
+
 // The admin user-detail "Analysed videos" listing. Adopts the shared front-end
 // table baseline (card surface, accent header, clickable rows) so admin and
 // product surfaces read as one system. Each row opens the video's deep-analysis
@@ -67,17 +82,20 @@ export function AdminVideoAnalysesTable({
             <TableHead className="px-4 py-3 text-accent-foreground">
               Video
             </TableHead>
+            <TableHead className="px-4 py-3 text-accent-foreground">
+              Analysed
+            </TableHead>
             <TableHead className="hidden px-4 py-3 text-right text-accent-foreground sm:table-cell">
               Light analysis
+            </TableHead>
+            <TableHead className="px-4 py-3 text-accent-foreground">
+              Raw file uploaded
             </TableHead>
             <TableHead className="hidden px-4 py-3 text-right text-accent-foreground sm:table-cell">
               Deep analysis
             </TableHead>
             <TableHead className="px-4 py-3 text-right text-accent-foreground">
               Events generated
-            </TableHead>
-            <TableHead className="px-4 py-3 text-accent-foreground">
-              Analysed
             </TableHead>
           </TableRow>
         </TableHeader>
@@ -117,7 +135,9 @@ export function AdminVideoAnalysesTable({
                     </a>
                   </div>
                 </TableCell>
+                <DateCell value={video.dateAnalysed} />
                 <CostCell value={video.lightCostUsd} />
+                <DateCell value={video.rawFileUploadedAt} />
                 <CostCell value={video.deepCostUsd} />
                 <TableCell className="px-4 py-3 text-right tabular-nums">
                   {video.eventCount > 0 ? (
@@ -125,9 +145,6 @@ export function AdminVideoAnalysesTable({
                   ) : (
                     <span className="text-muted-foreground">—</span>
                   )}
-                </TableCell>
-                <TableCell className="px-4 py-3 text-sm text-muted-foreground">
-                  {format(new Date(video.dateAnalysed), "d MMM yyyy, HH:mm")}
                 </TableCell>
               </TableRow>
             )
