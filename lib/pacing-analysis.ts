@@ -1,3 +1,5 @@
+import { recordLlmCallCost, type LlmLogContext } from "@/lib/llm-calls"
+import { responsesCallCost, type ResponsesUsage } from "@/lib/llm-cost"
 import type { TranscriptCue, VideoDetails } from "@/lib/youtube/youtube"
 
 export type PacingRate =
@@ -265,6 +267,7 @@ function isModelOutput(value: unknown): value is ModelOutput {
 export async function generatePacingAnalysis(
   video: Pick<VideoDetails, "title" | "durationSeconds">,
   transcript: TranscriptCue[],
+  logContext?: LlmLogContext,
 ): Promise<PacingAnalysis | null> {
   const windows = buildPacingWindows(video.durationSeconds, transcript)
   if (
@@ -357,6 +360,7 @@ export async function generatePacingAnalysis(
 
   const json = (await response.json()) as {
     output?: Array<{ content?: Array<{ type?: string; text?: string }> }>
+    usage?: ResponsesUsage
   }
   const outputText = extractOutputText(json)
   if (!outputText) throw new Error("OpenAI returned no pacing analysis text")
@@ -364,6 +368,15 @@ export async function generatePacingAnalysis(
   const parsed: unknown = JSON.parse(outputText)
   if (!isModelOutput(parsed)) {
     throw new Error("OpenAI returned an invalid pacing analysis")
+  }
+
+  // Log the call's cost to the account-wide LLM call log (best-effort).
+  if (logContext) {
+    await recordLlmCallCost(
+      "pacing",
+      responsesCallCost(model, json.usage),
+      logContext,
+    )
   }
 
   const modelWindows = new Map(

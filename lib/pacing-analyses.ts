@@ -260,7 +260,10 @@ export async function getOrGeneratePacingAnalysis(
   if (!claimed) return null
 
   try {
-    const pacingAnalysis = await generatePacingAnalysis(video, transcript)
+    const pacingAnalysis = await generatePacingAnalysis(video, transcript, {
+      userId,
+      analysedVideoId,
+    })
     if (pacingAnalysis) {
       await savePacingAnalysis(supabase, userId, analysedVideoId, pacingAnalysis)
     }

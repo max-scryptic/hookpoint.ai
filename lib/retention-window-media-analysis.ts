@@ -39,6 +39,7 @@ import {
   measureAudioSignalBuckets,
   type AudioSignalBucket,
 } from "@/lib/media/video-extraction"
+import { recordLlmCallCost } from "@/lib/llm-calls"
 import { recordRetentionWindowCost } from "@/lib/retention-window-costs"
 import {
   claimRetentionWindowAudioPendingAnalysis,
@@ -304,6 +305,13 @@ export async function analyzeRetentionWindowMedia(
         }).catch((error) =>
           console.error("Failed to record snapshot analysis cost", error),
         )
+        // Mirror into the account-wide LLM call log (best-effort; never throws).
+        await recordLlmCallCost(
+          "snapshot",
+          results.cost,
+          { userId, analysedVideoId },
+          admin,
+        )
       } catch (error) {
         console.error("Failed to analyse retention window snapshots", error)
         const message =
@@ -345,6 +353,7 @@ export async function analyzeRetentionWindowMedia(
         }).catch((error) =>
           console.error("Failed to record audio analysis cost", error),
         )
+        await recordLlmCallCost("audio", cost, { userId, analysedVideoId }, admin)
       }
     } catch (error) {
       console.error("Failed to analyse retention window audio", error)

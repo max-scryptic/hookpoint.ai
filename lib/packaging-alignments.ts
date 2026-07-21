@@ -106,8 +106,11 @@ export async function getOrGeneratePackagingAlignment(
     // Two independent reads of the same inputs; a taxonomy failure never
     // costs the user the prose alignment.
     const [alignment, taxonomy] = await Promise.all([
-      generatePackagingAlignment(video, transcript),
-      generatePackagingTaxonomy(video, transcript).catch((error) => {
+      generatePackagingAlignment(video, transcript, { userId, analysedVideoId }),
+      generatePackagingTaxonomy(video, transcript, {
+        userId,
+        analysedVideoId,
+      }).catch((error) => {
         console.error("Failed to generate packaging taxonomy", error)
         return null
       }),
@@ -154,7 +157,10 @@ async function backfillPackagingTaxonomy(
     if (!claimed) return existing
 
     try {
-      const taxonomy = await generatePackagingTaxonomy(video, transcript)
+      const taxonomy = await generatePackagingTaxonomy(video, transcript, {
+        userId,
+        analysedVideoId,
+      })
       const healed = taxonomy ? { ...existing, taxonomy } : existing
       if (taxonomy) {
         await savePackagingAlignment(supabase, userId, analysedVideoId, healed)

@@ -1,5 +1,6 @@
 import { AdminShell } from "@/components/admin/admin-shell"
 import { requireAdminUser } from "@/lib/admin/auth"
+import { getSidebarDefaultOpen } from "@/lib/sidebar-state"
 
 // Auth boundary for every admin page. This route group excludes /admin/login,
 // so enforcing admin access here can't loop back on the sign-in screen. Any
@@ -9,7 +10,14 @@ export default async function AdminProtectedLayout({
 }: {
   children: React.ReactNode
 }) {
-  const admin = await requireAdminUser()
+  const [admin, defaultOpen] = await Promise.all([
+    requireAdminUser(),
+    getSidebarDefaultOpen(),
+  ])
 
-  return <AdminShell adminEmail={admin.email}>{children}</AdminShell>
+  return (
+    <AdminShell adminEmail={admin.email} defaultOpen={defaultOpen}>
+      {children}
+    </AdminShell>
+  )
 }
