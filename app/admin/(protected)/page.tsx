@@ -1,7 +1,6 @@
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
@@ -12,7 +11,7 @@ import {
   type DailyCountPoint,
   type VideosByDayPoint,
 } from "@/lib/admin/activity"
-import { AdminTimeSeriesChart } from "@/components/admin/admin-time-series-chart"
+import { AdminActivityCharts } from "@/components/admin/admin-activity-charts"
 import {
   CoinsIcon,
   FileVideoIcon,
@@ -21,8 +20,10 @@ import {
   VideoIcon,
 } from "lucide-react"
 
-// How many days of history the dashboard time-series charts show.
-const CHART_DAYS = 30
+// The full window of daily history loaded for the activity charts. The charts
+// default to showing the most recent 30 days but let an admin pick any range
+// within this window without another round-trip.
+const CHART_WINDOW_DAYS = 180
 
 // Per-request admin data behind an auth check — never statically prerender.
 export const dynamic = "force-dynamic"
@@ -41,15 +42,18 @@ export default async function AdminDashboardPage() {
 
   let activeUsers: DailyCountPoint[] = []
   let videosByDay: VideosByDayPoint[] = []
-  let chartsError = false
+  // Each chart tracks its own failure so one broken query only degrades its own
+  // card instead of blanking both charts (and mislabelling the healthy one).
+  let activeUsersError = false
+  let videosError = false
 
   // The headline stats and the two time-series charts are independent
   // best-effort loads: a failure in any one of them logs and degrades that
   // section rather than 500-ing the whole dashboard.
   const [statsResult, activeUsersResult, videosResult] = await Promise.allSettled([
     getAdminStats(),
-    getDailyActiveUsers(CHART_DAYS),
-    getVideosAnalysedByDay(CHART_DAYS),
+    getDailyActiveUsers(CHART_WINDOW_DAYS),
+    getVideosAnalysedByDay(CHART_WINDOW_DAYS),
   ])
 
   if (statsResult.status === "fulfilled") {
@@ -63,14 +67,14 @@ export default async function AdminDashboardPage() {
     activeUsers = activeUsersResult.value
   } else {
     console.error("Failed to load daily active users", activeUsersResult.reason)
-    chartsError = true
+    activeUsersError = true
   }
 
   if (videosResult.status === "fulfilled") {
     videosByDay = videosResult.value
   } else {
     console.error("Failed to load videos analysed by day", videosResult.reason)
-    chartsError = true
+    videosError = true
   }
 
   const cards: {
@@ -140,69 +144,12 @@ export default async function AdminDashboardPage() {
         })}
       </div>
 
-      {chartsError && (
-        <p className="text-sm text-destructive">
-          Activity charts could not be loaded. Check the server logs.
-        </p>
-      )}
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base font-medium">
-              Active users per day
-            </CardTitle>
-            <CardDescription>
-              Distinct users who used Hookpoint.ai each day (last {CHART_DAYS}{" "}
-              days, UTC).
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <AdminTimeSeriesChart
-              caption={`Distinct active users per day over the last ${CHART_DAYS} days`}
-              data={activeUsers}
-              series={[
-                {
-                  key: "count",
-                  label: "Active users",
-                  color: "var(--chart-1)",
-                },
-              ]}
-            />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base font-medium">
-              Videos analysed per day
-            </CardTitle>
-            <CardDescription>
-              Light and deep analyses started each day (last {CHART_DAYS} days,
-              UTC).
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <AdminTimeSeriesChart
-              caption={`Light and deep video analyses per day over the last ${CHART_DAYS} days`}
-              data={videosByDay}
-              series={[
-                {
-                  key: "light",
-                  label: "Light analysis",
-                  color: "var(--chart-1)",
-                },
-                {
-                  key: "deep",
-                  label: "Deep analysis",
-                  color: "var(--chart-3)",
-                  dashed: true,
-                },
-              ]}
-            />
-          </CardContent>
-        </Card>
-      </div>
+      <AdminActivityCharts
+        activeUsers={activeUsers}
+        videosByDay={videosByDay}
+        activeUsersError={activeUsersError}
+        videosError={videosError}
+      />
     </div>
   )
 }
