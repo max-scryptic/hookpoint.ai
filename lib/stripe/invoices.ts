@@ -74,3 +74,42 @@ export async function getBillingInvoices(
 
   return invoices.data.map(mapInvoice)
 }
+
+// The total amount a user has actually paid us, summed across every one of
+// their invoices (not just the recent page the history table shows). Kept in
+// the smallest currency unit (pence) alongside the currency code, since Stripe
+// reports both and the admin view formats them together. Returns null when the
+// user has no Stripe customer (never billed) so callers can render "—".
+export type UserRevenue = {
+  // Total paid, in the smallest currency unit (e.g. pence for GBP).
+  totalMinorUnits: number
+  // Lower-case ISO currency of the paid invoices (e.g. "gbp"). Null when there
+  // are none. Multi-currency accounts aren't expected here; the first paid
+  // invoice's currency is reported.
+  currency: string | null
+}
+
+export async function getUserRevenue(userId: string): Promise<UserRevenue | null> {
+  const customerId = await getStripeCustomerIdForUser(userId)
+  if (!customerId) return null
+
+  const stripe = getStripe()
+
+  let totalMinorUnits = 0
+  let currency: string | null = null
+
+  // Page through every invoice so the total reflects the account's whole
+  // history, not just the most recent page. amount_paid already excludes
+  // refunds and unpaid/void invoices, so summing it gives net collected.
+  for await (const invoice of stripe.invoices.list({
+    customer: customerId,
+    limit: 100,
+  })) {
+    if (invoice.amount_paid > 0) {
+      totalMinorUnits += invoice.amount_paid
+      currency ??= invoice.currency
+    }
+  }
+
+  return { totalMinorUnits, currency }
+}
