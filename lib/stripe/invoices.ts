@@ -113,3 +113,26 @@ export async function getUserRevenue(userId: string): Promise<UserRevenue | null
 
   return { totalMinorUnits, currency }
 }
+
+// The all-time revenue across every account, summed straight from Stripe (the
+// source of truth), so the admin dashboard can show total money made. Pages
+// through every invoice on the account — no customer filter — and sums
+// amount_paid, which already excludes refunds and unpaid/void invoices. The
+// currency comes from the first paid invoice; a single-currency account is
+// assumed, matching the per-user revenue figure. Never null: there is always
+// an account to read, so an empty history reports £0 rather than "never billed".
+export async function getTotalRevenue(): Promise<UserRevenue> {
+  const stripe = getStripe()
+
+  let totalMinorUnits = 0
+  let currency: string | null = null
+
+  for await (const invoice of stripe.invoices.list({ limit: 100 })) {
+    if (invoice.amount_paid > 0) {
+      totalMinorUnits += invoice.amount_paid
+      currency ??= invoice.currency
+    }
+  }
+
+  return { totalMinorUnits, currency }
+}
