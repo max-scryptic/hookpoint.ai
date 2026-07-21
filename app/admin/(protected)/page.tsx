@@ -1,9 +1,4 @@
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { getAdminStats } from "@/lib/admin/users"
 import { getTotalCostUsd } from "@/lib/admin/llm-calls"
 import { getTotalRevenue, type UserRevenue } from "@/lib/stripe/invoices"
@@ -54,32 +49,71 @@ function formatUsd(value: number | "error"): string {
   return `$${value.toFixed(2)}`
 }
 
-// One headline metric card. Numbers are localised; pre-formatted strings (e.g.
-// currency) pass through unchanged.
-function KpiCard({
+// KPIs are grouped by category via colour rather than by separate section rows,
+// which keeps every headline metric compact and on a single row. Each category
+// gets one accent hue; the legend below the row decodes it.
+type KpiCategory = "users" | "video" | "economics"
+
+const CATEGORY_STYLES: Record<
+  KpiCategory,
+  { label: string; dot: string; border: string; icon: string }
+> = {
+  users: {
+    label: "Users",
+    dot: "bg-blue-500",
+    border: "border-l-blue-500",
+    icon: "text-blue-500",
+  },
+  video: {
+    label: "Video analysis",
+    dot: "bg-violet-500",
+    border: "border-l-violet-500",
+    icon: "text-violet-500",
+  },
+  economics: {
+    label: "Economics",
+    dot: "bg-emerald-500",
+    border: "border-l-emerald-500",
+    icon: "text-emerald-500",
+  },
+}
+
+// One compact headline metric. A left accent border colour-codes the category;
+// numbers are localised and pre-formatted strings (e.g. currency) pass through.
+function KpiTile({
   label,
   hint,
   value,
   icon: Icon,
+  category,
 }: {
   label: string
   hint?: string
   value: number | string
   icon: typeof UsersIcon
+  category: KpiCategory
 }) {
+  const style = CATEGORY_STYLES[category]
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
-          {label}
-        </CardTitle>
-        <Icon className="size-4 text-muted-foreground" />
-      </CardHeader>
-      <CardContent>
-        <div className="text-3xl font-semibold tabular-nums">
+    <Card
+      size="sm"
+      className={`gap-0 border-l-2 py-3 ${style.border}`}
+    >
+      <CardContent className="flex flex-col gap-1">
+        <div className="flex items-start justify-between gap-2">
+          <span className="text-xs leading-tight font-medium text-muted-foreground">
+            {label}
+          </span>
+          <Icon className={`size-3.5 shrink-0 ${style.icon}`} />
+        </div>
+        <div className="text-2xl font-semibold tabular-nums">
           {typeof value === "number" ? value.toLocaleString() : value}
         </div>
-        {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+        {hint && (
+          <p className="text-[11px] leading-tight text-muted-foreground">
+            {hint}
+          </p>
+        )}
       </CardContent>
     </Card>
   )
@@ -163,7 +197,7 @@ export default async function AdminDashboardPage() {
   const nonAdminUsers = Math.max(0, stats.totalUsers - stats.totalAdmins)
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8">
+    <div className="mx-auto max-w-6xl space-y-8">
       <div>
         <h1 className="text-2xl font-semibold tracking-normal">Dashboard</h1>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -177,71 +211,78 @@ export default async function AdminDashboardPage() {
         </p>
       )}
 
-      <section className="space-y-4">
-        <h2 className="text-lg font-semibold tracking-normal">Users</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <KpiCard
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          {(Object.keys(CATEGORY_STYLES) as KpiCategory[]).map((key) => (
+            <span
+              key={key}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground"
+            >
+              <span
+                className={`size-2 rounded-full ${CATEGORY_STYLES[key].dot}`}
+              />
+              {CATEGORY_STYLES[key].label}
+            </span>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7">
+          <KpiTile
             label="Users"
             hint="Non-admin accounts"
             value={nonAdminUsers}
             icon={UsersIcon}
+            category="users"
           />
-          <KpiCard
+          <KpiTile
             label="Admins"
             hint="Admin accounts"
             value={stats.totalAdmins}
             icon={ShieldCheckIcon}
+            category="users"
           />
-        </div>
-      </section>
-
-      <section className="space-y-4">
-        <h2 className="text-lg font-semibold tracking-normal">Video analysis</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <KpiCard
+          <KpiTile
             label="Videos analysed"
             hint="Light analysis"
             value={stats.totalAnalysedVideos}
             icon={VideoIcon}
+            category="video"
           />
-          <KpiCard
+          <KpiTile
             label="Source files uploaded"
             hint="Deep analysis"
             value={stats.totalSourceFilesUploaded}
             icon={FileVideoIcon}
+            category="video"
           />
-          <KpiCard
+          <KpiTile
             label="Deep-dive credits used"
             hint="All users"
             value={stats.totalDeepCreditsUsed}
             icon={CoinsIcon}
+            category="video"
           />
-        </div>
-      </section>
-
-      <section className="space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold tracking-normal">Economics</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Money made across every account versus what serving them has cost.
-            Shown in their billed currencies (revenue in GBP, AI/media spend in
-            USD), so they aren&rsquo;t netted into a single figure.
-          </p>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <KpiCard
+          <KpiTile
             label="Money made"
-            hint="Total paid via Stripe, all users (all time)"
+            hint="Stripe, all users (all time)"
             value={formatMoneyMade(revenue)}
             icon={BanknoteIcon}
+            category="economics"
           />
-          <KpiCard
+          <KpiTile
             label="Money spent"
-            hint="Total AI/media cost, all users (all time)"
+            hint="AI/media cost, all time"
             value={formatUsd(totalCostUsd)}
             icon={ReceiptIcon}
+            category="economics"
           />
         </div>
+
+        <p className="text-xs text-muted-foreground">
+          Economics are shown in their billed currencies (revenue in GBP,
+          AI/media spend in USD), so they aren&rsquo;t netted into a single
+          figure.
+        </p>
       </section>
 
       <AdminActivityCharts
