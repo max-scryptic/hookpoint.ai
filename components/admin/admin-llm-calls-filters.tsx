@@ -117,14 +117,23 @@ export function AdminLlmCallsFilters({
           <UsersIcon className="size-4" />
           <span className="max-w-[12rem] truncate">{userLabel}</span>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="max-h-72">
+        <DropdownMenuContent
+          align="start"
+          className="max-h-72 w-auto min-w-(--anchor-width) max-w-[min(28rem,var(--available-width))]"
+        >
           <DropdownMenuRadioGroup
             value={current.userId ?? ""}
             onValueChange={(value) => pushWith({ userId: value || null })}
           >
-            <DropdownMenuRadioItem value="">All users</DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="" className="whitespace-nowrap">
+              All users
+            </DropdownMenuRadioItem>
             {userOptions.map((option) => (
-              <DropdownMenuRadioItem key={option.id} value={option.id}>
+              <DropdownMenuRadioItem
+                key={option.id}
+                value={option.id}
+                className="whitespace-nowrap"
+              >
                 {option.email}
               </DropdownMenuRadioItem>
             ))}
@@ -139,14 +148,23 @@ export function AdminLlmCallsFilters({
           <ListFilterIcon className="size-4" />
           {costTypeLabel}
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
+        <DropdownMenuContent
+          align="start"
+          className="w-auto min-w-(--anchor-width) max-w-[min(28rem,var(--available-width))]"
+        >
           <DropdownMenuRadioGroup
             value={current.costType ?? ""}
             onValueChange={(value) => pushWith({ costType: value || null })}
           >
-            <DropdownMenuRadioItem value="">All cost types</DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="" className="whitespace-nowrap">
+              All cost types
+            </DropdownMenuRadioItem>
             {COST_TYPES.map((type) => (
-              <DropdownMenuRadioItem key={type} value={type}>
+              <DropdownMenuRadioItem
+                key={type}
+                value={type}
+                className="whitespace-nowrap"
+              >
                 {COST_TYPE_LABELS[type]}
               </DropdownMenuRadioItem>
             ))}
@@ -161,14 +179,23 @@ export function AdminLlmCallsFilters({
           <ListFilterIcon className="size-4" />
           {callTypeLabel}
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
+        <DropdownMenuContent
+          align="start"
+          className="max-h-72 w-auto min-w-(--anchor-width) max-w-[min(28rem,var(--available-width))]"
+        >
           <DropdownMenuRadioGroup
             value={current.callType ?? ""}
             onValueChange={(value) => pushWith({ callType: value || null })}
           >
-            <DropdownMenuRadioItem value="">All call types</DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="" className="whitespace-nowrap">
+              All call types
+            </DropdownMenuRadioItem>
             {LLM_CALL_TYPES.map((type) => (
-              <DropdownMenuRadioItem key={type} value={type}>
+              <DropdownMenuRadioItem
+                key={type}
+                value={type}
+                className="whitespace-nowrap"
+              >
                 {LLM_CALL_TYPE_LABELS[type]}
               </DropdownMenuRadioItem>
             ))}
