@@ -51,6 +51,7 @@ const validDetail = {
     primaryDriver: "identity",
     archetype: "personal_stakes_confession",
     trendRelevance: 4,
+    trendRelevanceConfidence: 6,
   },
 }
 
@@ -149,6 +150,18 @@ describe("isPackagingTaxonomyOutput", () => {
       isPackagingTaxonomyOutput({
         ...valid,
         detail: { ...validDetail, drivers: driversWithoutTrend },
+      }),
+    ).toBe(false)
+  })
+
+  it("rejects a detail block missing the trend relevance confidence", () => {
+    const { trendRelevanceConfidence: _c, ...driversWithoutConfidence } =
+      validDetail.drivers
+    void _c
+    expect(
+      isPackagingTaxonomyOutput({
+        ...valid,
+        detail: { ...validDetail, drivers: driversWithoutConfidence },
       }),
     ).toBe(false)
   })

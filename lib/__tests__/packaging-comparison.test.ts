@@ -63,6 +63,7 @@ function detail(overrides: Partial<PackagingDetail> = {}): PackagingDetail {
       primaryDriver: "curiosity",
       archetype: "other",
       trendRelevance: 5,
+      trendRelevanceConfidence: 5,
     },
     ...overrides,
   }
@@ -126,6 +127,7 @@ const cryptoTaxonomy = taxonomy(
       primaryDriver: "identity",
       archetype: "personal_stakes_confession",
       trendRelevance: 8,
+      trendRelevanceConfidence: 7,
     },
   }),
 )
@@ -189,6 +191,7 @@ const stopChartsTaxonomy = taxonomy(
       primaryDriver: "authority",
       archetype: "warning",
       trendRelevance: 2,
+      trendRelevanceConfidence: 3,
     },
   }),
 )
