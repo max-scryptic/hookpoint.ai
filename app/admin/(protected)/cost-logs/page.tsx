@@ -76,7 +76,7 @@ export default async function AdminLlmCallsPage({
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Cost Logs</h1>
+        <h1 className="text-2xl font-semibold tracking-normal">Cost Logs</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Every LLM and Qencode transcoding cost we incur, and what it costs.
         </p>
