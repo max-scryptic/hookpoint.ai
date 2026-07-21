@@ -6,11 +6,14 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import {
+  COST_TYPES,
+  COST_TYPE_LABELS,
   LLM_CALL_TYPES,
   LLM_CALL_TYPE_LABELS,
+  type CostType,
   type LlmCallType,
 } from "@/lib/llm-call-types"
-import type { LlmCallUserOption } from "@/lib/admin/llm-calls"
+import type { CostLogUserOption } from "@/lib/admin/llm-calls"
 import { cn } from "@/lib/utils"
 
 const selectClasses = cn(
@@ -38,25 +41,28 @@ function fromDatetimeLocal(value: string): string | undefined {
   return date.toISOString()
 }
 
-export interface LlmCallFilterValues {
+export interface CostLogFilterValues {
   userId?: string
+  costType?: CostType
   callType?: LlmCallType
   from?: string
   to?: string
 }
 
-// The filter bar for the admin LLM Calls page: user, type of call, and a
-// datetime window (from / to). Filtering is done server-side — applying pushes
-// the choices into the URL query, which the server page reads and re-queries.
+// The filter bar for the admin cost log page: user, cost type, type of call and
+// a datetime window (from / to). Filtering is done server-side — applying
+// pushes the choices into the URL query, which the server page reads and
+// re-queries.
 export function AdminLlmCallsFilters({
   userOptions,
   current,
 }: {
-  userOptions: LlmCallUserOption[]
-  current: LlmCallFilterValues
+  userOptions: CostLogUserOption[]
+  current: CostLogFilterValues
 }) {
   const router = useRouter()
   const [userId, setUserId] = useState(current.userId ?? "")
+  const [costType, setCostType] = useState<string>(current.costType ?? "")
   const [callType, setCallType] = useState<string>(current.callType ?? "")
   const [from, setFrom] = useState(toDatetimeLocal(current.from))
   const [to, setTo] = useState(toDatetimeLocal(current.to))
@@ -64,6 +70,7 @@ export function AdminLlmCallsFilters({
   function apply() {
     const params = new URLSearchParams()
     if (userId) params.set("userId", userId)
+    if (costType) params.set("costType", costType)
     if (callType) params.set("callType", callType)
     const fromIso = fromDatetimeLocal(from)
     const toIso = fromDatetimeLocal(to)
@@ -75,6 +82,7 @@ export function AdminLlmCallsFilters({
 
   function reset() {
     setUserId("")
+    setCostType("")
     setCallType("")
     setFrom("")
     setTo("")
@@ -83,7 +91,7 @@ export function AdminLlmCallsFilters({
 
   return (
     <div className="rounded-lg border bg-card p-4">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <div className="space-y-1.5">
           <Label htmlFor="filter-user">User</Label>
           <select
@@ -102,6 +110,23 @@ export function AdminLlmCallsFilters({
         </div>
 
         <div className="space-y-1.5">
+          <Label htmlFor="filter-cost-type">Cost type</Label>
+          <select
+            id="filter-cost-type"
+            className={selectClasses}
+            value={costType}
+            onChange={(event) => setCostType(event.target.value)}
+          >
+            <option value="">All cost types</option>
+            {COST_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {COST_TYPE_LABELS[type]}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-1.5">
           <Label htmlFor="filter-type">Type of call</Label>
           <select
             id="filter-type"
@@ -109,7 +134,7 @@ export function AdminLlmCallsFilters({
             value={callType}
             onChange={(event) => setCallType(event.target.value)}
           >
-            <option value="">All types</option>
+            <option value="">All call types</option>
             {LLM_CALL_TYPES.map((type) => (
               <option key={type} value={type}>
                 {LLM_CALL_TYPE_LABELS[type]}

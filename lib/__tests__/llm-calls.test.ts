@@ -2,16 +2,18 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import {
+  COST_TYPE_LABELS,
+  COST_TYPES,
   LLM_CALL_TYPES,
   LLM_CALL_TYPE_LABELS,
-  recordLlmCall,
+  recordCostLog,
   recordLlmCallCost,
   recordTranscodingCall,
 } from "@/lib/llm-calls"
 
-// A minimal fake service-role client that captures llm_calls inserts. `result`
-// lets a test force the insert to report an error; `throwOn` forces `from` to
-// throw, standing in for a client that blows up entirely.
+// A minimal fake service-role client that captures cost_logs inserts. `result`
+// lets a test force the insert to report an error; `throwOnFrom` forces `from`
+// to throw, standing in for a client that blows up entirely.
 function fakeClient(options: {
   result?: { error: { message: string } | null }
   throwOnFrom?: boolean
@@ -20,7 +22,7 @@ function fakeClient(options: {
   const client = {
     from(table: string) {
       if (options.throwOnFrom) throw new Error("boom")
-      expect(table).toBe("llm_calls")
+      expect(table).toBe("cost_logs")
       return {
         insert: async (payload: Record<string, unknown>) => {
           inserts.push(payload)
@@ -36,22 +38,35 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe("LLM_CALL_TYPE_LABELS", () => {
+describe("cost log labels", () => {
+  it("has a human label for every cost type", () => {
+    for (const type of COST_TYPES) {
+      expect(COST_TYPE_LABELS[type]).toBeTruthy()
+    }
+  })
+
   it("has a human label for every call type", () => {
     for (const type of LLM_CALL_TYPES) {
       expect(LLM_CALL_TYPE_LABELS[type]).toBeTruthy()
     }
   })
+
+  it("no longer treats transcoding as a call type", () => {
+    expect((LLM_CALL_TYPES as readonly string[]).includes("transcoding")).toBe(
+      false,
+    )
+  })
 })
 
-describe("recordLlmCall", () => {
+describe("recordCostLog", () => {
   it("inserts a normalised row, defaulting provider and clamping tokens", async () => {
     const { client, inserts } = fakeClient()
 
-    await recordLlmCall(
+    await recordCostLog(
       {
         userId: "user-1",
         analysedVideoId: "video-1",
+        costType: "llm_call",
         callType: "pacing",
         model: "gpt-4.1-mini",
         inputTokens: 10.6,
@@ -65,6 +80,7 @@ describe("recordLlmCall", () => {
     expect(inserts[0]).toMatchObject({
       user_id: "user-1",
       analysed_video_id: "video-1",
+      cost_type: "llm_call",
       call_type: "pacing",
       provider: "openai",
       model: "gpt-4.1-mini",
@@ -76,10 +92,20 @@ describe("recordLlmCall", () => {
     expect(inserts[0]).not.toHaveProperty("created_at")
   })
 
+  it("defaults call_type to null when absent", async () => {
+    const { client, inserts } = fakeClient()
+    await recordCostLog(
+      { costType: "qencode_transcode", provider: "qencode", costUsd: 0.15 },
+      client,
+    )
+    expect(inserts[0].call_type).toBeNull()
+  })
+
   it("passes through an explicit created_at", async () => {
     const { client, inserts } = fakeClient()
-    await recordLlmCall(
+    await recordCostLog(
       {
+        costType: "llm_call",
         callType: "snapshot",
         costUsd: 0,
         createdAt: "2026-07-21T10:00:00.000Z",
@@ -94,7 +120,7 @@ describe("recordLlmCall", () => {
     const { client } = fakeClient({ result: { error: { message: "nope" } } })
 
     await expect(
-      recordLlmCall({ callType: "audio", costUsd: 1 }, client),
+      recordCostLog({ costType: "llm_call", callType: "audio", costUsd: 1 }, client),
     ).resolves.toBeUndefined()
     expect(spy).toHaveBeenCalled()
   })
@@ -104,14 +130,14 @@ describe("recordLlmCall", () => {
     const { client } = fakeClient({ throwOnFrom: true })
 
     await expect(
-      recordLlmCall({ callType: "audio", costUsd: 1 }, client),
+      recordCostLog({ costType: "llm_call", callType: "audio", costUsd: 1 }, client),
     ).resolves.toBeUndefined()
     expect(spy).toHaveBeenCalled()
   })
 })
 
 describe("recordLlmCallCost", () => {
-  it("folds an LlmCallCost into a record", async () => {
+  it("records an llm_call cost with its call type", async () => {
     const { client, inserts } = fakeClient()
 
     await recordLlmCallCost(
@@ -127,6 +153,7 @@ describe("recordLlmCallCost", () => {
     )
 
     expect(inserts[0]).toMatchObject({
+      cost_type: "llm_call",
       call_type: "event_synthesis",
       provider: "openai",
       model: "gpt-4.1-mini",
@@ -140,7 +167,7 @@ describe("recordLlmCallCost", () => {
 })
 
 describe("recordTranscodingCall", () => {
-  it("records a qencode call with no model or tokens", async () => {
+  it("records a qencode_transcode cost with no call type, model or tokens", async () => {
     const { client, inserts } = fakeClient()
 
     await recordTranscodingCall(
@@ -150,7 +177,8 @@ describe("recordTranscodingCall", () => {
     )
 
     expect(inserts[0]).toMatchObject({
-      call_type: "transcoding",
+      cost_type: "qencode_transcode",
+      call_type: null,
       provider: "qencode",
       model: null,
       input_tokens: 0,

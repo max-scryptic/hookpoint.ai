@@ -1,7 +1,7 @@
 import { format } from "date-fns"
 
-import { LLM_CALL_TYPE_LABELS } from "@/lib/llm-call-types"
-import type { LlmCallRow } from "@/lib/admin/llm-calls"
+import { COST_TYPE_LABELS, LLM_CALL_TYPE_LABELS } from "@/lib/llm-call-types"
+import type { CostLogRow } from "@/lib/admin/llm-calls"
 import {
   Table,
   TableBody,
@@ -19,18 +19,11 @@ function formatUsd(value: number): string {
   return `$${value.toFixed(2)}`
 }
 
-function callTypeLabel(callType: string): string {
-  return (
-    LLM_CALL_TYPE_LABELS[callType as keyof typeof LLM_CALL_TYPE_LABELS] ??
-    callType
-  )
-}
-
-export function AdminLlmCallsTable({ rows }: { rows: LlmCallRow[] }) {
+export function AdminLlmCallsTable({ rows }: { rows: CostLogRow[] }) {
   if (rows.length === 0) {
     return (
       <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-        No LLM calls match these filters yet.
+        No cost logs match these filters yet.
       </p>
     )
   }
@@ -41,6 +34,7 @@ export function AdminLlmCallsTable({ rows }: { rows: LlmCallRow[] }) {
         <TableHeader>
           <TableRow>
             <TableHead>User</TableHead>
+            <TableHead>Cost type</TableHead>
             <TableHead>Type of call</TableHead>
             <TableHead>Model</TableHead>
             <TableHead className="text-right">Tokens (in / out)</TableHead>
@@ -56,14 +50,21 @@ export function AdminLlmCallsTable({ rows }: { rows: LlmCallRow[] }) {
                   <span className="text-muted-foreground">Unknown user</span>
                 )}
               </TableCell>
-              <TableCell>{callTypeLabel(row.callType)}</TableCell>
+              <TableCell>{COST_TYPE_LABELS[row.costType] ?? row.costType}</TableCell>
+              <TableCell>
+                {row.callType ? (
+                  LLM_CALL_TYPE_LABELS[row.callType] ?? row.callType
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
+              </TableCell>
               <TableCell className="text-sm text-muted-foreground">
                 {row.model ?? "—"}
               </TableCell>
               <TableCell className="text-right text-sm tabular-nums text-muted-foreground">
-                {row.callType === "transcoding"
-                  ? "—"
-                  : `${row.inputTokens.toLocaleString()} / ${row.outputTokens.toLocaleString()}`}
+                {row.callType
+                  ? `${row.inputTokens.toLocaleString()} / ${row.outputTokens.toLocaleString()}`
+                  : "—"}
               </TableCell>
               <TableCell className="text-right font-medium tabular-nums">
                 {formatUsd(row.costUsd)}
