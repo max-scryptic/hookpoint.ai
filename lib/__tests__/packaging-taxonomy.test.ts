@@ -50,6 +50,8 @@ const validDetail = {
     clickDrivers: ["identity", "curiosity"],
     primaryDriver: "identity",
     archetype: "personal_stakes_confession",
+    trendRelevance: 4,
+    trendRelevanceConfidence: 6,
   },
 }
 
@@ -125,6 +127,41 @@ describe("isPackagingTaxonomyOutput", () => {
           ...validDetail,
           title: { ...validDetail.title, specificity: 11 },
         },
+      }),
+    ).toBe(false)
+  })
+
+  it("rejects a detail block whose trend relevance is out of range", () => {
+    expect(
+      isPackagingTaxonomyOutput({
+        ...valid,
+        detail: {
+          ...validDetail,
+          drivers: { ...validDetail.drivers, trendRelevance: 11 },
+        },
+      }),
+    ).toBe(false)
+  })
+
+  it("rejects a detail block missing the trend relevance score", () => {
+    const { trendRelevance: _tr, ...driversWithoutTrend } = validDetail.drivers
+    void _tr
+    expect(
+      isPackagingTaxonomyOutput({
+        ...valid,
+        detail: { ...validDetail, drivers: driversWithoutTrend },
+      }),
+    ).toBe(false)
+  })
+
+  it("rejects a detail block missing the trend relevance confidence", () => {
+    const { trendRelevanceConfidence: _c, ...driversWithoutConfidence } =
+      validDetail.drivers
+    void _c
+    expect(
+      isPackagingTaxonomyOutput({
+        ...valid,
+        detail: { ...validDetail, drivers: driversWithoutConfidence },
       }),
     ).toBe(false)
   })

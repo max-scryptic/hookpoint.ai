@@ -298,6 +298,14 @@ const ORDINAL_AXES: OrdinalDescriptor[] = [
     direction: "higher",
     get: (t) => t.detail?.cross.hookDeliversPromise ?? null,
   },
+  // Drivers.
+  {
+    key: "drivers.trendRelevance",
+    label: "Trend relevance",
+    surface: "drivers",
+    direction: "higher",
+    get: (t) => t.detail?.drivers.trendRelevance ?? null,
+  },
 ]
 
 interface CategoricalDescriptor {
