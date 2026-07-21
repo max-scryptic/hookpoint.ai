@@ -8,6 +8,8 @@
 // Mirrors lib/pacing-analysis.ts: a single OpenAI Responses call with a strict
 // JSON schema, one output entry per supplied moment, keyed by index.
 
+import { recordLlmCallCost, type LlmLogContext } from "@/lib/llm-calls"
+import { responsesCallCost, type ResponsesUsage } from "@/lib/llm-cost"
 import type { RetentionWindow } from "@/lib/retention-windows"
 import {
   transcriptForSegment,
@@ -146,6 +148,7 @@ export async function generateRetentionAttribution(
   video: Pick<VideoDetails, "title" | "durationSeconds">,
   windows: RetentionWindow[],
   transcript: TranscriptCue[],
+  logContext?: LlmLogContext,
 ): Promise<RetentionAttribution | null> {
   const moments = prepareRetentionMoments(windows, transcript)
   if (moments.length === 0 || moments.every((moment) => moment.said === "")) {
@@ -237,6 +240,7 @@ export async function generateRetentionAttribution(
 
   const json = (await response.json()) as {
     output?: Array<{ content?: Array<{ type?: string; text?: string }> }>
+    usage?: ResponsesUsage
   }
   const outputText = extractOutputText(json)
   if (!outputText) throw new Error("OpenAI returned no retention attribution text")
@@ -244,6 +248,14 @@ export async function generateRetentionAttribution(
   const parsed: unknown = JSON.parse(outputText)
   if (!isModelOutput(parsed)) {
     throw new Error("OpenAI returned an invalid retention attribution")
+  }
+
+  if (logContext) {
+    await recordLlmCallCost(
+      "retention_attribution",
+      responsesCallCost(model, json.usage),
+      logContext,
+    )
   }
 
   const byIndex = new Map(parsed.moments.map((moment) => [moment.momentIndex, moment]))

@@ -20,6 +20,8 @@
 // lib/packaging-comparison.ts). `detail` is optional so v1 rows keep working
 // and heal to v2 through the same backfill path.
 
+import { recordLlmCallCost, type LlmLogContext } from "@/lib/llm-calls"
+import { responsesCallCost, type ResponsesUsage } from "@/lib/llm-cost"
 import {
   transcriptForSegment,
   type TranscriptCue,
@@ -688,6 +690,7 @@ function toPackagingDetail(detail: ModelDetailOutput): PackagingDetail {
 export async function generatePackagingTaxonomy(
   video: Pick<VideoDetails, "title" | "thumbnailUrl">,
   transcript: TranscriptCue[],
+  logContext?: LlmLogContext,
 ): Promise<PackagingTaxonomy | null> {
   if (!video.thumbnailUrl) return null
 
@@ -767,6 +770,7 @@ export async function generatePackagingTaxonomy(
 
   const json = (await response.json()) as {
     output?: Array<{ content?: Array<{ type?: string; text?: string }> }>
+    usage?: ResponsesUsage
   }
   const outputText = extractOutputText(json)
   if (!outputText) throw new Error("OpenAI returned no packaging taxonomy text")
@@ -774,6 +778,14 @@ export async function generatePackagingTaxonomy(
   const parsed: unknown = JSON.parse(outputText)
   if (!isPackagingTaxonomyOutput(parsed)) {
     throw new Error("OpenAI returned an invalid packaging taxonomy")
+  }
+
+  if (logContext) {
+    await recordLlmCallCost(
+      "packaging_taxonomy",
+      responsesCallCost(model, json.usage),
+      logContext,
+    )
   }
 
   return {

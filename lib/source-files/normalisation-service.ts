@@ -23,6 +23,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import { recordTranscodingCall } from "@/lib/llm-calls"
 import { QencodeClient, type QencodeQuery } from "@/lib/qencode/qencode"
 import {
   getAnalysisProxyTargetHeight,
@@ -39,6 +40,7 @@ import {
   type SourceFile,
 } from "@/lib/source-files/source-files"
 import type { StorageProvider } from "@/lib/storage"
+import { transcodingCostUsd } from "@/lib/transcoding-cost"
 
 const NORMALISATION_PROVIDER = "qencode"
 
@@ -412,6 +414,20 @@ export async function applyNormalisationCallback(
     storagePath: null,
     normalisationError: null,
   })
+
+  // Log the one-time Qencode transcoding cost to the account-wide LLM call log,
+  // derived from the transcoded video's duration. Best-effort: never let a
+  // costing write fail a completed normalisation.
+  await recordTranscodingCall(
+    transcodingCostUsd(
+      sourceFile.uploadedDurationSeconds ?? sourceFile.youtubeDurationSeconds,
+    ),
+    {
+      userId: sourceFile.userId,
+      analysedVideoId: sourceFile.analysedVideoId,
+    },
+    admin,
+  )
 
   // Delete the (large) original master last, best-effort: the proxy is already
   // the source of truth, so an orphaned original is a cost nit, not a bug.

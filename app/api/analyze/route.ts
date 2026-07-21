@@ -265,7 +265,9 @@ export async function POST(request: NextRequest) {
     // analysis against — fall back to generating one just for this response.
     if (!videoPersisted && transcript.length > 0) {
       try {
-        pacingAnalysis = await generatePacingAnalysis(video, transcript)
+        pacingAnalysis = await generatePacingAnalysis(video, transcript, {
+          userId: user.id,
+        })
       } catch (pacingError) {
         console.error("Failed to generate pacing analysis", pacingError)
       }

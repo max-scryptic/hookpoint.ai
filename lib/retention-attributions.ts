@@ -89,6 +89,7 @@ export async function getOrGenerateRetentionAttribution(
       video,
       windows,
       transcript,
+      { userId, analysedVideoId },
     )
     if (attribution) {
       await saveRetentionAttribution(supabase, userId, analysedVideoId, attribution)

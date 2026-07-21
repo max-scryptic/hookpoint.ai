@@ -23,6 +23,7 @@ import {
   type ChannelEventHistory,
 } from "@/lib/channel-event-history"
 import { runWithConcurrency } from "@/lib/concurrency"
+import { recordLlmCallCost } from "@/lib/llm-calls"
 import { responsesCallCost, type LlmCallCost } from "@/lib/llm-cost"
 import { recordRetentionWindowCost } from "@/lib/retention-window-costs"
 import {
@@ -670,6 +671,12 @@ export async function synthesizeRetentionWindowEvents(
           cost,
         }).catch((error) =>
           console.error("Failed to record event synthesis cost", error),
+        )
+        await recordLlmCallCost(
+          "event_synthesis",
+          cost,
+          { userId, analysedVideoId },
+          admin,
         )
       } catch (error) {
         console.error("Failed to synthesize retention window events", error)

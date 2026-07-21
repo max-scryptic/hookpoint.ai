@@ -9,6 +9,8 @@
 // promise); retention, pacing and watch-through belong to the separate
 // retention analysis, so the hook is judged only on what it communicates here.
 
+import { recordLlmCallCost, type LlmLogContext } from "@/lib/llm-calls"
+import { responsesCallCost, type ResponsesUsage } from "@/lib/llm-cost"
 import type { PackagingTaxonomy } from "@/lib/packaging-taxonomy"
 import {
   transcriptForSegment,
@@ -175,6 +177,7 @@ function toComponentFeedback(
 export async function generatePackagingAlignment(
   video: Pick<VideoDetails, "title" | "description" | "thumbnailUrl">,
   transcript: TranscriptCue[],
+  logContext?: LlmLogContext,
 ): Promise<PackagingAlignment | null> {
   if (!video.thumbnailUrl) return null
 
@@ -250,6 +253,7 @@ export async function generatePackagingAlignment(
 
   const json = (await response.json()) as {
     output?: Array<{ content?: Array<{ type?: string; text?: string }> }>
+    usage?: ResponsesUsage
   }
   const outputText = extractOutputText(json)
   if (!outputText) throw new Error("OpenAI returned no packaging alignment text")
@@ -257,6 +261,14 @@ export async function generatePackagingAlignment(
   const parsed: unknown = JSON.parse(outputText)
   if (!isModelOutput(parsed)) {
     throw new Error("OpenAI returned an invalid packaging alignment")
+  }
+
+  if (logContext) {
+    await recordLlmCallCost(
+      "packaging_alignment",
+      responsesCallCost(model, json.usage),
+      logContext,
+    )
   }
 
   return {
