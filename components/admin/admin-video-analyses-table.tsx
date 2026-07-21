@@ -1,5 +1,8 @@
+"use client"
+
 import { format } from "date-fns"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { ExternalLinkIcon } from "lucide-react"
 
 import type { AdminVideoAnalysis } from "@/lib/admin/video-analysis"
@@ -12,6 +15,33 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
+// Enough precision for the sub-cent figures a single video can cost, without
+// trailing noise on larger totals. Matches the cost-log table's formatting.
+function formatUsd(value: number): string {
+  if (value === 0) return "$0.00"
+  if (value < 0.01) return `$${value.toFixed(4)}`
+  return `$${value.toFixed(2)}`
+}
+
+// A right-aligned currency cell that mutes an em-dash when nothing has been
+// spent in that bucket, so real costs stay scannable against the empty rows.
+function CostCell({ value }: { value: number }) {
+  return (
+    <TableCell className="hidden px-4 py-3 text-right text-sm tabular-nums sm:table-cell">
+      {value > 0 ? (
+        formatUsd(value)
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      )}
+    </TableCell>
+  )
+}
+
+// The admin user-detail "Analysed videos" listing. Adopts the shared front-end
+// table baseline (card surface, accent header, clickable rows) so admin and
+// product surfaces read as one system. Each row opens the video's deep-analysis
+// detail page; the external icon still opens the source video on YouTube in a
+// new tab, and the per-video light/deep spend rolls up alongside the events.
 export function AdminVideoAnalysesTable({
   userId,
   videos,
@@ -19,6 +49,8 @@ export function AdminVideoAnalysesTable({
   userId: string
   videos: AdminVideoAnalysis[]
 }) {
+  const router = useRouter()
+
   if (videos.length === 0) {
     return (
       <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
@@ -28,53 +60,78 @@ export function AdminVideoAnalysesTable({
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border">
-      <Table>
+    <div className="overflow-hidden rounded-xl border bg-card">
+      <Table className="text-left">
         <TableHeader>
-          <TableRow>
-            <TableHead>Video</TableHead>
-            <TableHead className="text-right">Events generated</TableHead>
-            <TableHead>Analysed</TableHead>
+          <TableRow className="bg-accent text-xs text-accent-foreground hover:bg-accent">
+            <TableHead className="px-4 py-3 text-accent-foreground">
+              Video
+            </TableHead>
+            <TableHead className="hidden px-4 py-3 text-right text-accent-foreground sm:table-cell">
+              Light analysis
+            </TableHead>
+            <TableHead className="hidden px-4 py-3 text-right text-accent-foreground sm:table-cell">
+              Deep analysis
+            </TableHead>
+            <TableHead className="px-4 py-3 text-right text-accent-foreground">
+              Events generated
+            </TableHead>
+            <TableHead className="px-4 py-3 text-accent-foreground">
+              Analysed
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {videos.map((video) => (
-            <TableRow key={video.id}>
-              <TableCell className="max-w-[360px]">
-                <div className="flex items-center gap-2">
-                  {/* The title links to the admin video detail page, where the
-                      full deep-analysis evidence (every synthesized event and
-                      the raw signals behind it) can be reviewed. The external
-                      icon still opens the source video on YouTube. */}
-                  <Link
-                    href={`/admin/users/${userId}/videos/${video.id}`}
-                    className="min-w-0 font-medium hover:underline"
-                  >
-                    <span className="block truncate">{video.title}</span>
-                  </Link>
-                  <a
-                    href={`https://www.youtube.com/watch?v=${video.videoId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label="Open on YouTube"
-                    className="shrink-0 text-muted-foreground hover:text-foreground"
-                  >
-                    <ExternalLinkIcon className="size-3.5" />
-                  </a>
-                </div>
-              </TableCell>
-              <TableCell className="text-right tabular-nums">
-                {video.eventCount > 0 ? (
-                  video.eventCount.toLocaleString()
-                ) : (
-                  <span className="text-muted-foreground">—</span>
-                )}
-              </TableCell>
-              <TableCell className="text-sm text-muted-foreground">
-                {format(new Date(video.dateAnalysed), "d MMM yyyy, HH:mm")}
-              </TableCell>
-            </TableRow>
-          ))}
+          {videos.map((video) => {
+            const href = `/admin/users/${userId}/videos/${video.id}`
+            return (
+              <TableRow
+                key={video.id}
+                onClick={() => router.push(href)}
+                className="cursor-pointer hover:bg-muted/40"
+              >
+                <TableCell className="max-w-[360px] px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    {/* A real anchor keeps the row keyboard-focusable and
+                        supports middle/cmd-click; the row's onClick handles
+                        clicks elsewhere. Both land on the deep-analysis detail
+                        page. */}
+                    <Link
+                      href={href}
+                      className="min-w-0 font-medium hover:underline focus-visible:underline focus-visible:outline-none"
+                    >
+                      <span className="block truncate">{video.title}</span>
+                    </Link>
+                    {/* Opens the source video on YouTube in a new tab. Stops
+                        propagation so it doesn't also trigger the row's
+                        navigation to the detail page. */}
+                    <a
+                      href={`https://www.youtube.com/watch?v=${video.videoId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label="Open on YouTube"
+                      onClick={(event) => event.stopPropagation()}
+                      className="shrink-0 text-muted-foreground hover:text-foreground"
+                    >
+                      <ExternalLinkIcon className="size-3.5" />
+                    </a>
+                  </div>
+                </TableCell>
+                <CostCell value={video.lightCostUsd} />
+                <CostCell value={video.deepCostUsd} />
+                <TableCell className="px-4 py-3 text-right tabular-nums">
+                  {video.eventCount > 0 ? (
+                    video.eventCount.toLocaleString()
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+                <TableCell className="px-4 py-3 text-sm text-muted-foreground">
+                  {format(new Date(video.dateAnalysed), "d MMM yyyy, HH:mm")}
+                </TableCell>
+              </TableRow>
+            )
+          })}
         </TableBody>
       </Table>
     </div>

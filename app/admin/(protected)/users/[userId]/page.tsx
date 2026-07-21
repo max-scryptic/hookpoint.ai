@@ -376,8 +376,9 @@ export default async function AdminUserDetailPage({
                 Analysed videos
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Every video this user has analysed, with the retention events
-                each produced. Most recently analysed first.
+                Every video this user has analysed, with its light/deep spend
+                and the retention events each produced. Select a row for the
+                full breakdown. Most recently analysed first.
               </p>
             </div>
             <AdminVideoAnalysesTable userId={user.id} videos={videoAnalyses} />

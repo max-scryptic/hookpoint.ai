@@ -1,4 +1,9 @@
 import { createAdminClient } from "@/lib/supabase/admin"
+import {
+  analysisCostBucket,
+  type CostType,
+  type LlmCallType,
+} from "@/lib/llm-call-types"
 import type { VideoDetails } from "@/lib/youtube/youtube"
 
 // Read-side helper for the admin user-detail "Video analysis" tab. Uses the
@@ -15,6 +20,11 @@ export type AdminVideoAnalysis = {
   // Retention-window events synthesized for this video (0 when it has only had
   // light analysis, or deep analysis hasn't produced events yet).
   eventCount: number
+  // What serving this video has cost (USD), split into the initial light
+  // analysis and the opt-in deep dive. 0 when nothing has been logged against
+  // the video for that bucket yet.
+  lightCostUsd: number
+  deepCostUsd: number
 }
 
 // Lists a user's analysed videos (most recently analysed first), each annotated
@@ -26,7 +36,7 @@ export async function getUserVideoAnalyses(
 ): Promise<AdminVideoAnalysis[]> {
   const supabase = createAdminClient()
 
-  const [videos, events] = await Promise.all([
+  const [videos, events, costs] = await Promise.all([
     supabase
       .from("analysed_videos")
       .select("id, video_id, video_title, date_analysed")
@@ -35,6 +45,10 @@ export async function getUserVideoAnalyses(
     supabase
       .from("retention_window_events")
       .select("analysed_video_id")
+      .eq("user_id", userId),
+    supabase
+      .from("cost_logs")
+      .select("analysed_video_id, cost_type, call_type, cost_usd")
       .eq("user_id", userId),
   ])
 
@@ -45,6 +59,11 @@ export async function getUserVideoAnalyses(
     // Events are an optional enrichment — a failure there should still let the
     // video list render (with zero counts) rather than sink the tab.
     console.error("Failed to load retention events for user", events.error)
+  }
+  if (costs.error) {
+    // Costs are likewise an enrichment — a failure leaves the list rendering
+    // with zero spend rather than sinking the tab.
+    console.error("Failed to load video costs for user", costs.error)
   }
 
   const eventCounts = new Map<string, number>()
@@ -58,18 +77,44 @@ export async function getUserVideoAnalyses(
     )
   }
 
+  // Tally each video's spend into its light/deep buckets in one pass. Rows with
+  // no analysed_video_id (costs we couldn't attribute to a specific video) are
+  // skipped rather than mis-assigned.
+  const costTotals = new Map<string, { light: number; deep: number }>()
+  for (const row of (costs.error ? [] : (costs.data ?? [])) as {
+    analysed_video_id: string | null
+    cost_type: CostType
+    call_type: LlmCallType | null
+    cost_usd: number | string
+  }[]) {
+    if (!row.analysed_video_id) continue
+    const totals = costTotals.get(row.analysed_video_id) ?? {
+      light: 0,
+      deep: 0,
+    }
+    totals[analysisCostBucket(row.cost_type, row.call_type)] += Number(
+      row.cost_usd,
+    )
+    costTotals.set(row.analysed_video_id, totals)
+  }
+
   return ((videos.data ?? []) as {
     id: string
     video_id: string
     video_title: string
     date_analysed: string
-  }[]).map((row) => ({
-    id: row.id,
-    videoId: row.video_id,
-    title: row.video_title,
-    dateAnalysed: row.date_analysed,
-    eventCount: eventCounts.get(row.id) ?? 0,
-  }))
+  }[]).map((row) => {
+    const totals = costTotals.get(row.id)
+    return {
+      id: row.id,
+      videoId: row.video_id,
+      title: row.video_title,
+      dateAnalysed: row.date_analysed,
+      eventCount: eventCounts.get(row.id) ?? 0,
+      lightCostUsd: totals?.light ?? 0,
+      deepCostUsd: totals?.deep ?? 0,
+    }
+  })
 }
 
 // A single analysed video, keyed on its analysed_videos row UUID and scoped to
