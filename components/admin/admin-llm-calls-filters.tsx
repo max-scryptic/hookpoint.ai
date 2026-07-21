@@ -1,10 +1,19 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { endOfDay, startOfDay } from "date-fns"
+import { ListFilterIcon, UsersIcon, XIcon } from "lucide-react"
+import { type DateRange } from "react-day-picker"
 
 import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { DatePickerWithRange } from "@/components/date-range-picker"
 import {
   COST_TYPES,
   COST_TYPE_LABELS,
@@ -14,32 +23,6 @@ import {
   type LlmCallType,
 } from "@/lib/llm-call-types"
 import type { CostLogUserOption } from "@/lib/admin/llm-calls"
-import { cn } from "@/lib/utils"
-
-const selectClasses = cn(
-  "h-8 w-full min-w-0 rounded-lg border border-input bg-card px-2.5 py-1 text-sm transition-colors outline-none",
-  "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30",
-)
-
-// Converts an ISO timestamp to the `yyyy-MM-ddTHH:mm` a datetime-local input
-// wants, in the viewer's local time. Empty for a missing/invalid value.
-function toDatetimeLocal(iso?: string): string {
-  if (!iso) return ""
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return ""
-  const pad = (n: number) => String(n).padStart(2, "0")
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
-    date.getDate(),
-  )}T${pad(date.getHours())}:${pad(date.getMinutes())}`
-}
-
-// Local datetime-local value -> ISO string for the query, or undefined.
-function fromDatetimeLocal(value: string): string | undefined {
-  if (!value) return undefined
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return undefined
-  return date.toISOString()
-}
 
 export interface CostLogFilterValues {
   userId?: string
@@ -49,10 +32,23 @@ export interface CostLogFilterValues {
   to?: string
 }
 
-// The filter bar for the admin cost log page: user, cost type, type of call and
-// a datetime window (from / to). Filtering is done server-side — applying
-// pushes the choices into the URL query, which the server page reads and
-// re-queries.
+// Turns the stored ISO from/to bounds back into a react-day-picker range so the
+// date picker reflects whatever window is currently applied.
+function toDateRange(from?: string, to?: string): DateRange | undefined {
+  const start = from ? new Date(from) : undefined
+  const end = to ? new Date(to) : undefined
+  if (start && Number.isNaN(start.getTime())) return undefined
+  if (end && Number.isNaN(end.getTime())) return undefined
+  if (!start && !end) return undefined
+  return { from: start, to: end }
+}
+
+// The filter bar for the admin cost log, built from the same widgets the
+// front-end video browser uses: dropdown radio menus for the single-choice
+// filters and the shared date-range picker for the datetime window. Filtering is
+// server-side, so every change pushes the choices into the URL query, which the
+// server page reads and re-queries — no separate "apply" step, matching the
+// instant filtering on the front-end.
 export function AdminLlmCallsFilters({
   userOptions,
   current,
@@ -61,121 +57,142 @@ export function AdminLlmCallsFilters({
   current: CostLogFilterValues
 }) {
   const router = useRouter()
-  const [userId, setUserId] = useState(current.userId ?? "")
-  const [costType, setCostType] = useState<string>(current.costType ?? "")
-  const [callType, setCallType] = useState<string>(current.callType ?? "")
-  const [from, setFrom] = useState(toDatetimeLocal(current.from))
-  const [to, setTo] = useState(toDatetimeLocal(current.to))
 
-  function apply() {
+  // Builds the next query from the current filters plus the changed field and
+  // navigates. Passing `null` for a field clears it.
+  function pushWith(overrides: Partial<Record<keyof CostLogFilterValues, string | null>>) {
+    const next: Record<keyof CostLogFilterValues, string | undefined> = {
+      userId: current.userId,
+      costType: current.costType,
+      callType: current.callType,
+      from: current.from,
+      to: current.to,
+    }
+    for (const [key, value] of Object.entries(overrides)) {
+      next[key as keyof CostLogFilterValues] = value ?? undefined
+    }
     const params = new URLSearchParams()
-    if (userId) params.set("userId", userId)
-    if (costType) params.set("costType", costType)
-    if (callType) params.set("callType", callType)
-    const fromIso = fromDatetimeLocal(from)
-    const toIso = fromDatetimeLocal(to)
-    if (fromIso) params.set("from", fromIso)
-    if (toIso) params.set("to", toIso)
+    if (next.userId) params.set("userId", next.userId)
+    if (next.costType) params.set("costType", next.costType)
+    if (next.callType) params.set("callType", next.callType)
+    if (next.from) params.set("from", next.from)
+    if (next.to) params.set("to", next.to)
     const query = params.toString()
     router.push(query ? `/admin/llm-calls?${query}` : "/admin/llm-calls")
   }
 
-  function reset() {
-    setUserId("")
-    setCostType("")
-    setCallType("")
-    setFrom("")
-    setTo("")
+  function changeDateRange(range: DateRange | undefined) {
+    pushWith({
+      from: range?.from ? startOfDay(range.from).toISOString() : null,
+      to: range?.to ? endOfDay(range.to).toISOString() : null,
+    })
+  }
+
+  function clearFilters() {
     router.push("/admin/llm-calls")
   }
 
+  const selectedUser = userOptions.find((option) => option.id === current.userId)
+  const userLabel = selectedUser?.email ?? "All users"
+  const costTypeLabel = current.costType
+    ? COST_TYPE_LABELS[current.costType]
+    : "All cost types"
+  const callTypeLabel = current.callType
+    ? LLM_CALL_TYPE_LABELS[current.callType]
+    : "All call types"
+
+  const hasActiveFilters =
+    Boolean(current.userId) ||
+    Boolean(current.costType) ||
+    Boolean(current.callType) ||
+    Boolean(current.from) ||
+    Boolean(current.to)
+
   return (
-    <div className="rounded-lg border bg-card p-4">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        <div className="space-y-1.5">
-          <Label htmlFor="filter-user">User</Label>
-          <select
-            id="filter-user"
-            className={selectClasses}
-            value={userId}
-            onChange={(event) => setUserId(event.target.value)}
+    <div className="flex flex-wrap items-center gap-2">
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={<Button variant="outline" size="sm" className="h-9 gap-2" />}
+        >
+          <UsersIcon className="size-4" />
+          <span className="max-w-[12rem] truncate">{userLabel}</span>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="max-h-72">
+          <DropdownMenuRadioGroup
+            value={current.userId ?? ""}
+            onValueChange={(value) => pushWith({ userId: value || null })}
           >
-            <option value="">All users</option>
+            <DropdownMenuRadioItem value="">All users</DropdownMenuRadioItem>
             {userOptions.map((option) => (
-              <option key={option.id} value={option.id}>
+              <DropdownMenuRadioItem key={option.id} value={option.id}>
                 {option.email}
-              </option>
+              </DropdownMenuRadioItem>
             ))}
-          </select>
-        </div>
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="filter-cost-type">Cost type</Label>
-          <select
-            id="filter-cost-type"
-            className={selectClasses}
-            value={costType}
-            onChange={(event) => setCostType(event.target.value)}
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={<Button variant="outline" size="sm" className="h-9 gap-2" />}
+        >
+          <ListFilterIcon className="size-4" />
+          {costTypeLabel}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          <DropdownMenuRadioGroup
+            value={current.costType ?? ""}
+            onValueChange={(value) => pushWith({ costType: value || null })}
           >
-            <option value="">All cost types</option>
+            <DropdownMenuRadioItem value="">All cost types</DropdownMenuRadioItem>
             {COST_TYPES.map((type) => (
-              <option key={type} value={type}>
+              <DropdownMenuRadioItem key={type} value={type}>
                 {COST_TYPE_LABELS[type]}
-              </option>
+              </DropdownMenuRadioItem>
             ))}
-          </select>
-        </div>
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="filter-type">Type of call</Label>
-          <select
-            id="filter-type"
-            className={selectClasses}
-            value={callType}
-            onChange={(event) => setCallType(event.target.value)}
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={<Button variant="outline" size="sm" className="h-9 gap-2" />}
+        >
+          <ListFilterIcon className="size-4" />
+          {callTypeLabel}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          <DropdownMenuRadioGroup
+            value={current.callType ?? ""}
+            onValueChange={(value) => pushWith({ callType: value || null })}
           >
-            <option value="">All call types</option>
+            <DropdownMenuRadioItem value="">All call types</DropdownMenuRadioItem>
             {LLM_CALL_TYPES.map((type) => (
-              <option key={type} value={type}>
+              <DropdownMenuRadioItem key={type} value={type}>
                 {LLM_CALL_TYPE_LABELS[type]}
-              </option>
+              </DropdownMenuRadioItem>
             ))}
-          </select>
-        </div>
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="filter-from">From</Label>
-          <input
-            id="filter-from"
-            type="datetime-local"
-            className={selectClasses}
-            value={from}
-            max={to || undefined}
-            onChange={(event) => setFrom(event.target.value)}
-          />
-        </div>
+      <DatePickerWithRange
+        value={toDateRange(current.from, current.to)}
+        onChange={changeDateRange}
+        placeholder="Date range"
+      />
 
-        <div className="space-y-1.5">
-          <Label htmlFor="filter-to">To</Label>
-          <input
-            id="filter-to"
-            type="datetime-local"
-            className={selectClasses}
-            value={to}
-            min={from || undefined}
-            onChange={(event) => setTo(event.target.value)}
-          />
-        </div>
-      </div>
-
-      <div className="mt-4 flex items-center gap-2">
-        <Button size="sm" onClick={apply}>
-          Apply filters
+      {hasActiveFilters && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-9 gap-1.5"
+          onClick={clearFilters}
+        >
+          <XIcon className="size-4" />
+          Clear
         </Button>
-        <Button size="sm" variant="ghost" onClick={reset}>
-          Reset
-        </Button>
-      </div>
+      )}
     </div>
   )
 }
