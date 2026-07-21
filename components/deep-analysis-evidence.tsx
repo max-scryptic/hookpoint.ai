@@ -92,9 +92,15 @@ const KIND_LABELS: Record<WindowEvidence["window"]["kind"], string> = {
 export function DeepAnalysisEvidence({
   evidence,
   videoId,
+  readOnly = false,
 }: {
   evidence: DeepAnalysisEvidenceData
   videoId: string
+  // Hides the per-window "was this useful?" feedback control. The feedback API
+  // is scoped to the signed-in user's own videos, so it can't be submitted from
+  // an admin viewing someone else's analysis — the admin oversight view passes
+  // this to render the evidence read-only.
+  readOnly?: boolean
 }) {
   if (evidence.windows.length === 0) return null
 
@@ -109,7 +115,12 @@ export function DeepAnalysisEvidence({
 
       <div className="flex flex-col gap-3">
         {evidence.windows.map((item) => (
-          <WindowEvidenceCard key={item.window.id} item={item} videoId={videoId} />
+          <WindowEvidenceCard
+            key={item.window.id}
+            item={item}
+            videoId={videoId}
+            readOnly={readOnly}
+          />
         ))}
       </div>
     </section>
@@ -161,9 +172,11 @@ function VideoCostSummary({
 function WindowEvidenceCard({
   item,
   videoId,
+  readOnly = false,
 }: {
   item: WindowEvidence
   videoId: string
+  readOnly?: boolean
 }) {
   const { window } = item
   const from = window.analysisFromSeconds ?? window.fromSeconds
@@ -196,11 +209,13 @@ function WindowEvidenceCard({
       <CollapsibleContent className="flex flex-col gap-5 border-t p-4">
         <EventsSection events={item.events} />
         <RecommendationsSection recommendations={item.recommendations} />
-        <DeepAnalysisFeedback
-          videoId={videoId}
-          retentionWindowId={window.id}
-          initialFeedback={item.feedback}
-        />
+        {!readOnly && (
+          <DeepAnalysisFeedback
+            videoId={videoId}
+            retentionWindowId={window.id}
+            initialFeedback={item.feedback}
+          />
+        )}
         <div className="flex flex-col divide-y rounded-lg border">
           <RetentionSection window={window} />
           <EditingSection editing={item.editing} baseline={item.baseline} />

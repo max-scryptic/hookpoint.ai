@@ -380,7 +380,7 @@ export default async function AdminUserDetailPage({
                 each produced. Most recently analysed first.
               </p>
             </div>
-            <AdminVideoAnalysesTable videos={videoAnalyses} />
+            <AdminVideoAnalysesTable userId={user.id} videos={videoAnalyses} />
           </section>
         </TabsContent>
 
