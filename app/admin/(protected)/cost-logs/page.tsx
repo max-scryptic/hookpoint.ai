@@ -4,6 +4,7 @@ import { requireAdminUser } from "@/lib/admin/auth"
 import {
   listCostLogs,
   listCostLogUserOptions,
+  listCostLogVideoOptions,
   type CostLogFilters,
 } from "@/lib/admin/llm-calls"
 import {
@@ -51,6 +52,7 @@ export default async function AdminLlmCallsPage({
 }: {
   searchParams?: Promise<{
     userId?: string
+    videoId?: string
     costType?: string
     callType?: string
     from?: string
@@ -59,19 +61,26 @@ export default async function AdminLlmCallsPage({
 }) {
   const resolved = (await searchParams) ?? {}
 
+  const userId = resolved.userId || undefined
+
   const filters: CostLogFilters = {
-    userId: resolved.userId || undefined,
+    userId,
+    // A video belongs to one user, so the video filter only applies once a user
+    // is selected; ignore any stray videoId that arrives without a user.
+    videoId: userId ? resolved.videoId || undefined : undefined,
     costType: parseCostType(resolved.costType),
     callType: parseCallType(resolved.callType),
     from: parseDate(resolved.from),
     to: parseDate(resolved.to),
   }
 
-  const [, { rows, totalCostUsd, truncated }, userOptions] = await Promise.all([
-    requireAdminUser(),
-    listCostLogs(filters),
-    listCostLogUserOptions(),
-  ])
+  const [, { rows, totalCostUsd, truncated }, userOptions, videoOptions] =
+    await Promise.all([
+      requireAdminUser(),
+      listCostLogs(filters),
+      listCostLogUserOptions(),
+      listCostLogVideoOptions(userId),
+    ])
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -84,8 +93,10 @@ export default async function AdminLlmCallsPage({
 
       <AdminLlmCallsFilters
         userOptions={userOptions}
+        videoOptions={videoOptions}
         current={{
           userId: filters.userId,
+          videoId: filters.videoId,
           costType: filters.costType,
           callType: filters.callType,
           from: filters.from,

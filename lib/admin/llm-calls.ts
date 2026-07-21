@@ -28,6 +28,9 @@ export interface CostLogRow {
 
 export interface CostLogFilters {
   userId?: string
+  // Scopes the log to a single analysed video. Only meaningful alongside a
+  // userId (a video belongs to one user), which the filter UI enforces.
+  videoId?: string
   costType?: CostType
   callType?: LlmCallType
   // ISO timestamps bounding the cost time (inclusive).
@@ -80,6 +83,7 @@ export async function listCostLogs(
     .limit(ROW_LIMIT + 1)
 
   if (filters.userId) query = query.eq("user_id", filters.userId)
+  if (filters.videoId) query = query.eq("analysed_video_id", filters.videoId)
   if (filters.costType) query = query.eq("cost_type", filters.costType)
   if (filters.callType) query = query.eq("call_type", filters.callType)
   if (filters.from) query = query.gte("created_at", filters.from)
@@ -235,4 +239,47 @@ export async function listCostLogUserOptions(): Promise<CostLogUserOption[]> {
       email: (row.email as string | null) ?? "",
     }))
     .filter((option) => option.email !== "")
+}
+
+export interface CostLogVideoOption {
+  id: string
+  title: string
+}
+
+// The set of videos offered in the page's video filter, scoped to a single
+// user. Only videos that actually carry cost logs for that user are listed, so
+// every option yields results: we read the distinct analysed_video_ids from the
+// user's cost logs, then resolve their titles. Returns an empty list when no
+// user is selected (the video filter is only meaningful once a user is chosen).
+export async function listCostLogVideoOptions(
+  userId?: string,
+): Promise<CostLogVideoOption[]> {
+  if (!userId) return []
+
+  const supabase = createAdminClient()
+
+  const { data, error } = await supabase
+    .from("cost_logs")
+    .select("analysed_video_id")
+    .eq("user_id", userId)
+    .not("analysed_video_id", "is", null)
+
+  if (error) {
+    throw new Error(`Failed to list videos for cost log filter: ${error.message}`)
+  }
+
+  const videoIds = Array.from(
+    new Set(
+      ((data ?? []) as { analysed_video_id: string | null }[])
+        .map((row) => row.analysed_video_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  )
+  if (videoIds.length === 0) return []
+
+  const titleByVideoId = await resolveVideoTitles(supabase, videoIds)
+
+  return videoIds
+    .map((id) => ({ id, title: titleByVideoId.get(id) ?? "Untitled video" }))
+    .sort((a, b) => a.title.localeCompare(b.title))
 }
