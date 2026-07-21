@@ -115,6 +115,26 @@ export async function listCostLogs(
   return { rows, totalCostUsd, truncated }
 }
 
+// The all-time total of every paid AI/media cost across every user, in USD.
+// Sums the whole cost_logs.cost_usd column rather than a capped listing page, so
+// the dashboard shows true account-wide spend. Mirrors how getAdminStats sums
+// usage columns in JS; numeric values can arrive as strings via PostgREST, so
+// each is coerced before summing.
+export async function getTotalCostUsd(): Promise<number> {
+  const supabase = createAdminClient()
+
+  const { data, error } = await supabase.from("cost_logs").select("cost_usd")
+
+  if (error) {
+    throw new Error(`Failed to total cost logs: ${error.message}`)
+  }
+
+  return ((data ?? []) as { cost_usd: number | string }[]).reduce(
+    (sum, row) => sum + Number(row.cost_usd),
+    0,
+  )
+}
+
 // Resolves user_id -> email for the given ids in a single query.
 async function resolveUserEmails(
   supabase: ReturnType<typeof createAdminClient>,
