@@ -135,6 +135,8 @@ export type AdminUserKpis = {
   sourceFilesUploaded: number
   // Deep-dive credits this user has spent across every billing window (all-time).
   deepCreditsUsed: number
+  // Retention-window events synthesized across all of this user's deep analyses.
+  eventsGenerated: number
 }
 
 // Aggregates one user's headline counts. Counts use head+exact so no row data is
@@ -144,7 +146,7 @@ export type AdminUserKpis = {
 export async function getUserKpis(userId: string): Promise<AdminUserKpis> {
   const supabase = createAdminClient()
 
-  const [videos, sourceFiles, deepCredits] = await Promise.all([
+  const [videos, sourceFiles, deepCredits, events] = await Promise.all([
     supabase
       .from("analysed_videos")
       .select("*", { count: "exact", head: true })
@@ -158,6 +160,10 @@ export async function getUserKpis(userId: string): Promise<AdminUserKpis> {
       .from("usage_counters")
       .select("deep_credits_used")
       .eq("user_id", userId),
+    supabase
+      .from("retention_window_events")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId),
   ])
 
   if (videos.error) {
@@ -168,6 +174,9 @@ export async function getUserKpis(userId: string): Promise<AdminUserKpis> {
   }
   if (deepCredits.error) {
     console.error("Failed to load deep-credit usage for user", deepCredits.error)
+  }
+  if (events.error) {
+    console.error("Failed to count retention events for user", events.error)
   }
 
   const deepCreditRows = (deepCredits.error ? [] : (deepCredits.data ?? [])) as {
@@ -183,6 +192,7 @@ export async function getUserKpis(userId: string): Promise<AdminUserKpis> {
     videosAnalysed: videos.count ?? 0,
     sourceFilesUploaded: sourceFiles.count ?? 0,
     deepCreditsUsed,
+    eventsGenerated: events.count ?? 0,
   }
 }
 

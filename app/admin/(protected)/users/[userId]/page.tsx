@@ -3,20 +3,26 @@ import { notFound } from "next/navigation"
 import Link from "next/link"
 import {
   ArrowLeftIcon,
+  BanknoteIcon,
   CoinsIcon,
   FileVideoIcon,
+  ReceiptIcon,
   ShieldCheckIcon,
+  SparklesIcon,
   VideoIcon,
 } from "lucide-react"
 
 import { AdminBillingHistoryTable } from "@/components/admin/admin-billing-history-table"
 import { AdminLlmCallsTable } from "@/components/admin/admin-llm-calls-table"
+import { AdminVideoAnalysesTable } from "@/components/admin/admin-video-analyses-table"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { requireAdminUser } from "@/lib/admin/auth"
 import { getUserById, getUserKpis } from "@/lib/admin/users"
+import { getUserVideoAnalyses } from "@/lib/admin/video-analysis"
 import { listCostLogs } from "@/lib/admin/llm-calls"
-import { getBillingInvoices } from "@/lib/stripe/invoices"
+import { getBillingInvoices, getUserRevenue } from "@/lib/stripe/invoices"
 import { COST_TYPE_LABELS, type CostType } from "@/lib/llm-call-types"
 import {
   getBillingSnapshot,
@@ -60,7 +66,8 @@ function KpiCard({
 }: {
   label: string
   hint: string
-  value: number
+  // Numbers are localised; pre-formatted strings (e.g. currency) pass through.
+  value: number | string
   icon: typeof VideoIcon
 }) {
   return (
@@ -73,11 +80,26 @@ function KpiCard({
       </CardHeader>
       <CardContent>
         <div className="text-3xl font-semibold tabular-nums">
-          {value.toLocaleString()}
+          {typeof value === "number" ? value.toLocaleString() : value}
         </div>
         <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
       </CardContent>
     </Card>
+  )
+}
+
+// Total revenue collected from a user, formatted in the currency Stripe billed
+// them in. null means the account has no Stripe customer (never billed → £0.00);
+// "error" means the lookup failed and the figure is unknown.
+function formatMoneyMade(
+  revenue: { totalMinorUnits: number; currency: string | null } | null | "error",
+): string {
+  if (revenue === "error") return "—"
+  if (!revenue) return formatGbp(0)
+  const currency = (revenue.currency ?? "gbp").toUpperCase()
+  if (currency === "GBP") return formatGbp(revenue.totalMinorUnits)
+  return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(
+    revenue.totalMinorUnits / 100,
   )
 }
 
@@ -217,20 +239,29 @@ export default async function AdminUserDetailPage({
 
   // Billing is an optional enhancement here: a lookup failure should still let
   // the rest of the page render rather than 500 the whole view. The same goes
-  // for the Stripe-backed payment history — a failed/absent Stripe lookup falls
-  // back to an empty list rather than sinking the page.
-  const [kpis, snapshot, costLogs, invoices] = await Promise.all([
-    getUserKpis(user.id),
-    getBillingSnapshot(user.id).catch((error) => {
-      console.error("Failed to load billing snapshot for user", error)
-      return null
-    }),
-    listCostLogs({ userId: user.id }),
-    getBillingInvoices(user.id).catch((error) => {
-      console.error("Failed to load billing invoices for user", error)
-      return []
-    }),
-  ])
+  // for the Stripe-backed payment history and revenue total — a failed/absent
+  // Stripe lookup falls back rather than sinking the page.
+  const [kpis, snapshot, costLogs, invoices, videoAnalyses, revenue] =
+    await Promise.all([
+      getUserKpis(user.id),
+      getBillingSnapshot(user.id).catch((error) => {
+        console.error("Failed to load billing snapshot for user", error)
+        return null
+      }),
+      listCostLogs({ userId: user.id }),
+      getBillingInvoices(user.id).catch((error) => {
+        console.error("Failed to load billing invoices for user", error)
+        return []
+      }),
+      getUserVideoAnalyses(user.id).catch((error) => {
+        console.error("Failed to load video analyses for user", error)
+        return []
+      }),
+      getUserRevenue(user.id).catch((error) => {
+        console.error("Failed to load revenue for user", error)
+        return "error" as const
+      }),
+    ])
 
   // Per-cost-type spend, so the breakdown reads at a glance before the full log.
   const costByType = new Map<CostType, { count: number; total: number }>()
@@ -277,96 +308,154 @@ export default async function AdminUserDetailPage({
       </div>
 
       <section className="space-y-4">
-        <h2 className="text-lg font-semibold tracking-normal">Activity</h2>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <KpiCard
-            label="Videos analysed"
-            hint="Light analysis"
-            value={kpis.videosAnalysed}
-            icon={VideoIcon}
-          />
-          <KpiCard
-            label="Source files uploaded"
-            hint="Deep analysis"
-            value={kpis.sourceFilesUploaded}
-            icon={FileVideoIcon}
-          />
-          <KpiCard
-            label="Deep-dive credits used"
-            hint="All time"
-            value={kpis.deepCreditsUsed}
-            icon={CoinsIcon}
-          />
-        </div>
-      </section>
-
-      <section className="space-y-4">
         <div>
-          <h2 className="text-lg font-semibold tracking-normal">
-            Plan &amp; billing
-          </h2>
+          <h2 className="text-lg font-semibold tracking-normal">Economics</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            The account&rsquo;s effective plan and current billing cycle.
+            Money made from this account versus what serving it has cost. Shown
+            in their billed currencies (revenue in GBP, AI/media spend in USD),
+            so they aren&rsquo;t netted into a single figure.
           </p>
         </div>
-        <PlanOverview snapshot={snapshot} />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <KpiCard
+            label="Money made"
+            hint="Total paid via Stripe (all time)"
+            value={formatMoneyMade(revenue)}
+            icon={BanknoteIcon}
+          />
+          <KpiCard
+            label="Money spent"
+            hint="Total AI/media cost (all time)"
+            value={formatUsd(costLogs.totalCostUsd)}
+            icon={ReceiptIcon}
+          />
+        </div>
       </section>
 
-      <section className="space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold tracking-normal">
-            Billing history
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Payments and invoices from Stripe, most recent first.
-          </p>
-        </div>
-        <AdminBillingHistoryTable invoices={invoices} />
-      </section>
+      <Tabs defaultValue="video-analysis" className="gap-6">
+        <TabsList>
+          <TabsTrigger value="video-analysis">Video analysis</TabsTrigger>
+          <TabsTrigger value="plan-billing">Plan &amp; billing</TabsTrigger>
+          <TabsTrigger value="cost-logs">Cost logs</TabsTrigger>
+        </TabsList>
 
-      <section className="space-y-4">
-        <div className="flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h2 className="text-lg font-semibold tracking-normal">Cost logs</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Every paid AI/media cost this user has driven.
-              {costLogs.truncated ? " Showing the most recent 1,000." : ""}
-            </p>
-          </div>
-          <div className="text-sm">
-            <span className="text-muted-foreground">Total cost: </span>
-            <span className="font-medium tabular-nums">
-              {formatUsd(costLogs.totalCostUsd)}
-            </span>
-          </div>
-        </div>
+        <TabsContent value="video-analysis" className="space-y-8">
+          <section className="space-y-4">
+            <h2 className="text-lg font-semibold tracking-normal">Activity</h2>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <KpiCard
+                label="Videos analysed"
+                hint="Light analysis"
+                value={kpis.videosAnalysed}
+                icon={VideoIcon}
+              />
+              <KpiCard
+                label="Source files uploaded"
+                hint="Deep analysis"
+                value={kpis.sourceFilesUploaded}
+                icon={FileVideoIcon}
+              />
+              <KpiCard
+                label="Deep-dive credits used"
+                hint="All time"
+                value={kpis.deepCreditsUsed}
+                icon={CoinsIcon}
+              />
+              <KpiCard
+                label="Events generated"
+                hint="Retention events synthesized"
+                value={kpis.eventsGenerated}
+                icon={SparklesIcon}
+              />
+            </div>
+          </section>
 
-        {costBreakdown.length > 0 && (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {costBreakdown.map((entry) => (
-              <div
-                key={entry.type}
-                className="flex items-center justify-between rounded-lg border bg-muted/30 p-3"
-              >
-                <div>
-                  <div className="text-sm font-medium">
-                    {COST_TYPE_LABELS[entry.type] ?? entry.type}
+          <section className="space-y-4">
+            <div>
+              <h2 className="text-lg font-semibold tracking-normal">
+                Analysed videos
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Every video this user has analysed, with the retention events
+                each produced. Most recently analysed first.
+              </p>
+            </div>
+            <AdminVideoAnalysesTable videos={videoAnalyses} />
+          </section>
+        </TabsContent>
+
+        <TabsContent value="plan-billing" className="space-y-8">
+          <section className="space-y-4">
+            <div>
+              <h2 className="text-lg font-semibold tracking-normal">
+                Plan &amp; billing
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                The account&rsquo;s effective plan and current billing cycle.
+              </p>
+            </div>
+            <PlanOverview snapshot={snapshot} />
+          </section>
+
+          <section className="space-y-4">
+            <div>
+              <h2 className="text-lg font-semibold tracking-normal">
+                Billing history
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Payments and invoices from Stripe, most recent first.
+              </p>
+            </div>
+            <AdminBillingHistoryTable invoices={invoices} />
+          </section>
+        </TabsContent>
+
+        <TabsContent value="cost-logs" className="space-y-4">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <h2 className="text-lg font-semibold tracking-normal">
+                Cost logs
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Every paid AI/media cost this user has driven.
+                {costLogs.truncated ? " Showing the most recent 1,000." : ""}
+              </p>
+            </div>
+            <div className="text-sm">
+              <span className="text-muted-foreground">Total cost: </span>
+              <span className="font-medium tabular-nums">
+                {formatUsd(costLogs.totalCostUsd)}
+              </span>
+            </div>
+          </div>
+
+          {costBreakdown.length > 0 && (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {costBreakdown.map((entry) => (
+                <div
+                  key={entry.type}
+                  className="flex items-center justify-between rounded-lg border bg-muted/30 p-3"
+                >
+                  <div>
+                    <div className="text-sm font-medium">
+                      {COST_TYPE_LABELS[entry.type] ?? entry.type}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {entry.count.toLocaleString()} entr
+                      {entry.count === 1 ? "y" : "ies"}
+                    </div>
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    {entry.count.toLocaleString()} entr
-                    {entry.count === 1 ? "y" : "ies"}
+                  <div className="font-medium tabular-nums">
+                    {formatUsd(entry.total)}
                   </div>
                 </div>
-                <div className="font-medium tabular-nums">
-                  {formatUsd(entry.total)}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
 
-        <AdminLlmCallsTable rows={costLogs.rows} />
-      </section>
+          <AdminLlmCallsTable rows={costLogs.rows} />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
