@@ -85,6 +85,107 @@ export async function listUsers(now: Date = new Date()): Promise<AdminUserRow[]>
   })
 }
 
+// The bare account profile shown at the top of a user's detail page. Plan and
+// billing-cycle information is resolved separately via the billing snapshot, so
+// this deliberately carries only the columns on the users row.
+export type AdminUserProfile = {
+  id: string
+  username: string
+  email: string
+  avatarUrl: string | null
+  isAdmin: boolean
+  createdAt: string
+}
+
+// Loads a single account by id, or null when no such user exists. Used by the
+// admin user detail page; the caller resolves plan/usage separately.
+export async function getUserById(
+  userId: string,
+): Promise<AdminUserProfile | null> {
+  const supabase = createAdminClient()
+
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, username, email, avatar_url, is_admin, created_at")
+    .eq("id", userId)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(`Failed to load user: ${error.message}`)
+  }
+  if (!data) return null
+
+  return {
+    id: data.id as string,
+    username: data.username as string,
+    email: data.email as string,
+    avatarUrl: (data.avatar_url as string | null) ?? null,
+    isAdmin: Boolean(data.is_admin),
+    createdAt: data.created_at as string,
+  }
+}
+
+// The headline counts shown for a single user on their detail page. Mirrors the
+// account-wide numbers on the admin dashboard, but scoped to one user.
+export type AdminUserKpis = {
+  // Light (YouTube-API) analyses this user has run.
+  videosAnalysed: number
+  // Raw source files this user actually uploaded for deep analysis (bytes
+  // landed in storage), using the same states as the dashboard aggregate.
+  sourceFilesUploaded: number
+  // Deep-dive credits this user has spent across every billing window (all-time).
+  deepCreditsUsed: number
+}
+
+// Aggregates one user's headline counts. Counts use head+exact so no row data is
+// transferred; the credits total needs the column values, so those rows are
+// fetched and summed. The deep-analysis tables are optional enhancements, so a
+// failure there logs and reports zero rather than sinking the whole page.
+export async function getUserKpis(userId: string): Promise<AdminUserKpis> {
+  const supabase = createAdminClient()
+
+  const [videos, sourceFiles, deepCredits] = await Promise.all([
+    supabase
+      .from("analysed_videos")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId),
+    supabase
+      .from("source_files")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .in("upload_status", DEEP_ANALYSIS_UPLOAD_STATES),
+    supabase
+      .from("usage_counters")
+      .select("deep_credits_used")
+      .eq("user_id", userId),
+  ])
+
+  if (videos.error) {
+    console.error("Failed to count analysed videos for user", videos.error)
+  }
+  if (sourceFiles.error) {
+    console.error("Failed to count source files for user", sourceFiles.error)
+  }
+  if (deepCredits.error) {
+    console.error("Failed to load deep-credit usage for user", deepCredits.error)
+  }
+
+  const deepCreditRows = (deepCredits.error ? [] : (deepCredits.data ?? [])) as {
+    deep_credits_used: number | null
+  }[]
+  const deepCreditsUsed = deepCreditRows.reduce(
+    (sum, row) =>
+      sum + (typeof row.deep_credits_used === "number" ? row.deep_credits_used : 0),
+    0,
+  )
+
+  return {
+    videosAnalysed: videos.count ?? 0,
+    sourceFilesUploaded: sourceFiles.count ?? 0,
+    deepCreditsUsed,
+  }
+}
+
 export type AdminStats = {
   totalUsers: number
   totalAdmins: number
