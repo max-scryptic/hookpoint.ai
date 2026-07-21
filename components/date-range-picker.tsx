@@ -1,9 +1,9 @@
 "use client"
 
 import * as React from "react"
-import { format } from "date-fns"
+import { addMonths, format, subMonths } from "date-fns"
 import { CalendarIcon } from "lucide-react"
-import { type DateRange } from "react-day-picker"
+import { type DateRange, type Matcher } from "react-day-picker"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -19,12 +19,26 @@ export function DatePickerWithRange({
   onChange,
   className,
   placeholder = "Pick a date range",
+  maxRangeMonths,
 }: {
   value?: DateRange
   onChange?: (range: DateRange | undefined) => void
   className?: string
   placeholder?: string
+  // When set, the calendar caps the selectable span to this many months around
+  // the first-picked day: once a start is chosen (but no end yet), days more
+  // than `maxRangeMonths` before or after it are disabled, so the completed
+  // range can never exceed the cap in either direction.
+  maxRangeMonths?: number
 }) {
+  // Always block future days; while a range is mid-selection (a start picked
+  // but no end), also block days outside the allowed span from that start.
+  const disabled: Matcher[] = [{ after: new Date() }]
+  if (maxRangeMonths != null && value?.from && !value?.to) {
+    disabled.push({ before: subMonths(value.from, maxRangeMonths) })
+    disabled.push({ after: addMonths(value.from, maxRangeMonths) })
+  }
+
   return (
     <Popover>
       <PopoverTrigger
@@ -61,7 +75,7 @@ export function DatePickerWithRange({
           selected={value}
           onSelect={onChange}
           numberOfMonths={2}
-          disabled={{ after: new Date() }}
+          disabled={disabled}
         />
       </PopoverContent>
     </Popover>
