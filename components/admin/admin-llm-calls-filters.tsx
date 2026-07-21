@@ -78,7 +78,7 @@ export function AdminLlmCallsFilters({
     if (next.from) params.set("from", next.from)
     if (next.to) params.set("to", next.to)
     const query = params.toString()
-    router.push(query ? `/admin/llm-calls?${query}` : "/admin/llm-calls")
+    router.push(query ? `/admin/cost-logs?${query}` : "/admin/cost-logs")
   }
 
   function changeDateRange(range: DateRange | undefined) {
@@ -89,7 +89,7 @@ export function AdminLlmCallsFilters({
   }
 
   function clearFilters() {
-    router.push("/admin/llm-calls")
+    router.push("/admin/cost-logs")
   }
 
   const selectedUser = userOptions.find((option) => option.id === current.userId)

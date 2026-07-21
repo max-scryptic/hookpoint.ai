@@ -37,8 +37,8 @@ const navMain = [
     icon: <UsersIcon />,
   },
   {
-    title: "LLM Calls",
-    url: "/admin/llm-calls",
+    title: "Cost Logs",
+    url: "/admin/cost-logs",
     icon: <ReceiptTextIcon />,
   },
 ]

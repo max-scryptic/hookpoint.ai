@@ -20,7 +20,7 @@ const ADMIN_HOME = { title: "Dashboard", url: "/admin" }
 // is the trailing crumb.
 const ADMIN_PAGES: Record<string, string> = {
   "/admin/users": "Users",
-  "/admin/llm-calls": "LLM Calls",
+  "/admin/cost-logs": "Cost Logs",
 }
 
 // Breadcrumb for the admin header, derived from the current route. Kept in sync
