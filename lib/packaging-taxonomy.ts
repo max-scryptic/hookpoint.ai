@@ -33,7 +33,7 @@ const HOOK_WINDOW_SECONDS = 30
 // Bumped whenever `detail`'s shape changes. A stored taxonomy whose version is
 // below this is treated as stale and re-generated on its next detail-page
 // visit (see lib/packaging-alignments.ts).
-export const PACKAGING_TAXONOMY_SCHEMA_VERSION = 2
+export const PACKAGING_TAXONOMY_SCHEMA_VERSION = 3
 
 export const TITLE_STYLES = [
   "curiosity_gap",
@@ -251,6 +251,11 @@ export interface PackagingDriversDetail {
   clickDrivers: ClickDriver[]
   primaryDriver: ClickDriver
   archetype: PackagingArchetype
+  // 0 = evergreen / timeless topic that owes nothing to the moment; 10 = the
+  // topic is riding a current trend, meme, news cycle or seasonal wave, so part
+  // of the pull is timeliness rather than the packaging itself. A descriptor of
+  // WHY a video may over- or under-index right now, not a quality judgement.
+  trendRelevance: number
 }
 
 export interface PackagingDetail {
@@ -419,7 +424,7 @@ const DETAIL_SCHEMA = {
     drivers: {
       type: "object",
       additionalProperties: false,
-      required: ["clickDrivers", "primaryDriver", "archetype"],
+      required: ["clickDrivers", "primaryDriver", "archetype", "trendRelevance"],
       properties: {
         clickDrivers: {
           type: "array",
@@ -429,6 +434,7 @@ const DETAIL_SCHEMA = {
         },
         primaryDriver: { type: "string", enum: [...CLICK_DRIVERS] },
         archetype: { type: "string", enum: [...PACKAGING_ARCHETYPES] },
+        trendRelevance: ordinalSchema,
       },
     },
   },
@@ -571,7 +577,8 @@ function isModelDriversDetail(value: unknown): boolean {
     t.clickDrivers.length >= 1 &&
     t.clickDrivers.every((d) => isEnumValue(CLICK_DRIVERS, d)) &&
     isEnumValue(CLICK_DRIVERS, t.primaryDriver) &&
-    isEnumValue(PACKAGING_ARCHETYPES, t.archetype)
+    isEnumValue(PACKAGING_ARCHETYPES, t.archetype) &&
+    isOrdinal(t.trendRelevance)
   )
 }
 
@@ -704,7 +711,7 @@ export async function generatePackagingTaxonomy(
                 "detail.thumbnail: faceProminence (0 no or tiny face, 10 a face filling the frame); eyeContact (is the subject looking at the viewer); emotionIntensity (0 neutral, 10 extreme expression); sceneType (talking_head_indoor, outdoor, screen_or_charts, graphic, b_roll, other); mood (serious, celebratory, alarming, casual, mysterious, other); colorContrast (0 flat and muddy, 10 high-contrast and thumbstopping); visualComplexity (0 clean single-subject, 10 busy and crowded; this is a descriptor, neither end is better); textVerbatim (the overlaid words read off the image, or \"\"); impliedPromise (what the image alone would lead a viewer to expect, before the title).",
                 "detail.hook: openingType (cold_open_story, bold_claim, question, context_setup, meta_intro); payoffSpeed (0 the opening never reaches the title's promise inside the window, 10 it delivers it in the first breath); restatesPromise (0 the opening ignores the title's promise, 10 it restates it head-on); stakesEstablished (0 no tension set up, 10 vivid stakes immediately); personalDisclosure (0 impersonal, 10 candid first-person disclosure); specificity (0 vague setup, 10 concrete detail up front); genericFiller (true if it opens with throat-clearing like 'hey guys welcome back, before we start'); firstSentence (the literal opening line, or \"\" when there is no transcript).",
                 "detail.cross: titleThumbnailMatch (0 title and thumbnail promise unrelated things, 10 they promise the same one thing); hookDeliversPromise (0 the opening never cashes the title's promise, 10 it delivers it fully); singleClearPromise (the one promise all three surfaces make, or \"\" when they do not agree); contradiction (true when two surfaces actively fight, e.g. a warning title over a celebratory thumbnail) and contradictionNote (what contradicts, or \"\").",
-                "detail.drivers: clickDrivers (1 to 4 of curiosity, specificity, emotion, identity, authority, novelty, controversy that are doing the pulling, dominant first); primaryDriver (the single dominant one); archetype (personal_stakes_confession, warning, tutorial, listicle, hype, story, opinion, other).",
+                "detail.drivers: clickDrivers (1 to 4 of curiosity, specificity, emotion, identity, authority, novelty, controversy that are doing the pulling, dominant first); primaryDriver (the single dominant one); archetype (personal_stakes_confession, warning, tutorial, listicle, hype, story, opinion, other); trendRelevance (0 the topic is evergreen and timeless, owing nothing to the moment; 10 the topic is clearly riding a current trend, meme, news cycle or seasonal wave, so some of the pull is timeliness rather than the packaging; judge only the topic's tie to a current wave, not how good the video is, and when unsure lean lower).",
                 "If the hook transcript is empty, score the hook and cross fields from the title and thumbnail alone rather than inventing what was said.",
               ].join(" "),
             },

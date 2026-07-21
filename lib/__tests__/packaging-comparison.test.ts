@@ -62,6 +62,7 @@ function detail(overrides: Partial<PackagingDetail> = {}): PackagingDetail {
       clickDrivers: ["curiosity"],
       primaryDriver: "curiosity",
       archetype: "other",
+      trendRelevance: 5,
     },
     ...overrides,
   }
@@ -124,6 +125,7 @@ const cryptoTaxonomy = taxonomy(
       clickDrivers: ["identity", "curiosity"],
       primaryDriver: "identity",
       archetype: "personal_stakes_confession",
+      trendRelevance: 8,
     },
   }),
 )
@@ -186,6 +188,7 @@ const stopChartsTaxonomy = taxonomy(
       clickDrivers: ["authority"],
       primaryDriver: "authority",
       archetype: "warning",
+      trendRelevance: 2,
     },
   }),
 )
@@ -257,6 +260,15 @@ describe("buildPackagingComparison", () => {
       (s) => s.key === "hook.firstSentence",
     )
     expect(firstSentence?.b).toContain("welcome back")
+  })
+
+  it("diffs the topic's trend relevance as a driver ordinal", () => {
+    const result = buildPackagingComparison(cryptoInput, stopInput)
+    const trend = result?.ordinals.find((o) => o.key === "drivers.trendRelevance")
+    expect(trend?.surface).toBe("drivers")
+    expect(trend?.a).toBe(8)
+    expect(trend?.b).toBe(2)
+    expect(trend?.delta).toBe(6)
   })
 
   it("keeps the alignment axis available even without a detail block", () => {
