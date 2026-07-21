@@ -35,20 +35,24 @@ export function AdminAdminsList({
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border">
-      <Table>
+    <div className="overflow-hidden rounded-xl border bg-card">
+      <Table className="text-left">
         <TableHeader>
-          <TableRow>
-            <TableHead>Admin</TableHead>
-            <TableHead>Joined</TableHead>
+          <TableRow className="bg-accent text-xs text-accent-foreground hover:bg-accent">
+            <TableHead className="px-4 py-3 text-accent-foreground">
+              Admin
+            </TableHead>
+            <TableHead className="px-4 py-3 text-accent-foreground">
+              Joined
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {admins.map((admin) => {
             const isSelf = admin.id === currentAdminId
             return (
-              <TableRow key={admin.id}>
-                <TableCell>
+              <TableRow key={admin.id} className="hover:bg-muted/40">
+                <TableCell className="px-4 py-3">
                   <div className="flex items-center gap-3">
                     <Avatar className="size-8">
                       {admin.avatarUrl && (
@@ -72,7 +76,7 @@ export function AdminAdminsList({
                     </div>
                   </div>
                 </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
+                <TableCell className="px-4 py-3 text-sm text-muted-foreground">
                   {format(new Date(admin.createdAt), "d MMM yyyy")}
                 </TableCell>
               </TableRow>
