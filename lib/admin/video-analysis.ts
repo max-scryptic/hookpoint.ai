@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin"
+import type { VideoDetails } from "@/lib/youtube/youtube"
 
 // Read-side helper for the admin user-detail "Video analysis" tab. Uses the
 // service-role client (bypassing RLS) and MUST only be called from server code
@@ -69,4 +70,56 @@ export async function getUserVideoAnalyses(
     dateAnalysed: row.date_analysed,
     eventCount: eventCounts.get(row.id) ?? 0,
   }))
+}
+
+// A single analysed video, keyed on its analysed_videos row UUID and scoped to
+// the owning user, for the admin video detail page. `durationSeconds` comes
+// from the stored YouTube video details and is used to derive the one-time
+// transcoding cost of the video's proxies; it's null for legacy rows saved
+// before those details were persisted.
+export type AdminAnalysedVideo = {
+  id: string
+  videoId: string
+  title: string
+  dateAnalysed: string
+  durationSeconds: number | null
+}
+
+// Loads one of a user's analysed videos by its row id, or null when no such row
+// belongs to that user. The user_id predicate keeps the lookup scoped to the
+// account the admin is viewing, so a mistyped/foreign id resolves to null (a
+// 404) rather than surfacing another user's video.
+export async function getUserAnalysedVideoById(
+  userId: string,
+  analysedVideoId: string,
+): Promise<AdminAnalysedVideo | null> {
+  const supabase = createAdminClient()
+
+  const { data, error } = await supabase
+    .from("analysed_videos")
+    .select("id, video_id, video_title, date_analysed, video_details")
+    .eq("user_id", userId)
+    .eq("id", analysedVideoId)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(`Failed to load analysed video: ${error.message}`)
+  }
+  if (!data) return null
+
+  const row = data as {
+    id: string
+    video_id: string
+    video_title: string
+    date_analysed: string
+    video_details: VideoDetails | null
+  }
+
+  return {
+    id: row.id,
+    videoId: row.video_id,
+    title: row.video_title,
+    dateAnalysed: row.date_analysed,
+    durationSeconds: row.video_details?.durationSeconds ?? null,
+  }
 }
