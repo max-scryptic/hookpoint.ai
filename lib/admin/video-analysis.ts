@@ -17,6 +17,9 @@ export type AdminVideoAnalysis = {
   videoId: string
   title: string
   dateAnalysed: string
+  // When the user uploaded the raw source file for this video (the prerequisite
+  // for deep analysis), or null when no raw file has been uploaded yet.
+  rawFileUploadedAt: string | null
   // Retention-window events synthesized for this video (0 when it has only had
   // light analysis, or deep analysis hasn't produced events yet).
   eventCount: number
@@ -36,7 +39,7 @@ export async function getUserVideoAnalyses(
 ): Promise<AdminVideoAnalysis[]> {
   const supabase = createAdminClient()
 
-  const [videos, events, costs] = await Promise.all([
+  const [videos, events, costs, sourceFiles] = await Promise.all([
     supabase
       .from("analysed_videos")
       .select("id, video_id, video_title, date_analysed")
@@ -49,6 +52,10 @@ export async function getUserVideoAnalyses(
     supabase
       .from("cost_logs")
       .select("analysed_video_id, cost_type, call_type, cost_usd")
+      .eq("user_id", userId),
+    supabase
+      .from("source_files")
+      .select("analysed_video_id, created_at")
       .eq("user_id", userId),
   ])
 
@@ -64,6 +71,11 @@ export async function getUserVideoAnalyses(
     // Costs are likewise an enrichment — a failure leaves the list rendering
     // with zero spend rather than sinking the tab.
     console.error("Failed to load video costs for user", costs.error)
+  }
+  if (sourceFiles.error) {
+    // Raw-file upload dates are an enrichment too — a failure leaves the list
+    // rendering with blank upload dates rather than sinking the tab.
+    console.error("Failed to load source files for user", sourceFiles.error)
   }
 
   const eventCounts = new Map<string, number>()
@@ -98,6 +110,17 @@ export async function getUserVideoAnalyses(
     costTotals.set(row.analysed_video_id, totals)
   }
 
+  // Map each video to when its raw source file was uploaded. There's one source
+  // file per analysed video, so the created_at doubles as the upload timestamp.
+  const rawFileUploads = new Map<string, string>()
+  for (const row of (sourceFiles.error ? [] : (sourceFiles.data ?? [])) as {
+    analysed_video_id: string | null
+    created_at: string
+  }[]) {
+    if (!row.analysed_video_id) continue
+    rawFileUploads.set(row.analysed_video_id, row.created_at)
+  }
+
   return ((videos.data ?? []) as {
     id: string
     video_id: string
@@ -110,6 +133,7 @@ export async function getUserVideoAnalyses(
       videoId: row.video_id,
       title: row.video_title,
       dateAnalysed: row.date_analysed,
+      rawFileUploadedAt: rawFileUploads.get(row.id) ?? null,
       eventCount: eventCounts.get(row.id) ?? 0,
       lightCostUsd: totals?.light ?? 0,
       deepCostUsd: totals?.deep ?? 0,
