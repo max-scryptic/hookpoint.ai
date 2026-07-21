@@ -9,12 +9,14 @@ import {
   VideoIcon,
 } from "lucide-react"
 
+import { AdminBillingHistoryTable } from "@/components/admin/admin-billing-history-table"
 import { AdminLlmCallsTable } from "@/components/admin/admin-llm-calls-table"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { requireAdminUser } from "@/lib/admin/auth"
 import { getUserById, getUserKpis } from "@/lib/admin/users"
 import { listCostLogs } from "@/lib/admin/llm-calls"
+import { getBillingInvoices } from "@/lib/stripe/invoices"
 import { COST_TYPE_LABELS, type CostType } from "@/lib/llm-call-types"
 import {
   getBillingSnapshot,
@@ -214,14 +216,20 @@ export default async function AdminUserDetailPage({
   }
 
   // Billing is an optional enhancement here: a lookup failure should still let
-  // the rest of the page render rather than 500 the whole view.
-  const [kpis, snapshot, costLogs] = await Promise.all([
+  // the rest of the page render rather than 500 the whole view. The same goes
+  // for the Stripe-backed payment history — a failed/absent Stripe lookup falls
+  // back to an empty list rather than sinking the page.
+  const [kpis, snapshot, costLogs, invoices] = await Promise.all([
     getUserKpis(user.id),
     getBillingSnapshot(user.id).catch((error) => {
       console.error("Failed to load billing snapshot for user", error)
       return null
     }),
     listCostLogs({ userId: user.id }),
+    getBillingInvoices(user.id).catch((error) => {
+      console.error("Failed to load billing invoices for user", error)
+      return []
+    }),
   ])
 
   // Per-cost-type spend, so the breakdown reads at a glance before the full log.
@@ -302,6 +310,18 @@ export default async function AdminUserDetailPage({
           </p>
         </div>
         <PlanOverview snapshot={snapshot} />
+      </section>
+
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold tracking-normal">
+            Billing history
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Payments and invoices from Stripe, most recent first.
+          </p>
+        </div>
+        <AdminBillingHistoryTable invoices={invoices} />
       </section>
 
       <section className="space-y-4">
