@@ -88,26 +88,64 @@ export async function listUsers(now: Date = new Date()): Promise<AdminUserRow[]>
 export type AdminStats = {
   totalUsers: number
   totalAdmins: number
+  // Light (YouTube-API) analyses: rows in analysed_videos.
   totalAnalysedVideos: number
+  // Deep analyses: raw source files a user actually uploaded (bytes landed in
+  // storage). Mirrors the states the user dashboard counts as "deeply analysed".
+  totalSourceFilesUploaded: number
+  // Total deep-dive credits spent across every user and billing window.
+  totalDeepCreditsUsed: number
 }
 
-// Aggregate counts for the admin dashboard. Uses head+exact counts so no row
-// data is transferred — only the totals.
+// Upload states where the raw bytes have genuinely landed in storage — i.e. a
+// source file was really uploaded for deep analysis. Mirrors
+// DEEP_ANALYSIS_UPLOAD_STATES in lib/dashboard/kpis.ts: "pending"/"uploading"
+// haven't landed yet and "failed" never will, so none of those count.
+const DEEP_ANALYSIS_UPLOAD_STATES = ["uploaded", "processing", "ready"]
+
+// Aggregate counts for the admin dashboard. Counts use head+exact so no row
+// data is transferred; the credits total needs the column values, so those rows
+// are fetched and summed here. Deep-analysis tables are optional enhancements —
+// a query failure there logs and reports zero rather than sinking the whole
+// dashboard.
 export async function getAdminStats(): Promise<AdminStats> {
   const supabase = createAdminClient()
 
-  const [users, admins, videos] = await Promise.all([
+  const [users, admins, videos, sourceFiles, deepCredits] = await Promise.all([
     supabase.from("users").select("*", { count: "exact", head: true }),
     supabase
       .from("users")
       .select("*", { count: "exact", head: true })
       .eq("is_admin", true),
     supabase.from("analysed_videos").select("*", { count: "exact", head: true }),
+    supabase
+      .from("source_files")
+      .select("*", { count: "exact", head: true })
+      .in("upload_status", DEEP_ANALYSIS_UPLOAD_STATES),
+    supabase.from("usage_counters").select("deep_credits_used"),
   ])
+
+  if (sourceFiles.error) {
+    console.error("Failed to count source files", sourceFiles.error)
+  }
+  if (deepCredits.error) {
+    console.error("Failed to load deep-credit usage", deepCredits.error)
+  }
+
+  const deepCreditRows = (deepCredits.error ? [] : (deepCredits.data ?? [])) as {
+    deep_credits_used: number | null
+  }[]
+  const totalDeepCreditsUsed = deepCreditRows.reduce(
+    (sum, row) =>
+      sum + (typeof row.deep_credits_used === "number" ? row.deep_credits_used : 0),
+    0,
+  )
 
   return {
     totalUsers: users.count ?? 0,
     totalAdmins: admins.count ?? 0,
     totalAnalysedVideos: videos.count ?? 0,
+    totalSourceFilesUploaded: sourceFiles.count ?? 0,
+    totalDeepCreditsUsed,
   }
 }
