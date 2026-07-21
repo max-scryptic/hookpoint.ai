@@ -77,7 +77,7 @@ export function AdminLlmCallsFilters({
     if (fromIso) params.set("from", fromIso)
     if (toIso) params.set("to", toIso)
     const query = params.toString()
-    router.push(query ? `/admin/llm-calls?${query}` : "/admin/llm-calls")
+    router.push(query ? `/admin/cost-logs?${query}` : "/admin/cost-logs")
   }
 
   function reset() {
@@ -86,7 +86,7 @@ export function AdminLlmCallsFilters({
     setCallType("")
     setFrom("")
     setTo("")
-    router.push("/admin/llm-calls")
+    router.push("/admin/cost-logs")
   }
 
   return (
