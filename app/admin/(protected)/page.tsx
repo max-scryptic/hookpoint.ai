@@ -1,6 +1,12 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { getAdminStats } from "@/lib/admin/users"
-import { ShieldCheckIcon, UsersIcon, VideoIcon } from "lucide-react"
+import {
+  CoinsIcon,
+  FileVideoIcon,
+  ShieldCheckIcon,
+  UsersIcon,
+  VideoIcon,
+} from "lucide-react"
 
 // Per-request admin data behind an auth check — never statically prerender.
 export const dynamic = "force-dynamic"
@@ -8,7 +14,13 @@ export const dynamic = "force-dynamic"
 // Admin landing page: a small set of headline counts. Counts are best-effort —
 // a failure here should still render the shell rather than 500 the whole area.
 export default async function AdminDashboardPage() {
-  let stats = { totalUsers: 0, totalAdmins: 0, totalAnalysedVideos: 0 }
+  let stats = {
+    totalUsers: 0,
+    totalAdmins: 0,
+    totalAnalysedVideos: 0,
+    totalSourceFilesUploaded: 0,
+    totalDeepCreditsUsed: 0,
+  }
   let statsError = false
 
   try {
@@ -18,10 +30,32 @@ export default async function AdminDashboardPage() {
     statsError = true
   }
 
-  const cards = [
+  const cards: {
+    label: string
+    hint?: string
+    value: number
+    icon: typeof UsersIcon
+  }[] = [
     { label: "Users", value: stats.totalUsers, icon: UsersIcon },
     { label: "Admins", value: stats.totalAdmins, icon: ShieldCheckIcon },
-    { label: "Analysed videos", value: stats.totalAnalysedVideos, icon: VideoIcon },
+    {
+      label: "Videos analysed",
+      hint: "Light analysis",
+      value: stats.totalAnalysedVideos,
+      icon: VideoIcon,
+    },
+    {
+      label: "Source files uploaded",
+      hint: "Deep analysis",
+      value: stats.totalSourceFilesUploaded,
+      icon: FileVideoIcon,
+    },
+    {
+      label: "Deep-dive credits used",
+      hint: "All users",
+      value: stats.totalDeepCreditsUsed,
+      icon: CoinsIcon,
+    },
   ]
 
   return (
@@ -54,6 +88,9 @@ export default async function AdminDashboardPage() {
                 <div className="text-3xl font-semibold tabular-nums">
                   {card.value.toLocaleString()}
                 </div>
+                {card.hint && (
+                  <p className="mt-1 text-xs text-muted-foreground">{card.hint}</p>
+                )}
               </CardContent>
             </Card>
           )
