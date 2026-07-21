@@ -13,14 +13,17 @@ export function utcDateString(now: Date = new Date()): string {
 // carry the user's session (RLS lets a user write only their own row).
 //
 // Activity tracking is strictly best-effort: it must never block or fail a
-// request, so any error is logged and swallowed. The caller (proxy.ts) also
-// gates this behind a per-day cookie so the write happens at most once per day
-// per browser rather than on every request.
+// request, so any error is logged and swallowed. Returns whether the write
+// actually landed so the caller (proxy.ts) can gate its once-per-day cookie on
+// success: a failed write must NOT stamp the cookie, otherwise a transient
+// failure (e.g. the table not existing yet during a deploy, or a momentary
+// network/RLS error) would suppress recording for the rest of the day instead
+// of being retried on the next request.
 export async function recordDailyActivity(
   supabase: SupabaseClient,
   userId: string,
   now: Date = new Date(),
-): Promise<void> {
+): Promise<boolean> {
   const { error } = await supabase.from("user_daily_activity").upsert(
     {
       user_id: userId,
@@ -32,5 +35,8 @@ export async function recordDailyActivity(
 
   if (error) {
     console.error("Failed to record daily activity", error)
+    return false
   }
+
+  return true
 }

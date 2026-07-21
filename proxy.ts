@@ -54,16 +54,23 @@ export async function proxy(request: NextRequest) {
   // so `user` reflects a valid signed-in user. RLS lets the user write only
   // their own activity row, and recordDailyActivity swallows its own errors, so
   // this can never break request handling.
+  //
+  // The cookie is only stamped when the write actually landed. Stamping it on a
+  // failed write would suppress recording for the rest of the day, so a
+  // transient failure (e.g. the table missing during a deploy) is instead
+  // retried on the next request.
   if (user) {
     const today = utcDateString();
     if (request.cookies.get(ACTIVITY_COOKIE)?.value !== today) {
-      await recordDailyActivity(supabase, user.id);
-      supabaseResponse.cookies.set(ACTIVITY_COOKIE, today, {
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        maxAge: 60 * 60 * 24,
-      });
+      const recorded = await recordDailyActivity(supabase, user.id);
+      if (recorded) {
+        supabaseResponse.cookies.set(ACTIVITY_COOKIE, today, {
+          httpOnly: true,
+          sameSite: "lax",
+          path: "/",
+          maxAge: 60 * 60 * 24,
+        });
+      }
     }
   }
 
