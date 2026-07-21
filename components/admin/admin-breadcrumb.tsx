@@ -23,17 +23,39 @@ const ADMIN_PAGES: Record<string, string> = {
   "/admin/cost-logs": "Cost Logs",
 }
 
+// A user's detail page hangs off Users as a third crumb, e.g.
+// "Dashboard / Users / User detail". Matched by pattern since the id segment is
+// dynamic; the leaf label stays generic rather than fetching the username here.
+const USER_DETAIL_PATTERN = /^\/admin\/users\/[^/]+$/
+
 // Breadcrumb for the admin header, derived from the current route. Kept in sync
 // with the admin sidebar nav so the crumb always names the page you're on — the
 // same "section / page" trail the front-end shows above each dashboard screen.
 export function AdminBreadcrumb() {
   const pathname = usePathname()
   const currentPage = ADMIN_PAGES[pathname]
+  const isUserDetail = USER_DETAIL_PATTERN.test(pathname)
 
   return (
     <Breadcrumb>
       <BreadcrumbList>
-        {currentPage ? (
+        {isUserDetail ? (
+          <>
+            <BreadcrumbItem className="hidden md:block">
+              <BreadcrumbLink href={ADMIN_HOME.url}>
+                {ADMIN_HOME.title}
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator className="hidden md:block" />
+            <BreadcrumbItem className="hidden md:block">
+              <BreadcrumbLink href="/admin/users">Users</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator className="hidden md:block" />
+            <BreadcrumbItem>
+              <BreadcrumbPage>User detail</BreadcrumbPage>
+            </BreadcrumbItem>
+          </>
+        ) : currentPage ? (
           <>
             <BreadcrumbItem className="hidden md:block">
               <BreadcrumbLink href={ADMIN_HOME.url}>
