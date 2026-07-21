@@ -1,5 +1,13 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import {
+  recordDailyActivity,
+  utcDateString,
+} from "@/lib/activity/record-daily-activity";
+
+// Cookie that remembers the last UTC day we recorded activity for this browser,
+// so the once-per-day activity write doesn't run on every request.
+const ACTIVITY_COOKIE = "hp_active_day";
 
 export async function proxy(request: NextRequest) {
   const hasSupabaseEnv =
@@ -37,7 +45,27 @@ export async function proxy(request: NextRequest) {
     },
   );
 
-  await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Record daily-active-user activity for the admin dashboard, at most once per
+  // day per browser. The getUser() call above has already refreshed the session,
+  // so `user` reflects a valid signed-in user. RLS lets the user write only
+  // their own activity row, and recordDailyActivity swallows its own errors, so
+  // this can never break request handling.
+  if (user) {
+    const today = utcDateString();
+    if (request.cookies.get(ACTIVITY_COOKIE)?.value !== today) {
+      await recordDailyActivity(supabase, user.id);
+      supabaseResponse.cookies.set(ACTIVITY_COOKIE, today, {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        maxAge: 60 * 60 * 24,
+      });
+    }
+  }
 
   return supabaseResponse;
 }
