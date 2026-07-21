@@ -43,6 +43,32 @@ export const LLM_CALL_TYPE_LABELS: Record<LlmCallType, string> = {
   event_synthesis: "Deep video analysis · event synthesis",
 }
 
+// The two spend buckets a video's costs roll up into. "Light analysis" is the
+// initial analysis every video goes through (pacing, retention attribution and
+// packaging); "Deep analysis" is the opt-in source-file deep dive (snapshot,
+// audio and event synthesis LLM calls plus the one-time Qencode transcode).
+export type AnalysisCostBucket = "light" | "deep"
+
+// The deep-dive LLM calls — everything else logged against a video is light.
+const DEEP_LLM_CALL_TYPES = new Set<LlmCallType>([
+  "snapshot",
+  "audio",
+  "event_synthesis",
+])
+
+// Classifies a logged cost into its light/deep bucket. Qencode transcodes only
+// happen to prepare a source file for the deep dive, so they count as deep; the
+// deep-dive LLM calls are enumerated above and everything else is light. Kept
+// here (with the labels) so both the read helper and any UI can share one rule.
+export function analysisCostBucket(
+  costType: CostType,
+  callType: LlmCallType | null,
+): AnalysisCostBucket {
+  if (costType === "qencode_transcode") return "deep"
+  if (callType && DEEP_LLM_CALL_TYPES.has(callType)) return "deep"
+  return "light"
+}
+
 export type LlmCallProvider = "openai" | "qencode"
 
 // Who/what a logged call belongs to. Threaded into the generate* functions so
