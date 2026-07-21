@@ -212,14 +212,16 @@ export interface CostLogUserOption {
   email: string
 }
 
-// The set of users offered in the page's user filter. Lists every account
-// (newest first) so any user can be filtered to, matching the users table.
+// The set of users offered in the page's user filter. Lists every front-end
+// account (newest first); admin accounts are excluded since the cost log is
+// about the usage costs real users incur.
 export async function listCostLogUserOptions(): Promise<CostLogUserOption[]> {
   const supabase = createAdminClient()
 
   const { data, error } = await supabase
     .from("users")
     .select("id, email")
+    .eq("is_admin", false)
     .order("created_at", { ascending: false })
     .limit(1000)
 
