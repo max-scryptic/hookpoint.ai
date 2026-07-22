@@ -30,7 +30,7 @@ export function AdminLlmCallsTable({ rows }: { rows: CostLogRow[] }) {
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border">
+    <div className="overflow-x-auto rounded-lg border bg-card dark:bg-transparent">
       <Table>
         <TableHeader>
           <TableRow>
