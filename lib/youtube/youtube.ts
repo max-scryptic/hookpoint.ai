@@ -636,6 +636,16 @@ export interface VideoAnalyticsSummary {
   // "subs gained" figure so a net loss shows as a negative number.
   subscribersGained: number | null
   subscribersLost: number | null
+  // How many times the video's thumbnail was shown in YouTube's feeds, and the
+  // resulting click-through rate. YouTube only exposed these to the Analytics
+  // API from January 2026 (they were Studio-only before), so they are fetched
+  // best-effort and are null for videos analysed before then, on channels
+  // where YouTube still withholds them, or when the reach report is rejected.
+  // impressionClickThroughRate is stored exactly as YouTube returns it; confirm
+  // against Studio whether that is a 0..1 fraction or a 0..100 percentage
+  // before formatting it for display.
+  impressions: number | null
+  impressionClickThroughRate: number | null
   // Ordered most-viewed first. Empty when YouTube reports no breakdown.
   trafficSources: TrafficSource[]
   fetchedAt: string
@@ -695,11 +705,27 @@ async function runAnalyticsReport(
   }
 }
 
+// Reads one numeric metric out of a report's first row by column name, so
+// callers never depend on the order YouTube returns metrics in. Null when the
+// column is absent or the cell is empty.
+function readMetric(
+  headers: string[],
+  row: Array<number | string | null>,
+  name: string,
+): number | null {
+  const index = headers.indexOf(name)
+  if (index === -1) return null
+  const raw = row[index]
+  return typeof raw === "number" ? raw : raw == null ? null : Number(raw)
+}
+
 // Fetches the deterministic KPI/engagement/traffic-source summary for a video
-// the authenticated user owns. Two Analytics reports (1 quota unit each): the
-// no-dimension totals row, and the traffic-source breakdown. Traffic sources
-// are best-effort — a failure there still returns the KPI totals — because the
-// totals are the higher-value half and shouldn't be lost to a partial outage.
+// the authenticated user owns. Up to three Analytics reports (1 quota unit
+// each): the no-dimension totals row, the traffic-source breakdown, and the
+// thumbnail reach (impressions + CTR) row. Only the totals are load-bearing;
+// traffic sources and reach are each best-effort, so a failure in either still
+// returns the KPI totals. Reach in particular is a recent, sometimes-withheld
+// metric that must never take the whole summary down (see VideoAnalyticsSummary).
 export async function getVideoAnalyticsSummary(
   accessToken: string,
   video: VideoDetails,
@@ -710,12 +736,8 @@ export async function getVideoAnalyticsSummary(
   })
 
   const row = totals.rows[0] ?? []
-  const value = (name: string): number | null => {
-    const index = totals.headers.indexOf(name)
-    if (index === -1) return null
-    const raw = row[index]
-    return typeof raw === "number" ? raw : raw == null ? null : Number(raw)
-  }
+  const value = (name: string): number | null =>
+    readMetric(totals.headers, row, name)
 
   let trafficSources: TrafficSource[] = []
   try {
@@ -739,6 +761,27 @@ export async function getVideoAnalyticsSummary(
     console.error("Failed to fetch traffic sources", error)
   }
 
+  // Thumbnail reach: impressions and click-through rate. Isolated and
+  // best-effort — YouTube only started serving these to the API in January
+  // 2026 and still withholds them for some channels/date ranges, where the
+  // report 400s; that must degrade to nulls, never lose the totals above.
+  let impressions: number | null = null
+  let impressionClickThroughRate: number | null = null
+  try {
+    const reach = await runAnalyticsReport(accessToken, video, {
+      metrics: "videoThumbnailImpressions,videoThumbnailImpressionsClickRate",
+    })
+    const reachRow = reach.rows[0] ?? []
+    impressions = readMetric(reach.headers, reachRow, "videoThumbnailImpressions")
+    impressionClickThroughRate = readMetric(
+      reach.headers,
+      reachRow,
+      "videoThumbnailImpressionsClickRate",
+    )
+  } catch (error) {
+    console.error("Failed to fetch thumbnail reach", error)
+  }
+
   return {
     views: value("views"),
     estimatedMinutesWatched: value("estimatedMinutesWatched"),
@@ -749,6 +792,8 @@ export async function getVideoAnalyticsSummary(
     shares: value("shares"),
     subscribersGained: value("subscribersGained"),
     subscribersLost: value("subscribersLost"),
+    impressions,
+    impressionClickThroughRate,
     trafficSources,
     fetchedAt: new Date().toISOString(),
   }

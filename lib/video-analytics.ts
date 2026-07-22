@@ -57,10 +57,19 @@ export async function getStoredVideoAnalyticsSummary(
   )
 }
 
-// Returns the stored summary if present, otherwise fetches it from the YouTube
-// Analytics API (spending a Google access token) and persists it. Entirely
-// best-effort: any failure resolves to null so a missing summary never breaks
-// the analysis page — the section simply doesn't render.
+// True once a stored summary carries the thumbnail-reach fields (added January
+// 2026). A summary that predates them lacks the `impressions` key entirely and
+// is refetched once to heal; a summary that HAS the key but a null value (i.e.
+// we fetched and YouTube withheld reach) is already current and must not
+// refetch on every page view.
+function hasReachFields(summary: VideoAnalyticsSummary): boolean {
+  return "impressions" in summary
+}
+
+// Returns the stored summary if present and current, otherwise fetches it from
+// the YouTube Analytics API (spending a Google access token) and persists it.
+// Entirely best-effort: any failure resolves to null so a missing summary never
+// breaks the analysis page — the section simply doesn't render.
 export async function getOrBackfillVideoAnalyticsSummary(
   supabase: SupabaseClient,
   userId: string,
@@ -73,7 +82,7 @@ export async function getOrBackfillVideoAnalyticsSummary(
       userId,
       analysedVideoId,
     )
-    if (existing) return existing
+    if (existing && hasReachFields(existing)) return existing
 
     const accessToken = await getGoogleAccessToken(userId)
     const summary = await getVideoAnalyticsSummary(accessToken, video)
