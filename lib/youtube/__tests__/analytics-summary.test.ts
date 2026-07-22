@@ -56,6 +56,15 @@ describe("getVideoAnalyticsSummary", () => {
           ],
         }),
       )
+      .mockResolvedValueOnce(
+        analyticsResponse({
+          columnHeaders: [
+            { name: "videoThumbnailImpressions" },
+            { name: "videoThumbnailImpressionsClickRate" },
+          ],
+          rows: [[25000, 4.8]],
+        }),
+      )
 
     const summary = await getVideoAnalyticsSummary("token", video)
 
@@ -69,16 +78,23 @@ describe("getVideoAnalyticsSummary", () => {
       shares: 15,
       subscribersGained: 25,
       subscribersLost: 4,
+      impressions: 25000,
+      impressionClickThroughRate: 4.8,
     })
     expect(summary.trafficSources).toEqual([
       { source: "YT_SEARCH", views: 600 },
       { source: "RELATED_VIDEO", views: 300 },
     ])
 
-    // Two reports: totals then traffic sources, both filtered to the video.
-    expect(fetchMock).toHaveBeenCalledTimes(2)
+    // Three reports: totals, traffic sources, then thumbnail reach, all
+    // filtered to the video.
+    expect(fetchMock).toHaveBeenCalledTimes(3)
     const firstUrl = new URL(String(fetchMock.mock.calls[0][0]))
     expect(firstUrl.searchParams.get("filters")).toBe("video==vid-1")
+    const reachUrl = new URL(String(fetchMock.mock.calls[2][0]))
+    expect(reachUrl.searchParams.get("metrics")).toBe(
+      "videoThumbnailImpressions,videoThumbnailImpressionsClickRate",
+    )
   })
 
   it("still returns KPIs when the traffic-source report fails", async () => {
@@ -90,11 +106,50 @@ describe("getVideoAnalyticsSummary", () => {
         }),
       )
       .mockResolvedValueOnce(new Response("nope", { status: 500 }))
+      .mockResolvedValueOnce(
+        analyticsResponse({
+          columnHeaders: [
+            { name: "videoThumbnailImpressions" },
+            { name: "videoThumbnailImpressionsClickRate" },
+          ],
+          rows: [[8000, 3.1]],
+        }),
+      )
 
     const summary = await getVideoAnalyticsSummary("token", video)
 
     expect(summary.views).toBe(500)
     expect(summary.likes).toBe(40)
     expect(summary.trafficSources).toEqual([])
+    expect(summary.impressions).toBe(8000)
+    expect(summary.impressionClickThroughRate).toBe(3.1)
+  })
+
+  it("still returns KPIs and traffic when the reach report is withheld", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        analyticsResponse({
+          columnHeaders: [{ name: "views" }],
+          rows: [[500]],
+        }),
+      )
+      .mockResolvedValueOnce(
+        analyticsResponse({
+          columnHeaders: [
+            { name: "insightTrafficSourceType" },
+            { name: "views" },
+          ],
+          rows: [["YT_SEARCH", 500]],
+        }),
+      )
+      // YouTube 400s the reach report for a channel/date range it withholds.
+      .mockResolvedValueOnce(new Response("unknown metric", { status: 400 }))
+
+    const summary = await getVideoAnalyticsSummary("token", video)
+
+    expect(summary.views).toBe(500)
+    expect(summary.trafficSources).toEqual([{ source: "YT_SEARCH", views: 500 }])
+    expect(summary.impressions).toBeNull()
+    expect(summary.impressionClickThroughRate).toBeNull()
   })
 })
