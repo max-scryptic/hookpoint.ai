@@ -21,7 +21,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { createClient } from "@/lib/supabase/client"
-import { ChevronsUpDownIcon, LogOutIcon } from "lucide-react"
+import { ChevronsUpDownIcon, LogOutIcon, Settings2Icon } from "lucide-react"
 
 // The admin sidebar footer: the signed-in admin plus a sign-out control.
 // Mirrors the front-end NavUser but signs out to /admin/login (the admin area
@@ -77,6 +77,13 @@ export function AdminNavUser({ email }: { email: string | null }) {
                   </div>
                 </div>
               </DropdownMenuLabel>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuItem render={<a href="/admin/settings" />}>
+                <Settings2Icon />
+                Settings
+              </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleSignOut} disabled={isSigningOut}>
