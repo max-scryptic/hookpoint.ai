@@ -56,8 +56,9 @@ describe("getVideoAnalyticsSummary", () => {
           ],
         }),
       )
-      // Reach is dimensioned by video and filtered to this video, so it returns
-      // just this video's row; our row is picked out by video id.
+      // Reach is a channel-wide report dimensioned by video (no per-video
+      // filter — YouTube rejects that shape for these metrics); our row is
+      // picked out of the ranking by video id.
       .mockResolvedValueOnce(
         analyticsResponse({
           columnHeaders: [
@@ -89,8 +90,9 @@ describe("getVideoAnalyticsSummary", () => {
       { source: "RELATED_VIDEO", views: 300 },
     ])
 
-    // Three reports, all filtered to the video. The reach report is also
-    // dimensioned by video, which its impression metrics require.
+    // Three reports. The totals and traffic reports are filtered to the video;
+    // the reach report is NOT — its impression metrics are only served by a
+    // channel-wide report dimensioned by video, so it carries no video filter.
     expect(fetchMock).toHaveBeenCalledTimes(3)
     const firstUrl = new URL(String(fetchMock.mock.calls[0][0]))
     expect(firstUrl.searchParams.get("filters")).toBe("video==vid-1")
@@ -99,7 +101,68 @@ describe("getVideoAnalyticsSummary", () => {
       "videoThumbnailImpressions,videoThumbnailImpressionsClickRate",
     )
     expect(reachUrl.searchParams.get("dimensions")).toBe("video")
-    expect(reachUrl.searchParams.get("filters")).toBe("video==vid-1")
+    expect(reachUrl.searchParams.get("sort")).toBe("-videoThumbnailImpressions")
+    expect(reachUrl.searchParams.get("filters")).toBeNull()
+  })
+
+  it("pages past the first slice to find a low-ranked video's reach", async () => {
+    // A row for some other video so page one is a full slice that does not
+    // contain vid-1, forcing a second page request.
+    const fullPage = Array.from({ length: 200 }, (_, index) => [
+      `other-${index}`,
+      1000,
+      2,
+    ])
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        analyticsResponse({
+          columnHeaders: [{ name: "views" }],
+          rows: [[500]],
+        }),
+      )
+      .mockResolvedValueOnce(
+        analyticsResponse({
+          columnHeaders: [
+            { name: "insightTrafficSourceType" },
+            { name: "views" },
+          ],
+          rows: [["YT_SEARCH", 500]],
+        }),
+      )
+      // Reach page one: a full slice of other videos, so paging continues.
+      .mockResolvedValueOnce(
+        analyticsResponse({
+          columnHeaders: [
+            { name: "video" },
+            { name: "videoThumbnailImpressions" },
+            { name: "videoThumbnailImpressionsClickRate" },
+          ],
+          rows: fullPage,
+        }),
+      )
+      // Reach page two: this video's row finally appears.
+      .mockResolvedValueOnce(
+        analyticsResponse({
+          columnHeaders: [
+            { name: "video" },
+            { name: "videoThumbnailImpressions" },
+            { name: "videoThumbnailImpressionsClickRate" },
+          ],
+          rows: [["vid-1", 1200, 2.4]],
+        }),
+      )
+
+    const summary = await getVideoAnalyticsSummary("token", video)
+
+    expect(summary.impressions).toBe(1200)
+    expect(summary.impressionClickThroughRate).toBe(2.4)
+    // Totals + traffic + two reach pages.
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+    const page1 = new URL(String(fetchMock.mock.calls[2][0]))
+    const page2 = new URL(String(fetchMock.mock.calls[3][0]))
+    expect(page1.searchParams.get("startIndex")).toBe("1")
+    expect(page2.searchParams.get("startIndex")).toBe("201")
   })
 
   it("still returns KPIs when the traffic-source report fails", async () => {
