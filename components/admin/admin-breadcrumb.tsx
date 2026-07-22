@@ -21,6 +21,7 @@ const ADMIN_HOME = { title: "Dashboard", url: "/admin" }
 const ADMIN_PAGES: Record<string, string> = {
   "/admin/users": "Users",
   "/admin/cost-logs": "Cost Logs",
+  "/admin/settings": "Settings",
 }
 
 // A user's detail page hangs off Users as a third crumb, e.g.
