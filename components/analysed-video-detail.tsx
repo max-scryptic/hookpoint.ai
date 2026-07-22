@@ -85,6 +85,16 @@ function formatCompactNumber(value: number | null): string {
   }).format(value)
 }
 
+// Thumbnail click-through rate as a percentage string. YouTube added this
+// metric to the Analytics API in January 2026 and its docs are ambiguous on
+// units, so this is defensive: a click-through rate can never exceed 100%, so a
+// value <= 1 is a 0..1 fraction (scale up) and anything larger is already a
+// 0..100 percentage. Either way a sane "4.8%" comes out.
+function formatClickThroughRate(value: number): string {
+  const percent = value <= 1 ? value * 100 : value
+  return `${percent.toFixed(1)}%`
+}
+
 // Maps an insight marker's kind to the retention tab that holds its list, so a
 // click on the chart can bring the matching tab forward.
 const TAB_FOR_INSIGHT_KIND: Record<
@@ -1482,6 +1492,14 @@ export function AnalysedVideoDetail({
                       : "N/A"
                   }
                 />
+                {analyticsSummary.impressionClickThroughRate != null && (
+                  <Metric
+                    label="Thumbnail CTR"
+                    value={formatClickThroughRate(
+                      analyticsSummary.impressionClickThroughRate,
+                    )}
+                  />
+                )}
               </div>
             )}
           </div>
