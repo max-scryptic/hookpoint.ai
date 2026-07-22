@@ -56,13 +56,19 @@ describe("getVideoAnalyticsSummary", () => {
           ],
         }),
       )
+      // Reach is a channel-level report dimensioned by video; our row is
+      // picked out by video id, not assumed to be first.
       .mockResolvedValueOnce(
         analyticsResponse({
           columnHeaders: [
+            { name: "video" },
             { name: "videoThumbnailImpressions" },
             { name: "videoThumbnailImpressionsClickRate" },
           ],
-          rows: [[25000, 4.8]],
+          rows: [
+            ["vid-other", 90000, 6.2],
+            ["vid-1", 25000, 4.8],
+          ],
         }),
       )
 
@@ -86,8 +92,8 @@ describe("getVideoAnalyticsSummary", () => {
       { source: "RELATED_VIDEO", views: 300 },
     ])
 
-    // Three reports: totals, traffic sources, then thumbnail reach, all
-    // filtered to the video.
+    // Three reports: totals and traffic sources are filtered to the video; the
+    // reach report is channel-level (no video filter) and dimensioned by video.
     expect(fetchMock).toHaveBeenCalledTimes(3)
     const firstUrl = new URL(String(fetchMock.mock.calls[0][0]))
     expect(firstUrl.searchParams.get("filters")).toBe("video==vid-1")
@@ -95,6 +101,8 @@ describe("getVideoAnalyticsSummary", () => {
     expect(reachUrl.searchParams.get("metrics")).toBe(
       "videoThumbnailImpressions,videoThumbnailImpressionsClickRate",
     )
+    expect(reachUrl.searchParams.get("dimensions")).toBe("video")
+    expect(reachUrl.searchParams.has("filters")).toBe(false)
   })
 
   it("still returns KPIs when the traffic-source report fails", async () => {
@@ -109,10 +117,11 @@ describe("getVideoAnalyticsSummary", () => {
       .mockResolvedValueOnce(
         analyticsResponse({
           columnHeaders: [
+            { name: "video" },
             { name: "videoThumbnailImpressions" },
             { name: "videoThumbnailImpressionsClickRate" },
           ],
-          rows: [[8000, 3.1]],
+          rows: [["vid-1", 8000, 3.1]],
         }),
       )
 
@@ -149,6 +158,43 @@ describe("getVideoAnalyticsSummary", () => {
 
     expect(summary.views).toBe(500)
     expect(summary.trafficSources).toEqual([{ source: "YT_SEARCH", views: 500 }])
+    expect(summary.impressions).toBeNull()
+    expect(summary.impressionClickThroughRate).toBeNull()
+  })
+
+  it("nulls reach when the channel report has no row for this video", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        analyticsResponse({
+          columnHeaders: [{ name: "views" }],
+          rows: [[500]],
+        }),
+      )
+      .mockResolvedValueOnce(
+        analyticsResponse({
+          columnHeaders: [
+            { name: "insightTrafficSourceType" },
+            { name: "views" },
+          ],
+          rows: [["YT_SEARCH", 500]],
+        }),
+      )
+      // Reach report ran, but our video isn't among the returned rows (e.g. it
+      // ranks below the maxResults cutoff). That must read back null, not throw.
+      .mockResolvedValueOnce(
+        analyticsResponse({
+          columnHeaders: [
+            { name: "video" },
+            { name: "videoThumbnailImpressions" },
+            { name: "videoThumbnailImpressionsClickRate" },
+          ],
+          rows: [["vid-other", 90000, 6.2]],
+        }),
+      )
+
+    const summary = await getVideoAnalyticsSummary("token", video)
+
+    expect(summary.views).toBe(500)
     expect(summary.impressions).toBeNull()
     expect(summary.impressionClickThroughRate).toBeNull()
   })
