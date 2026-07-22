@@ -13,6 +13,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  TablePagination,
+  usePagination,
+} from "@/components/ui/table-pagination"
 import { cn } from "@/lib/utils"
 
 function initials(value: string): string {
@@ -78,6 +82,8 @@ function UserCell({ user, href }: { user: AdminUserRow; href: string }) {
 // separately and are intentionally not clickable.
 export function AdminUsersTable({ users }: { users: AdminUserRow[] }) {
   const router = useRouter()
+  const { pageRows, currentPage, pageCount, setPageNumber } =
+    usePagination(users)
 
   if (users.length === 0) {
     return (
@@ -88,23 +94,24 @@ export function AdminUsersTable({ users }: { users: AdminUserRow[] }) {
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border bg-card">
-      <Table className="text-left">
-        <TableHeader>
-          <TableRow className="bg-accent text-xs text-accent-foreground hover:bg-accent">
-            <TableHead className="px-4 py-3 text-accent-foreground">
-              User
-            </TableHead>
-            <TableHead className="px-4 py-3 text-accent-foreground">
-              Plan
-            </TableHead>
-            <TableHead className="px-4 py-3 text-accent-foreground">
-              Joined
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {users.map((user) => {
+    <div className="space-y-4">
+      <div className="overflow-hidden rounded-xl border bg-card">
+        <Table className="text-left">
+          <TableHeader>
+            <TableRow className="bg-accent text-xs text-accent-foreground hover:bg-accent">
+              <TableHead className="px-4 py-3 text-accent-foreground">
+                User
+              </TableHead>
+              <TableHead className="px-4 py-3 text-accent-foreground">
+                Plan
+              </TableHead>
+              <TableHead className="px-4 py-3 text-accent-foreground">
+                Joined
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {pageRows.map((user) => {
             const href = `/admin/users/${user.id}`
             return (
               <TableRow
@@ -124,8 +131,14 @@ export function AdminUsersTable({ users }: { users: AdminUserRow[] }) {
               </TableRow>
             )
           })}
-        </TableBody>
-      </Table>
+          </TableBody>
+        </Table>
+      </div>
+      <TablePagination
+        currentPage={currentPage}
+        pageCount={pageCount}
+        onPageChange={setPageNumber}
+      />
     </div>
   )
 }

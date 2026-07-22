@@ -1,3 +1,5 @@
+"use client"
+
 import { format } from "date-fns"
 import Link from "next/link"
 
@@ -11,6 +13,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  TablePagination,
+  usePagination,
+} from "@/components/ui/table-pagination"
 
 // Formats a dollar cost with enough precision for the sub-cent figures a single
 // call usually is, without trailing noise for larger totals.
@@ -21,6 +27,9 @@ function formatUsd(value: number): string {
 }
 
 export function AdminLlmCallsTable({ rows }: { rows: CostLogRow[] }) {
+  const { pageRows, currentPage, pageCount, setPageNumber } =
+    usePagination(rows)
+
   if (rows.length === 0) {
     return (
       <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
@@ -30,22 +39,31 @@ export function AdminLlmCallsTable({ rows }: { rows: CostLogRow[] }) {
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border bg-card dark:bg-transparent">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>User</TableHead>
-            <TableHead>Video</TableHead>
-            <TableHead>Cost type</TableHead>
-            <TableHead>Type of call</TableHead>
-            <TableHead>Model</TableHead>
-            <TableHead className="text-right">Tokens (in / out)</TableHead>
-            <TableHead className="text-right">Cost</TableHead>
-            <TableHead>Date &amp; time</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((row) => (
+    <div className="space-y-4">
+      <div className="overflow-x-auto rounded-lg border bg-card dark:bg-transparent">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-accent text-xs text-accent-foreground hover:bg-accent">
+              <TableHead className="text-accent-foreground">User</TableHead>
+              <TableHead className="text-accent-foreground">Video</TableHead>
+              <TableHead className="text-accent-foreground">Cost type</TableHead>
+              <TableHead className="text-accent-foreground">
+                Type of call
+              </TableHead>
+              <TableHead className="text-accent-foreground">Model</TableHead>
+              <TableHead className="text-right text-accent-foreground">
+                Tokens (in / out)
+              </TableHead>
+              <TableHead className="text-right text-accent-foreground">
+                Cost
+              </TableHead>
+              <TableHead className="text-accent-foreground">
+                Date &amp; time
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {pageRows.map((row) => (
             <TableRow key={row.id}>
               <TableCell className="max-w-[220px] truncate">
                 {row.userEmail ? (
@@ -100,8 +118,14 @@ export function AdminLlmCallsTable({ rows }: { rows: CostLogRow[] }) {
               </TableCell>
             </TableRow>
           ))}
-        </TableBody>
-      </Table>
+          </TableBody>
+        </Table>
+      </div>
+      <TablePagination
+        currentPage={currentPage}
+        pageCount={pageCount}
+        onPageChange={setPageNumber}
+      />
     </div>
   )
 }

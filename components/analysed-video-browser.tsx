@@ -43,6 +43,7 @@ import {
   formatCount,
   formatPublishedAt,
 } from "@/components/video-list"
+import { TABLE_PAGE_SIZE } from "@/components/ui/table-pagination"
 import type { AnalysedVideo } from "@/lib/analysed-videos"
 import {
   netSubscribersGained,
@@ -53,8 +54,8 @@ import {
 type PrivacyFilter = "all" | VideoPrivacyStatus
 
 // All analysed videos are loaded up front, so we page through them client-side.
-// Matches the Analyse Video table's page size for visual parity.
-const PAGE_SIZE = 12
+// Uses the app-wide table page size so every table paginates at the same rate.
+const PAGE_SIZE = TABLE_PAGE_SIZE
 
 const PRIVACY_OPTIONS: Array<{
   value: PrivacyFilter

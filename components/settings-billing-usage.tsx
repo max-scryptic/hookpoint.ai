@@ -1,4 +1,4 @@
-import { DownloadIcon, ExternalLinkIcon, FileTextIcon } from "lucide-react"
+import { FileTextIcon } from "lucide-react"
 
 import { BillingPaymentMethod } from "@/components/billing-payment-method"
 import { Button } from "@/components/ui/button"
@@ -10,14 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+import { SettingsBillingInvoicesTable } from "@/components/settings-billing-invoices-table"
 import type { BillingCard } from "@/lib/stripe/customers"
 import type { BillingSnapshot, MeterStatus } from "@/lib/billing/entitlements"
 import type { BillingInvoice } from "@/lib/stripe/invoices"
@@ -190,55 +183,7 @@ export function SettingsBillingUsage({
                 </p>
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead className="text-right">Invoice</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {invoices.map((invoice) => (
-                    <TableRow key={invoice.id}>
-                      <TableCell>{invoice.date}</TableCell>
-                      <TableCell>{invoice.description}</TableCell>
-                      <TableCell>{invoice.status}</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {invoice.amount}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {invoice.url ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            render={
-                              <a
-                                href={invoice.url}
-                                target="_blank"
-                                rel="noreferrer"
-                              />
-                            }
-                          >
-                            {invoice.actionLabel === "Download" ? (
-                              <DownloadIcon data-icon="inline-start" />
-                            ) : (
-                              <ExternalLinkIcon data-icon="inline-start" />
-                            )}
-                            {invoice.actionLabel}
-                          </Button>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">
-                            Unavailable
-                          </span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <SettingsBillingInvoicesTable invoices={invoices} />
             )}
           </CardContent>
         </Card>

@@ -17,11 +17,11 @@ import {
 } from "@/components/ui/table-pagination"
 import type { BillingInvoice } from "@/lib/stripe/invoices"
 
-// Renders a user's Stripe billing history for the admin detail page. Data comes
-// straight from Stripe (via getBillingInvoices), so Stripe stays the source of
-// truth for receipts and downloadable PDFs. Styling mirrors the other admin
-// tables: a bordered, horizontally scrollable frame around the shared Table.
-export function AdminBillingHistoryTable({
+// The user-facing invoices table on the billing settings page. Split out from
+// the (server-rendered) settings page so it can paginate client-side at the
+// shared app-wide page size. Callers guarantee a non-empty list — the empty
+// state lives in the settings page alongside its illustration.
+export function SettingsBillingInvoicesTable({
   invoices,
 }: {
   invoices: BillingInvoice[]
@@ -29,40 +29,25 @@ export function AdminBillingHistoryTable({
   const { pageRows, currentPage, pageCount, setPageNumber } =
     usePagination(invoices)
 
-  if (invoices.length === 0) {
-    return (
-      <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-        No payments on record for this user.
-      </p>
-    )
-  }
-
   return (
     <div className="space-y-4">
-      <div className="overflow-x-auto rounded-lg border bg-card dark:bg-transparent">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-accent text-xs text-accent-foreground hover:bg-accent">
-              <TableHead className="text-accent-foreground">Date</TableHead>
-              <TableHead className="text-accent-foreground">
-                Description
-              </TableHead>
-              <TableHead className="text-accent-foreground">Status</TableHead>
-              <TableHead className="text-right text-accent-foreground">
-                Amount
-              </TableHead>
-              <TableHead className="text-right text-accent-foreground">
-                Invoice
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {pageRows.map((invoice) => (
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Date</TableHead>
+            <TableHead>Description</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead className="text-right">Amount</TableHead>
+            <TableHead className="text-right">Invoice</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {pageRows.map((invoice) => (
             <TableRow key={invoice.id}>
               <TableCell>{invoice.date}</TableCell>
               <TableCell>{invoice.description}</TableCell>
               <TableCell>{invoice.status}</TableCell>
-              <TableCell className="text-right font-medium tabular-nums">
+              <TableCell className="text-right tabular-nums">
                 {invoice.amount}
               </TableCell>
               <TableCell className="text-right">
@@ -89,9 +74,8 @@ export function AdminBillingHistoryTable({
               </TableCell>
             </TableRow>
           ))}
-          </TableBody>
-        </Table>
-      </div>
+        </TableBody>
+      </Table>
       <TablePagination
         currentPage={currentPage}
         pageCount={pageCount}
