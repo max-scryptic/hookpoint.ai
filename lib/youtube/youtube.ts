@@ -637,10 +637,12 @@ export interface VideoAnalyticsSummary {
   subscribersGained: number | null
   subscribersLost: number | null
   // How many times the video's thumbnail was shown in YouTube's feeds, and the
-  // resulting click-through rate. YouTube only exposed these to the Analytics
-  // API from January 2026 (they were Studio-only before), so they are fetched
-  // best-effort and are null for videos analysed before then, on channels
-  // where YouTube still withholds them, or when the reach report is rejected.
+  // resulting click-through rate (added to the Analytics API in January 2026;
+  // Studio-only before). These are NOT served by the targeted per-video query
+  // used for the totals above — that shape 400s — so they come from a separate
+  // channel-level report dimensioned by video (see getVideoAnalyticsSummary).
+  // Fetched best-effort: null for videos analysed before this report shape
+  // existed, videos absent from the returned rows, or a rejected report.
   // impressionClickThroughRate is stored exactly as YouTube returns it; confirm
   // against Studio whether that is a 0..1 fraction or a 0..100 percentage
   // before formatting it for display.
@@ -669,7 +671,16 @@ export function netSubscribersGained(
 async function runAnalyticsReport(
   accessToken: string,
   video: VideoDetails,
-  params: { metrics: string; dimensions?: string; sort?: string; maxResults?: number },
+  params: {
+    metrics: string
+    dimensions?: string
+    sort?: string
+    maxResults?: number
+    // Skip the default `filters=video==<id>` scoping. Needed for the
+    // thumbnail-reach report, whose metrics are only served by a channel-level
+    // report dimensioned by video, not a targeted per-video filter.
+    omitVideoFilter?: boolean
+  },
 ): Promise<{ headers: string[]; rows: Array<Array<number | string | null>> }> {
   const url = new URL(`${ANALYTICS_API}/reports`)
   url.searchParams.set("ids", "channel==MINE")
@@ -681,7 +692,9 @@ async function runAnalyticsReport(
   if (params.maxResults != null) {
     url.searchParams.set("maxResults", String(params.maxResults))
   }
-  url.searchParams.set("filters", `video==${video.id}`)
+  if (!params.omitVideoFilter) {
+    url.searchParams.set("filters", `video==${video.id}`)
+  }
 
   const response = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -761,23 +774,47 @@ export async function getVideoAnalyticsSummary(
     console.error("Failed to fetch traffic sources", error)
   }
 
-  // Thumbnail reach: impressions and click-through rate. Isolated and
-  // best-effort — YouTube only started serving these to the API in January
-  // 2026 and still withholds them for some channels/date ranges, where the
-  // report 400s; that must degrade to nulls, never lose the totals above.
+  // Thumbnail reach: impressions and click-through rate. These metrics live in
+  // a different report shape than the per-video totals above — the targeted
+  // `filters=video==` query rejects them with 400 "query is not supported", so
+  // we request the channel-level report dimensioned by video (sorted by
+  // impressions, no video filter) and pick this video's row out of the result.
+  // Still isolated and best-effort: any failure, or a video that doesn't appear
+  // in the returned rows, degrades to null and never touches the load-bearing
+  // totals above. The two log lines below deliberately separate "the report was
+  // rejected" from "the report ran but had no row for this video" so the logs
+  // say which mode we're in while we validate that this shape works at all.
   let impressions: number | null = null
   let impressionClickThroughRate: number | null = null
   try {
     const reach = await runAnalyticsReport(accessToken, video, {
       metrics: "videoThumbnailImpressions,videoThumbnailImpressionsClickRate",
+      dimensions: "video",
+      sort: "-videoThumbnailImpressions",
+      // Channel-wide report capped at the API max; a video far down the
+      // impressions ranking won't be in the returned rows and reads back null.
+      maxResults: 200,
+      omitVideoFilter: true,
     })
-    const reachRow = reach.rows[0] ?? []
-    impressions = readMetric(reach.headers, reachRow, "videoThumbnailImpressions")
-    impressionClickThroughRate = readMetric(
-      reach.headers,
-      reachRow,
-      "videoThumbnailImpressionsClickRate",
-    )
+    const videoIndex = reach.headers.indexOf("video")
+    const reachRow =
+      videoIndex === -1
+        ? undefined
+        : reach.rows.find((entry) => String(entry[videoIndex]) === video.id)
+    if (!reachRow) {
+      console.info(`Thumbnail reach report returned no row for video ${video.id}`)
+    } else {
+      impressions = readMetric(
+        reach.headers,
+        reachRow,
+        "videoThumbnailImpressions",
+      )
+      impressionClickThroughRate = readMetric(
+        reach.headers,
+        reachRow,
+        "videoThumbnailImpressionsClickRate",
+      )
+    }
   } catch (error) {
     console.error("Failed to fetch thumbnail reach", error)
   }
