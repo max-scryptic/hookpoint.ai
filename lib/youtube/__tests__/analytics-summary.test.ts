@@ -56,8 +56,8 @@ describe("getVideoAnalyticsSummary", () => {
           ],
         }),
       )
-      // Reach is a channel-level report dimensioned by video; our row is
-      // picked out by video id, not assumed to be first.
+      // Reach is dimensioned by video and filtered to this video, so it returns
+      // just this video's row; our row is picked out by video id.
       .mockResolvedValueOnce(
         analyticsResponse({
           columnHeaders: [
@@ -65,10 +65,7 @@ describe("getVideoAnalyticsSummary", () => {
             { name: "videoThumbnailImpressions" },
             { name: "videoThumbnailImpressionsClickRate" },
           ],
-          rows: [
-            ["vid-other", 90000, 6.2],
-            ["vid-1", 25000, 4.8],
-          ],
+          rows: [["vid-1", 25000, 4.8]],
         }),
       )
 
@@ -92,8 +89,8 @@ describe("getVideoAnalyticsSummary", () => {
       { source: "RELATED_VIDEO", views: 300 },
     ])
 
-    // Three reports: totals and traffic sources are filtered to the video; the
-    // reach report is channel-level (no video filter) and dimensioned by video.
+    // Three reports, all filtered to the video. The reach report is also
+    // dimensioned by video, which its impression metrics require.
     expect(fetchMock).toHaveBeenCalledTimes(3)
     const firstUrl = new URL(String(fetchMock.mock.calls[0][0]))
     expect(firstUrl.searchParams.get("filters")).toBe("video==vid-1")
@@ -102,7 +99,7 @@ describe("getVideoAnalyticsSummary", () => {
       "videoThumbnailImpressions,videoThumbnailImpressionsClickRate",
     )
     expect(reachUrl.searchParams.get("dimensions")).toBe("video")
-    expect(reachUrl.searchParams.has("filters")).toBe(false)
+    expect(reachUrl.searchParams.get("filters")).toBe("video==vid-1")
   })
 
   it("still returns KPIs when the traffic-source report fails", async () => {
@@ -162,7 +159,7 @@ describe("getVideoAnalyticsSummary", () => {
     expect(summary.impressionClickThroughRate).toBeNull()
   })
 
-  it("nulls reach when the channel report has no row for this video", async () => {
+  it("nulls reach when the report returns no row for this video", async () => {
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(
         analyticsResponse({
@@ -179,8 +176,8 @@ describe("getVideoAnalyticsSummary", () => {
           rows: [["YT_SEARCH", 500]],
         }),
       )
-      // Reach report ran, but our video isn't among the returned rows (e.g. it
-      // ranks below the maxResults cutoff). That must read back null, not throw.
+      // Reach report ran but YouTube withholds reach for this video, so it comes
+      // back with no rows. That must read back null, not throw.
       .mockResolvedValueOnce(
         analyticsResponse({
           columnHeaders: [
@@ -188,7 +185,7 @@ describe("getVideoAnalyticsSummary", () => {
             { name: "videoThumbnailImpressions" },
             { name: "videoThumbnailImpressionsClickRate" },
           ],
-          rows: [["vid-other", 90000, 6.2]],
+          rows: [],
         }),
       )
 
