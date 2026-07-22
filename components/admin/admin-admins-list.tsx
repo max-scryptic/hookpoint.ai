@@ -1,3 +1,5 @@
+"use client"
+
 import { format } from "date-fns"
 import { ShieldCheckIcon } from "lucide-react"
 import type { AdminUserRow } from "@/lib/admin/users"
@@ -10,6 +12,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  TablePagination,
+  usePagination,
+} from "@/components/ui/table-pagination"
 
 function initials(value: string): string {
   return value.slice(0, 2).toUpperCase()
@@ -26,6 +32,9 @@ export function AdminAdminsList({
   admins: AdminUserRow[]
   currentAdminId: string
 }) {
+  const { pageRows, currentPage, pageCount, setPageNumber } =
+    usePagination(admins)
+
   if (admins.length === 0) {
     return (
       <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
@@ -35,20 +44,21 @@ export function AdminAdminsList({
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border bg-card">
-      <Table className="text-left">
-        <TableHeader>
-          <TableRow className="bg-accent text-xs text-accent-foreground hover:bg-accent">
-            <TableHead className="px-4 py-3 text-accent-foreground">
-              Admin
-            </TableHead>
-            <TableHead className="px-4 py-3 text-accent-foreground">
-              Joined
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {admins.map((admin) => {
+    <div className="space-y-4">
+      <div className="overflow-hidden rounded-xl border bg-card">
+        <Table className="text-left">
+          <TableHeader>
+            <TableRow className="bg-accent text-xs text-accent-foreground hover:bg-accent">
+              <TableHead className="px-4 py-3 text-accent-foreground">
+                Admin
+              </TableHead>
+              <TableHead className="px-4 py-3 text-accent-foreground">
+                Joined
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {pageRows.map((admin) => {
             const isSelf = admin.id === currentAdminId
             return (
               <TableRow key={admin.id} className="hover:bg-muted/40">
@@ -82,8 +92,14 @@ export function AdminAdminsList({
               </TableRow>
             )
           })}
-        </TableBody>
-      </Table>
+          </TableBody>
+        </Table>
+      </div>
+      <TablePagination
+        currentPage={currentPage}
+        pageCount={pageCount}
+        onPageChange={setPageNumber}
+      />
     </div>
   )
 }

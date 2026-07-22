@@ -14,6 +14,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  TablePagination,
+  usePagination,
+} from "@/components/ui/table-pagination"
 
 // Enough precision for the sub-cent figures a single video can cost, without
 // trailing noise on larger totals. Matches the cost-log table's formatting.
@@ -74,6 +78,8 @@ export function AdminVideoAnalysesTable({
   videos: AdminVideoAnalysis[]
 }) {
   const router = useRouter()
+  const { pageRows, currentPage, pageCount, setPageNumber } =
+    usePagination(videos)
 
   if (videos.length === 0) {
     return (
@@ -84,32 +90,33 @@ export function AdminVideoAnalysesTable({
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border bg-card">
-      <Table className="text-left">
-        <TableHeader>
-          <TableRow className="bg-accent text-xs text-accent-foreground hover:bg-accent">
-            <TableHead className="px-4 py-3 text-accent-foreground">
-              Video
-            </TableHead>
-            <TableHead className="px-4 py-3 text-accent-foreground">
-              Analysed
-            </TableHead>
-            <TableHead className="hidden px-4 py-3 text-right text-accent-foreground sm:table-cell">
-              Light analysis
-            </TableHead>
-            <TableHead className="px-4 py-3 text-accent-foreground">
-              Raw file uploaded
-            </TableHead>
-            <TableHead className="hidden px-4 py-3 text-right text-accent-foreground sm:table-cell">
-              Deep analysis
-            </TableHead>
-            <TableHead className="px-4 py-3 text-right text-accent-foreground">
-              Events generated
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {videos.map((video) => {
+    <div className="space-y-4">
+      <div className="overflow-hidden rounded-xl border bg-card">
+        <Table className="text-left">
+          <TableHeader>
+            <TableRow className="bg-accent text-xs text-accent-foreground hover:bg-accent">
+              <TableHead className="px-4 py-3 text-accent-foreground">
+                Video
+              </TableHead>
+              <TableHead className="px-4 py-3 text-accent-foreground">
+                Analysed
+              </TableHead>
+              <TableHead className="hidden px-4 py-3 text-right text-accent-foreground sm:table-cell">
+                Light analysis
+              </TableHead>
+              <TableHead className="px-4 py-3 text-accent-foreground">
+                Raw file uploaded
+              </TableHead>
+              <TableHead className="hidden px-4 py-3 text-right text-accent-foreground sm:table-cell">
+                Deep analysis
+              </TableHead>
+              <TableHead className="px-4 py-3 text-right text-accent-foreground">
+                Events generated
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {pageRows.map((video) => {
             // Only deeply-analysed videos (raw source file uploaded) route to a
             // detail page worth opening; the rest render as an inert row.
             const deeplyAnalysed = video.rawFileUploadedAt != null
@@ -177,8 +184,14 @@ export function AdminVideoAnalysesTable({
               </TableRow>
             )
           })}
-        </TableBody>
-      </Table>
+          </TableBody>
+        </Table>
+      </div>
+      <TablePagination
+        currentPage={currentPage}
+        pageCount={pageCount}
+        onPageChange={setPageNumber}
+      />
     </div>
   )
 }
