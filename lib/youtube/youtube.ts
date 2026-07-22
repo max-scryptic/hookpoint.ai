@@ -676,6 +676,12 @@ async function runAnalyticsReport(
     dimensions?: string
     sort?: string
     maxResults?: number
+    startIndex?: number
+    // Skip the default `filters=video==<id>` scoping. Required for the
+    // thumbnail-reach metrics, which YouTube only serves from a channel-level
+    // report dimensioned by video — a per-video filter 400s "query is not
+    // supported" (see getVideoAnalyticsSummary).
+    omitVideoFilter?: boolean
   },
 ): Promise<{ headers: string[]; rows: Array<Array<number | string | null>> }> {
   const url = new URL(`${ANALYTICS_API}/reports`)
@@ -688,7 +694,12 @@ async function runAnalyticsReport(
   if (params.maxResults != null) {
     url.searchParams.set("maxResults", String(params.maxResults))
   }
-  url.searchParams.set("filters", `video==${video.id}`)
+  if (params.startIndex != null) {
+    url.searchParams.set("startIndex", String(params.startIndex))
+  }
+  if (!params.omitVideoFilter) {
+    url.searchParams.set("filters", `video==${video.id}`)
+  }
 
   const response = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -768,35 +779,50 @@ export async function getVideoAnalyticsSummary(
     console.error("Failed to fetch traffic sources", error)
   }
 
-  // Thumbnail reach: impressions and click-through rate. These metrics require
-  // the `video` dimension — requesting them on the no-dimension totals query
-  // above 400s with "query is not supported" — so they get their own report
-  // dimensioned by video and filtered to this video, which returns exactly this
-  // video's reach row no matter where it ranks in the channel. Isolated and
-  // best-effort: any failure, or a video YouTube withholds reach for (an empty
-  // report), degrades to null and never touches the load-bearing totals above.
+  // Thumbnail reach: impressions and click-through rate. YouTube serves these
+  // metrics ONLY from a channel-level report dimensioned by video — a per-video
+  // `filters=video==<id>` query (with or without dimensions) 400s "query is not
+  // supported". So we request the channel-wide report dimensioned by video,
+  // sorted by impressions, and page through it with startIndex until we find
+  // this video's row. Paging (rather than a single top-N slice) is what lets a
+  // low-impression video still surface its reach instead of falling off the end
+  // of the ranking. Isolated and best-effort: any failure, or a video YouTube
+  // withholds reach for (never appears in the report), degrades to null and
+  // never touches the load-bearing totals above.
   let impressions: number | null = null
   let impressionClickThroughRate: number | null = null
   try {
-    const reach = await runAnalyticsReport(accessToken, video, {
-      metrics: "videoThumbnailImpressions,videoThumbnailImpressionsClickRate",
-      dimensions: "video",
-    })
-    const videoIndex = reach.headers.indexOf("video")
-    const reachRow =
-      videoIndex === -1
-        ? reach.rows[0]
-        : reach.rows.find((entry) => String(entry[videoIndex]) === video.id)
+    const pageSize = 200
+    // Cap total scanned rows so a large channel can't spin the loop forever;
+    // videos with meaningful reach rank well within this window.
+    const maxRows = 2000
+    let reachRow: Array<number | string | null> | undefined
+    let headers: string[] = []
+    for (let startIndex = 1; startIndex <= maxRows; startIndex += pageSize) {
+      const reach = await runAnalyticsReport(accessToken, video, {
+        metrics: "videoThumbnailImpressions,videoThumbnailImpressionsClickRate",
+        dimensions: "video",
+        sort: "-videoThumbnailImpressions",
+        maxResults: pageSize,
+        startIndex,
+        omitVideoFilter: true,
+      })
+      headers = reach.headers
+      const videoIndex = reach.headers.indexOf("video")
+      if (videoIndex !== -1) {
+        reachRow = reach.rows.find(
+          (entry) => String(entry[videoIndex]) === video.id,
+        )
+      }
+      // Found it, or reached the last (short) page — stop paging either way.
+      if (reachRow || reach.rows.length < pageSize) break
+    }
     if (!reachRow) {
       console.info(`Thumbnail reach report returned no row for video ${video.id}`)
     } else {
-      impressions = readMetric(
-        reach.headers,
-        reachRow,
-        "videoThumbnailImpressions",
-      )
+      impressions = readMetric(headers, reachRow, "videoThumbnailImpressions")
       impressionClickThroughRate = readMetric(
-        reach.headers,
+        headers,
         reachRow,
         "videoThumbnailImpressionsClickRate",
       )
