@@ -3,7 +3,7 @@
 import * as React from "react"
 import { subDays } from "date-fns"
 import type { DateRange } from "react-day-picker"
-import { Area, AreaChart, CartesianGrid, XAxis } from "recharts"
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts"
 
 import {
   Card,
@@ -253,6 +253,13 @@ export function AdminActivityCharts({
                   minTickGap={32}
                   tickFormatter={(value) => formatDay(String(value))}
                 />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  width={32}
+                  allowDecimals={false}
+                />
                 <ChartTooltip
                   cursor={false}
                   content={
@@ -314,6 +321,13 @@ export function AdminActivityCharts({
                   tickMargin={8}
                   minTickGap={32}
                   tickFormatter={(value) => formatDay(String(value))}
+                />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  width={32}
+                  allowDecimals={false}
                 />
                 <ChartTooltip
                   cursor={false}
