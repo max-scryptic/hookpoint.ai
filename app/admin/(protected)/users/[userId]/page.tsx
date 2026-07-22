@@ -113,8 +113,10 @@ function StatTile({
   value: string
   tabular?: boolean
 }) {
+  // White in light mode so the tile lifts off the tinted page; dark mode keeps
+  // its original muted fill untouched.
   return (
-    <div className="rounded-lg border bg-muted/30 p-3">
+    <div className="rounded-lg border bg-card p-3 dark:bg-muted/30">
       <div className="text-xs text-muted-foreground">{label}</div>
       <div
         className={cn(
@@ -435,7 +437,7 @@ export default async function AdminUserDetailPage({
               {costBreakdown.map((entry) => (
                 <div
                   key={entry.type}
-                  className="flex items-center justify-between rounded-lg border bg-muted/30 p-3"
+                  className="flex items-center justify-between rounded-lg border bg-card p-3 dark:bg-muted/30"
                 >
                   <div>
                     <div className="text-sm font-medium">
