@@ -25,6 +25,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs"
 import type {
   AudioAnalysis,
   SnapshotAnalysis,
@@ -93,6 +99,7 @@ export function DeepAnalysisEvidence({
   evidence,
   videoId,
   readOnly = false,
+  tabbed = false,
 }: {
   evidence: DeepAnalysisEvidenceData
   videoId: string
@@ -101,6 +108,11 @@ export function DeepAnalysisEvidence({
   // an admin viewing someone else's analysis — the admin oversight view passes
   // this to render the evidence read-only.
   readOnly?: boolean
+  // Splits the per-window evidence across a tab per window rather than stacking
+  // every window as a collapsible card. The admin oversight view opts into this
+  // so a video with many windows stays one tab-click per window instead of a
+  // long scroll; the user-facing dashboard keeps the default stacked layout.
+  tabbed?: boolean
 }) {
   if (evidence.windows.length === 0) return null
 
@@ -113,17 +125,64 @@ export function DeepAnalysisEvidence({
 
       <VideoCostSummary evidence={evidence} />
 
-      <div className="flex flex-col gap-3">
-        {evidence.windows.map((item) => (
-          <WindowEvidenceCard
-            key={item.window.id}
-            item={item}
-            videoId={videoId}
-            readOnly={readOnly}
-          />
-        ))}
-      </div>
+      {tabbed ? (
+        <Tabs defaultValue={String(evidence.windows[0].window.id)} className="gap-3">
+          <TabsList className="flex w-full flex-wrap">
+            {evidence.windows.map((item) => (
+              <TabsTrigger
+                key={item.window.id}
+                value={String(item.window.id)}
+              >
+                <WindowTabLabel item={item} />
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          {evidence.windows.map((item) => (
+            <TabsContent
+              key={item.window.id}
+              value={String(item.window.id)}
+              className="flex flex-col gap-5 rounded-xl border bg-card p-4"
+            >
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <WindowSummary item={item} />
+              </div>
+              <WindowEvidenceBody
+                item={item}
+                videoId={videoId}
+                readOnly={readOnly}
+              />
+            </TabsContent>
+          ))}
+        </Tabs>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {evidence.windows.map((item) => (
+            <WindowEvidenceCard
+              key={item.window.id}
+              item={item}
+              videoId={videoId}
+              readOnly={readOnly}
+            />
+          ))}
+        </div>
+      )}
     </section>
+  )
+}
+
+// The compact per-window label for a tab trigger: the window kind and its
+// analysed time range, kept short so a row of tabs stays scannable.
+function WindowTabLabel({ item }: { item: WindowEvidence }) {
+  const { window } = item
+  const from = window.analysisFromSeconds ?? window.fromSeconds
+  const to = window.analysisToSeconds ?? window.toSeconds
+  return (
+    <span className="flex items-center gap-1.5">
+      {KIND_LABELS[window.kind]}
+      <span className="font-mono text-xs text-muted-foreground">
+        {formatTimestamp(from)}–{formatTimestamp(to)}
+      </span>
+    </span>
   )
 }
 
@@ -169,7 +228,44 @@ function VideoCostSummary({
   )
 }
 
-function WindowEvidenceCard({
+// The one-line summary of a window — kind, label, time range, retention delta
+// and a roll-up of what evidence it carries. Shared by the stacked collapsible
+// card (as its trigger) and the tabbed layout (as the panel header) so both
+// read identically.
+function WindowSummary({ item }: { item: WindowEvidence }) {
+  const { window } = item
+  const from = window.analysisFromSeconds ?? window.fromSeconds
+  const to = window.analysisToSeconds ?? window.toSeconds
+
+  return (
+    <>
+      <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+        {KIND_LABELS[window.kind]}
+      </span>
+      <h3 className="text-sm font-medium">{item.displayLabel}</h3>
+      <span className="font-mono text-xs text-muted-foreground">
+        {formatTimestamp(from)} – {formatTimestamp(to)}
+      </span>
+      <span
+        className={`font-mono text-xs ${window.kind === "hold" ? "text-teal-600 dark:text-teal-400" : window.delta >= 0 ? "text-emerald-600 dark:text-emerald-500" : "text-destructive"}`}
+      >
+        {formatSignedPercent(window.delta)}
+      </span>
+      <span className="ml-auto text-xs text-muted-foreground">
+        {item.events.length} event{item.events.length === 1 ? "" : "s"} ·{" "}
+        {item.snapshots.length} snapshot{item.snapshots.length === 1 ? "" : "s"}
+        {item.audio ? " · audio" : ""}
+        {item.transcript ? " · transcript" : ""}
+        {item.costs.length > 0 ? ` · ${formatUsd(item.totalCostUsd)}` : ""}
+      </span>
+    </>
+  )
+}
+
+// Everything below a window's summary line: the synthesized events, recommended
+// tests, the optional feedback control and the per-modality evidence sections.
+// Shared between the collapsible and tabbed layouts.
+function WindowEvidenceBody({
   item,
   videoId,
   readOnly = false,
@@ -179,51 +275,47 @@ function WindowEvidenceCard({
   readOnly?: boolean
 }) {
   const { window } = item
-  const from = window.analysisFromSeconds ?? window.fromSeconds
-  const to = window.analysisToSeconds ?? window.toSeconds
 
+  return (
+    <>
+      <EventsSection events={item.events} />
+      <RecommendationsSection recommendations={item.recommendations} />
+      {!readOnly && (
+        <DeepAnalysisFeedback
+          videoId={videoId}
+          retentionWindowId={window.id}
+          initialFeedback={item.feedback}
+        />
+      )}
+      <div className="flex flex-col divide-y rounded-lg border">
+        <RetentionSection window={window} />
+        <EditingSection editing={item.editing} baseline={item.baseline} />
+        <TranscriptSection transcript={item.transcript} />
+        <SnapshotsSection snapshots={item.snapshots} />
+        <AudioSection audio={item.audio} baseline={item.baseline} />
+        <CostSection costs={item.costs} totalCostUsd={item.totalCostUsd} />
+      </div>
+    </>
+  )
+}
+
+function WindowEvidenceCard({
+  item,
+  videoId,
+  readOnly = false,
+}: {
+  item: WindowEvidence
+  videoId: string
+  readOnly?: boolean
+}) {
   return (
     <Collapsible defaultOpen className="rounded-xl border bg-card">
       <CollapsibleTrigger className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 p-4 text-left">
-        <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-          {KIND_LABELS[window.kind]}
-        </span>
-        <h3 className="text-sm font-medium">{item.displayLabel}</h3>
-        <span className="font-mono text-xs text-muted-foreground">
-          {formatTimestamp(from)} – {formatTimestamp(to)}
-        </span>
-        <span
-          className={`font-mono text-xs ${window.kind === "hold" ? "text-teal-600 dark:text-teal-400" : window.delta >= 0 ? "text-emerald-600 dark:text-emerald-500" : "text-destructive"}`}
-        >
-          {formatSignedPercent(window.delta)}
-        </span>
-        <span className="ml-auto text-xs text-muted-foreground">
-          {item.events.length} event{item.events.length === 1 ? "" : "s"} ·{" "}
-          {item.snapshots.length} snapshot{item.snapshots.length === 1 ? "" : "s"}
-          {item.audio ? " · audio" : ""}
-          {item.transcript ? " · transcript" : ""}
-          {item.costs.length > 0 ? ` · ${formatUsd(item.totalCostUsd)}` : ""}
-        </span>
+        <WindowSummary item={item} />
       </CollapsibleTrigger>
 
       <CollapsibleContent className="flex flex-col gap-5 border-t p-4">
-        <EventsSection events={item.events} />
-        <RecommendationsSection recommendations={item.recommendations} />
-        {!readOnly && (
-          <DeepAnalysisFeedback
-            videoId={videoId}
-            retentionWindowId={window.id}
-            initialFeedback={item.feedback}
-          />
-        )}
-        <div className="flex flex-col divide-y rounded-lg border">
-          <RetentionSection window={window} />
-          <EditingSection editing={item.editing} baseline={item.baseline} />
-          <TranscriptSection transcript={item.transcript} />
-          <SnapshotsSection snapshots={item.snapshots} />
-          <AudioSection audio={item.audio} baseline={item.baseline} />
-          <CostSection costs={item.costs} totalCostUsd={item.totalCostUsd} />
-        </div>
+        <WindowEvidenceBody item={item} videoId={videoId} readOnly={readOnly} />
       </CollapsibleContent>
     </Collapsible>
   )
