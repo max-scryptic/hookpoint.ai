@@ -4,9 +4,20 @@ import {
   getVideoAnalyticsSummary,
   type VideoDetails,
 } from "@/lib/youtube/youtube"
+import { getVideoThumbnailReach } from "@/lib/youtube/reporting"
+
+// Reach comes from the Reporting API (a separate async subsystem, tested in
+// reporting.test.ts). Here we stub it so these tests cover only how the
+// Analytics-API totals/traffic reports are fetched and merged with reach.
+vi.mock("@/lib/youtube/reporting", () => ({
+  getVideoThumbnailReach: vi.fn(),
+}))
+
+const mockedReach = vi.mocked(getVideoThumbnailReach)
 
 afterEach(() => {
   vi.restoreAllMocks()
+  mockedReach.mockReset()
 })
 
 const video: VideoDetails = {
@@ -23,7 +34,11 @@ function analyticsResponse(body: unknown): Response {
 }
 
 describe("getVideoAnalyticsSummary", () => {
-  it("maps KPIs by column name and orders traffic sources", async () => {
+  it("maps KPIs by column name, orders traffic, and merges reach", async () => {
+    mockedReach.mockResolvedValue({
+      impressions: 25000,
+      impressionClickThroughRate: 0.048,
+    })
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(
@@ -56,19 +71,6 @@ describe("getVideoAnalyticsSummary", () => {
           ],
         }),
       )
-      // Reach is a channel-wide report dimensioned by video (no per-video
-      // filter — YouTube rejects that shape for these metrics); our row is
-      // picked out of the ranking by video id.
-      .mockResolvedValueOnce(
-        analyticsResponse({
-          columnHeaders: [
-            { name: "video" },
-            { name: "videoThumbnailImpressions" },
-            { name: "videoThumbnailImpressionsClickRate" },
-          ],
-          rows: [["vid-1", 25000, 4.8]],
-        }),
-      )
 
     const summary = await getVideoAnalyticsSummary("token", video)
 
@@ -83,89 +85,26 @@ describe("getVideoAnalyticsSummary", () => {
       subscribersGained: 25,
       subscribersLost: 4,
       impressions: 25000,
-      impressionClickThroughRate: 4.8,
+      impressionClickThroughRate: 0.048,
     })
     expect(summary.trafficSources).toEqual([
       { source: "YT_SEARCH", views: 600 },
       { source: "RELATED_VIDEO", views: 300 },
     ])
 
-    // Three reports. The totals and traffic reports are filtered to the video;
-    // the reach report is NOT — its impression metrics are only served by a
-    // channel-wide report dimensioned by video, so it carries no video filter.
-    expect(fetchMock).toHaveBeenCalledTimes(3)
+    // Reach is not an Analytics report — only totals and traffic hit fetch, both
+    // filtered to the video. Reach was sourced via the Reporting API stub.
+    expect(fetchMock).toHaveBeenCalledTimes(2)
     const firstUrl = new URL(String(fetchMock.mock.calls[0][0]))
     expect(firstUrl.searchParams.get("filters")).toBe("video==vid-1")
-    const reachUrl = new URL(String(fetchMock.mock.calls[2][0]))
-    expect(reachUrl.searchParams.get("metrics")).toBe(
-      "videoThumbnailImpressions,videoThumbnailImpressionsClickRate",
-    )
-    expect(reachUrl.searchParams.get("dimensions")).toBe("video")
-    expect(reachUrl.searchParams.get("sort")).toBe("-videoThumbnailImpressions")
-    expect(reachUrl.searchParams.get("filters")).toBeNull()
-  })
-
-  it("pages past the first slice to find a low-ranked video's reach", async () => {
-    // A row for some other video so page one is a full slice that does not
-    // contain vid-1, forcing a second page request.
-    const fullPage = Array.from({ length: 200 }, (_, index) => [
-      `other-${index}`,
-      1000,
-      2,
-    ])
-    const fetchMock = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(
-        analyticsResponse({
-          columnHeaders: [{ name: "views" }],
-          rows: [[500]],
-        }),
-      )
-      .mockResolvedValueOnce(
-        analyticsResponse({
-          columnHeaders: [
-            { name: "insightTrafficSourceType" },
-            { name: "views" },
-          ],
-          rows: [["YT_SEARCH", 500]],
-        }),
-      )
-      // Reach page one: a full slice of other videos, so paging continues.
-      .mockResolvedValueOnce(
-        analyticsResponse({
-          columnHeaders: [
-            { name: "video" },
-            { name: "videoThumbnailImpressions" },
-            { name: "videoThumbnailImpressionsClickRate" },
-          ],
-          rows: fullPage,
-        }),
-      )
-      // Reach page two: this video's row finally appears.
-      .mockResolvedValueOnce(
-        analyticsResponse({
-          columnHeaders: [
-            { name: "video" },
-            { name: "videoThumbnailImpressions" },
-            { name: "videoThumbnailImpressionsClickRate" },
-          ],
-          rows: [["vid-1", 1200, 2.4]],
-        }),
-      )
-
-    const summary = await getVideoAnalyticsSummary("token", video)
-
-    expect(summary.impressions).toBe(1200)
-    expect(summary.impressionClickThroughRate).toBe(2.4)
-    // Totals + traffic + two reach pages.
-    expect(fetchMock).toHaveBeenCalledTimes(4)
-    const page1 = new URL(String(fetchMock.mock.calls[2][0]))
-    const page2 = new URL(String(fetchMock.mock.calls[3][0]))
-    expect(page1.searchParams.get("startIndex")).toBe("1")
-    expect(page2.searchParams.get("startIndex")).toBe("201")
+    expect(mockedReach).toHaveBeenCalledWith("token", "vid-1")
   })
 
   it("still returns KPIs when the traffic-source report fails", async () => {
+    mockedReach.mockResolvedValue({
+      impressions: 8000,
+      impressionClickThroughRate: 0.031,
+    })
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(
         analyticsResponse({
@@ -174,16 +113,6 @@ describe("getVideoAnalyticsSummary", () => {
         }),
       )
       .mockResolvedValueOnce(new Response("nope", { status: 500 }))
-      .mockResolvedValueOnce(
-        analyticsResponse({
-          columnHeaders: [
-            { name: "video" },
-            { name: "videoThumbnailImpressions" },
-            { name: "videoThumbnailImpressionsClickRate" },
-          ],
-          rows: [["vid-1", 8000, 3.1]],
-        }),
-      )
 
     const summary = await getVideoAnalyticsSummary("token", video)
 
@@ -191,10 +120,13 @@ describe("getVideoAnalyticsSummary", () => {
     expect(summary.likes).toBe(40)
     expect(summary.trafficSources).toEqual([])
     expect(summary.impressions).toBe(8000)
-    expect(summary.impressionClickThroughRate).toBe(3.1)
+    expect(summary.impressionClickThroughRate).toBe(0.031)
   })
 
-  it("still returns KPIs and traffic when the reach report is withheld", async () => {
+  it("nulls reach when the Reporting API has nothing for this video", async () => {
+    // A freshly created reporting job (or a video outside the report window)
+    // yields null reach. That must not throw or disturb the KPI totals.
+    mockedReach.mockResolvedValue(null)
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(
         analyticsResponse({
@@ -211,8 +143,6 @@ describe("getVideoAnalyticsSummary", () => {
           rows: [["YT_SEARCH", 500]],
         }),
       )
-      // YouTube 400s the reach report for a channel/date range it withholds.
-      .mockResolvedValueOnce(new Response("unknown metric", { status: 400 }))
 
     const summary = await getVideoAnalyticsSummary("token", video)
 
@@ -220,42 +150,8 @@ describe("getVideoAnalyticsSummary", () => {
     expect(summary.trafficSources).toEqual([{ source: "YT_SEARCH", views: 500 }])
     expect(summary.impressions).toBeNull()
     expect(summary.impressionClickThroughRate).toBeNull()
-  })
-
-  it("nulls reach when the report returns no row for this video", async () => {
-    vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(
-        analyticsResponse({
-          columnHeaders: [{ name: "views" }],
-          rows: [[500]],
-        }),
-      )
-      .mockResolvedValueOnce(
-        analyticsResponse({
-          columnHeaders: [
-            { name: "insightTrafficSourceType" },
-            { name: "views" },
-          ],
-          rows: [["YT_SEARCH", 500]],
-        }),
-      )
-      // Reach report ran but YouTube withholds reach for this video, so it comes
-      // back with no rows. That must read back null, not throw.
-      .mockResolvedValueOnce(
-        analyticsResponse({
-          columnHeaders: [
-            { name: "video" },
-            { name: "videoThumbnailImpressions" },
-            { name: "videoThumbnailImpressionsClickRate" },
-          ],
-          rows: [],
-        }),
-      )
-
-    const summary = await getVideoAnalyticsSummary("token", video)
-
-    expect(summary.views).toBe(500)
-    expect(summary.impressions).toBeNull()
-    expect(summary.impressionClickThroughRate).toBeNull()
+    // Even a null reading records an attempt time so it's retried later, not
+    // cached as final.
+    expect(typeof summary.reachAttemptedAt).toBe("string")
   })
 })
