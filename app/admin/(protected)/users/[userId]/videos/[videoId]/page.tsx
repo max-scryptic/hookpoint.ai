@@ -3,8 +3,10 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ArrowLeftIcon, ExternalLinkIcon } from "lucide-react"
 
-import { DeepAnalysisEvidence } from "@/components/deep-analysis-evidence"
+import { AdminVideoAnalysisDetail } from "@/components/admin/admin-video-analysis-detail"
 import { requireAdminUser } from "@/lib/admin/auth"
+import { getAnalysisCostBreakdown } from "@/lib/admin/analysis-cost-breakdown"
+import { getLightAnalysisEvidence } from "@/lib/admin/light-analysis-evidence"
 import { getUserById } from "@/lib/admin/users"
 import { getUserAnalysedVideoById } from "@/lib/admin/video-analysis"
 import { getDeepAnalysisEvidence } from "@/lib/deep-analysis-evidence"
@@ -18,13 +20,16 @@ function formatDate(iso: string): string {
   return format(new Date(iso), "d MMM yyyy, HH:mm")
 }
 
-// Admin video detail: the full deep-analysis evidence for a single video a user
-// has analysed — every synthesized retention-window event plus the raw signals
-// behind them (transcript, snapshots, audio, editing metrics and cost). This is
-// the same breakdown the front-end deep-analysis section renders, read-only, so
-// admins retain full oversight once those panels are hidden from users. All data
-// is loaded server-side via the service-role client (behind the admin auth
-// check), scoped to the video's owning user.
+// Admin video detail: the full evidence for a single video a user has analysed,
+// split into Light Analysis and Deep Analysis tabs. Each tab leads with the
+// cost KPIs for that bucket and then every piece of data the pipeline captured
+// for it — the light reads (pacing, packaging + its categorical taxonomy,
+// retention attribution) and the deep per-window signals (transcript,
+// snapshots, audio, editing metrics and synthesized events). This is the same
+// breakdown the front end renders, read-only, so admins retain full oversight
+// of everything we capture about the video. All data is loaded server-side via
+// the service-role client (behind the admin auth check), scoped to the owning
+// user.
 export default async function AdminUserVideoDetailPage({
   params,
 }: {
@@ -61,21 +66,29 @@ export default async function AdminUserVideoDetailPage({
     console.error("Failed to load source file for admin video detail", error)
   }
 
-  let evidence: Awaited<ReturnType<typeof getDeepAnalysisEvidence>> | null = null
-  try {
-    evidence = await getDeepAnalysisEvidence(
+  // The light reads, the deep per-window evidence and the authoritative cost
+  // breakdown, loaded together. Deep evidence is best-effort (a failure leaves
+  // the deep tab showing its empty state rather than sinking the page); the
+  // light-evidence and cost helpers already degrade to nulls/zeroes internally.
+  const [costs, lightEvidence, deepEvidence] = await Promise.all([
+    getAnalysisCostBreakdown(userId, video.id),
+    getLightAnalysisEvidence(supabase, userId, video.id),
+    getDeepAnalysisEvidence(
       supabase,
       userId,
       video.id,
       transcodedDurationSeconds,
-    )
-  } catch (error) {
-    console.error("Failed to load deep analysis evidence for admin", error)
-  }
+    ).catch((error) => {
+      console.error("Failed to load deep analysis evidence for admin", error)
+      return null
+    }),
+  ])
 
   const eventCount =
-    evidence?.windows.reduce((sum, window) => sum + window.events.length, 0) ?? 0
-  const hasEvidence = Boolean(evidence && evidence.windows.length > 0)
+    deepEvidence?.windows.reduce(
+      (sum, window) => sum + window.events.length,
+      0,
+    ) ?? 0
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
@@ -108,15 +121,12 @@ export default async function AdminUserVideoDetailPage({
         </div>
       </div>
 
-      {hasEvidence && evidence ? (
-        <DeepAnalysisEvidence evidence={evidence} videoId={video.id} readOnly />
-      ) : (
-        <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-          No deep-analysis evidence has been generated for this video yet. Events
-          and their supporting signals appear here once the user has uploaded a
-          source file and the deep-analysis pipeline has run.
-        </p>
-      )}
+      <AdminVideoAnalysisDetail
+        videoId={video.id}
+        costs={costs}
+        lightEvidence={lightEvidence}
+        deepEvidence={deepEvidence}
+      />
     </div>
   )
 }
