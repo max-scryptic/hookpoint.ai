@@ -3,12 +3,18 @@
 // is fetched once at analyse time and replayed from the column thereafter, so
 // we don't re-spend YouTube Analytics quota on every page view. Rows analysed
 // before this column existed are backfilled opportunistically the next time
-// their detail page is opened.
+// their detail page is opened. Thumbnail reach (impressions + CTR) is handled
+// separately: it comes from the channel-granular Reporting API, so one fetch is
+// fanned out across every one of the user's videos (see
+// backfillChannelThumbnailReach).
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { getGoogleAccessToken } from "@/lib/youtube/google-auth"
-import { getVideoThumbnailReach } from "@/lib/youtube/reporting"
+import {
+  fetchChannelThumbnailReach,
+  type ThumbnailReach,
+} from "@/lib/youtube/reporting"
 import {
   getVideoAnalyticsSummary,
   type VideoAnalyticsSummary,
@@ -83,12 +89,90 @@ function reachIsCurrent(summary: VideoAnalyticsSummary): boolean {
     : false
 }
 
+// Applies a reach reading onto a summary, preserving any existing values when
+// the reading is absent (a video not yet in a report) and always stamping the
+// attempt time so a still-null reading is throttled from immediate refetch.
+function applyReach(
+  summary: VideoAnalyticsSummary,
+  reach: ThumbnailReach | undefined,
+  attemptedAt: string,
+): VideoAnalyticsSummary {
+  return {
+    ...summary,
+    impressions: reach?.impressions ?? summary.impressions ?? null,
+    impressionClickThroughRate:
+      reach?.impressionClickThroughRate ??
+      summary.impressionClickThroughRate ??
+      null,
+    reachAttemptedAt: attemptedAt,
+  }
+}
+
+// Fetches thumbnail reach for the whole channel in a single pass and patches it
+// onto every one of the user's analysed videos that already has a summary.
+// Reach ships from the Reporting API at channel granularity — one download
+// covers every video — so we fan it out across the entire library rather than
+// paying the download per video: analysing or viewing one video fills in CTR for
+// all of them. Rows are stamped with reachAttemptedAt so a still-null reading (a
+// reporting job with no report yet) is throttled from refetching on every view.
+// Returns the reach map so the caller can read the current video's value.
+// Best-effort: a load failure leaves rows untouched.
+export async function backfillChannelThumbnailReach(
+  supabase: SupabaseClient,
+  userId: string,
+  accessToken: string,
+): Promise<Map<string, ThumbnailReach>> {
+  const reachByVideo = await fetchChannelThumbnailReach(accessToken)
+
+  const { data, error } = await supabase
+    .from("analysed_videos")
+    .select("id, video_id, analytics_summary")
+    .eq("user_id", userId)
+    .not("analytics_summary", "is", null)
+
+  if (error) {
+    console.error("Failed to load videos for reach backfill", error)
+    return reachByVideo
+  }
+
+  const rows = (data ?? []) as Array<{
+    id: string
+    video_id: string
+    analytics_summary: VideoAnalyticsSummary | null
+  }>
+
+  const attemptedAt = new Date().toISOString()
+  await Promise.all(
+    rows.map(async (row) => {
+      const summary = row.analytics_summary
+      if (!summary) return
+      const reach = reachByVideo.get(row.video_id)
+      // Nothing to fill and not due for a retry — leave the row alone so an
+      // established library isn't rewritten wholesale on every backfill.
+      if (!reach && reachIsCurrent(summary)) return
+      const { error: updateError } = await supabase
+        .from("analysed_videos")
+        .update({ analytics_summary: applyReach(summary, reach, attemptedAt) })
+        .eq("id", row.id)
+        .eq("user_id", userId)
+      if (updateError) {
+        console.error(
+          `Failed to patch reach for video ${row.video_id}`,
+          updateError,
+        )
+      }
+    }),
+  )
+
+  return reachByVideo
+}
+
 // Returns the stored summary if present and current, otherwise fetches what's
-// missing and persists it. The load-bearing KPI totals are fetched once at
-// analyse time; thereafter only thumbnail reach is refetched (and patched onto
-// the stored summary) until it lands, so a lagging Reporting API report heals in
-// without re-spending Analytics quota on the totals. Entirely best-effort: any
-// failure resolves to null so a missing summary never breaks the analysis page.
+// missing and persists it. KPI totals are fetched once at analyse time; reach is
+// then populated channel-wide (backfilling every video at once) and patched onto
+// this video's summary, so a lagging Reporting API report heals in without
+// re-spending Analytics quota on the totals. Entirely best-effort: any failure
+// resolves to null so a missing summary never breaks the analysis page.
 export async function getOrBackfillVideoAnalyticsSummary(
   supabase: SupabaseClient,
   userId: string,
@@ -105,26 +189,27 @@ export async function getOrBackfillVideoAnalyticsSummary(
 
     const accessToken = await getGoogleAccessToken(userId)
 
-    // A stored summary with only stale/absent reach: refetch reach alone and
-    // patch it in, keeping the already-fetched totals and traffic sources.
-    if (existing) {
-      const reach = await getVideoThumbnailReach(accessToken, video.id)
-      const patched: VideoAnalyticsSummary = {
-        ...existing,
-        impressions: reach?.impressions ?? existing.impressions ?? null,
-        impressionClickThroughRate:
-          reach?.impressionClickThroughRate ??
-          existing.impressionClickThroughRate ??
-          null,
-        reachAttemptedAt: new Date().toISOString(),
-      }
-      await saveVideoAnalyticsSummary(supabase, userId, analysedVideoId, patched)
-      return patched
+    // Ensure this video has its base summary (KPI totals + traffic sources),
+    // fetched once and cached thereafter.
+    let base = existing
+    if (!base) {
+      base = await getVideoAnalyticsSummary(accessToken, video)
+      await saveVideoAnalyticsSummary(supabase, userId, analysedVideoId, base)
     }
 
-    const summary = await getVideoAnalyticsSummary(accessToken, video)
-    await saveVideoAnalyticsSummary(supabase, userId, analysedVideoId, summary)
-    return summary
+    // Populate thumbnail reach for the whole channel in one pass — this patches
+    // every analysed video (including this one) in the database.
+    const reachByVideo = await backfillChannelThumbnailReach(
+      supabase,
+      userId,
+      accessToken,
+    )
+
+    return applyReach(
+      base,
+      reachByVideo.get(video.id),
+      new Date().toISOString(),
+    )
   } catch (error) {
     console.error("Failed to backfill analytics summary", error)
     return null
