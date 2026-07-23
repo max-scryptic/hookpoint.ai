@@ -53,6 +53,10 @@ import {
 
 type PrivacyFilter = "all" | VideoPrivacyStatus
 
+// Whether a row's raw source file has been uploaded. "all" leaves the set
+// untouched; the other two split rows by upload status.
+type RawFileFilter = "all" | "uploaded" | "not-uploaded"
+
 // All analysed videos are loaded up front, so we page through them client-side.
 // Uses the app-wide table page size so every table paginates at the same rate.
 const PAGE_SIZE = TABLE_PAGE_SIZE
@@ -66,6 +70,16 @@ const PRIVACY_OPTIONS: Array<{
   { value: "public", label: "Public", icon: GlobeIcon },
   { value: "unlisted", label: "Unlisted", icon: LinkIcon },
   { value: "private", label: "Private", icon: LockIcon },
+]
+
+const RAW_FILE_OPTIONS: Array<{
+  value: RawFileFilter
+  label: string
+  icon: typeof CircleCheckIcon | null
+}> = [
+  { value: "all", label: "All raw files", icon: null },
+  { value: "uploaded", label: "Raw file uploaded", icon: CircleCheckIcon },
+  { value: "not-uploaded", label: "No raw file", icon: null },
 ]
 
 // Every analysed video is already in memory, so unlike the uploads list this
@@ -203,6 +217,7 @@ export function AnalysedVideoBrowser({
   const [search, setSearch] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
   const [privacy, setPrivacy] = useState<PrivacyFilter>("all")
+  const [rawFile, setRawFile] = useState<RawFileFilter>("all")
   const [publishedRange, setPublishedRange] = useState<DateRange | undefined>(
     undefined,
   )
@@ -240,6 +255,11 @@ export function AnalysedVideoBrowser({
       if (privacy !== "all" && (!row.privacyKnown || row.video.privacyStatus !== privacy)) {
         return false
       }
+      if (rawFile !== "all") {
+        const uploaded = rawFileIds.has(row.video.id)
+        if (rawFile === "uploaded" && !uploaded) return false
+        if (rawFile === "not-uploaded" && uploaded) return false
+      }
       if (publishedFrom || publishedTo) {
         const published = row.video.publishedAt.slice(0, 10)
         if (!published) return false
@@ -258,6 +278,8 @@ export function AnalysedVideoBrowser({
     rows,
     debouncedSearch,
     privacy,
+    rawFile,
+    rawFileIds,
     publishedFrom,
     publishedTo,
     analysedFrom,
@@ -272,6 +294,7 @@ export function AnalysedVideoBrowser({
   const hasActiveFilters =
     debouncedSearch !== "" ||
     privacy !== "all" ||
+    rawFile !== "all" ||
     publishedFrom !== "" ||
     publishedTo !== "" ||
     analysedFrom !== "" ||
@@ -298,6 +321,11 @@ export function AnalysedVideoBrowser({
     setPageNumber(1)
   }
 
+  function changeRawFile(value: RawFileFilter) {
+    setRawFile(value)
+    setPageNumber(1)
+  }
+
   function changePublishedRange(range: DateRange | undefined) {
     setPublishedRange(range)
     setPageNumber(1)
@@ -316,6 +344,7 @@ export function AnalysedVideoBrowser({
   function clearFilters() {
     setSearch("")
     setPrivacy("all")
+    setRawFile("all")
     setPublishedRange(undefined)
     setAnalysedRange(undefined)
     setSort("analysed-desc")
@@ -325,6 +354,10 @@ export function AnalysedVideoBrowser({
   const privacyLabel =
     PRIVACY_OPTIONS.find((option) => option.value === privacy)?.label ??
     "All visibility"
+
+  const rawFileLabel =
+    RAW_FILE_OPTIONS.find((option) => option.value === rawFile)?.label ??
+    "All raw files"
 
   const sortLabel =
     SORT_OPTIONS.find((option) => option.value === sort)?.label ??
@@ -364,6 +397,28 @@ export function AnalysedVideoBrowser({
               onValueChange={(value) => changePrivacy(value as PrivacyFilter)}
             >
               {PRIVACY_OPTIONS.map(({ value, label, icon: Icon }) => (
+                <DropdownMenuRadioItem key={value} value={value}>
+                  {Icon && <Icon className="size-4" />}
+                  {label}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={<Button variant="outline" size="sm" className="h-9 gap-2" />}
+          >
+            <ListFilterIcon className="size-4" />
+            {rawFileLabel}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuRadioGroup
+              value={rawFile}
+              onValueChange={(value) => changeRawFile(value as RawFileFilter)}
+            >
+              {RAW_FILE_OPTIONS.map(({ value, label, icon: Icon }) => (
                 <DropdownMenuRadioItem key={value} value={value}>
                   {Icon && <Icon className="size-4" />}
                   {label}
