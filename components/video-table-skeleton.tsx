@@ -25,63 +25,72 @@ export function VideoTableSkeleton({ rows = 6 }: { rows?: number }) {
         <Skeleton className="h-9 w-36" />
       </div>
 
-      {/* Table */}
-      <div className="overflow-hidden rounded-xl border bg-card">
-        <Table className="text-left">
-          <TableHeader>
-            <TableRow className="bg-accent text-xs text-accent-foreground hover:bg-accent">
-              <TableHead className="px-4 py-3 text-accent-foreground">
-                Video
-              </TableHead>
-              <TableHead className="hidden px-4 py-3 text-accent-foreground md:table-cell">
-                Visibility
-              </TableHead>
-              <TableHead className="hidden px-4 py-3 text-accent-foreground lg:table-cell">
-                Published
-              </TableHead>
-              <TableHead className="hidden px-4 py-3 text-right text-accent-foreground sm:table-cell">
-                Views
-              </TableHead>
-              <TableHead className="hidden px-4 py-3 text-right text-accent-foreground lg:table-cell">
-                Comments
-              </TableHead>
-              <TableHead className="hidden px-4 py-3 text-accent-foreground sm:table-cell">
-                Analysed
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {Array.from({ length: rows }).map((_, index) => (
-              <TableRow key={index} className="align-top">
-                <TableCell className="px-4 py-3">
-                  <div className="flex gap-3 sm:gap-4">
-                    <Skeleton className="aspect-video w-32 shrink-0 rounded-lg sm:w-40" />
-                    <div className="min-w-0 flex-1 space-y-2 py-0.5">
-                      <Skeleton className="h-4 w-3/4" />
-                      <Skeleton className="h-3 w-1/2" />
-                    </div>
+      <VideoTableRowsSkeleton rows={rows} />
+    </div>
+  )
+}
+
+// Just the bordered table portion of the skeleton, without the filter bar. Used by
+// VideoBrowser to fill the results region while it buffers a page from YouTube — the
+// filter bar there is already the real, interactive one, so only the table swaps to
+// a skeleton and back.
+export function VideoTableRowsSkeleton({ rows = 6 }: { rows?: number }) {
+  return (
+    <div className="overflow-hidden rounded-xl border bg-card">
+      <Table className="text-left">
+        <TableHeader>
+          <TableRow className="bg-accent text-xs text-accent-foreground hover:bg-accent">
+            <TableHead className="px-4 py-3 text-accent-foreground">
+              Video
+            </TableHead>
+            <TableHead className="hidden px-4 py-3 text-accent-foreground md:table-cell">
+              Visibility
+            </TableHead>
+            <TableHead className="hidden px-4 py-3 text-accent-foreground lg:table-cell">
+              Published
+            </TableHead>
+            <TableHead className="hidden px-4 py-3 text-right text-accent-foreground sm:table-cell">
+              Views
+            </TableHead>
+            <TableHead className="hidden px-4 py-3 text-right text-accent-foreground lg:table-cell">
+              Comments
+            </TableHead>
+            <TableHead className="hidden px-4 py-3 text-accent-foreground sm:table-cell">
+              Analysed
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {Array.from({ length: rows }).map((_, index) => (
+            <TableRow key={index} className="align-top">
+              <TableCell className="px-4 py-3">
+                <div className="flex gap-3 sm:gap-4">
+                  <Skeleton className="aspect-video w-32 shrink-0 rounded-lg sm:w-40" />
+                  <div className="min-w-0 flex-1 space-y-2 py-0.5">
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-3 w-1/2" />
                   </div>
-                </TableCell>
-                <TableCell className="hidden px-4 py-3 md:table-cell">
-                  <Skeleton className="h-4 w-16" />
-                </TableCell>
-                <TableCell className="hidden px-4 py-3 lg:table-cell">
-                  <Skeleton className="h-4 w-20" />
-                </TableCell>
-                <TableCell className="hidden px-4 py-3 sm:table-cell">
-                  <Skeleton className="ml-auto h-4 w-12" />
-                </TableCell>
-                <TableCell className="hidden px-4 py-3 lg:table-cell">
-                  <Skeleton className="ml-auto h-4 w-10" />
-                </TableCell>
-                <TableCell className="hidden px-4 py-3 sm:table-cell">
-                  <Skeleton className="h-4 w-16" />
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+                </div>
+              </TableCell>
+              <TableCell className="hidden px-4 py-3 md:table-cell">
+                <Skeleton className="h-4 w-16" />
+              </TableCell>
+              <TableCell className="hidden px-4 py-3 lg:table-cell">
+                <Skeleton className="h-4 w-20" />
+              </TableCell>
+              <TableCell className="hidden px-4 py-3 sm:table-cell">
+                <Skeleton className="ml-auto h-4 w-12" />
+              </TableCell>
+              <TableCell className="hidden px-4 py-3 lg:table-cell">
+                <Skeleton className="ml-auto h-4 w-10" />
+              </TableCell>
+              <TableCell className="hidden px-4 py-3 sm:table-cell">
+                <Skeleton className="h-4 w-16" />
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   )
 }
