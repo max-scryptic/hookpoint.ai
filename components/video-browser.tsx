@@ -43,6 +43,17 @@ interface VideosPage {
   prevPageToken: string | null
 }
 
+// How many videos a single displayed page holds, counted *after* the
+// client-side filters (hidden analysed uploads, privacy, date range) have been
+// applied. Every page is filled to this many visible rows before the user can
+// advance — see the buffering effect below.
+const PAGE_SIZE = 12
+
+// How many uploads to pull from YouTube per API call while filling a page.
+// search.list costs the same quota regardless of page size (up to 50), so we
+// grab the max to minimise round-trips when many rows are filtered out.
+const FETCH_SIZE = 50
+
 // Sorting is server-side: search.list only keeps one page in memory at a time,
 // so the order has to be passed to the API and the list refetched from page 1.
 // YouTube limits forMine=true uploads to these three orders.
@@ -77,8 +88,9 @@ export function VideoBrowser({
     [analysedVideoIds],
   )
 
-  // Filter inputs. `search`/`dateFrom`/`dateTo` query YouTube server-side;
-  // `privacy` is applied client-side because search.list can't filter on it.
+  // Filter inputs. `search`/`order` query YouTube server-side; `privacy`/date
+  // range / the analysed toggle are applied client-side because search.list
+  // can't filter on them.
   const [search, setSearch] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
   const [privacy, setPrivacy] = useState<PrivacyFilter>("all")
@@ -94,16 +106,38 @@ export function VideoBrowser({
   const dateFrom = dateRange?.from ? format(dateRange.from, "yyyy-MM-dd") : ""
   const dateTo = dateRange?.to ? format(dateRange.to, "yyyy-MM-dd") : ""
 
-  const [page, setPage] = useState<VideosPage>(initial)
+  // The running feed of uploads fetched from YouTube for the current
+  // search/order query, plus the cursor for the next batch (null once YouTube
+  // has no more). Because the client-side filters throw rows away, we keep
+  // fetching batches into this feed until a full page's worth of *visible* rows
+  // is buffered. Refs mirror the state so the async buffering loop can read and
+  // extend the feed without racing on stale closures.
+  const [feed, setFeed] = useState<RecentVideo[]>(initial.videos)
+  const feedRef = useRef<RecentVideo[]>(initial.videos)
+  const nextTokenRef = useRef<string | null>(initial.nextPageToken)
+
   const [pageNumber, setPageNumber] = useState(1)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // search.list (forMine=true) doesn't reliably return a prevPageToken, so we
-  // can't depend on it to page backwards. Instead we track the token used for
-  // each page we've visited; the last entry is the current page's token and
-  // `null` is the first page. "Newer" re-fetches with the prior entry.
-  const [tokenHistory, setTokenHistory] = useState<Array<string | null>>([null])
+  // The server-side query (search + order). When it changes the feed is stale
+  // and has to be rebuilt from YouTube page 1; the ref tracks the query the
+  // current feed was built for. Seeded to match the `initial` prop (empty
+  // search, newest-first) so no refetch fires on mount.
+  const queryKey = `${debouncedSearch} ${order}`
+  const feedQueryKeyRef = useRef(queryKey)
+
+  // The search string and order flow into the fetch through refs so the fetch
+  // helper can stay identity-stable — otherwise every keystroke would rebuild
+  // the buffering effect and retrigger it.
+  const debouncedSearchRef = useRef(debouncedSearch)
+  const orderRef = useRef(order)
+  useEffect(() => {
+    debouncedSearchRef.current = debouncedSearch
+  }, [debouncedSearch])
+  useEffect(() => {
+    orderRef.current = order
+  }, [order])
 
   // Debounce the search box so typing doesn't fire a request per keystroke.
   useEffect(() => {
@@ -111,73 +145,161 @@ export function VideoBrowser({
     return () => clearTimeout(id)
   }, [search])
 
-  const fetchPage = useCallback(
-    async (pageToken: string | null): Promise<boolean> => {
-      setLoading(true)
-      setError(null)
-
-      const params = new URLSearchParams()
-      if (pageToken) params.set("pageToken", pageToken)
-      if (debouncedSearch) params.set("q", debouncedSearch)
-      if (order !== "date") params.set("order", order)
-
-      try {
-        const res = await fetch(`/api/videos?${params.toString()}`, {
-          cache: "no-store",
-        })
-        const data = (await res.json()) as VideosPage & {
-          error?: string
-          message?: string
-        }
-        if (!res.ok) {
-          setError(data.message ?? data.error ?? "Couldn't load your videos.")
-          return false
-        }
-        setPage({
-          videos: data.videos ?? [],
-          nextPageToken: data.nextPageToken ?? null,
-          prevPageToken: data.prevPageToken ?? null,
-        })
-        return true
-      } catch {
-        setError("Something went wrong loading your videos.")
-        return false
-      } finally {
-        setLoading(false)
+  // Predicate for the client-side filters. Kept as a stable-ish callback so the
+  // buffering effect only reruns when a filter that changes visibility changes.
+  const isVisible = useCallback(
+    (video: RecentVideo) => {
+      if (!showAnalysed && analysedIds.has(video.id)) return false
+      if (privacy !== "all" && video.privacyStatus !== privacy) return false
+      if (dateFrom || dateTo) {
+        const publishedDate = video.publishedAt.slice(0, 10)
+        if (!publishedDate) return false
+        if (dateFrom && publishedDate < dateFrom) return false
+        if (dateTo && publishedDate > dateTo) return false
       }
+      return true
     },
-    [debouncedSearch, order],
+    [showAnalysed, analysedIds, privacy, dateFrom, dateTo],
   )
 
-  // Re-query from the first page whenever a server-side filter changes. Skipped
-  // on mount because the initial page already reflects the empty filter state.
-  const isFirstRender = useRef(true)
-  useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false
-      return
-    }
-    setPageNumber(1)
-    setTokenHistory([null])
-    fetchPage(null)
-  }, [fetchPage])
+  // Fetch one batch of uploads from YouTube. Reads the query from refs so its
+  // identity never changes; throws on error so callers can bail the loop.
+  const fetchBatch = useCallback(
+    async (pageToken: string | null): Promise<VideosPage> => {
+      const params = new URLSearchParams()
+      params.set("maxResults", String(FETCH_SIZE))
+      if (pageToken) params.set("pageToken", pageToken)
+      if (debouncedSearchRef.current) params.set("q", debouncedSearchRef.current)
+      if (orderRef.current !== "date") params.set("order", orderRef.current)
 
-  async function goNext() {
-    if (!page.nextPageToken || loading) return
-    const token = page.nextPageToken
-    if (await fetchPage(token)) {
-      setTokenHistory((history) => [...history, token])
-      setPageNumber((n) => n + 1)
-    }
+      const res = await fetch(`/api/videos?${params.toString()}`, {
+        cache: "no-store",
+      })
+      const data = (await res.json()) as VideosPage & {
+        error?: string
+        message?: string
+      }
+      if (!res.ok) {
+        throw new Error(
+          data.message ?? data.error ?? "Couldn't load your videos.",
+        )
+      }
+      return {
+        videos: data.videos ?? [],
+        nextPageToken: data.nextPageToken ?? null,
+        prevPageToken: data.prevPageToken ?? null,
+      }
+    },
+    [],
+  )
+
+  // Applying a client-side filter jumps back to page 1 so we never strand the
+  // user on a page that no longer exists. The setters are wrapped so every
+  // entry point (dropdowns, toggle, clear) resets the page in one place.
+  function changePrivacy(value: PrivacyFilter) {
+    setPrivacy(value)
+    setPageNumber(1)
+  }
+  function changeDateRange(value: DateRange | undefined) {
+    setDateRange(value)
+    setPageNumber(1)
+  }
+  function toggleShowAnalysed() {
+    setShowAnalysed((value) => !value)
+    setPageNumber(1)
   }
 
-  async function goPrev() {
-    if (tokenHistory.length <= 1 || loading) return
-    const prevToken = tokenHistory[tokenHistory.length - 2]
-    if (await fetchPage(prevToken)) {
-      setTokenHistory((history) => history.slice(0, -1))
-      setPageNumber((n) => Math.max(1, n - 1))
+  // The buffering engine. On every change to the query, the page, or the
+  // filters it (a) rebuilds the feed from scratch when the server-side query
+  // changed, then (b) keeps pulling YouTube batches until enough *visible* rows
+  // are buffered to fill the current page — plus one extra, which is how we
+  // know whether an older page exists.
+  useEffect(() => {
+    let cancelled = false
+
+    async function run() {
+      setError(null)
+      let videos = feedRef.current
+      let token = nextTokenRef.current
+
+      const queryChanged = feedQueryKeyRef.current !== queryKey
+      if (queryChanged) {
+        setLoading(true)
+        try {
+          const batch = await fetchBatch(null)
+          if (cancelled) return
+          videos = batch.videos
+          token = batch.nextPageToken
+          feedRef.current = videos
+          nextTokenRef.current = token
+          feedQueryKeyRef.current = queryKey
+          setFeed(videos)
+          // Rebuilding the feed means we're back on page 1. Bail and let the
+          // pageNumber change retrigger this effect for the buffering pass.
+          if (pageNumber !== 1) {
+            setPageNumber(1)
+            setLoading(false)
+            return
+          }
+        } catch (err) {
+          if (!cancelled) {
+            setError(
+              err instanceof Error
+                ? err.message
+                : "Something went wrong loading your videos.",
+            )
+            setLoading(false)
+          }
+          return
+        }
+      }
+
+      // One extra visible row past the current page tells us an older page
+      // exists without having to guess from YouTube's cursor.
+      const target = pageNumber * PAGE_SIZE + 1
+      const countVisible = (list: RecentVideo[]) =>
+        list.reduce((n, video) => (isVisible(video) ? n + 1 : n), 0)
+
+      if (countVisible(videos) < target && token !== null) {
+        setLoading(true)
+        try {
+          while (!cancelled && countVisible(videos) < target && token !== null) {
+            const batch = await fetchBatch(token)
+            videos = [...videos, ...batch.videos]
+            token = batch.nextPageToken
+          }
+          if (cancelled) return
+          feedRef.current = videos
+          nextTokenRef.current = token
+          setFeed(videos)
+        } catch (err) {
+          if (!cancelled) {
+            setError(
+              err instanceof Error
+                ? err.message
+                : "Something went wrong loading your videos.",
+            )
+          }
+        }
+      }
+
+      if (!cancelled) setLoading(false)
     }
+
+    run()
+    return () => {
+      cancelled = true
+    }
+  }, [queryKey, pageNumber, isVisible, fetchBatch])
+
+  function goNext() {
+    if (loading) return
+    setPageNumber((n) => n + 1)
+  }
+
+  function goPrev() {
+    if (loading) return
+    setPageNumber((n) => Math.max(1, n - 1))
   }
 
   function clearFilters() {
@@ -185,23 +307,19 @@ export function VideoBrowser({
     setPrivacy("all")
     setDateRange(undefined)
     setOrder("date")
+    setPageNumber(1)
   }
 
-  // Privacy and date range are filtered here rather than server-side (see the
-  // note where the filter state is declared). Each video's publishedAt is an
-  // ISO timestamp; its date portion compares directly against the YYYY-MM-DD
-  // bounds, with `dateTo` inclusive of the whole day.
-  const visibleVideos = page.videos.filter((video) => {
-    if (!showAnalysed && analysedIds.has(video.id)) return false
-    if (privacy !== "all" && video.privacyStatus !== privacy) return false
-    if (dateFrom || dateTo) {
-      const publishedDate = video.publishedAt.slice(0, 10)
-      if (!publishedDate) return false
-      if (dateFrom && publishedDate < dateFrom) return false
-      if (dateTo && publishedDate > dateTo) return false
-    }
-    return true
-  })
+  // The filtered feed, then the slice for the current page. Because buffering
+  // guarantees at least `pageNumber * PAGE_SIZE (+1)` visible rows are loaded
+  // (unless YouTube is exhausted), every page but the last is filled to
+  // PAGE_SIZE.
+  const visibleVideos = useMemo(
+    () => feed.filter(isVisible),
+    [feed, isVisible],
+  )
+  const startIndex = (pageNumber - 1) * PAGE_SIZE
+  const pageVideos = visibleVideos.slice(startIndex, startIndex + PAGE_SIZE)
 
   const hasActiveFilters =
     debouncedSearch !== "" ||
@@ -217,9 +335,14 @@ export function VideoBrowser({
     SORT_OPTIONS.find((option) => option.value === order)?.label ??
     "Newest first"
 
+  // A newer page always exists off page 1; an older page exists whenever we've
+  // buffered at least one visible row beyond the current page.
+  const canGoPrev = pageNumber > 1
+  const canGoNext = visibleVideos.length > pageNumber * PAGE_SIZE
+
   // When a query returns nothing, show a blank slate instead of the list and
   // hide the pagination controls — there are no further pages to step through.
-  const isEmpty = visibleVideos.length === 0
+  const isEmpty = pageVideos.length === 0
   const emptyMessage = hasActiveFilters
     ? "No videos match your filters."
     : "No videos found on your YouTube channel yet."
@@ -252,7 +375,7 @@ export function VideoBrowser({
           <DropdownMenuContent align="start">
             <DropdownMenuRadioGroup
               value={privacy}
-              onValueChange={(value) => setPrivacy(value as PrivacyFilter)}
+              onValueChange={(value) => changePrivacy(value as PrivacyFilter)}
             >
               {PRIVACY_OPTIONS.map(({ value, label, icon: Icon }) => (
                 <DropdownMenuRadioItem key={value} value={value}>
@@ -264,7 +387,7 @@ export function VideoBrowser({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <DatePickerWithRange value={dateRange} onChange={setDateRange} />
+        <DatePickerWithRange value={dateRange} onChange={changeDateRange} />
 
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -295,7 +418,7 @@ export function VideoBrowser({
             size="sm"
             className="h-9 gap-2"
             aria-pressed={showAnalysed}
-            onClick={() => setShowAnalysed((value) => !value)}
+            onClick={toggleShowAnalysed}
           >
             {showAnalysed ? (
               <EyeOffIcon className="size-4" />
@@ -339,7 +462,7 @@ export function VideoBrowser({
           </div>
         ) : (
           <VideoList
-            videos={visibleVideos}
+            videos={pageVideos}
             analysedIds={analysedIds}
             showAnalysedColumn={showAnalysed}
           />
@@ -356,7 +479,7 @@ export function VideoBrowser({
               size="sm"
               className="gap-1.5"
               onClick={goPrev}
-              disabled={tokenHistory.length <= 1 || loading}
+              disabled={!canGoPrev || loading}
             >
               <ChevronLeftIcon className="size-4" />
               Newer
@@ -366,7 +489,7 @@ export function VideoBrowser({
               size="sm"
               className="gap-1.5"
               onClick={goNext}
-              disabled={!page.nextPageToken || loading}
+              disabled={!canGoNext || loading}
             >
               Older
               <ChevronRightIcon className="size-4" />
