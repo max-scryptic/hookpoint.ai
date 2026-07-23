@@ -58,18 +58,13 @@ function DateCell({ value }: { value: string | null }) {
 
 // The admin user-detail "Analysed videos" listing. Adopts the shared front-end
 // table baseline (card surface, accent header, clickable rows) so admin and
-// product surfaces read as one system. Each deeply-analysed row opens the
-// video's deep-analysis detail page; the external icon still opens the source
-// video on YouTube in a new tab, and the per-video light/deep spend rolls up
-// alongside the events.
-//
-// A video counts as "deeply analysed" once its raw source file has been
-// uploaded — the same signal the front-end browser uses to distinguish a
-// deeply-analysed video from one that's only been retention-scanned, and the
-// prerequisite for the deep-analysis pipeline that fills the detail page.
-// Rows that haven't cleared that bar aren't linked or clickable: their detail
-// page would only show the "no deep-analysis evidence yet" empty state, so
-// there's nothing to route to.
+// product surfaces read as one system. Every row opens the video's analysis
+// detail page — its Light Analysis / Deep Analysis oversight tabs — since even
+// a video that's only had the initial light analysis has evidence worth
+// inspecting there. The external icon still opens the source video on YouTube
+// in a new tab, and the per-video light/deep spend rolls up alongside the
+// events. The "Raw file uploaded" column stays as the signal for whether the
+// deep-analysis pipeline could have run.
 export function AdminVideoAnalysesTable({
   userId,
   videos,
@@ -117,44 +112,27 @@ export function AdminVideoAnalysesTable({
           </TableHeader>
           <TableBody>
             {pageRows.map((video) => {
-            // Only deeply-analysed videos (raw source file uploaded) route to a
-            // detail page worth opening; the rest render as an inert row.
-            const deeplyAnalysed = video.rawFileUploadedAt != null
-            const href = deeplyAnalysed
-              ? `/admin/users/${userId}/videos/${video.id}`
-              : null
+            // Every analysed video has an oversight detail page (at minimum its
+            // light-analysis evidence), so every row routes there.
+            const href = `/admin/users/${userId}/videos/${video.id}`
             return (
               <TableRow
                 key={video.id}
-                onClick={href ? () => router.push(href) : undefined}
-                className={
-                  href
-                    ? "cursor-pointer hover:bg-muted/40"
-                    : undefined
-                }
+                onClick={() => router.push(href)}
+                className="cursor-pointer hover:bg-muted/40"
               >
                 <TableCell className="max-w-[360px] px-4 py-3">
                   <div className="flex items-center gap-2">
                     {/* A real anchor keeps the row keyboard-focusable and
                         supports middle/cmd-click; the row's onClick handles
-                        clicks elsewhere. Both land on the deep-analysis detail
-                        page. Videos that haven't been deeply analysed have no
-                        detail page to open, so their title is plain text. */}
-                    {href ? (
-                      <Link
-                        href={href}
-                        className="min-w-0 font-medium hover:underline focus-visible:underline focus-visible:outline-none"
-                      >
-                        <span className="block truncate">{video.title}</span>
-                      </Link>
-                    ) : (
-                      <span
-                        className="block min-w-0 truncate font-medium"
-                        title="Deep analysis hasn't run for this video yet"
-                      >
-                        {video.title}
-                      </span>
-                    )}
+                        clicks elsewhere. Both land on the analysis detail
+                        page. */}
+                    <Link
+                      href={href}
+                      className="min-w-0 font-medium hover:underline focus-visible:underline focus-visible:outline-none"
+                    >
+                      <span className="block truncate">{video.title}</span>
+                    </Link>
                     {/* Opens the source video on YouTube in a new tab. Stops
                         propagation so it doesn't also trigger the row's
                         navigation to the detail page. */}
