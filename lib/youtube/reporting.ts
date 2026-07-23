@@ -220,41 +220,33 @@ async function aggregateReports(
 }
 
 // Builds the whole-channel reach map: every video that appears in the available
-// reports, with summed impressions and impression-weighted CTR. Empty when the
-// job has no reports yet (freshly created) or the API is unavailable.
-async function fetchChannelReach(
+// reports, keyed by video id, with summed impressions and impression-weighted
+// CTR. This is the natural granularity of the Reporting API — one download pass
+// yields reach for the entire channel at once — so callers fetch it once and
+// fan the results out across all of a user's analysed videos rather than paying
+// the download per video. Never throws: any failure, or a freshly created job
+// with no reports yet, resolves to an empty map so callers degrade gracefully.
+export async function fetchChannelThumbnailReach(
   accessToken: string,
 ): Promise<Map<string, ThumbnailReach>> {
   const result = new Map<string, ThumbnailReach>()
-  const jobId = await ensureReachJob(accessToken)
-  if (!jobId) return result
-
-  const reports = await listReachReports(accessToken, jobId)
-  if (reports.length === 0) return result
-
-  const totals = await aggregateReports(accessToken, reports)
-  for (const [videoId, entry] of totals) {
-    result.set(videoId, {
-      impressions: entry.impressions,
-      impressionClickThroughRate:
-        entry.impressions > 0 ? entry.weightedCtr / entry.impressions : null,
-    })
-  }
-  return result
-}
-
-// Thumbnail reach for a single owned video, aggregated across every available
-// daily report. Never throws: any failure, or a video that hasn't appeared in a
-// report yet, resolves to null so callers degrade gracefully.
-export async function getVideoThumbnailReach(
-  accessToken: string,
-  videoId: string,
-): Promise<ThumbnailReach | null> {
   try {
-    const channelReach = await fetchChannelReach(accessToken)
-    return channelReach.get(videoId) ?? null
+    const jobId = await ensureReachJob(accessToken)
+    if (!jobId) return result
+
+    const reports = await listReachReports(accessToken, jobId)
+    if (reports.length === 0) return result
+
+    const totals = await aggregateReports(accessToken, reports)
+    for (const [videoId, entry] of totals) {
+      result.set(videoId, {
+        impressions: entry.impressions,
+        impressionClickThroughRate:
+          entry.impressions > 0 ? entry.weightedCtr / entry.impressions : null,
+      })
+    }
   } catch (error) {
     console.error("Failed to fetch thumbnail reach", error)
-    return null
   }
+  return result
 }

@@ -2,8 +2,6 @@
 // Analytics API (audience retention), plus the local logic that turns a
 // retention curve into the steep drop-off points we surface to the user.
 
-import { getVideoThumbnailReach } from "@/lib/youtube/reporting"
-
 const DATA_API = "https://www.googleapis.com/youtube/v3"
 const ANALYTICS_API = "https://youtubeanalytics.googleapis.com/v2"
 
@@ -773,20 +771,13 @@ export async function getVideoAnalyticsSummary(
     console.error("Failed to fetch traffic sources", error)
   }
 
-  // Thumbnail reach: impressions and click-through rate. These are NOT Analytics
-  // API metrics — they come from the asynchronous YouTube Reporting API (bulk
-  // daily CSV jobs), see lib/youtube/reporting.ts. Best-effort and isolated: the
-  // reporting job may have no reports yet (a freshly created job takes ~24-48h to
-  // produce its first CSV), in which case reach is null and never touches the
-  // load-bearing totals above. It heals on a later view once a report lands.
-  let impressions: number | null = null
-  let impressionClickThroughRate: number | null = null
-  const reach = await getVideoThumbnailReach(accessToken, video.id)
-  if (reach) {
-    impressions = reach.impressions
-    impressionClickThroughRate = reach.impressionClickThroughRate
-  }
-
+  // Thumbnail reach (impressions + CTR) is deliberately NOT fetched here. It is
+  // not an Analytics API metric — it comes from the asynchronous YouTube
+  // Reporting API at channel granularity (one download covers every video), so
+  // it is populated separately and fanned out across all of a user's videos by
+  // backfillChannelThumbnailReach (see lib/video-analytics.ts). This summary
+  // carries null reach on first fetch; the channel backfill patches it in once a
+  // report lands (~24-48h after the reporting job is first created).
   return {
     views: value("views"),
     estimatedMinutesWatched: value("estimatedMinutesWatched"),
@@ -797,9 +788,8 @@ export async function getVideoAnalyticsSummary(
     shares: value("shares"),
     subscribersGained: value("subscribersGained"),
     subscribersLost: value("subscribersLost"),
-    impressions,
-    impressionClickThroughRate,
-    reachAttemptedAt: new Date().toISOString(),
+    impressions: null,
+    impressionClickThroughRate: null,
     trafficSources,
     fetchedAt: new Date().toISOString(),
   }
