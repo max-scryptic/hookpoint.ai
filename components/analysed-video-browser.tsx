@@ -413,7 +413,7 @@ export function AnalysedVideoBrowser({
             <ListFilterIcon className="size-4" />
             {rawFileLabel}
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
+          <DropdownMenuContent align="start" className="w-auto">
             <DropdownMenuRadioGroup
               value={rawFile}
               onValueChange={(value) => changeRawFile(value as RawFileFilter)}
