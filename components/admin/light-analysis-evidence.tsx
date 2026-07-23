@@ -13,6 +13,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs"
 import type { LightAnalysisEvidence } from "@/lib/admin/light-analysis-evidence"
 import type { PacingAnalysis, PacingWindow } from "@/lib/pacing-analysis"
 import type {
@@ -685,11 +691,12 @@ function RetentionSection({
 
 // --- top-level --------------------------------------------------------------
 
-// Every "light analysis" read a video has accumulated, one section per read:
+// Every "light analysis" read a video has accumulated, one sub-tab per read:
 // pacing, packaging (alignment + the full categorical taxonomy), and retention
-// attribution. Read-only oversight for the admin detail page — each section
-// renders its own empty state when that read hasn't been generated yet, so an
-// admin can see exactly which parts of the light analysis have run.
+// attribution. Read-only oversight for the admin detail page — splitting the
+// reads across tabs keeps each one on its own page rather than one long scroll,
+// and each tab renders its own empty state when that read hasn't been generated
+// yet, so an admin can see exactly which parts of the light analysis have run.
 export function LightAnalysisEvidenceView({
   evidence,
 }: {
@@ -702,41 +709,66 @@ export function LightAnalysisEvidenceView({
         <h2 className="text-sm font-medium">Light analysis evidence</h2>
       </div>
 
-      {evidence.pacing ? (
-        <PacingSection pacing={evidence.pacing} />
-      ) : (
-        <EvidenceSection
-          icon={GaugeIcon}
-          title="Pacing analysis"
-          subtitle="Not generated for this video yet."
-        >
-          <EmptyState>No pacing analysis has been generated.</EmptyState>
-        </EvidenceSection>
-      )}
+      <Tabs defaultValue="pacing" className="gap-4">
+        <TabsList className="flex w-full flex-wrap">
+          <TabsTrigger value="pacing">
+            <GaugeIcon />
+            Pacing
+          </TabsTrigger>
+          <TabsTrigger value="packaging">
+            <PackageIcon />
+            Packaging
+          </TabsTrigger>
+          <TabsTrigger value="retention">
+            <TrendingUpIcon />
+            Retention
+          </TabsTrigger>
+        </TabsList>
 
-      {evidence.packaging ? (
-        <PackagingSection packaging={evidence.packaging} />
-      ) : (
-        <EvidenceSection
-          icon={PackageIcon}
-          title="Packaging analysis"
-          subtitle="Not generated for this video yet."
-        >
-          <EmptyState>No packaging analysis has been generated.</EmptyState>
-        </EvidenceSection>
-      )}
+        <TabsContent value="pacing">
+          {evidence.pacing ? (
+            <PacingSection pacing={evidence.pacing} />
+          ) : (
+            <EvidenceSection
+              icon={GaugeIcon}
+              title="Pacing analysis"
+              subtitle="Not generated for this video yet."
+            >
+              <EmptyState>No pacing analysis has been generated.</EmptyState>
+            </EvidenceSection>
+          )}
+        </TabsContent>
 
-      {evidence.retention ? (
-        <RetentionSection retention={evidence.retention} />
-      ) : (
-        <EvidenceSection
-          icon={TrendingUpIcon}
-          title="Retention attribution"
-          subtitle="Not generated for this video yet."
-        >
-          <EmptyState>No retention attribution has been generated.</EmptyState>
-        </EvidenceSection>
-      )}
+        <TabsContent value="packaging">
+          {evidence.packaging ? (
+            <PackagingSection packaging={evidence.packaging} />
+          ) : (
+            <EvidenceSection
+              icon={PackageIcon}
+              title="Packaging analysis"
+              subtitle="Not generated for this video yet."
+            >
+              <EmptyState>No packaging analysis has been generated.</EmptyState>
+            </EvidenceSection>
+          )}
+        </TabsContent>
+
+        <TabsContent value="retention">
+          {evidence.retention ? (
+            <RetentionSection retention={evidence.retention} />
+          ) : (
+            <EvidenceSection
+              icon={TrendingUpIcon}
+              title="Retention attribution"
+              subtitle="Not generated for this video yet."
+            >
+              <EmptyState>
+                No retention attribution has been generated.
+              </EmptyState>
+            </EvidenceSection>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
