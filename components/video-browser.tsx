@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { DatePickerWithRange } from "@/components/date-range-picker"
 import { VideoList } from "@/components/video-list"
+import { VideoTableRowsSkeleton } from "@/components/video-table-skeleton"
 import type {
   RecentVideo,
   RecentVideosOrder,
@@ -117,7 +118,20 @@ export function VideoBrowser({
   const nextTokenRef = useRef<string | null>(initial.nextPageToken)
 
   const [pageNumber, setPageNumber] = useState(1)
-  const [loading, setLoading] = useState(false)
+  // Start in the loading state when the server-rendered first page doesn't
+  // already hold a full page of visible rows and YouTube has more to give — the
+  // buffering effect will immediately fetch more, and seeding `loading` to true
+  // means the very first paint shows the skeleton instead of the handful of
+  // initial rows that would otherwise flash before jumping to the full list. At
+  // mount only the "hide analysed" filter is active (privacy=all, no dates), so
+  // the initial visible count is just the uploads not yet analysed.
+  const [loading, setLoading] = useState(() => {
+    const initialVisible = initial.videos.reduce(
+      (n, video) => (analysedIds.has(video.id) ? n : n + 1),
+      0,
+    )
+    return initialVisible < PAGE_SIZE + 1 && initial.nextPageToken !== null
+  })
   const [error, setError] = useState<string | null>(null)
 
   // The server-side query (search + order). When it changes the feed is stale
@@ -340,9 +354,16 @@ export function VideoBrowser({
   const canGoPrev = pageNumber > 1
   const canGoNext = visibleVideos.length > pageNumber * PAGE_SIZE
 
+  // While a page is still being buffered we won't yet have a full slice of rows.
+  // Rather than flash that partial set (and then have it jump to the full page
+  // once the remaining batches land), show the table skeleton until the page is
+  // complete. A settled last page legitimately holds fewer than PAGE_SIZE rows,
+  // but by then `loading` is false, so it renders normally.
+  const showSkeleton = loading && pageVideos.length < PAGE_SIZE
+
   // When a query returns nothing, show a blank slate instead of the list and
   // hide the pagination controls — there are no further pages to step through.
-  const isEmpty = pageVideos.length === 0
+  const isEmpty = !showSkeleton && pageVideos.length === 0
   const emptyMessage = hasActiveFilters
     ? "No videos match your filters."
     : "No videos found on your YouTube channel yet."
@@ -449,28 +470,35 @@ export function VideoBrowser({
       )}
 
       {/* Results */}
-      <div
-        aria-busy={loading}
-        className={loading ? "pointer-events-none opacity-60 transition-opacity" : "transition-opacity"}
-      >
-        {isEmpty ? (
-          <div className="flex flex-col items-center justify-center gap-3 rounded-xl border bg-card px-6 py-16 text-center">
-            <div className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
-              <VideoOffIcon className="size-6" />
+      {showSkeleton ? (
+        // The page isn't fully buffered yet — show the skeleton rather than the
+        // partial row set so the table doesn't visibly grow as batches land.
+        <VideoTableRowsSkeleton rows={PAGE_SIZE} />
+      ) : (
+        <div
+          aria-busy={loading}
+          className={loading ? "pointer-events-none opacity-60 transition-opacity" : "transition-opacity"}
+        >
+          {isEmpty ? (
+            <div className="flex flex-col items-center justify-center gap-3 rounded-xl border bg-card px-6 py-16 text-center">
+              <div className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                <VideoOffIcon className="size-6" />
+              </div>
+              <p className="text-sm text-muted-foreground">{emptyMessage}</p>
             </div>
-            <p className="text-sm text-muted-foreground">{emptyMessage}</p>
-          </div>
-        ) : (
-          <VideoList
-            videos={pageVideos}
-            analysedIds={analysedIds}
-            showAnalysedColumn={showAnalysed}
-          />
-        )}
-      </div>
+          ) : (
+            <VideoList
+              videos={pageVideos}
+              analysedIds={analysedIds}
+              showAnalysedColumn={showAnalysed}
+            />
+          )}
+        </div>
+      )}
 
-      {/* Pagination — hidden when there are no videos to page through. */}
-      {!isEmpty && (
+      {/* Pagination — hidden when there are no videos to page through, and while
+          the skeleton is up (the buttons would only be disabled mid-buffer). */}
+      {!isEmpty && !showSkeleton && (
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">Page {pageNumber}</p>
           <div className="flex items-center gap-2">
