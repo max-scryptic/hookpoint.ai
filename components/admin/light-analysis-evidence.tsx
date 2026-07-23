@@ -710,7 +710,7 @@ export function LightAnalysisEvidenceView({
       </div>
 
       <Tabs defaultValue="pacing" className="gap-4">
-        <TabsList className="flex w-full flex-wrap">
+        <TabsList className="flex-wrap">
           <TabsTrigger value="pacing">
             <GaugeIcon />
             Pacing

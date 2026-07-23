@@ -6,11 +6,15 @@ import {
   GaugeIcon,
   ImageIcon,
   LightbulbIcon,
+  MinusIcon,
   ScissorsIcon,
   SparklesIcon,
+  TrendingDownIcon,
+  TrendingUpIcon,
 } from "lucide-react"
 
 import { DeepAnalysisFeedback } from "@/components/deep-analysis-feedback"
+import { HookIcon } from "@/components/hook-icon"
 import {
   Collapsible,
   CollapsibleContent,
@@ -90,6 +94,43 @@ const KIND_LABELS: Record<WindowEvidence["window"]["kind"], string> = {
   hold: "Hold",
 }
 
+type WindowKind = WindowEvidence["window"]["kind"]
+
+// The retention sections a video's windows are grouped into, in the same order
+// and with the same icon/label styling the user-facing video detail page uses
+// for its retention tabs, so the admin oversight view reads identically.
+const KIND_TABS: {
+  kind: WindowKind
+  label: string
+  icon: React.ComponentType<{ className?: string }>
+  iconClassName: string
+}[] = [
+  {
+    kind: "hook",
+    label: "Hook",
+    icon: HookIcon,
+    iconClassName: "text-yellow-500 dark:text-yellow-400",
+  },
+  {
+    kind: "drop_off",
+    label: "Drop-offs",
+    icon: TrendingDownIcon,
+    iconClassName: "text-destructive",
+  },
+  {
+    kind: "gain",
+    label: "Gains",
+    icon: TrendingUpIcon,
+    iconClassName: "text-emerald-600 dark:text-emerald-400",
+  },
+  {
+    kind: "hold",
+    label: "Holds",
+    icon: MinusIcon,
+    iconClassName: "text-teal-600 dark:text-teal-400",
+  },
+]
+
 // The deep-analysis evidence generated for a video, grouped by retention
 // window: the synthesized cross-modal events plus every raw component that
 // fed them — retention metrics, transcript, snapshots and audio. Rendered
@@ -116,6 +157,12 @@ export function DeepAnalysisEvidence({
 }) {
   if (evidence.windows.length === 0) return null
 
+  // The sections that actually have windows, in the fixed KIND_TABS order — an
+  // empty kind (a video with no gains, say) never adds a dead tab.
+  const activeKinds = KIND_TABS.filter((tab) =>
+    evidence.windows.some((item) => item.window.kind === tab.kind),
+  )
+
   return (
     <section className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
@@ -123,39 +170,46 @@ export function DeepAnalysisEvidence({
         <h2 className="text-sm font-medium">Deep analysis evidence</h2>
       </div>
 
-      <VideoCostSummary evidence={evidence} />
-
       {tabbed ? (
-        <Tabs defaultValue={String(evidence.windows[0].window.id)} className="gap-3">
-          <TabsList className="flex w-full flex-wrap">
-            {evidence.windows.map((item) => (
-              <TabsTrigger
-                key={item.window.id}
-                value={String(item.window.id)}
-              >
-                <WindowTabLabel item={item} />
-              </TabsTrigger>
-            ))}
+        <Tabs defaultValue={activeKinds[0]?.kind} className="gap-3">
+          <TabsList className="flex-wrap">
+            {activeKinds.map((tab) => {
+              const count = evidence.windows.filter(
+                (item) => item.window.kind === tab.kind,
+              ).length
+              return (
+                <TabsTrigger key={tab.kind} value={tab.kind}>
+                  <tab.icon className={tab.iconClassName} />
+                  {tab.label}
+                  <span className="font-mono text-xs text-muted-foreground">
+                    {count}
+                  </span>
+                </TabsTrigger>
+              )
+            })}
           </TabsList>
-          {evidence.windows.map((item) => (
+          {activeKinds.map((tab) => (
             <TabsContent
-              key={item.window.id}
-              value={String(item.window.id)}
-              className="flex flex-col gap-5 rounded-xl border bg-card p-4"
+              key={tab.kind}
+              value={tab.kind}
+              className="flex flex-col gap-3"
             >
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <WindowSummary item={item} />
-              </div>
-              <WindowEvidenceBody
-                item={item}
-                videoId={videoId}
-                readOnly={readOnly}
-              />
+              {evidence.windows
+                .filter((item) => item.window.kind === tab.kind)
+                .map((item) => (
+                  <WindowEvidenceCard
+                    key={item.window.id}
+                    item={item}
+                    videoId={videoId}
+                    readOnly={readOnly}
+                  />
+                ))}
             </TabsContent>
           ))}
         </Tabs>
       ) : (
         <div className="flex flex-col gap-3">
+          <VideoCostSummary evidence={evidence} />
           {evidence.windows.map((item) => (
             <WindowEvidenceCard
               key={item.window.id}
@@ -167,22 +221,6 @@ export function DeepAnalysisEvidence({
         </div>
       )}
     </section>
-  )
-}
-
-// The compact per-window label for a tab trigger: the window kind and its
-// analysed time range, kept short so a row of tabs stays scannable.
-function WindowTabLabel({ item }: { item: WindowEvidence }) {
-  const { window } = item
-  const from = window.analysisFromSeconds ?? window.fromSeconds
-  const to = window.analysisToSeconds ?? window.toSeconds
-  return (
-    <span className="flex items-center gap-1.5">
-      {KIND_LABELS[window.kind]}
-      <span className="font-mono text-xs text-muted-foreground">
-        {formatTimestamp(from)}–{formatTimestamp(to)}
-      </span>
-    </span>
   )
 }
 
