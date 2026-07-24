@@ -9,10 +9,12 @@ import {
 } from "@/lib/admin/llm-calls"
 import {
   COST_TYPES,
+  COST_TYPE_LABELS,
   LLM_CALL_TYPES,
   type CostType,
   type LlmCallType,
 } from "@/lib/llm-calls"
+import type { CostLogRow } from "@/lib/admin/llm-calls"
 
 // Per-request admin data behind an auth check — never statically prerender.
 export const dynamic = "force-dynamic"
@@ -42,6 +44,21 @@ function formatUsd(value: number): string {
   if (value === 0) return "$0.00"
   if (value < 0.01) return `$${value.toFixed(4)}`
   return `$${value.toFixed(2)}`
+}
+
+// Per-cost-type spend for the listed rows, largest first, so the summary line
+// can break the total down by type. Summed from the same (capped) rows as the
+// grand total, so the parts always add up to it.
+function costBreakdown(
+  rows: CostLogRow[],
+): { type: CostType; total: number }[] {
+  const byType = new Map<CostType, number>()
+  for (const row of rows) {
+    byType.set(row.costType, (byType.get(row.costType) ?? 0) + row.costUsd)
+  }
+  return Array.from(byType.entries())
+    .map(([type, total]) => ({ type, total }))
+    .sort((a, b) => b.total - a.total)
 }
 
 // Admin cost log: every paid AI/media cost the platform incurs and what it
@@ -104,15 +121,26 @@ export default async function AdminLlmCallsPage({
         }}
       />
 
-      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+      {/* The per-cost-type spend sits inline beside the grand total. The
+          per-type figures are muted so the total stands out as the headline
+          number. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm">
         <span className="text-muted-foreground">
           {rows.length.toLocaleString()} entr{rows.length === 1 ? "y" : "ies"}
           {truncated ? " (showing the most recent 1,000)" : ""}
         </span>
-        <span className="font-medium">
-          Total cost:{" "}
-          <span className="tabular-nums">{formatUsd(totalCostUsd)}</span>
-        </span>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          {costBreakdown(rows).map((entry) => (
+            <span key={entry.type} className="text-muted-foreground">
+              {COST_TYPE_LABELS[entry.type] ?? entry.type}:{" "}
+              <span className="tabular-nums">{formatUsd(entry.total)}</span>
+            </span>
+          ))}
+          <span className="font-medium">
+            Total cost:{" "}
+            <span className="tabular-nums">{formatUsd(totalCostUsd)}</span>
+          </span>
+        </div>
       </div>
 
       <AdminLlmCallsTable rows={rows} />
