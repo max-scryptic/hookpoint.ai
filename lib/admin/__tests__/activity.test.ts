@@ -17,6 +17,7 @@ vi.mock("@/lib/supabase/admin", () => ({
         select: () => builder,
         gte: () => builder,
         in: () => builder,
+        eq: () => builder,
         then: (resolve: (value: { data: unknown; error: null }) => unknown) =>
           resolve({ data: rows, error: null }),
       }
@@ -59,15 +60,32 @@ describe("getDailyActiveUsers", () => {
     // One row per (user, day) is the table's invariant, so counting rows per
     // day is the distinct-user count.
     tableData.user_daily_activity = [
-      { activity_date: "2026-07-21" },
-      { activity_date: "2026-07-21" },
-      { activity_date: "2026-07-20" },
+      { activity_date: "2026-07-21", user_id: "u1" },
+      { activity_date: "2026-07-21", user_id: "u2" },
+      { activity_date: "2026-07-20", user_id: "u1" },
     ]
 
     expect(await getDailyActiveUsers(3, NOW)).toEqual([
       { date: "2026-07-19", count: 0 },
       { date: "2026-07-20", count: 1 },
       { date: "2026-07-21", count: 2 },
+    ])
+  })
+
+  it("excludes admin users from the daily counts", async () => {
+    // u2 is an admin, so their activity must not be counted — the chart is
+    // about real end users, not admins signing in to inspect the app.
+    tableData.user_daily_activity = [
+      { activity_date: "2026-07-21", user_id: "u1" },
+      { activity_date: "2026-07-21", user_id: "u2" },
+      { activity_date: "2026-07-20", user_id: "u2" },
+    ]
+    tableData.users = [{ id: "u2" }]
+
+    expect(await getDailyActiveUsers(3, NOW)).toEqual([
+      { date: "2026-07-19", count: 0 },
+      { date: "2026-07-20", count: 0 },
+      { date: "2026-07-21", count: 1 },
     ])
   })
 })
