@@ -13,7 +13,7 @@ import {
 } from "lucide-react"
 
 import { AdminBillingHistoryTable } from "@/components/admin/admin-billing-history-table"
-import { AdminLlmCallsTable } from "@/components/admin/admin-llm-calls-table"
+import { AdminCostLogsPanel } from "@/components/admin/admin-cost-logs-panel"
 import { AdminVideoAnalysesTable } from "@/components/admin/admin-video-analyses-table"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -23,7 +23,6 @@ import { getUserById, getUserKpis } from "@/lib/admin/users"
 import { getUserVideoAnalyses } from "@/lib/admin/video-analysis"
 import { listCostLogs } from "@/lib/admin/llm-calls"
 import { getBillingInvoices, getUserRevenue } from "@/lib/stripe/invoices"
-import { COST_TYPE_LABELS, type CostType } from "@/lib/llm-call-types"
 import {
   getBillingSnapshot,
   type BillingSnapshot,
@@ -265,18 +264,6 @@ export default async function AdminUserDetailPage({
       }),
     ])
 
-  // Per-cost-type spend, so the breakdown reads at a glance before the full log.
-  const costByType = new Map<CostType, { count: number; total: number }>()
-  for (const row of costLogs.rows) {
-    const entry = costByType.get(row.costType) ?? { count: 0, total: 0 }
-    entry.count += 1
-    entry.total += row.costUsd
-    costByType.set(row.costType, entry)
-  }
-  const costBreakdown = Array.from(costByType.entries())
-    .map(([type, entry]) => ({ type, ...entry }))
-    .sort((a, b) => b.total - a.total)
-
   return (
     <div className="mx-auto max-w-6xl space-y-8">
       <div className="space-y-4">
@@ -424,31 +411,11 @@ export default async function AdminUserDetailPage({
             </p>
           </div>
 
-          {costBreakdown.length > 0 && (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {costBreakdown.map((entry) => (
-                <div
-                  key={entry.type}
-                  className="flex items-center justify-between rounded-lg border bg-card p-3 dark:bg-muted/30"
-                >
-                  <div>
-                    <div className="text-sm font-medium">
-                      {COST_TYPE_LABELS[entry.type] ?? entry.type}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {entry.count.toLocaleString()} entr
-                      {entry.count === 1 ? "y" : "ies"}
-                    </div>
-                  </div>
-                  <div className="font-medium tabular-nums">
-                    {formatUsd(entry.total)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <AdminLlmCallsTable rows={costLogs.rows} />
+          <AdminCostLogsPanel
+            rows={costLogs.rows}
+            showVideoFilter
+            truncated={costLogs.truncated}
+          />
         </TabsContent>
       </Tabs>
     </div>

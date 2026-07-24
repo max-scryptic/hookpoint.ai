@@ -1,6 +1,7 @@
 "use client"
 
 import { AnalysisCostKpis } from "@/components/admin/analysis-cost-kpis"
+import { AdminCostLogsPanel } from "@/components/admin/admin-cost-logs-panel"
 import { LightAnalysisEvidenceView } from "@/components/admin/light-analysis-evidence"
 import { DeepAnalysisEvidence } from "@/components/deep-analysis-evidence"
 import {
@@ -10,6 +11,7 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs"
 import type { AnalysisCostBreakdown } from "@/lib/admin/analysis-cost-breakdown"
+import type { CostLogRow } from "@/lib/admin/llm-calls"
 import type { LightAnalysisEvidence } from "@/lib/admin/light-analysis-evidence"
 import type { DeepAnalysisEvidence as DeepAnalysisEvidenceData } from "@/lib/deep-analysis-evidence"
 
@@ -25,11 +27,15 @@ export function AdminVideoAnalysisDetail({
   costs,
   lightEvidence,
   deepEvidence,
+  costLogRows,
+  costLogsTruncated = false,
 }: {
   videoId: string
   costs: AnalysisCostBreakdown
   lightEvidence: LightAnalysisEvidence
   deepEvidence: DeepAnalysisEvidenceData | null
+  costLogRows: CostLogRow[]
+  costLogsTruncated?: boolean
 }) {
   const lightLines = costs.lines.filter((line) => line.bucket === "light")
   const deepLines = costs.lines.filter((line) => line.bucket === "deep")
@@ -42,6 +48,7 @@ export function AdminVideoAnalysisDetail({
       <TabsList>
         <TabsTrigger value="light">Light Analysis</TabsTrigger>
         <TabsTrigger value="deep">Deep Analysis</TabsTrigger>
+        <TabsTrigger value="cost-logs">Cost logs</TabsTrigger>
       </TabsList>
 
       <TabsContent value="light" className="flex flex-col gap-4">
@@ -73,6 +80,17 @@ export function AdminVideoAnalysisDetail({
             uploaded a source file and the deep-analysis pipeline has run.
           </p>
         )}
+      </TabsContent>
+
+      <TabsContent value="cost-logs" className="flex flex-col gap-4">
+        <p className="text-sm text-muted-foreground">
+          Every paid AI/media cost logged against this video.
+          {costLogsTruncated ? " Showing the most recent 1,000." : ""}
+        </p>
+        <AdminCostLogsPanel
+          rows={costLogRows}
+          truncated={costLogsTruncated}
+        />
       </TabsContent>
     </Tabs>
   )
