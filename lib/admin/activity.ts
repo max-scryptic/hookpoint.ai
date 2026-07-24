@@ -49,9 +49,12 @@ export function recentUtcDates(days: number, now: Date = new Date()): string[] {
   return dates
 }
 
-// Counts distinct active users per day over the last `days` days. Because
-// user_daily_activity holds exactly one row per user per day, counting rows per
-// activity_date already yields the distinct-user count — no dedupe needed.
+// Counts distinct active *non-admin* users per day over the last `days` days.
+// Admin activity is deliberately excluded — the chart is about real end users,
+// and admins signing in to inspect the app would otherwise inflate the numbers.
+// Because user_daily_activity holds exactly one row per user per day, counting
+// non-admin rows per activity_date already yields the distinct-user count — no
+// dedupe needed.
 export async function getDailyActiveUsers(
   days = 30,
   now: Date = new Date(),
@@ -59,17 +62,31 @@ export async function getDailyActiveUsers(
   const supabase = createAdminClient()
   const dates = recentUtcDates(days, now)
 
-  const { data, error } = await supabase
-    .from("user_daily_activity")
-    .select("activity_date")
-    .gte("activity_date", dates[0])
+  // Pull the activity rows and the set of admin ids in parallel; we drop any
+  // row belonging to an admin before counting.
+  const [activity, admins] = await Promise.all([
+    supabase
+      .from("user_daily_activity")
+      .select("activity_date, user_id")
+      .gte("activity_date", dates[0]),
+    supabase.from("users").select("id").eq("is_admin", true),
+  ])
 
-  if (error) {
-    throw new Error(`Failed to load daily active users: ${error.message}`)
+  if (activity.error) {
+    throw new Error(
+      `Failed to load daily active users: ${activity.error.message}`,
+    )
+  }
+  if (admins.error) {
+    throw new Error(`Failed to load admin users: ${admins.error.message}`)
   }
 
+  const adminIds = new Set((admins.data ?? []).map((row) => row.id as string))
+
   const counts = new Map<string, number>()
-  for (const row of data ?? []) {
+  for (const row of activity.data ?? []) {
+    // Admins are not real end users for this chart, so skip their rows.
+    if (adminIds.has(row.user_id as string)) continue
     // activity_date is a Postgres `date`, returned as a YYYY-MM-DD string that
     // already matches the entries in `dates`.
     const day = row.activity_date as string
