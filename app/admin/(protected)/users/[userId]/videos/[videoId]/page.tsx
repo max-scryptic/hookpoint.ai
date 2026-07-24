@@ -3,6 +3,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ArrowLeftIcon, ExternalLinkIcon } from "lucide-react"
 
+import { AdminBreadcrumbLabel } from "@/components/admin/admin-breadcrumb-label"
 import { AdminVideoAnalysisDetail } from "@/components/admin/admin-video-analysis-detail"
 import { requireAdminUser } from "@/lib/admin/auth"
 import { getAnalysisCostBreakdown } from "@/lib/admin/analysis-cost-breakdown"
@@ -92,6 +93,8 @@ export default async function AdminUserVideoDetailPage({
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
+      {/* Feeds the header breadcrumb the video title as its trailing crumb. */}
+      <AdminBreadcrumbLabel label={video.title} />
       <div className="space-y-4">
         <Link
           href={`/admin/users/${userId}`}
