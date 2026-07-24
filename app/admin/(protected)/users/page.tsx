@@ -38,14 +38,11 @@ export default async function AdminUsersPage() {
       </div>
 
       <div className="space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold tracking-normal">Users</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {members.length.toLocaleString()} account
-            {members.length === 1 ? "" : "s"}.
-          </p>
-        </div>
+        <h2 className="text-lg font-semibold tracking-normal">Users</h2>
 
+        {/* The account count and the search/sort controls are rendered by the
+            table itself so the count can track the active search and the
+            controls sit inline with it on the right. */}
         <AdminUsersTable users={members} />
       </div>
     </div>
