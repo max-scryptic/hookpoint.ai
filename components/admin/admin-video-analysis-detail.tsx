@@ -27,6 +27,7 @@ export function AdminVideoAnalysisDetail({
   costs,
   lightEvidence,
   deepEvidence,
+  sourceFileUploaded,
   costLogRows,
   costLogsTruncated = false,
 }: {
@@ -34,6 +35,10 @@ export function AdminVideoAnalysisDetail({
   costs: AnalysisCostBreakdown
   lightEvidence: LightAnalysisEvidence
   deepEvidence: DeepAnalysisEvidenceData | null
+  // Whether the user has uploaded a raw source file. The deep-analysis pipeline
+  // only runs off an uploaded file, so the Deep Analysis tab and its events stay
+  // hidden entirely until the upload has landed.
+  sourceFileUploaded: boolean
   costLogRows: CostLogRow[]
   costLogsTruncated?: boolean
 }) {
@@ -47,7 +52,9 @@ export function AdminVideoAnalysisDetail({
     <Tabs defaultValue="light" className="gap-4">
       <TabsList>
         <TabsTrigger value="light">Light Analysis</TabsTrigger>
-        <TabsTrigger value="deep">Deep Analysis</TabsTrigger>
+        {sourceFileUploaded && (
+          <TabsTrigger value="deep">Deep Analysis</TabsTrigger>
+        )}
         <TabsTrigger value="cost-logs">Cost logs</TabsTrigger>
       </TabsList>
 
@@ -60,27 +67,29 @@ export function AdminVideoAnalysisDetail({
         <LightAnalysisEvidenceView evidence={lightEvidence} />
       </TabsContent>
 
-      <TabsContent value="deep" className="flex flex-col gap-4">
-        <AnalysisCostKpis
-          totalLabel="Total deep-analysis cost"
-          totalCostUsd={costs.deepCostUsd}
-          lines={deepLines}
-        />
-        {hasDeepWindows && deepEvidence ? (
-          <DeepAnalysisEvidence
-            evidence={deepEvidence}
-            videoId={videoId}
-            readOnly
-            tabbed
+      {sourceFileUploaded && (
+        <TabsContent value="deep" className="flex flex-col gap-4">
+          <AnalysisCostKpis
+            totalLabel="Total deep-analysis cost"
+            totalCostUsd={costs.deepCostUsd}
+            lines={deepLines}
           />
-        ) : (
-          <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-            No deep-analysis evidence has been generated for this video yet.
-            Events and their supporting signals appear here once the user has
-            uploaded a source file and the deep-analysis pipeline has run.
-          </p>
-        )}
-      </TabsContent>
+          {hasDeepWindows && deepEvidence ? (
+            <DeepAnalysisEvidence
+              evidence={deepEvidence}
+              videoId={videoId}
+              readOnly
+              tabbed
+            />
+          ) : (
+            <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+              No deep-analysis evidence has been generated for this video yet.
+              Events and their supporting signals appear here once the
+              deep-analysis pipeline has run.
+            </p>
+          )}
+        </TabsContent>
+      )}
 
       <TabsContent value="cost-logs" className="flex flex-col gap-4">
         <p className="text-sm text-muted-foreground">

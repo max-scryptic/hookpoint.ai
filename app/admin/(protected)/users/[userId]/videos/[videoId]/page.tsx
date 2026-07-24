@@ -59,8 +59,16 @@ export default async function AdminUserVideoDetailPage({
   // (normalisation ready). Best-effort — a source-file lookup failure just
   // omits the transcoding line rather than sinking the evidence view.
   let transcodedDurationSeconds: number | null = null
+  // Whether the user has actually uploaded a raw source file for this video. The
+  // deep-analysis pipeline only runs off an uploaded file, so the Deep Analysis
+  // tab (and the events it surfaces) stay hidden until the upload has landed —
+  // mirroring the front-end's "ready" gate.
+  let sourceFileUploaded = false
   try {
     const sourceFile = await getSourceFileForVideo(supabase, userId, video.videoId)
+    if (sourceFile?.uploadStatus === "ready") {
+      sourceFileUploaded = true
+    }
     if (sourceFile?.normalisationStatus === "ready") {
       transcodedDurationSeconds = video.durationSeconds
     }
@@ -126,8 +134,10 @@ export default async function AdminUserVideoDetailPage({
             </a>
           </h1>
           <p className="text-sm text-muted-foreground">
-            Analysed {formatDate(video.dateAnalysed)} · {eventCount} event
-            {eventCount === 1 ? "" : "s"} generated
+            Analysed {formatDate(video.dateAnalysed)}
+            {sourceFileUploaded
+              ? ` · ${eventCount} event${eventCount === 1 ? "" : "s"} generated`
+              : ""}
           </p>
         </div>
       </div>
@@ -137,6 +147,7 @@ export default async function AdminUserVideoDetailPage({
         costs={costs}
         lightEvidence={lightEvidence}
         deepEvidence={deepEvidence}
+        sourceFileUploaded={sourceFileUploaded}
         costLogRows={costLogs.rows}
         costLogsTruncated={costLogs.truncated}
       />
