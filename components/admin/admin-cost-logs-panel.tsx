@@ -268,7 +268,15 @@ export function AdminCostLogsPanel({
         </span>
       </div>
 
-      <AdminLlmCallsTable rows={filtered} />
+      {/* The user is fixed on every surface this panel is used on, so the User
+          column is always redundant here; the Video column is only redundant
+          on the single-video page, which is exactly where the video filter is
+          hidden. */}
+      <AdminLlmCallsTable
+        rows={filtered}
+        hideUserColumn
+        hideVideoColumn={!showVideoFilter}
+      />
     </div>
   )
 }

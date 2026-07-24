@@ -26,7 +26,19 @@ function formatUsd(value: number): string {
   return `$${value.toFixed(2)}`
 }
 
-export function AdminLlmCallsTable({ rows }: { rows: CostLogRow[] }) {
+// `hideUserColumn`/`hideVideoColumn` drop the User/Video columns on surfaces
+// where that dimension is already fixed by context (the admin user- and
+// video-detail pages), where repeating the same value on every row is just
+// noise. The main cost-log page leaves both shown.
+export function AdminLlmCallsTable({
+  rows,
+  hideUserColumn = false,
+  hideVideoColumn = false,
+}: {
+  rows: CostLogRow[]
+  hideUserColumn?: boolean
+  hideVideoColumn?: boolean
+}) {
   const { pageRows, currentPage, pageCount, setPageNumber } =
     usePagination(rows)
 
@@ -44,8 +56,12 @@ export function AdminLlmCallsTable({ rows }: { rows: CostLogRow[] }) {
         <Table>
           <TableHeader>
             <TableRow className="bg-accent text-xs text-accent-foreground hover:bg-accent">
-              <TableHead className="text-accent-foreground">User</TableHead>
-              <TableHead className="text-accent-foreground">Video</TableHead>
+              {!hideUserColumn && (
+                <TableHead className="text-accent-foreground">User</TableHead>
+              )}
+              {!hideVideoColumn && (
+                <TableHead className="text-accent-foreground">Video</TableHead>
+              )}
               <TableHead className="text-accent-foreground">Cost type</TableHead>
               <TableHead className="text-accent-foreground">
                 Type of call
@@ -65,35 +81,39 @@ export function AdminLlmCallsTable({ rows }: { rows: CostLogRow[] }) {
           <TableBody>
             {pageRows.map((row) => (
             <TableRow key={row.id}>
-              <TableCell className="max-w-[220px] truncate">
-                {row.userEmail ? (
-                  row.userId ? (
+              {!hideUserColumn && (
+                <TableCell className="max-w-[220px] truncate">
+                  {row.userEmail ? (
+                    row.userId ? (
+                      <Link
+                        href={`/admin/users/${row.userId}`}
+                        className="font-medium hover:underline focus-visible:underline focus-visible:outline-none"
+                      >
+                        {row.userEmail}
+                      </Link>
+                    ) : (
+                      row.userEmail
+                    )
+                  ) : (
+                    <span className="text-muted-foreground">Unknown user</span>
+                  )}
+                </TableCell>
+              )}
+              {!hideVideoColumn && (
+                <TableCell className="max-w-[220px] truncate">
+                  {row.analysedVideoId && row.userId ? (
                     <Link
-                      href={`/admin/users/${row.userId}`}
-                      className="font-medium hover:underline focus-visible:underline focus-visible:outline-none"
+                      href={`/admin/users/${row.userId}/videos/${row.analysedVideoId}`}
+                      className="hover:underline focus-visible:underline focus-visible:outline-none"
+                      title={row.videoTitle ?? undefined}
                     >
-                      {row.userEmail}
+                      {row.videoTitle ?? "View video"}
                     </Link>
                   ) : (
-                    row.userEmail
-                  )
-                ) : (
-                  <span className="text-muted-foreground">Unknown user</span>
-                )}
-              </TableCell>
-              <TableCell className="max-w-[220px] truncate">
-                {row.analysedVideoId && row.userId ? (
-                  <Link
-                    href={`/admin/users/${row.userId}/videos/${row.analysedVideoId}`}
-                    className="hover:underline focus-visible:underline focus-visible:outline-none"
-                    title={row.videoTitle ?? undefined}
-                  >
-                    {row.videoTitle ?? "View video"}
-                  </Link>
-                ) : (
-                  <span className="text-muted-foreground">—</span>
-                )}
-              </TableCell>
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+              )}
               <TableCell>{COST_TYPE_LABELS[row.costType] ?? row.costType}</TableCell>
               <TableCell>
                 {row.callType ? (
