@@ -8,6 +8,7 @@ import { AdminVideoAnalysisDetail } from "@/components/admin/admin-video-analysi
 import { requireAdminUser } from "@/lib/admin/auth"
 import { getAnalysisCostBreakdown } from "@/lib/admin/analysis-cost-breakdown"
 import { getLightAnalysisEvidence } from "@/lib/admin/light-analysis-evidence"
+import { listCostLogs } from "@/lib/admin/llm-calls"
 import { getUserById } from "@/lib/admin/users"
 import { getUserAnalysedVideoById } from "@/lib/admin/video-analysis"
 import { getDeepAnalysisEvidence } from "@/lib/deep-analysis-evidence"
@@ -71,7 +72,7 @@ export default async function AdminUserVideoDetailPage({
   // breakdown, loaded together. Deep evidence is best-effort (a failure leaves
   // the deep tab showing its empty state rather than sinking the page); the
   // light-evidence and cost helpers already degrade to nulls/zeroes internally.
-  const [costs, lightEvidence, deepEvidence] = await Promise.all([
+  const [costs, lightEvidence, deepEvidence, costLogs] = await Promise.all([
     getAnalysisCostBreakdown(userId, video.id),
     getLightAnalysisEvidence(supabase, userId, video.id),
     getDeepAnalysisEvidence(
@@ -82,6 +83,13 @@ export default async function AdminUserVideoDetailPage({
     ).catch((error) => {
       console.error("Failed to load deep analysis evidence for admin", error)
       return null
+    }),
+    // The raw per-call cost log for this one video, powering the Cost logs tab.
+    // Best-effort — a lookup failure leaves that tab empty rather than 500ing
+    // the whole evidence view.
+    listCostLogs({ userId, videoId: video.id }).catch((error) => {
+      console.error("Failed to load cost logs for admin video detail", error)
+      return { rows: [], totalCostUsd: 0, truncated: false }
     }),
   ])
 
@@ -129,6 +137,8 @@ export default async function AdminUserVideoDetailPage({
         costs={costs}
         lightEvidence={lightEvidence}
         deepEvidence={deepEvidence}
+        costLogRows={costLogs.rows}
+        costLogsTruncated={costLogs.truncated}
       />
     </div>
   )
