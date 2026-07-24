@@ -48,6 +48,7 @@ import {
   type RetentionWindowEventType,
   type SynthesizedEvent,
 } from "@/lib/retention-window-events"
+import { buildEventSignals } from "@/lib/retention-window-event-signals"
 import { getRetentionAttribution } from "@/lib/retention-attributions"
 import { getRetentionWindowTranscripts } from "@/lib/retention-window-transcripts"
 import { getRetentionWindows } from "@/lib/retention-windows"
@@ -652,12 +653,20 @@ export async function synthesizeRetentionWindowEvents(
 
         const { events, cost } = await deps.synthesizer.synthesize(evidence)
 
+        // Attach the deterministic evidence snapshot behind each event from the
+        // bundle we already have in scope, keyed to the timestamp the model
+        // chose. No extra model call: the numbers are all already computed.
+        const eventsWithSignals = events.map((event) => ({
+          ...event,
+          signals: buildEventSignals(evidence, event.timestampSeconds),
+        }))
+
         await replaceRetentionWindowEvents(
           admin,
           userId,
           analysedVideoId,
           job.retentionWindowId,
-          events,
+          eventsWithSignals,
         )
         await updateRetentionWindowEventSynthesisStatus(admin, userId, job.id, {
           status: "ready",

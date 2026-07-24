@@ -295,6 +295,7 @@ describe("getRetentionWindowEvents", () => {
         narrative: "A hard cut coincides with the drop.",
         primary_evidence: "editing",
         confidence: 0.75,
+        signals: { schemaVersion: 1, editing: { cutsPerMinute: 3 } },
       },
     ])
 
@@ -310,6 +311,7 @@ describe("getRetentionWindowEvents", () => {
         narrative: "A hard cut coincides with the drop.",
         primaryEvidence: "editing",
         confidence: 0.75,
+        signals: { schemaVersion: 1, editing: { cutsPerMinute: 3 } },
       },
     ])
   })

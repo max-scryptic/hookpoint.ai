@@ -23,6 +23,7 @@ function event(overrides: Partial<RankedRetentionWindowEvent> = {}): RankedReten
     narrative: "The audio loses momentum here.",
     primaryEvidence: "audio",
     confidence: 0.8,
+    signals: null,
     insightScore: 0.82,
     evidenceCompleteness: 1,
     evidenceQuality: "high",

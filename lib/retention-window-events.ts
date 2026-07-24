@@ -13,6 +13,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { selectDeepAnalysisWindows } from "@/lib/deep-analysis-window-selection"
+import type {
+  CameraMovement,
+  SnapshotScene,
+} from "@/lib/retention-window-media-analysis"
 import type { PersistedRetentionWindow } from "@/lib/retention-windows"
 import { getDeepAnalysisMaxWindows } from "@/lib/retention-window-media-config"
 
@@ -198,6 +202,89 @@ export type RetentionWindowEventPrimaryEvidence =
   | "transcript"
   | "combined"
 
+// Bumped whenever the EventSignals shape changes, so a stored block can be told
+// apart from one written against an older layout the same way the packaging
+// taxonomy versions its `detail` block.
+export const EVENT_SIGNALS_SCHEMA_VERSION = 1
+
+// The deterministic, comparison-grade snapshot of the measured evidence at an
+// event's moment. Every field is a real measurement the synthesizer already
+// assembled for the window (editing metrics, the audio analysis, motion, the
+// vision read of the nearest frame) captured onto the event so the numbers
+// that produced the narrative are queryable and diffable across the library,
+// instead of being hidden behind the prose. Built at synthesis time with no
+// extra model call (see lib/retention-window-event-signals.ts).
+export interface EventSignals {
+  schemaVersion: number
+  // The window's own retention weight, denormalised so an event carries the
+  // size of the change it belongs to without a join back to its window.
+  window: {
+    delta: number
+    steepness: number | null
+    relativePerformance: number | null
+  }
+  // Editing at the window, and how each metric deviates from the video's own
+  // full-video baseline (window value minus baseline; null when either side is
+  // unmeasured) — a static stretch only explains a drop when it is slower than
+  // the creator's norm.
+  editing: {
+    cutsPerMinute: number | null
+    freezeCoverage: number
+    blackCoverage: number
+    cutsPerMinuteBaselineDelta: number | null
+    freezeCoverageBaselineDelta: number | null
+    blackCoverageBaselineDelta: number | null
+  }
+  // The window-level audio read (categorical delivery plus acoustic
+  // measurements), and speech-rate deviation from the video's norm. Null when
+  // no audio was analysed for the window.
+  audio: {
+    energy: "low" | "moderate" | "high" | null
+    tone: string | null
+    music: boolean | null
+    musicDescription: string | null
+    speakers: number | null
+    speechRate: number | null
+    speechRateBaselineDelta: number | null
+    averageVolumeDb: number | null
+    silence: number | null
+    notableEvents: string[]
+  } | null
+  // The local counterfactual: the detected episode (target) minus its
+  // immediately preceding control range. This is what separates a real change
+  // from a steady state. Null for hooks, which have no fair pre-event control.
+  contrast: {
+    cutsPerMinuteDelta: number | null
+    freezeCoverageDelta: number
+    blackCoverageDelta: number
+    averageVolumeDbDelta: number | null
+    silenceDelta: number | null
+    speechRateDelta: number | null
+    motionDelta: number | null
+    targetMotion: number | null
+    controlMotion: number | null
+  } | null
+  // The vision read of the frame sampled nearest the event's timestamp, and
+  // the chunk link back to that exact snapshot so the UI can show the frame the
+  // event happened on. Null when no frame was sampled for the window.
+  frame: {
+    chunkIndex: number
+    timestampSeconds: number
+    scene: SnapshotScene
+    faceVisible: boolean
+    containsText: boolean
+    containsCode: boolean
+    motion: "low" | "moderate" | "high"
+    peopleCount: number
+    cameraMovement: CameraMovement
+    // The single distinguishing thing the vision model flagged for that frame
+    // (a cut, a zoom, a graphic appearing), null when nothing stood out.
+    notableEvent: string | null
+    // Deterministic OCR text read off that exact frame, null when none.
+    ocrText: string | null
+  } | null
+}
+
 export interface SynthesizedEvent {
   eventType: RetentionWindowEventType
   timestampSeconds: number
@@ -208,17 +295,25 @@ export interface SynthesizedEvent {
   // rank the events worth raising instead of every plausible one — the same
   // 0..1 confidence the script-only retention attribution already carries.
   confidence: number
+  // The structured evidence snapshot behind the narrative, attached
+  // deterministically after synthesis. Optional on the synthesizer's own
+  // output (the model call never produces it); the orchestrator fills it in
+  // before persisting.
+  signals?: EventSignals | null
 }
 
 // A persisted event. confidence is nullable rather than `number` because rows
 // written before the column existed read back as "unranked" (null); a re-run
 // of the window's synthesis repopulates it.
 export interface RetentionWindowEvent
-  extends Omit<SynthesizedEvent, "confidence"> {
+  extends Omit<SynthesizedEvent, "confidence" | "signals"> {
   id: string
   retentionWindowId: string
   eventIndex: number
   confidence: number | null
+  // Null on rows synthesized before the column existed; a re-analyse
+  // repopulates it.
+  signals: EventSignals | null
 }
 
 interface RetentionWindowEventRow {
@@ -230,10 +325,11 @@ interface RetentionWindowEventRow {
   narrative: string
   primary_evidence: RetentionWindowEventPrimaryEvidence
   confidence: number | null
+  signals: EventSignals | null
 }
 
 const EVENT_COLUMNS =
-  "id, retention_window_id, event_index, event_type, timestamp_seconds, narrative, primary_evidence, confidence"
+  "id, retention_window_id, event_index, event_type, timestamp_seconds, narrative, primary_evidence, confidence, signals"
 
 function mapEventRow(row: RetentionWindowEventRow): RetentionWindowEvent {
   return {
@@ -245,6 +341,7 @@ function mapEventRow(row: RetentionWindowEventRow): RetentionWindowEvent {
     narrative: row.narrative,
     primaryEvidence: row.primary_evidence,
     confidence: row.confidence ?? null,
+    signals: row.signals ?? null,
   }
 }
 
@@ -269,6 +366,7 @@ export async function replaceRetentionWindowEvents(
     narrative: event.narrative,
     primary_evidence: event.primaryEvidence,
     confidence: event.confidence,
+    signals: event.signals ?? null,
   }))
 
   const { error: deleteError } = await supabase

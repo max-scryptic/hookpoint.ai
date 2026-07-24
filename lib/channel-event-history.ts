@@ -14,6 +14,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import type {
+  EventSignals,
   RetentionWindowEventPrimaryEvidence,
   RetentionWindowEventType,
 } from "@/lib/retention-window-events"
@@ -36,6 +37,10 @@ export interface ChannelEventRecord {
   windowFromSeconds?: number
   windowToSeconds?: number
   relativePerformance?: number | null
+  // The structured evidence snapshot behind the event, when a database-loaded
+  // row carries one. Optional so pure-aggregation callers stay compatible and
+  // so rows synthesized before the column existed read back as absent.
+  signals?: EventSignals | null
 }
 
 export interface ChannelEventTypeTrend {
@@ -148,6 +153,7 @@ interface ChannelEventHistoryRow {
   narrative: string
   primary_evidence: RetentionWindowEventPrimaryEvidence
   confidence: number | null
+  signals: EventSignals | null
   // PostgREST embeds the many-to-one join as an object, but loosely-typed
   // clients can surface it as a single-element array — accept both.
   retention_windows:
@@ -188,7 +194,7 @@ export async function loadChannelEventRecords(
   let query = supabase
     .from("retention_window_events")
     .select(
-      "analysed_video_id, event_type, timestamp_seconds, narrative, primary_evidence, confidence, retention_windows!inner(kind, delta, from_seconds, to_seconds, relative_performance)",
+      "analysed_video_id, event_type, timestamp_seconds, narrative, primary_evidence, confidence, signals, retention_windows!inner(kind, delta, from_seconds, to_seconds, relative_performance)",
     )
     .eq("user_id", userId)
   if (options.excludeAnalysedVideoId != null) {
@@ -218,6 +224,7 @@ export async function loadChannelEventRecords(
       windowFromSeconds: window.from_seconds,
       windowToSeconds: window.to_seconds,
       relativePerformance: window.relative_performance,
+      signals: row.signals ?? null,
     })
   }
   return records

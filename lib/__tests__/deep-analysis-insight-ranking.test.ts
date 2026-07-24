@@ -13,6 +13,7 @@ function event(overrides: Partial<RetentionWindowEvent> = {}): RetentionWindowEv
     narrative: "Your pacing slows substantially in this section.",
     primaryEvidence: "combined",
     confidence: 0.8,
+    signals: null,
     ...overrides,
   }
 }
