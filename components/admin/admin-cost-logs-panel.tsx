@@ -232,40 +232,28 @@ export function AdminCostLogsPanel({
         )}
       </div>
 
-      {costBreakdown.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {costBreakdown.map((entry) => (
-            <div
-              key={entry.type}
-              className="flex items-center justify-between rounded-lg border bg-card p-3 dark:bg-muted/30"
-            >
-              <div>
-                <div className="text-sm font-medium">
-                  {COST_TYPE_LABELS[entry.type] ?? entry.type}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {entry.count.toLocaleString()} entr
-                  {entry.count === 1 ? "y" : "ies"}
-                </div>
-              </div>
-              <div className="font-medium tabular-nums">
-                {formatUsd(entry.total)}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+      {/* The per-cost-type spend sits inline beside the grand total rather than
+          in its own KPI cards — the breakdown reads at a glance without eating
+          vertical space. The per-type figures are muted so the total stands
+          out as the headline number. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm">
         <span className="text-muted-foreground">
           {filtered.length.toLocaleString()} entr
           {filtered.length === 1 ? "y" : "ies"}
           {truncated ? " (showing the most recent 1,000)" : ""}
         </span>
-        <span className="font-medium">
-          Total cost:{" "}
-          <span className="tabular-nums">{formatUsd(totalCostUsd)}</span>
-        </span>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          {costBreakdown.map((entry) => (
+            <span key={entry.type} className="text-muted-foreground">
+              {COST_TYPE_LABELS[entry.type] ?? entry.type}:{" "}
+              <span className="tabular-nums">{formatUsd(entry.total)}</span>
+            </span>
+          ))}
+          <span className="font-medium">
+            Total cost:{" "}
+            <span className="tabular-nums">{formatUsd(totalCostUsd)}</span>
+          </span>
+        </div>
       </div>
 
       {/* The user is fixed on every surface this panel is used on, so the User
