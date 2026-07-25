@@ -119,6 +119,12 @@ export function getPlan(planId: string | null | undefined): Plan {
   return PLAN_BY_ID.free
 }
 
+// The flat deep-dive credit cost of generating one video-vs-video comparison
+// report. Unlike deep analysis (which scales with runtime), a comparison is a
+// single fixed-price action, so it is priced as a whole number of credits
+// rather than derived from a duration.
+export const VIDEO_COMPARISON_CREDIT_COST = 5
+
 // Converts a source-video runtime (seconds) into the deep-dive credits its deep
 // analysis costs: 1 credit = 1 minute, rounded up so any started minute counts.
 // A non-positive/garbage duration costs a single credit floor of 0 so it can
