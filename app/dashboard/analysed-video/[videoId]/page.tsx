@@ -12,6 +12,7 @@ import {
 import { getOrGeneratePacingAnalysis } from "@/lib/pacing-analyses"
 import type { RetentionAttribution } from "@/lib/retention-attribution"
 import type { PackagingAlignment } from "@/lib/packaging-alignment"
+import type { ScriptTaxonomy } from "@/lib/script-taxonomy"
 import { loadSurfaceExtras } from "@/lib/surface-extras"
 import type { VideoAnalyticsSummary } from "@/lib/youtube/youtube"
 import {
@@ -85,6 +86,7 @@ type AnalysisResult =
       pacingAnalysis: PacingAnalysis | null
       retentionAttribution: RetentionAttribution | null
       packagingAlignment: PackagingAlignment | null
+      scriptTaxonomy: ScriptTaxonomy | null
       analyticsSummary: VideoAnalyticsSummary | null
       // The analysed_videos row's own UUID — distinct from the route's YouTube
       // video id — that retention_windows and everything derived from them are
@@ -212,6 +214,7 @@ async function analyse(
         pacingAnalysis,
         retentionAttribution: extras.retentionAttribution,
         packagingAlignment: extras.packagingAlignment,
+        scriptTaxonomy: extras.scriptTaxonomy,
         analyticsSummary: extras.analyticsSummary,
         analysedVideoId: cached.id,
       }
@@ -339,6 +342,7 @@ async function analyse(
       : {
           retentionAttribution: null,
           packagingAlignment: null,
+          scriptTaxonomy: null,
           analyticsSummary: null,
         }
 
@@ -351,6 +355,7 @@ async function analyse(
       pacingAnalysis,
       retentionAttribution: extras.retentionAttribution,
       packagingAlignment: extras.packagingAlignment,
+      scriptTaxonomy: extras.scriptTaxonomy,
       analyticsSummary: extras.analyticsSummary,
       analysedVideoId,
     }
@@ -488,6 +493,7 @@ export default async function Page({
               pacingAnalysis={result.pacingAnalysis}
               retentionAttribution={result.retentionAttribution}
               packagingAlignment={result.packagingAlignment}
+              scriptTaxonomy={result.scriptTaxonomy}
               analyticsSummary={result.analyticsSummary}
               deepAnalysisEvidence={
                 deepAnalysisRollout.insights ? deepAnalysisEvidence : null

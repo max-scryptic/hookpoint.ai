@@ -2,6 +2,7 @@ import Link from "next/link"
 import { ArrowLeftIcon, LockIcon } from "lucide-react"
 
 import { PackagingComparison } from "@/components/packaging-comparison"
+import { ScriptComparison } from "@/components/script-comparison"
 import {
   RetentionComparisonDetail,
   RetentionComparisonVideos,
@@ -15,6 +16,10 @@ import {
   getPackagingComparison,
   type PackagingComparison as PackagingComparisonData,
 } from "@/lib/packaging-comparison"
+import {
+  getScriptComparison,
+  type ScriptComparison as ScriptComparisonData,
+} from "@/lib/script-comparison"
 import {
   getRetentionComparison,
   listComparableVideos,
@@ -49,6 +54,7 @@ type ActiveComparison = {
   b: string
   data: RetentionComparisonData
   packaging: PackagingComparisonData | null
+  script: ScriptComparisonData | null
 }
 
 type ReportResult =
@@ -90,9 +96,10 @@ async function loadActiveComparison(
   )
   if (saved == null) return null
 
-  // Packaging rides on the same stored analysis; a packaging failure or gap
-  // must never cost the user the retention comparison, so it is best-effort.
-  const [data, packaging] = await Promise.all([
+  // Packaging and script both ride on the same stored analysis; a failure or
+  // gap in either must never cost the user the retention comparison, so both
+  // are best-effort.
+  const [data, packaging, script] = await Promise.all([
     getRetentionComparison(supabase, userId, requestedA, requestedB),
     getPackagingComparison(supabase, userId, requestedA, requestedB).catch(
       (error) => {
@@ -100,9 +107,15 @@ async function loadActiveComparison(
         return null
       },
     ),
+    getScriptComparison(supabase, userId, requestedA, requestedB).catch(
+      (error) => {
+        console.error("Failed to load script comparison", error)
+        return null
+      },
+    ),
   ])
   if (data == null) return null
-  return { a: requestedA, b: requestedB, data, packaging }
+  return { a: requestedA, b: requestedB, data, packaging, script }
 }
 
 async function loadReport(
@@ -222,10 +235,15 @@ export default async function Page({
                 )
               }
               script={
-                <Card className="p-6 text-sm text-muted-foreground">
-                  A script head-to-head is coming soon. For now, open each
-                  video&apos;s full analysis to read its script feedback.
-                </Card>
+                result.active.script ? (
+                  <ScriptComparison data={result.active.script} />
+                ) : (
+                  <Card className="p-6 text-sm text-muted-foreground">
+                    No script read is available for these two videos yet. Open
+                    each video&apos;s analysis to generate one, then this tab
+                    fills in.
+                  </Card>
+                )
               }
             />
           </>

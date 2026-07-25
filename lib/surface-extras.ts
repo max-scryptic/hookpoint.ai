@@ -4,6 +4,8 @@ import type { PackagingAlignment } from "@/lib/packaging-alignment"
 import { getOrGeneratePackagingAlignment } from "@/lib/packaging-alignments"
 import type { RetentionAttribution } from "@/lib/retention-attribution"
 import { getOrGenerateRetentionAttribution } from "@/lib/retention-attributions"
+import type { ScriptTaxonomy } from "@/lib/script-taxonomy"
+import { getOrGenerateScriptTaxonomy } from "@/lib/script-taxonomies"
 import type { RetentionWindow } from "@/lib/retention-windows"
 import { getOrBackfillVideoAnalyticsSummary } from "@/lib/video-analytics"
 import type {
@@ -25,38 +27,58 @@ export async function loadSurfaceExtras(
 ): Promise<{
   retentionAttribution: RetentionAttribution | null
   packagingAlignment: PackagingAlignment | null
+  scriptTaxonomy: ScriptTaxonomy | null
   analyticsSummary: VideoAnalyticsSummary | null
 }> {
-  const [retentionAttribution, packagingAlignment, analyticsSummary] =
-    await Promise.all([
-      getOrGenerateRetentionAttribution(
-        supabase,
-        userId,
-        analysedVideoId,
-        video,
-        retentionWindows,
-        transcript,
-      ).catch((error) => {
-        console.error("Failed to generate retention attribution", error)
-        return null
-      }),
-      getOrGeneratePackagingAlignment(
-        supabase,
-        userId,
-        analysedVideoId,
-        video,
-        transcript,
-      ).catch((error) => {
-        console.error("Failed to generate packaging alignment", error)
-        return null
-      }),
-      getOrBackfillVideoAnalyticsSummary(
-        supabase,
-        userId,
-        analysedVideoId,
-        video,
-      ),
-    ])
+  const [
+    retentionAttribution,
+    packagingAlignment,
+    scriptTaxonomy,
+    analyticsSummary,
+  ] = await Promise.all([
+    getOrGenerateRetentionAttribution(
+      supabase,
+      userId,
+      analysedVideoId,
+      video,
+      retentionWindows,
+      transcript,
+    ).catch((error) => {
+      console.error("Failed to generate retention attribution", error)
+      return null
+    }),
+    getOrGeneratePackagingAlignment(
+      supabase,
+      userId,
+      analysedVideoId,
+      video,
+      transcript,
+    ).catch((error) => {
+      console.error("Failed to generate packaging alignment", error)
+      return null
+    }),
+    getOrGenerateScriptTaxonomy(
+      supabase,
+      userId,
+      analysedVideoId,
+      video,
+      transcript,
+    ).catch((error) => {
+      console.error("Failed to generate script taxonomy", error)
+      return null
+    }),
+    getOrBackfillVideoAnalyticsSummary(
+      supabase,
+      userId,
+      analysedVideoId,
+      video,
+    ),
+  ])
 
-  return { retentionAttribution, packagingAlignment, analyticsSummary }
+  return {
+    retentionAttribution,
+    packagingAlignment,
+    scriptTaxonomy,
+    analyticsSummary,
+  }
 }

@@ -1,4 +1,5 @@
 import {
+  FileTextIcon,
   GaugeIcon,
   PackageIcon,
   SparklesIcon,
@@ -29,6 +30,7 @@ import type {
   PackagingDetail,
   PackagingTaxonomy,
 } from "@/lib/packaging-taxonomy"
+import type { ScriptTaxonomy } from "@/lib/script-taxonomy"
 import type { RetentionAttribution } from "@/lib/retention-attribution"
 
 function formatTimestamp(totalSeconds: number): string {
@@ -633,6 +635,156 @@ function PackagingSection({ packaging }: { packaging: PackagingAlignment }) {
   )
 }
 
+// --- script -----------------------------------------------------------------
+
+const SCRIPT_STRUCTURE_FIELDS: DetailField[] = [
+  { key: "segmentCount", label: "Topic beats", kind: "text" },
+  { key: "topicCohesion", label: "Topic cohesion", kind: "score" },
+  { key: "openLoops", label: "Open loops", kind: "score" },
+  { key: "payoffPlacement", label: "Payoff placement", kind: "score" },
+  { key: "hasCta", label: "Has call to action", kind: "bool" },
+]
+
+const SCRIPT_SUBSTANCE_FIELDS: DetailField[] = [
+  { key: "substanceDensity", label: "Substance density", kind: "score" },
+  { key: "concreteness", label: "Concreteness", kind: "score" },
+  { key: "noveltyOfIdeas", label: "Novelty of ideas", kind: "score" },
+  { key: "educationalValue", label: "Educational value", kind: "score" },
+  { key: "entertainmentValue", label: "Entertainment value", kind: "score" },
+  { key: "fillerLevel", label: "Filler level", kind: "score" },
+]
+
+const SCRIPT_EMOTION_FIELDS: DetailField[] = [
+  { key: "dominantEmotion", label: "Dominant emotion", kind: "label" },
+  { key: "energy", label: "Energy", kind: "score" },
+  { key: "emotionalRange", label: "Emotional range", kind: "score" },
+  { key: "arcShape", label: "Emotional arc", kind: "label" },
+  { key: "vulnerability", label: "Vulnerability", kind: "score" },
+]
+
+const SCRIPT_HUMOR_FIELDS: DetailField[] = [
+  { key: "humorDensity", label: "Humour density", kind: "score" },
+  { key: "humorStyle", label: "Humour style", kind: "label" },
+]
+
+const SCRIPT_RHETORIC_FIELDS: DetailField[] = [
+  { key: "narrativeVoice", label: "Narrative voice", kind: "label" },
+  { key: "directAddress", label: "Direct address", kind: "score" },
+  { key: "persuasionDevices", label: "Persuasion devices", kind: "tags" },
+  { key: "stakes", label: "Stakes", kind: "score" },
+  { key: "relatability", label: "Relatability", kind: "score" },
+]
+
+const SCRIPT_DRIVERS_FIELDS: DetailField[] = [
+  { key: "scriptArchetype", label: "Archetype", kind: "label" },
+  {
+    key: "primaryEngagementDriver",
+    label: "Primary driver",
+    kind: "label",
+  },
+]
+
+function ScriptTopicMap({
+  segments,
+}: {
+  segments: ScriptTaxonomy["segments"]
+}) {
+  if (segments.length === 0) {
+    return (
+      <EmptyState>Too short or single-topic to map into beats.</EmptyState>
+    )
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {segments.map((beat, index) => (
+        <span
+          key={`${beat.approxStartSeconds}-${index}`}
+          className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-xs"
+        >
+          <span className="font-mono tabular-nums text-muted-foreground">
+            {formatTimestamp(beat.approxStartSeconds)}
+          </span>
+          {beat.label}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function ScriptSection({ script }: { script: ScriptTaxonomy }) {
+  return (
+    <EvidenceSection
+      icon={FileTextIcon}
+      title="Script analysis"
+      subtitle="The categorical, comparison-grade read of the whole transcript — its content and emotional texture, each 0-10 axis scored on this video in isolation."
+    >
+      <div className="flex flex-col gap-4">
+        <FieldGrid>
+          <Field label="Format">{formatLabel(script.format)}</Field>
+          <Field label="Word count">
+            <span className="tabular-nums">{script.wordCount}</span>
+          </Field>
+          <Field label="Topics">
+            <TagList values={script.topics} />
+          </Field>
+          <Field label="Summary">
+            <Quote value={script.oneLineSummary} />
+          </Field>
+        </FieldGrid>
+
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-muted-foreground">Topic map</p>
+          <ScriptTopicMap segments={script.segments} />
+        </div>
+
+        <div className="flex flex-col gap-4 rounded-lg border p-3">
+          <p className="text-xs font-medium text-muted-foreground">
+            Enriched detail — intrinsic 0-10 axes scored on this video in
+            isolation
+          </p>
+          <DetailGroup
+            title="Structure"
+            fields={SCRIPT_STRUCTURE_FIELDS}
+            data={script.detail.structure as unknown as Record<string, unknown>}
+          />
+          <DetailGroup
+            title="Substance"
+            fields={SCRIPT_SUBSTANCE_FIELDS}
+            data={script.detail.substance as unknown as Record<string, unknown>}
+          />
+          <DetailGroup
+            title="Emotion & energy"
+            fields={SCRIPT_EMOTION_FIELDS}
+            data={script.detail.emotion as unknown as Record<string, unknown>}
+          />
+          <DetailGroup
+            title="Humour"
+            fields={SCRIPT_HUMOR_FIELDS}
+            data={
+              {
+                ...script.detail.humor,
+                humorStyle: script.detail.humor.humorStyle ?? "none",
+              } as unknown as Record<string, unknown>
+            }
+          />
+          <DetailGroup
+            title="Rhetoric & voice"
+            fields={SCRIPT_RHETORIC_FIELDS}
+            data={script.detail.rhetoric as unknown as Record<string, unknown>}
+          />
+          <DetailGroup
+            title="Drivers"
+            fields={SCRIPT_DRIVERS_FIELDS}
+            data={script.detail.drivers as unknown as Record<string, unknown>}
+          />
+        </div>
+
+        <GeneratedMeta model={script.model} generatedAt={script.generatedAt} />
+      </div>
+    </EvidenceSection>
+  )
+}
+
 // --- retention attribution --------------------------------------------------
 
 function RetentionSection({
@@ -719,6 +871,10 @@ export function LightAnalysisEvidenceView({
             <PackageIcon />
             Packaging
           </TabsTrigger>
+          <TabsTrigger value="script">
+            <FileTextIcon />
+            Script
+          </TabsTrigger>
           <TabsTrigger value="retention">
             <TrendingUpIcon />
             Retention
@@ -749,6 +905,20 @@ export function LightAnalysisEvidenceView({
               subtitle="Not generated for this video yet."
             >
               <EmptyState>No packaging analysis has been generated.</EmptyState>
+            </EvidenceSection>
+          )}
+        </TabsContent>
+
+        <TabsContent value="script">
+          {evidence.script ? (
+            <ScriptSection script={evidence.script} />
+          ) : (
+            <EvidenceSection
+              icon={FileTextIcon}
+              title="Script analysis"
+              subtitle="Not generated for this video yet."
+            >
+              <EmptyState>No script analysis has been generated.</EmptyState>
             </EvidenceSection>
           )}
         </TabsContent>
