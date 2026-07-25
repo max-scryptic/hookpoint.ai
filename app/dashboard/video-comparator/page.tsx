@@ -2,6 +2,7 @@ import Link from "next/link"
 import { LibraryIcon, LockIcon } from "lucide-react"
 
 import { PackagingComparison } from "@/components/packaging-comparison"
+import { PreviousComparisons } from "@/components/previous-comparisons"
 import { RetentionComparePicker } from "@/components/retention-compare-picker"
 import {
   RetentionComparisonDetail,
@@ -17,12 +18,16 @@ import {
   type PackagingComparison as PackagingComparisonData,
 } from "@/lib/packaging-comparison"
 import {
-  defaultComparisonPair,
   getRetentionComparison,
   listComparableVideos,
   type ComparableVideo,
   type RetentionComparisonData,
 } from "@/lib/retention-comparison"
+import {
+  findSavedComparison,
+  listSavedComparisons,
+  type SavedComparison,
+} from "@/lib/video-comparisons"
 import { createClient } from "@/lib/supabase/server"
 import {
   Breadcrumb,
@@ -44,41 +49,78 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 // COPY GUARDRAIL: no em or en dashes anywhere in this file (comments
 // included). Hyphens are fine.
 
+// The active report, when the requested pair has been generated (paid for).
+// Selecting a pair never loads a report on its own; only a saved comparison
+// does, so navigating to a pair the creator has not generated shows the
+// selectors prefilled with no report below.
+type ActiveComparison = {
+  a: string
+  b: string
+  data: RetentionComparisonData
+  packaging: PackagingComparisonData | null
+}
+
 type CompareResult =
   | { status: "locked" }
   | { status: "empty"; videoCount: number }
   | {
       status: "ok"
       videos: ComparableVideo[]
-      a: string
-      b: string
-      data: RetentionComparisonData
-      packaging: PackagingComparisonData | null
+      comparisons: SavedComparison[]
+      // The pair to prefill the selectors with, if any (from the URL).
+      selectedA: string
+      selectedB: string
+      // The report to render, only present for an already-generated pair.
+      active: ActiveComparison | null
     }
   | { status: "error" }
 
-function pickPair(
+// Resolves the requested URL pair against the creator's saved comparisons and
+// loads its report. Returns null when no pair was requested, the ids are not a
+// distinct comparable pair, or the pair has not been generated yet - in every
+// case the page shows the selectors without a report rather than charging on a
+// mere navigation.
+async function loadActiveComparison(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
   videos: ComparableVideo[],
   requestedA: string | undefined,
   requestedB: string | undefined,
-): { a: string; b: string } | null {
+): Promise<ActiveComparison | null> {
   const ids = new Set(videos.map((video) => video.id))
-  const a = requestedA && ids.has(requestedA) ? requestedA : null
-  const b =
-    requestedB && ids.has(requestedB) && requestedB !== a ? requestedB : null
-  if (a && b) return { a, b }
+  if (
+    !requestedA ||
+    !requestedB ||
+    requestedA === requestedB ||
+    !ids.has(requestedA) ||
+    !ids.has(requestedB)
+  ) {
+    return null
+  }
 
-  const fallback = defaultComparisonPair(videos)
-  if (fallback == null) return null
-  if (a) {
-    const other = videos.find((video) => video.id !== a)
-    return other ? { a, b: other.id } : null
-  }
-  if (b) {
-    const other = videos.find((video) => video.id !== b)
-    return other ? { a: other.id, b } : null
-  }
-  return fallback
+  // Only a paid-for pair renders. Without this gate a shared or hand-edited URL
+  // would load a report the creator never generated.
+  const saved = await findSavedComparison(
+    supabase,
+    userId,
+    requestedA,
+    requestedB,
+  )
+  if (saved == null) return null
+
+  // Packaging rides on the same stored analysis; a packaging failure or gap
+  // must never cost the user the retention comparison, so it is best-effort.
+  const [data, packaging] = await Promise.all([
+    getRetentionComparison(supabase, userId, requestedA, requestedB),
+    getPackagingComparison(supabase, userId, requestedA, requestedB).catch(
+      (error) => {
+        console.error("Failed to load packaging comparison", error)
+        return null
+      },
+    ),
+  ])
+  if (data == null) return null
+  return { a: requestedA, b: requestedB, data, packaging }
 }
 
 async function loadComparePage(
@@ -96,23 +138,30 @@ async function loadComparePage(
 
   try {
     const supabase = await createClient()
-    const videos = await listComparableVideos(supabase, userId)
-    const pair = pickPair(videos, requestedA, requestedB)
-    if (pair == null) return { status: "empty", videoCount: videos.length }
-
-    // Packaging rides on the same stored analysis; a packaging failure or gap
-    // must never cost the user the retention comparison, so it is best-effort.
-    const [data, packaging] = await Promise.all([
-      getRetentionComparison(supabase, userId, pair.a, pair.b),
-      getPackagingComparison(supabase, userId, pair.a, pair.b).catch(
-        (error) => {
-          console.error("Failed to load packaging comparison", error)
-          return null
-        },
-      ),
+    const [videos, comparisons] = await Promise.all([
+      listComparableVideos(supabase, userId),
+      listSavedComparisons(supabase, userId),
     ])
-    if (data == null) return { status: "empty", videoCount: videos.length }
-    return { status: "ok", videos, a: pair.a, b: pair.b, data, packaging }
+    // Two deeply analysed videos are the floor for comparing anything.
+    if (videos.length < 2) {
+      return { status: "empty", videoCount: videos.length }
+    }
+
+    const active = await loadActiveComparison(
+      supabase,
+      userId,
+      videos,
+      requestedA,
+      requestedB,
+    )
+    return {
+      status: "ok",
+      videos,
+      comparisons,
+      selectedA: active?.a ?? "",
+      selectedB: active?.b ?? "",
+      active,
+    }
   } catch (error) {
     console.error("Failed to load retention comparison", error)
     return { status: "error" }
@@ -173,29 +222,48 @@ export default async function Page({
         {result.status === "ok" && (
           <>
             <RetentionComparePicker
+              key={`${result.selectedA}-${result.selectedB}`}
               videos={result.videos}
-              selectedA={result.a}
-              selectedB={result.b}
+              selectedA={result.selectedA}
+              selectedB={result.selectedB}
+              savedPairs={result.comparisons.map((comparison) => ({
+                a: comparison.videoAId,
+                b: comparison.videoBId,
+              }))}
             />
-            <RetentionComparisonVideos data={result.data} />
-            <VideoComparisonTabs
-              retention={<RetentionComparisonDetail data={result.data} />}
-              packaging={
-                result.packaging ? (
-                  <PackagingComparison data={result.packaging} />
-                ) : (
-                  <Card className="p-6 text-sm text-muted-foreground">
-                    No packaging read is available for these two videos yet.
-                    Open each video&apos;s analysis to generate one, then this
-                    tab fills in.
-                  </Card>
-                )
-              }
-              script={
-                <Card className="p-6 text-sm text-muted-foreground">
-                  A script head-to-head is coming soon. For now, open each
-                  video&apos;s full analysis to read its script feedback.
-                </Card>
+            {result.active && (
+              <>
+                <RetentionComparisonVideos data={result.active.data} />
+                <VideoComparisonTabs
+                  retention={
+                    <RetentionComparisonDetail data={result.active.data} />
+                  }
+                  packaging={
+                    result.active.packaging ? (
+                      <PackagingComparison data={result.active.packaging} />
+                    ) : (
+                      <Card className="p-6 text-sm text-muted-foreground">
+                        No packaging read is available for these two videos yet.
+                        Open each video&apos;s analysis to generate one, then
+                        this tab fills in.
+                      </Card>
+                    )
+                  }
+                  script={
+                    <Card className="p-6 text-sm text-muted-foreground">
+                      A script head-to-head is coming soon. For now, open each
+                      video&apos;s full analysis to read its script feedback.
+                    </Card>
+                  }
+                />
+              </>
+            )}
+            <PreviousComparisons
+              comparisons={result.comparisons}
+              activePair={
+                result.active
+                  ? { a: result.active.a, b: result.active.b }
+                  : null
               }
             />
           </>
