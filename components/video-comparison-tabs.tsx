@@ -1,6 +1,7 @@
 "use client"
 
 import type { ReactNode } from "react"
+import { AreaChartIcon, PackageIcon, QuoteIcon } from "lucide-react"
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
@@ -22,9 +23,18 @@ export function VideoComparisonTabs({
   return (
     <Tabs defaultValue="retention" className="gap-4">
       <TabsList>
-        <TabsTrigger value="retention">Retention</TabsTrigger>
-        <TabsTrigger value="packaging">Packaging</TabsTrigger>
-        <TabsTrigger value="script">Script</TabsTrigger>
+        <TabsTrigger value="retention">
+          <AreaChartIcon />
+          Retention
+        </TabsTrigger>
+        <TabsTrigger value="packaging">
+          <PackageIcon />
+          Packaging
+        </TabsTrigger>
+        <TabsTrigger value="script">
+          <QuoteIcon />
+          Script
+        </TabsTrigger>
       </TabsList>
       <TabsContent value="retention">{retention}</TabsContent>
       <TabsContent value="packaging">{packaging}</TabsContent>
