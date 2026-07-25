@@ -133,27 +133,28 @@ export function RetentionComparePicker({
             </option>
           ))}
         </select>
-      </div>
-
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <Button
           type="button"
           onClick={generate}
           disabled={!bothPicked || pending}
-          className="sm:w-auto"
+          className="shrink-0 sm:w-auto"
         >
           {pending && <Loader2Icon className="size-4 animate-spin" />}
-          {alreadyGenerated
-            ? "View report"
-            : `Generate report (${VIDEO_COMPARISON_CREDIT_COST} credits)`}
+          {alreadyGenerated ? "View report" : "Generate report"}
         </Button>
-        {!alreadyGenerated && (
-          <p className="text-xs text-muted-foreground">
-            A comparison costs {VIDEO_COMPARISON_CREDIT_COST} deep-dive credits.
-          </p>
-        )}
-        {error && <p className="text-xs text-destructive">{error}</p>}
       </div>
+
+      {(!alreadyGenerated || error) && (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          {!alreadyGenerated && (
+            <p className="text-xs text-muted-foreground">
+              A comparison costs {VIDEO_COMPARISON_CREDIT_COST} deep-dive
+              credits.
+            </p>
+          )}
+          {error && <p className="text-xs text-destructive">{error}</p>}
+        </div>
+      )}
     </div>
   )
 }
