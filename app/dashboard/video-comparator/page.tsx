@@ -2,6 +2,7 @@ import Link from "next/link"
 import { LibraryIcon, LockIcon } from "lucide-react"
 
 import { PackagingComparison } from "@/components/packaging-comparison"
+import { ScriptComparison } from "@/components/script-comparison"
 import { RetentionComparePicker } from "@/components/retention-compare-picker"
 import {
   RetentionComparisonDetail,
@@ -16,6 +17,10 @@ import {
   getPackagingComparison,
   type PackagingComparison as PackagingComparisonData,
 } from "@/lib/packaging-comparison"
+import {
+  getScriptComparison,
+  type ScriptComparison as ScriptComparisonData,
+} from "@/lib/script-comparison"
 import {
   defaultComparisonPair,
   getRetentionComparison,
@@ -54,6 +59,7 @@ type CompareResult =
       b: string
       data: RetentionComparisonData
       packaging: PackagingComparisonData | null
+      script: ScriptComparisonData | null
     }
   | { status: "error" }
 
@@ -100,9 +106,10 @@ async function loadComparePage(
     const pair = pickPair(videos, requestedA, requestedB)
     if (pair == null) return { status: "empty", videoCount: videos.length }
 
-    // Packaging rides on the same stored analysis; a packaging failure or gap
-    // must never cost the user the retention comparison, so it is best-effort.
-    const [data, packaging] = await Promise.all([
+    // Packaging and script both ride on the same stored analysis; a failure or
+    // gap in either must never cost the user the retention comparison, so both
+    // are best-effort.
+    const [data, packaging, script] = await Promise.all([
       getRetentionComparison(supabase, userId, pair.a, pair.b),
       getPackagingComparison(supabase, userId, pair.a, pair.b).catch(
         (error) => {
@@ -110,9 +117,13 @@ async function loadComparePage(
           return null
         },
       ),
+      getScriptComparison(supabase, userId, pair.a, pair.b).catch((error) => {
+        console.error("Failed to load script comparison", error)
+        return null
+      }),
     ])
     if (data == null) return { status: "empty", videoCount: videos.length }
-    return { status: "ok", videos, a: pair.a, b: pair.b, data, packaging }
+    return { status: "ok", videos, a: pair.a, b: pair.b, data, packaging, script }
   } catch (error) {
     console.error("Failed to load retention comparison", error)
     return { status: "error" }
@@ -192,10 +203,15 @@ export default async function Page({
                 )
               }
               script={
-                <Card className="p-6 text-sm text-muted-foreground">
-                  A script head-to-head is coming soon. For now, open each
-                  video&apos;s full analysis to read its script feedback.
-                </Card>
+                result.script ? (
+                  <ScriptComparison data={result.script} />
+                ) : (
+                  <Card className="p-6 text-sm text-muted-foreground">
+                    No script read is available for these two videos yet. Open
+                    each video&apos;s analysis to generate one, then this tab
+                    fills in.
+                  </Card>
+                )
               }
             />
           </>
