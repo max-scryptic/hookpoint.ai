@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { LockIcon } from "lucide-react"
+import { LibraryIcon, LockIcon } from "lucide-react"
 
 import { PackagingComparison } from "@/components/packaging-comparison"
 import { RetentionComparePicker } from "@/components/retention-compare-picker"
@@ -202,14 +202,19 @@ export default async function Page({
         )}
         {result.status === "empty" && (
           <Card className="flex flex-col items-start gap-3 p-6">
-            <p className="max-w-prose text-sm text-muted-foreground">
-              Comparing needs at least two analysed videos with a stored
-              retention curve
-              {result.videoCount === 1
-                ? " - you have one so far."
-                : " - none are in your library yet."}{" "}
-              Analyse another video and this page lights up.
-            </p>
+            <LibraryIcon className="size-5 text-muted-foreground" />
+            <div className="w-full">
+              <p className="max-w-prose text-sm text-muted-foreground">
+                A head-to-head reads from the stored deep analysis of both
+                videos, so you need two deeply analysed uploads before this
+                page can compare anything.
+              </p>
+              <p className="mt-3 max-w-prose text-sm text-muted-foreground">
+                {result.videoCount === 1
+                  ? "One of your videos is deeply analysed so far. Deeply analyse one more and this page lights up."
+                  : "None of your videos are deeply analysed yet. Deeply analyse two and this page lights up."}
+              </p>
+            </div>
             <Link href="/dashboard/analyse-video" className={buttonVariants()}>
               Analyse a video
             </Link>
