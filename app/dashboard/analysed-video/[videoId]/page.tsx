@@ -1,5 +1,4 @@
 import { AnalysedVideoDetail } from "@/components/analysed-video-detail"
-import { DeepAnalysisEvidence } from "@/components/deep-analysis-evidence"
 import { SourceFileUpload } from "@/components/source-file-upload"
 import { getDeepAnalysisEvidence } from "@/lib/deep-analysis-evidence"
 import { getDeepAnalysisRollout } from "@/lib/deep-analysis-config"
@@ -503,14 +502,6 @@ export default async function Page({
               filenameSimilarityThreshold={getFilenameSimilarityThreshold()}
               initialSourceFile={initialSourceFile}
             />
-            {deepAnalysisEvidence &&
-              deepAnalysisRollout.evidencePanel &&
-              result.analysedVideoId && (
-              <DeepAnalysisEvidence
-                evidence={deepAnalysisEvidence}
-                videoId={result.analysedVideoId}
-              />
-            )}
           </>
         )}
 
