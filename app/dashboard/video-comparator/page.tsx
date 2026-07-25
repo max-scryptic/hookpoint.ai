@@ -1,30 +1,17 @@
 import Link from "next/link"
 import { LibraryIcon, LockIcon } from "lucide-react"
 
-import { PackagingComparison } from "@/components/packaging-comparison"
 import { PreviousComparisons } from "@/components/previous-comparisons"
 import { RetentionComparePicker } from "@/components/retention-compare-picker"
-import {
-  RetentionComparisonDetail,
-  RetentionComparisonVideos,
-} from "@/components/retention-comparison"
-import { VideoComparisonTabs } from "@/components/video-comparison-tabs"
 import { buttonVariants } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { requireAuthenticatedUser } from "@/lib/auth"
 import { getEntitlement } from "@/lib/billing/entitlements"
 import {
-  getPackagingComparison,
-  type PackagingComparison as PackagingComparisonData,
-} from "@/lib/packaging-comparison"
-import {
-  getRetentionComparison,
   listComparableVideos,
   type ComparableVideo,
-  type RetentionComparisonData,
 } from "@/lib/retention-comparison"
 import {
-  findSavedComparison,
   listSavedComparisons,
   type SavedComparison,
 } from "@/lib/video-comparisons"
@@ -40,25 +27,15 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 
-// The Video Comparator: pick any two library videos and see where their
-// retention curves diverge, hook against hook, and the event evidence for
-// each stretch. A standalone page and the seed of a much larger video-by-video
-// report. Same paid gate as deep analysis, since the comparison rides on the
-// stored analysis of both videos.
+// The Video Comparator: pick any two library videos to generate a head-to-head,
+// or re-open one you have already generated. The report itself now lives on its
+// own page (video-comparator/report); generating a pair or picking one from the
+// history below redirects there. This page is only the picker and the history.
+// Same paid gate as deep analysis, since the comparison rides on the stored
+// analysis of both videos.
 //
 // COPY GUARDRAIL: no em or en dashes anywhere in this file (comments
 // included). Hyphens are fine.
-
-// The active report, when the requested pair has been generated (paid for).
-// Selecting a pair never loads a report on its own; only a saved comparison
-// does, so navigating to a pair the creator has not generated shows the
-// selectors prefilled with no report below.
-type ActiveComparison = {
-  a: string
-  b: string
-  data: RetentionComparisonData
-  packaging: PackagingComparisonData | null
-}
 
 type CompareResult =
   | { status: "locked" }
@@ -67,67 +44,10 @@ type CompareResult =
       status: "ok"
       videos: ComparableVideo[]
       comparisons: SavedComparison[]
-      // The pair to prefill the selectors with, if any (from the URL).
-      selectedA: string
-      selectedB: string
-      // The report to render, only present for an already-generated pair.
-      active: ActiveComparison | null
     }
   | { status: "error" }
 
-// Resolves the requested URL pair against the creator's saved comparisons and
-// loads its report. Returns null when no pair was requested, the ids are not a
-// distinct comparable pair, or the pair has not been generated yet - in every
-// case the page shows the selectors without a report rather than charging on a
-// mere navigation.
-async function loadActiveComparison(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  userId: string,
-  videos: ComparableVideo[],
-  requestedA: string | undefined,
-  requestedB: string | undefined,
-): Promise<ActiveComparison | null> {
-  const ids = new Set(videos.map((video) => video.id))
-  if (
-    !requestedA ||
-    !requestedB ||
-    requestedA === requestedB ||
-    !ids.has(requestedA) ||
-    !ids.has(requestedB)
-  ) {
-    return null
-  }
-
-  // Only a paid-for pair renders. Without this gate a shared or hand-edited URL
-  // would load a report the creator never generated.
-  const saved = await findSavedComparison(
-    supabase,
-    userId,
-    requestedA,
-    requestedB,
-  )
-  if (saved == null) return null
-
-  // Packaging rides on the same stored analysis; a packaging failure or gap
-  // must never cost the user the retention comparison, so it is best-effort.
-  const [data, packaging] = await Promise.all([
-    getRetentionComparison(supabase, userId, requestedA, requestedB),
-    getPackagingComparison(supabase, userId, requestedA, requestedB).catch(
-      (error) => {
-        console.error("Failed to load packaging comparison", error)
-        return null
-      },
-    ),
-  ])
-  if (data == null) return null
-  return { a: requestedA, b: requestedB, data, packaging }
-}
-
-async function loadComparePage(
-  userId: string,
-  requestedA: string | undefined,
-  requestedB: string | undefined,
-): Promise<CompareResult> {
+async function loadComparePage(userId: string): Promise<CompareResult> {
   try {
     const entitlement = await getEntitlement(userId)
     if (entitlement.plan.deepCreditsPerMonth <= 0) return { status: "locked" }
@@ -147,43 +67,16 @@ async function loadComparePage(
       return { status: "empty", videoCount: videos.length }
     }
 
-    const active = await loadActiveComparison(
-      supabase,
-      userId,
-      videos,
-      requestedA,
-      requestedB,
-    )
-    return {
-      status: "ok",
-      videos,
-      comparisons,
-      selectedA: active?.a ?? "",
-      selectedB: active?.b ?? "",
-      active,
-    }
+    return { status: "ok", videos, comparisons }
   } catch (error) {
     console.error("Failed to load retention comparison", error)
     return { status: "error" }
   }
 }
 
-function first(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value
-}
-
-export default async function Page({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>
-}) {
+export default async function Page() {
   const user = await requireAuthenticatedUser()
-  const params = await searchParams
-  const result = await loadComparePage(
-    user.id,
-    first(params.a),
-    first(params.b),
-  )
+  const result = await loadComparePage(user.id)
 
   return (
     <>
@@ -222,50 +115,13 @@ export default async function Page({
         {result.status === "ok" && (
           <>
             <RetentionComparePicker
-              key={`${result.selectedA}-${result.selectedB}`}
               videos={result.videos}
-              selectedA={result.selectedA}
-              selectedB={result.selectedB}
               savedPairs={result.comparisons.map((comparison) => ({
                 a: comparison.videoAId,
                 b: comparison.videoBId,
               }))}
             />
-            {result.active && (
-              <>
-                <RetentionComparisonVideos data={result.active.data} />
-                <VideoComparisonTabs
-                  retention={
-                    <RetentionComparisonDetail data={result.active.data} />
-                  }
-                  packaging={
-                    result.active.packaging ? (
-                      <PackagingComparison data={result.active.packaging} />
-                    ) : (
-                      <Card className="p-6 text-sm text-muted-foreground">
-                        No packaging read is available for these two videos yet.
-                        Open each video&apos;s analysis to generate one, then
-                        this tab fills in.
-                      </Card>
-                    )
-                  }
-                  script={
-                    <Card className="p-6 text-sm text-muted-foreground">
-                      A script head-to-head is coming soon. For now, open each
-                      video&apos;s full analysis to read its script feedback.
-                    </Card>
-                  }
-                />
-              </>
-            )}
-            <PreviousComparisons
-              comparisons={result.comparisons}
-              activePair={
-                result.active
-                  ? { a: result.active.a, b: result.active.b }
-                  : null
-              }
-            />
+            <PreviousComparisons comparisons={result.comparisons} />
           </>
         )}
         {result.status === "empty" && (
