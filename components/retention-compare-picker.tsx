@@ -5,7 +5,7 @@ import { ArrowLeftRightIcon } from "lucide-react"
 
 import type { ComparableVideo } from "@/lib/retention-comparison"
 
-// The compare page's video selectors: two native selects that rewrite the
+// The Video Comparator's video selectors: two native selects that rewrite the
 // page's query string, so the chosen pair is shareable and the server
 // component reloads the comparison. Kept deliberately plain - the page is
 // server-rendered and this is its only interactive control.
@@ -33,7 +33,7 @@ export function RetentionComparePicker({
 
   const navigate = (a: string, b: string) => {
     router.push(
-      `/dashboard/channel-trends/compare?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`,
+      `/dashboard/video-comparator?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`,
     )
   }
 

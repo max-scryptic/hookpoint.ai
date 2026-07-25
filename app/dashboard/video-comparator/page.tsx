@@ -31,10 +31,11 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 
-// The video-vs-video comparison page: pick any two library videos and see
-// where their retention curves diverge, hook against hook, and the event
-// evidence for each stretch. Same paid gate as the Channel Trends page it
-// hangs off - comparison rides on deep analysis.
+// The Video Comparator: pick any two library videos and see where their
+// retention curves diverge, hook against hook, and the event evidence for
+// each stretch. A standalone page and the seed of a much larger video-by-video
+// report. Same paid gate as deep analysis, since the comparison rides on the
+// stored analysis of both videos.
 //
 // COPY GUARDRAIL: no em or en dashes anywhere in this file (comments
 // included). Hyphens are fine.
@@ -146,14 +147,8 @@ export default async function Page({
                 <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
               </BreadcrumbItem>
               <BreadcrumbSeparator className="hidden md:block" />
-              <BreadcrumbItem className="hidden md:block">
-                <BreadcrumbLink href="/dashboard/channel-trends">
-                  Channel Trends
-                </BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator className="hidden md:block" />
               <BreadcrumbItem>
-                <BreadcrumbPage>Compare</BreadcrumbPage>
+                <BreadcrumbPage>Video Comparator</BreadcrumbPage>
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
@@ -162,11 +157,12 @@ export default async function Page({
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <div>
           <h1 className="text-2xl font-semibold tracking-normal">
-            Video vs video
+            Video Comparator
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Two retention curves on one axis: where they diverge, how the
-            hooks compare, and the evidence behind each stretch.
+            Put any two uploads head to head: where their retention curves
+            diverge, how the hooks compare, and the evidence behind each
+            stretch.
           </p>
         </div>
 
