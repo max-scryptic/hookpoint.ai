@@ -1,33 +1,20 @@
 import Link from "next/link"
 import { LibraryIcon, LockIcon } from "lucide-react"
 
-import { PackagingComparison } from "@/components/packaging-comparison"
-import { ScriptComparison } from "@/components/script-comparison"
+import { PreviousComparisons } from "@/components/previous-comparisons"
 import { RetentionComparePicker } from "@/components/retention-compare-picker"
-import {
-  RetentionComparisonDetail,
-  RetentionComparisonVideos,
-} from "@/components/retention-comparison"
-import { VideoComparisonTabs } from "@/components/video-comparison-tabs"
 import { buttonVariants } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { requireAuthenticatedUser } from "@/lib/auth"
 import { getEntitlement } from "@/lib/billing/entitlements"
 import {
-  getPackagingComparison,
-  type PackagingComparison as PackagingComparisonData,
-} from "@/lib/packaging-comparison"
-import {
-  getScriptComparison,
-  type ScriptComparison as ScriptComparisonData,
-} from "@/lib/script-comparison"
-import {
-  defaultComparisonPair,
-  getRetentionComparison,
   listComparableVideos,
   type ComparableVideo,
-  type RetentionComparisonData,
 } from "@/lib/retention-comparison"
+import {
+  listSavedComparisons,
+  type SavedComparison,
+} from "@/lib/video-comparisons"
 import { createClient } from "@/lib/supabase/server"
 import {
   Breadcrumb,
@@ -40,11 +27,12 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 
-// The Video Comparator: pick any two library videos and see where their
-// retention curves diverge, hook against hook, and the event evidence for
-// each stretch. A standalone page and the seed of a much larger video-by-video
-// report. Same paid gate as deep analysis, since the comparison rides on the
-// stored analysis of both videos.
+// The Video Comparator: pick any two library videos to generate a head-to-head,
+// or re-open one you have already generated. The report itself now lives on its
+// own page (video-comparator/report); generating a pair or picking one from the
+// history below redirects there. This page is only the picker and the history.
+// Same paid gate as deep analysis, since the comparison rides on the stored
+// analysis of both videos.
 //
 // COPY GUARDRAIL: no em or en dashes anywhere in this file (comments
 // included). Hyphens are fine.
@@ -55,43 +43,11 @@ type CompareResult =
   | {
       status: "ok"
       videos: ComparableVideo[]
-      a: string
-      b: string
-      data: RetentionComparisonData
-      packaging: PackagingComparisonData | null
-      script: ScriptComparisonData | null
+      comparisons: SavedComparison[]
     }
   | { status: "error" }
 
-function pickPair(
-  videos: ComparableVideo[],
-  requestedA: string | undefined,
-  requestedB: string | undefined,
-): { a: string; b: string } | null {
-  const ids = new Set(videos.map((video) => video.id))
-  const a = requestedA && ids.has(requestedA) ? requestedA : null
-  const b =
-    requestedB && ids.has(requestedB) && requestedB !== a ? requestedB : null
-  if (a && b) return { a, b }
-
-  const fallback = defaultComparisonPair(videos)
-  if (fallback == null) return null
-  if (a) {
-    const other = videos.find((video) => video.id !== a)
-    return other ? { a, b: other.id } : null
-  }
-  if (b) {
-    const other = videos.find((video) => video.id !== b)
-    return other ? { a: other.id, b } : null
-  }
-  return fallback
-}
-
-async function loadComparePage(
-  userId: string,
-  requestedA: string | undefined,
-  requestedB: string | undefined,
-): Promise<CompareResult> {
+async function loadComparePage(userId: string): Promise<CompareResult> {
   try {
     const entitlement = await getEntitlement(userId)
     if (entitlement.plan.deepCreditsPerMonth <= 0) return { status: "locked" }
@@ -102,50 +58,25 @@ async function loadComparePage(
 
   try {
     const supabase = await createClient()
-    const videos = await listComparableVideos(supabase, userId)
-    const pair = pickPair(videos, requestedA, requestedB)
-    if (pair == null) return { status: "empty", videoCount: videos.length }
-
-    // Packaging and script both ride on the same stored analysis; a failure or
-    // gap in either must never cost the user the retention comparison, so both
-    // are best-effort.
-    const [data, packaging, script] = await Promise.all([
-      getRetentionComparison(supabase, userId, pair.a, pair.b),
-      getPackagingComparison(supabase, userId, pair.a, pair.b).catch(
-        (error) => {
-          console.error("Failed to load packaging comparison", error)
-          return null
-        },
-      ),
-      getScriptComparison(supabase, userId, pair.a, pair.b).catch((error) => {
-        console.error("Failed to load script comparison", error)
-        return null
-      }),
+    const [videos, comparisons] = await Promise.all([
+      listComparableVideos(supabase, userId),
+      listSavedComparisons(supabase, userId),
     ])
-    if (data == null) return { status: "empty", videoCount: videos.length }
-    return { status: "ok", videos, a: pair.a, b: pair.b, data, packaging, script }
+    // Two deeply analysed videos are the floor for comparing anything.
+    if (videos.length < 2) {
+      return { status: "empty", videoCount: videos.length }
+    }
+
+    return { status: "ok", videos, comparisons }
   } catch (error) {
     console.error("Failed to load retention comparison", error)
     return { status: "error" }
   }
 }
 
-function first(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value
-}
-
-export default async function Page({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>
-}) {
+export default async function Page() {
   const user = await requireAuthenticatedUser()
-  const params = await searchParams
-  const result = await loadComparePage(
-    user.id,
-    first(params.a),
-    first(params.b),
-  )
+  const result = await loadComparePage(user.id)
 
   return (
     <>
@@ -185,35 +116,12 @@ export default async function Page({
           <>
             <RetentionComparePicker
               videos={result.videos}
-              selectedA={result.a}
-              selectedB={result.b}
+              savedPairs={result.comparisons.map((comparison) => ({
+                a: comparison.videoAId,
+                b: comparison.videoBId,
+              }))}
             />
-            <RetentionComparisonVideos data={result.data} />
-            <VideoComparisonTabs
-              retention={<RetentionComparisonDetail data={result.data} />}
-              packaging={
-                result.packaging ? (
-                  <PackagingComparison data={result.packaging} />
-                ) : (
-                  <Card className="p-6 text-sm text-muted-foreground">
-                    No packaging read is available for these two videos yet.
-                    Open each video&apos;s analysis to generate one, then this
-                    tab fills in.
-                  </Card>
-                )
-              }
-              script={
-                result.script ? (
-                  <ScriptComparison data={result.script} />
-                ) : (
-                  <Card className="p-6 text-sm text-muted-foreground">
-                    No script read is available for these two videos yet. Open
-                    each video&apos;s analysis to generate one, then this tab
-                    fills in.
-                  </Card>
-                )
-              }
-            />
+            <PreviousComparisons comparisons={result.comparisons} />
           </>
         )}
         {result.status === "empty" && (

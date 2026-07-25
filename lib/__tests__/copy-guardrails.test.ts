@@ -15,16 +15,19 @@ import { stripEmDashes } from "@/lib/copy-guardrails"
 const CHANNEL_TRENDS_SOURCE_FILES = [
   "app/dashboard/channel-trends/page.tsx",
   "app/dashboard/video-comparator/page.tsx",
+  "app/dashboard/video-comparator/report/page.tsx",
   "components/channel-trends.tsx",
   "components/channel-trends-copy.ts",
   "components/event-type-badge.tsx",
   "components/packaging-comparison.tsx",
+  "components/previous-comparisons.tsx",
   "components/retention-comparison.tsx",
   "components/retention-comparison-chart.tsx",
   "components/retention-compare-picker.tsx",
   "components/video-comparison-tabs.tsx",
   "lib/packaging-comparison.ts",
   "lib/retention-comparison.ts",
+  "lib/video-comparisons.ts",
 ]
 
 const EM_DASH = "—"
