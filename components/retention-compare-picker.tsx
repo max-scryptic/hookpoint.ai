@@ -15,9 +15,10 @@ import { isSamePair } from "@/lib/video-comparisons"
 // presses the button. A pair that was already generated (in either order)
 // re-opens for free, and the button says so.
 //
-// Selecting a pair is local state here; loading a report is a navigation to
-// ?a=..&b=.. so the server re-renders with the (paid-for) comparison and the
-// URL stays shareable.
+// Selecting a pair is local state here; generating (or re-opening) a report is a
+// navigation to the dedicated report page at
+// video-comparator/report?a=..&b=.. so the report renders on its own page and
+// the URL stays shareable.
 //
 // COPY GUARDRAIL: no em or en dashes anywhere in this file (comments
 // included). Hyphens are fine.
@@ -31,20 +32,16 @@ function optionLabel(video: ComparableVideo): string {
 
 export function RetentionComparePicker({
   videos,
-  selectedA,
-  selectedB,
   savedPairs,
 }: {
   videos: ComparableVideo[]
-  selectedA: string
-  selectedB: string
   // The unordered pairs the creator has already generated, so the button can
   // offer a free re-open instead of another charge.
   savedPairs: Array<{ a: string; b: string }>
 }) {
   const router = useRouter()
-  const [a, setA] = useState(selectedA)
-  const [b, setB] = useState(selectedB)
+  const [a, setA] = useState("")
+  const [b, setB] = useState("")
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -54,7 +51,7 @@ export function RetentionComparePicker({
 
   const open = (nextA: string, nextB: string) => {
     router.push(
-      `/dashboard/video-comparator?a=${encodeURIComponent(nextA)}&b=${encodeURIComponent(nextB)}`,
+      `/dashboard/video-comparator/report?a=${encodeURIComponent(nextA)}&b=${encodeURIComponent(nextB)}`,
     )
     router.refresh()
   }

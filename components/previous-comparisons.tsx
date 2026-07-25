@@ -2,13 +2,12 @@ import Link from "next/link"
 import { HistoryIcon } from "lucide-react"
 
 import { Card } from "@/components/ui/card"
-import { cn } from "@/lib/utils"
-import { isSamePair, type SavedComparison } from "@/lib/video-comparisons"
+import type { SavedComparison } from "@/lib/video-comparisons"
 
 // The Video Comparator's history: every head-to-head the creator has already
-// generated (and paid for). Selecting one prefills the selectors and re-opens
-// its report for free, so this doubles as the free re-entry point into any past
-// comparison. Rendered below the selectors on every visit.
+// generated (and paid for). Selecting one opens its report page for free, so
+// this doubles as the free re-entry point into any past comparison. Rendered
+// below the selectors on every visit.
 //
 // COPY GUARDRAIL: no em or en dashes anywhere in this file (comments
 // included). Hyphens are fine.
@@ -25,10 +24,8 @@ function formatDate(value: string): string {
 
 export function PreviousComparisons({
   comparisons,
-  activePair,
 }: {
   comparisons: SavedComparison[]
-  activePair: { a: string; b: string } | null
 }) {
   return (
     <Card className="flex flex-col gap-3 p-4">
@@ -45,19 +42,13 @@ export function PreviousComparisons({
       ) : (
         <ul className="flex flex-col gap-1">
           {comparisons.map((comparison) => {
-            const pair = { a: comparison.videoAId, b: comparison.videoBId }
-            const isActive =
-              activePair != null && isSamePair(activePair, pair)
             return (
               <li key={comparison.id}>
                 <Link
-                  href={`/dashboard/video-comparator?a=${encodeURIComponent(
+                  href={`/dashboard/video-comparator/report?a=${encodeURIComponent(
                     comparison.videoAId,
                   )}&b=${encodeURIComponent(comparison.videoBId)}`}
-                  className={cn(
-                    "flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-accent",
-                    isActive ? "border-primary bg-accent" : "bg-card",
-                  )}
+                  className="flex items-center justify-between gap-3 rounded-md border bg-card px-3 py-2 text-sm transition-colors hover:bg-accent"
                 >
                   <span className="min-w-0 truncate">
                     <span className="font-medium">

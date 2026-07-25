@@ -15,6 +15,7 @@ import { stripEmDashes } from "@/lib/copy-guardrails"
 const CHANNEL_TRENDS_SOURCE_FILES = [
   "app/dashboard/channel-trends/page.tsx",
   "app/dashboard/video-comparator/page.tsx",
+  "app/dashboard/video-comparator/report/page.tsx",
   "components/channel-trends.tsx",
   "components/channel-trends-copy.ts",
   "components/event-type-badge.tsx",
