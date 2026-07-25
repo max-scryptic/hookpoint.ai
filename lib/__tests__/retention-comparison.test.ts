@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest"
 
+import type { SupabaseClient } from "@supabase/supabase-js"
+
 import {
   buildComparisonVideo,
   calibrationFactor,
@@ -7,6 +9,7 @@ import {
   defaultComparisonPair,
   eventWeight,
   findLargestDivergence,
+  listComparableVideos,
   watchRatioAt,
   type ComparisonVideoSummary,
 } from "@/lib/retention-comparison"
@@ -293,5 +296,116 @@ describe("defaultComparisonPair", () => {
       video("oldest", 30),
     ])
     expect(pair).toEqual({ a: "newest", b: "older" })
+  })
+})
+
+// A tiny thenable PostgREST stub: it applies the eq/in filters the loader uses
+// so the test exercises the real deeply-analysed gating, not a hand-fed answer.
+function fakeSupabase(tables: Record<string, Record<string, unknown>[]>): {
+  supabase: SupabaseClient
+  synthesisSelects: string[]
+} {
+  const synthesisSelects: string[] = []
+  const from = (table: string) => {
+    let rows = [...(tables[table] ?? [])]
+    const builder: Record<string, unknown> = {
+      select(columns: string) {
+        if (table === "retention_window_event_synthesis") {
+          synthesisSelects.push(columns)
+        }
+        return builder
+      },
+      eq(column: string, value: unknown) {
+        rows = rows.filter((row) => row[column] === value)
+        return builder
+      },
+      in(column: string, values: unknown[]) {
+        rows = rows.filter((row) => values.includes(row[column]))
+        return builder
+      },
+      not() {
+        return builder
+      },
+      order() {
+        return builder
+      },
+      limit() {
+        return Promise.resolve({ data: rows, error: null })
+      },
+      then(resolve: (value: { data: unknown; error: null }) => unknown) {
+        return resolve({ data: rows, error: null })
+      },
+    }
+    return builder
+  }
+  return {
+    supabase: { from } as unknown as SupabaseClient,
+    synthesisSelects,
+  }
+}
+
+describe("listComparableVideos", () => {
+  it("returns only videos whose deep analysis has completed", async () => {
+    const { supabase } = fakeSupabase({
+      retention_window_event_synthesis: [
+        { user_id: "u1", analysed_video_id: "deep-a", status: "ready" },
+        { user_id: "u1", analysed_video_id: "deep-b", status: "ready" },
+        // A second ready window for the same video must not duplicate it.
+        { user_id: "u1", analysed_video_id: "deep-a", status: "ready" },
+        // Not deeply analysed yet: still synthesizing.
+        { user_id: "u1", analysed_video_id: "pending-c", status: "pending" },
+        // Another user's rows must never leak in.
+        { user_id: "u2", analysed_video_id: "other-d", status: "ready" },
+      ],
+      analysed_videos: [
+        {
+          user_id: "u1",
+          id: "deep-a",
+          video_title: "Deep A",
+          date_analysed: "2026-01-02",
+          average_view_percentage: 40,
+        },
+        {
+          user_id: "u1",
+          id: "deep-b",
+          video_title: "Deep B",
+          date_analysed: "2026-01-01",
+          average_view_percentage: 60,
+        },
+        {
+          user_id: "u1",
+          id: "pending-c",
+          video_title: "Pending C",
+          date_analysed: "2026-01-03",
+          average_view_percentage: 55,
+        },
+      ],
+    })
+
+    const videos = await listComparableVideos(supabase, "u1")
+
+    expect(videos.map((video) => video.id).sort()).toEqual(["deep-a", "deep-b"])
+    expect(videos.every((video) => video.id !== "pending-c")).toBe(true)
+  })
+
+  it("returns an empty list without querying videos when none are deeply analysed", async () => {
+    const { supabase } = fakeSupabase({
+      retention_window_event_synthesis: [
+        { user_id: "u1", analysed_video_id: "only-c", status: "pending" },
+      ],
+      analysed_videos: [
+        {
+          user_id: "u1",
+          id: "only-c",
+          video_title: "Only C",
+          date_analysed: "2026-01-01",
+          average_view_percentage: 50,
+        },
+      ],
+    })
+
+    const videos = await listComparableVideos(supabase, "u1")
+
+    expect(videos).toEqual([])
   })
 })

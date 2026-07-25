@@ -588,18 +588,45 @@ export async function getRetentionComparison(
   return buildRetentionComparison(buildFor(rowA), buildFor(rowB), calibration)
 }
 
-// The compare page's picker: every analysed video with a stored retention
-// curve, newest analysis first.
+// The compare page's picker: every deeply analysed video with a stored
+// retention curve, newest analysis first. The comparison rides on the stored
+// deep analysis of both videos (curve, windows and their event evidence), so a
+// video that was only retention-scanned cannot be compared and never appears
+// here. A video counts as deeply analysed once its event synthesis has
+// completed for at least one window - the same signal Channel Trends uses to
+// grow its library (see loadLibrarySize in lib/channel-trends.ts).
 export async function listComparableVideos(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<ComparableVideo[]> {
+  const { data: synthesisData, error: synthesisError } = await supabase
+    .from("retention_window_event_synthesis")
+    .select("analysed_video_id")
+    .eq("user_id", userId)
+    .eq("status", "ready")
+
+  if (synthesisError) {
+    throw new Error(
+      `Failed to load deeply analysed videos: ${synthesisError.message}`,
+    )
+  }
+
+  const deeplyAnalysedIds = [
+    ...new Set(
+      (
+        (synthesisData ?? []) as Array<{ analysed_video_id: string }>
+      ).map((row) => row.analysed_video_id),
+    ),
+  ]
+  if (deeplyAnalysedIds.length === 0) return []
+
   const { data, error } = await supabase
     .from("analysed_videos")
     .select(
       "id, video_title, date_analysed, average_view_percentage:analytics_summary->averageViewPercentage",
     )
     .eq("user_id", userId)
+    .in("id", deeplyAnalysedIds)
     .not("retention", "is", null)
     .order("date_analysed", { ascending: false })
     .limit(100)
