@@ -3,7 +3,11 @@ import { LockIcon } from "lucide-react"
 
 import { PackagingComparison } from "@/components/packaging-comparison"
 import { RetentionComparePicker } from "@/components/retention-compare-picker"
-import { RetentionComparison } from "@/components/retention-comparison"
+import {
+  RetentionComparisonDetail,
+  RetentionComparisonVideos,
+} from "@/components/retention-comparison"
+import { VideoComparisonTabs } from "@/components/video-comparison-tabs"
 import { buttonVariants } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { requireAuthenticatedUser } from "@/lib/auth"
@@ -173,10 +177,27 @@ export default async function Page({
               selectedA={result.a}
               selectedB={result.b}
             />
-            <RetentionComparison data={result.data} />
-            {result.packaging && (
-              <PackagingComparison data={result.packaging} />
-            )}
+            <RetentionComparisonVideos data={result.data} />
+            <VideoComparisonTabs
+              retention={<RetentionComparisonDetail data={result.data} />}
+              packaging={
+                result.packaging ? (
+                  <PackagingComparison data={result.packaging} />
+                ) : (
+                  <Card className="p-6 text-sm text-muted-foreground">
+                    No packaging read is available for these two videos yet.
+                    Open each video&apos;s analysis to generate one, then this
+                    tab fills in.
+                  </Card>
+                )
+              }
+              script={
+                <Card className="p-6 text-sm text-muted-foreground">
+                  A script head-to-head is coming soon. For now, open each
+                  video&apos;s full analysis to read its script feedback.
+                </Card>
+              }
+            />
           </>
         )}
         {result.status === "empty" && (

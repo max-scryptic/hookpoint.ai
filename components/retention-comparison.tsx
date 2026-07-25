@@ -332,7 +332,26 @@ function StretchColumn({ video, side }: { video: ComparisonVideo; side: Side }) 
   )
 }
 
-export function RetentionComparison({
+// The two video header cards. Split out from the detail body so the page can
+// keep them above the Retention / Packaging / Script tabs as shared context
+// for whichever tab is open.
+export function RetentionComparisonVideos({
+  data,
+}: {
+  data: RetentionComparisonData
+}) {
+  return (
+    <div className="grid gap-3 lg:grid-cols-2">
+      <VideoHeaderCard video={data.a} side="a" />
+      <VideoHeaderCard video={data.b} side="b" />
+    </div>
+  )
+}
+
+// Everything from the retention graph down: the overlaid curves, hook against
+// hook, and the stretch-by-stretch evidence. This is the body of the Retention
+// tab.
+export function RetentionComparisonDetail({
   data,
 }: {
   data: RetentionComparisonData
@@ -340,11 +359,6 @@ export function RetentionComparison({
   const sentence = divergenceSentence(data)
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid gap-3 lg:grid-cols-2">
-        <VideoHeaderCard video={data.a} side="a" />
-        <VideoHeaderCard video={data.b} side="b" />
-      </div>
-
       <Card className="flex flex-col gap-3 p-5">
         <div>
           <h3 className="text-sm font-semibold">Where the curves diverge</h3>
@@ -415,6 +429,21 @@ export function RetentionComparison({
           </p>
         )}
       </Card>
+    </div>
+  )
+}
+
+// The full retention comparison: header cards then the detail body. Kept for
+// any caller that wants both together in one flow.
+export function RetentionComparison({
+  data,
+}: {
+  data: RetentionComparisonData
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      <RetentionComparisonVideos data={data} />
+      <RetentionComparisonDetail data={data} />
     </div>
   )
 }
