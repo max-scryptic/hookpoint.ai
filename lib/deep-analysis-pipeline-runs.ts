@@ -2,7 +2,11 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { DEEP_ANALYSIS_PIPELINE_VERSION } from "@/lib/deep-analysis-insight-feedback"
 
-export type DeepAnalysisPipelineStage = "extraction" | "media_analysis" | "event_synthesis"
+export type DeepAnalysisPipelineStage =
+  | "extraction"
+  | "media_analysis"
+  | "transcript_taxonomy"
+  | "event_synthesis"
 
 export interface DeepAnalysisPipelineRun {
   id: string

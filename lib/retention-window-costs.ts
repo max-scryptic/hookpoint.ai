@@ -10,7 +10,11 @@ import type { LlmCallCost } from "@/lib/llm-cost"
 
 // The per-window LLM calls whose cost is tracked, matching the `step` check
 // constraint in the retention_window_costs migration.
-export type RetentionWindowCostStep = "snapshot" | "audio" | "event_synthesis"
+export type RetentionWindowCostStep =
+  | "snapshot"
+  | "audio"
+  | "event_synthesis"
+  | "transcript_taxonomy"
 
 export interface RetentionWindowCost {
   retentionWindowId: string

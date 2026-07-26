@@ -82,6 +82,13 @@ export type SnapshotScene =
 
 export type CameraMovement = "static" | "pan" | "zoom" | "handheld" | "cut" | "unknown"
 
+// How much of the frame the main subject occupies. "not_applicable" for frames
+// with no clear subject (a full-screen graphic, a wide establishing shot with
+// nothing central).
+export type ShotScale = "close_up" | "medium" | "wide" | "not_applicable"
+
+export type Brightness = "dark" | "medium" | "bright"
+
 export interface SnapshotAnalysis {
   scene: SnapshotScene
   face_visible: boolean
@@ -92,6 +99,29 @@ export interface SnapshotAnalysis {
   camera_movement: CameraMovement
   notable_event: string | null
   description: string
+  // The visual-packaging axes below mirror the thumbnail read
+  // (lib/packaging-taxonomy.ts PackagingThumbnailDetail) so a window's frames
+  // can be judged on the same terms as the video's thumbnail — a face's pull,
+  // contrast/complexity, on-screen-text dominance — rather than the coarse
+  // booleans above. Every ordinal is 0-10 scored on the frame in isolation.
+  // Optional so reads of snapshot rows analysed before these fields existed
+  // still typecheck (the same tolerance signal_timeline gets on the audio side);
+  // the JSON schema requires them on every new analysis.
+  shot_scale?: ShotScale
+  // 0 = no face or a tiny one; 10 = a face dominating the frame. 0 when no face.
+  face_prominence?: number
+  // Whether a visible subject is looking into the lens.
+  eye_contact?: boolean
+  // 0 = neutral / no expression; 10 = an extreme expression. 0 when no face.
+  expression_intensity?: number
+  // 0 = flat and muddy; 10 = high-contrast, thumbstopping.
+  color_contrast?: number
+  // 0 = clean, single-subject; 10 = busy and crowded. A descriptor, not a score.
+  visual_complexity?: number
+  // 0 = no on-screen text, or tiny; 10 = large text dominating the frame.
+  // Complements contains_text (present at all) with how much it dominates.
+  text_prominence?: number
+  brightness?: Brightness
 }
 
 // The subset a model call can actually judge by ear — loudness and silence
@@ -582,6 +612,21 @@ const CAMERA_MOVEMENT_VALUES = [
   "unknown",
 ] as const
 
+const SHOT_SCALE_VALUES = [
+  "close_up",
+  "medium",
+  "wide",
+  "not_applicable",
+] as const
+
+const BRIGHTNESS_VALUES = ["dark", "medium", "bright"] as const
+
+const snapshotOrdinalSchema = {
+  type: "integer",
+  minimum: 0,
+  maximum: 10,
+} as const
+
 const SNAPSHOT_ANALYSIS_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -603,6 +648,14 @@ const SNAPSHOT_ANALYSIS_SCHEMA = {
           "camera_movement",
           "notable_event",
           "description",
+          "shot_scale",
+          "face_prominence",
+          "eye_contact",
+          "expression_intensity",
+          "color_contrast",
+          "visual_complexity",
+          "text_prominence",
+          "brightness",
         ],
         properties: {
           chunkIndex: { type: "integer" },
@@ -615,6 +668,14 @@ const SNAPSHOT_ANALYSIS_SCHEMA = {
           camera_movement: { type: "string", enum: CAMERA_MOVEMENT_VALUES },
           notable_event: { type: ["string", "null"] },
           description: { type: "string" },
+          shot_scale: { type: "string", enum: SHOT_SCALE_VALUES },
+          face_prominence: snapshotOrdinalSchema,
+          eye_contact: { type: "boolean" },
+          expression_intensity: snapshotOrdinalSchema,
+          color_contrast: snapshotOrdinalSchema,
+          visual_complexity: snapshotOrdinalSchema,
+          text_prominence: snapshotOrdinalSchema,
+          brightness: { type: "string", enum: BRIGHTNESS_VALUES },
         },
       },
     },
@@ -625,6 +686,7 @@ const SNAPSHOT_ANALYSIS_INSTRUCTIONS = [
   "You describe frames from one window of a YouTube video, in chunkIndex order (0 is earliest). Most frames are placed in flanking pairs just before and just after a detected hard cut or transition, so consecutive chunks often straddle a real edit rather than an arbitrary moment; a window with no detected cuts instead gets evenly spaced frames across it.",
   "Each chunk is also given ocrText: text already recognized from that exact frame by a separate deterministic OCR pass (null if none was found). Treat it as ground truth, not a guess to verify. Do not re-transcribe or second-guess it, but you may reference it in notable_event/description when it's relevant to what changed (e.g. a caption or graphic appearing).",
   "For each chunk, classify: scene (best-fitting category), whether a face is visible, whether on-screen text/captions/graphics are present (contains_text, judge this visually even where ocrText is null, e.g. stylised or hard-to-read text), whether source code is visible, the amount of on-screen motion, how many distinct people are visible, and the camera's behaviour relative to the surrounding chunks.",
+  "Also score these visual-packaging axes on the frame in isolation. shot_scale: how much of the frame the main subject occupies (close_up, medium, wide, or not_applicable when there is no clear subject such as a full-screen graphic). face_prominence: 0 when no face or a tiny one, 10 when a face dominates the frame (0 when no face). eye_contact: whether a visible subject looks into the lens. expression_intensity: 0 for a neutral or absent expression, 10 for an extreme one (0 when no face). color_contrast: 0 flat and muddy, 10 high-contrast and thumbstopping. visual_complexity: 0 clean and single-subject, 10 busy and crowded (a descriptor, neither end is better). text_prominence: 0 when there is no on-screen text or it is tiny, 10 when large text dominates the frame (score 0 whenever contains_text is false). brightness: dark, medium, or bright. Anchor every 0-10 axis at 0 absent, 5 moderately present, 10 as strong as it could plausibly be, and use the full range.",
   "Also give: notable_event (a single thing distinguishing this chunk from its neighbours, a cut, a zoom, a graphic appearing, a change of location, or null if nothing stands out), and a short free-text description of the composition and action.",
   "Base every judgment only on what's visible in that chunk's image (plus its given ocrText). Do not infer audio, speech, or viewer reaction.",
   "Return exactly one entry per supplied chunkIndex.",
@@ -821,7 +883,7 @@ export const openAiRetentionWindowMediaAnalyzer: RetentionWindowMediaAnalyzer = 
     const { text, usage } = await callOpenAiResponses({
       model,
       reasoning: { effort: "low" },
-      max_output_tokens: Math.min(16_000, Math.max(1_000, images.length * 300)),
+      max_output_tokens: Math.min(16_000, Math.max(1_000, images.length * 450)),
       input: [
         {
           role: "developer",

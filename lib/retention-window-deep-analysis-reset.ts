@@ -12,13 +12,17 @@
 // /api/analyze does right after saving a fresh set of windows — so the next
 // call to triggerRetentionWindowMediaExtraction has work to pick up. Pending
 // snapshot rows aren't recreated here: they're derived from each window's
-// scene-cue scan during extraction, the same as a first run.
+// scene-cue scan during extraction, the same as a first run. The per-window
+// transcript taxonomy lives on the transcripts row (which this reset keeps, as
+// light analysis owns the text), so instead of deleting it we re-pend it in
+// place — the same set of selected windows, prior reads cleared.
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { createPendingRetentionWindowAudio } from "@/lib/retention-window-media"
 import { createPendingRetentionWindowSceneCueScans } from "@/lib/video-scene-cues"
 import { createPendingRetentionWindowEventSynthesis } from "@/lib/retention-window-events"
+import { rependRetentionWindowTranscriptTaxonomies } from "@/lib/retention-window-transcripts"
 import { getRetentionWindows } from "@/lib/retention-windows"
 
 // Deep-analysis tables only, in no particular order — none of them cascade
@@ -63,6 +67,12 @@ export async function resetDeepAnalysis(
       windows,
     ),
     createPendingRetentionWindowEventSynthesis(
+      supabase,
+      userId,
+      analysedVideoId,
+      windows,
+    ),
+    rependRetentionWindowTranscriptTaxonomies(
       supabase,
       userId,
       analysedVideoId,

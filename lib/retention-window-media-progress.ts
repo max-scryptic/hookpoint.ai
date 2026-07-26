@@ -24,6 +24,7 @@ export interface DeepAnalysisStages {
   snapshotAnalysis: DeepAnalysisStageStatus
   audio: DeepAnalysisStageStatus
   audioAnalysis: DeepAnalysisStageStatus
+  transcriptTaxonomy: DeepAnalysisStageStatus
   eventSynthesis: DeepAnalysisStageStatus
 }
 
@@ -133,6 +134,30 @@ function countByAnalysisStatus(
   return { total: rows.length, pending, failed }
 }
 
+// Only window transcript rows that are part of deep analysis carry a
+// taxonomy_status (the rest are null — see saveRetentionWindowTranscripts), so a
+// null row is excluded from the total entirely rather than counted as pending.
+// 'skipped' (an empty transcript that settled with nothing to read) and 'ready'
+// are both done; 'pending'/'processing' are unsettled; 'failed' is a real
+// outcome. total===0 means no window was selected for a taxonomy — settled.
+function countByTaxonomyStatus(
+  rows: { taxonomy_status: string | null }[],
+): { total: number; pending: number; failed: number } {
+  let total = 0
+  let pending = 0
+  let failed = 0
+  for (const row of rows) {
+    if (row.taxonomy_status == null) continue
+    total++
+    if (row.taxonomy_status === "pending" || row.taxonomy_status === "processing") {
+      pending++
+    } else if (row.taxonomy_status === "failed") {
+      failed++
+    }
+  }
+  return { total, pending, failed }
+}
+
 function isStageSettled(status: DeepAnalysisStageStatus): boolean {
   return status === "ready" || status === "failed"
 }
@@ -170,29 +195,39 @@ export async function getDeepAnalysisProgress(
   analysedVideoId: string,
   sourceFile: SourceFile,
 ): Promise<DeepAnalysisProgress> {
-  const [snapshotsResult, audioResult, sceneCueScansResult, eventSynthesisResult] =
-    await Promise.all([
-      supabase
-        .from("retention_window_snapshots")
-        .select("status, analysis_status")
-        .eq("user_id", userId)
-        .eq("analysed_video_id", analysedVideoId),
-      supabase
-        .from("retention_window_audio")
-        .select("status, analysis_status")
-        .eq("user_id", userId)
-        .eq("analysed_video_id", analysedVideoId),
-      supabase
-        .from("retention_window_scene_cue_scans")
-        .select("status, updated_at")
-        .eq("user_id", userId)
-        .eq("analysed_video_id", analysedVideoId),
-      supabase
-        .from("retention_window_event_synthesis")
-        .select("status")
-        .eq("user_id", userId)
-        .eq("analysed_video_id", analysedVideoId),
-    ])
+  const [
+    snapshotsResult,
+    audioResult,
+    sceneCueScansResult,
+    eventSynthesisResult,
+    transcriptTaxonomyResult,
+  ] = await Promise.all([
+    supabase
+      .from("retention_window_snapshots")
+      .select("status, analysis_status")
+      .eq("user_id", userId)
+      .eq("analysed_video_id", analysedVideoId),
+    supabase
+      .from("retention_window_audio")
+      .select("status, analysis_status")
+      .eq("user_id", userId)
+      .eq("analysed_video_id", analysedVideoId),
+    supabase
+      .from("retention_window_scene_cue_scans")
+      .select("status, updated_at")
+      .eq("user_id", userId)
+      .eq("analysed_video_id", analysedVideoId),
+    supabase
+      .from("retention_window_event_synthesis")
+      .select("status")
+      .eq("user_id", userId)
+      .eq("analysed_video_id", analysedVideoId),
+    supabase
+      .from("retention_window_transcripts")
+      .select("taxonomy_status")
+      .eq("user_id", userId)
+      .eq("analysed_video_id", analysedVideoId),
+  ])
 
   if (snapshotsResult.error) {
     throw new Error(
@@ -214,6 +249,11 @@ export async function getDeepAnalysisProgress(
       `Failed to load event synthesis statuses: ${eventSynthesisResult.error.message}`,
     )
   }
+  if (transcriptTaxonomyResult.error) {
+    throw new Error(
+      `Failed to load transcript taxonomy statuses: ${transcriptTaxonomyResult.error.message}`,
+    )
+  }
 
   const snapshotRows = (snapshotsResult.data ?? []) as {
     status: string
@@ -230,6 +270,9 @@ export async function getDeepAnalysisProgress(
   const eventSynthesisRows = (eventSynthesisResult.data ?? []) as {
     status: string
   }[]
+  const transcriptTaxonomyRows = (transcriptTaxonomyResult.data ?? []) as {
+    taxonomy_status: string | null
+  }[]
 
   const snapshotCounts = countByStatus(snapshotRows)
   const audioCounts = countByStatus(audioRows)
@@ -237,6 +280,7 @@ export async function getDeepAnalysisProgress(
   const audioAnalysisCounts = countByAnalysisStatus(audioRows)
   const sceneCueScanCounts = countSceneCueScansByStatus(sceneCueScanRows)
   const eventSynthesisCounts = countByStatus(eventSynthesisRows)
+  const transcriptTaxonomyCounts = countByTaxonomyStatus(transcriptTaxonomyRows)
 
   const sceneCueScan = deriveMediaStageStatus(
     sceneCueScanCounts.total,
@@ -283,6 +327,15 @@ export async function getDeepAnalysisProgress(
       audioAnalysisCounts.total,
       audioAnalysisCounts.pending,
       audioAnalysisCounts.failed,
+    ),
+    // Transcript rows exist immediately (no extraction to wait on), and only
+    // the deep-analysis-selected ones carry a taxonomy_status, so a zero total
+    // here genuinely means "no window selected for a taxonomy" and needs no
+    // extra gating — the same as event synthesis below.
+    transcriptTaxonomy: deriveMediaStageStatus(
+      transcriptTaxonomyCounts.total,
+      transcriptTaxonomyCounts.pending,
+      transcriptTaxonomyCounts.failed,
     ),
     // Unlike snapshots, event-synthesis jobs are created eagerly (at analyze
     // time, alongside audio/scene-cue-scan jobs) rather than derived from a
