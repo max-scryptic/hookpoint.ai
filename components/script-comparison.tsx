@@ -7,6 +7,7 @@ import {
 
 import { Card } from "@/components/ui/card"
 import { stripEmDashes } from "@/lib/copy-guardrails"
+import type { ScriptComparisonReport } from "@/lib/script-comparison-report"
 import {
   SCRIPT_SURFACE_LABEL,
   type CategoricalComparisonRow,
@@ -446,21 +447,54 @@ function SurfaceSection({
   )
 }
 
-export function ScriptComparison({ data }: { data: ScriptComparison }) {
+// The written head-to-head: a model-authored comparison of both full
+// transcripts, generated once when the comparison is created. Leads the section
+// so the reader gets the story before the field-by-field tables below.
+function ReportNarrative({ report }: { report: ScriptComparisonReport }) {
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4">
+      {report.summary && <p className="text-sm">{clean(report.summary)}</p>}
+      {report.sections.length > 0 && (
+        <div className="flex flex-col gap-3">
+          {report.sections.map((section, index) => (
+            <div key={`${section.heading}-${index}`} className="flex flex-col gap-1">
+              <h4 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                {clean(section.heading)}
+              </h4>
+              <p className="text-sm text-muted-foreground">
+                {clean(section.body)}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function ScriptComparison({
+  data,
+  report = null,
+}: {
+  data: ScriptComparison | null
+  report?: ScriptComparisonReport | null
+}) {
   const bySurface = (surface: ScriptSurface) => ({
-    ordinals: data.ordinals.filter((row) => row.surface === surface),
-    metrics: data.metrics.filter((row) => row.surface === surface),
-    categoricals: data.categoricals.filter((row) => row.surface === surface),
-    flags: data.flags.filter((row) => row.surface === surface),
-    spans: data.spans.filter((row) => row.surface === surface),
+    ordinals: data?.ordinals.filter((row) => row.surface === surface) ?? [],
+    metrics: data?.metrics.filter((row) => row.surface === surface) ?? [],
+    categoricals:
+      data?.categoricals.filter((row) => row.surface === surface) ?? [],
+    flags: data?.flags.filter((row) => row.surface === surface) ?? [],
+    spans: data?.spans.filter((row) => row.surface === surface) ?? [],
   })
 
   const hasBody =
-    data.ordinals.length > 0 ||
-    data.metrics.length > 0 ||
-    data.categoricals.length > 0 ||
-    data.flags.length > 0 ||
-    data.spans.length > 0
+    data != null &&
+    (data.ordinals.length > 0 ||
+      data.metrics.length > 0 ||
+      data.categoricals.length > 0 ||
+      data.flags.length > 0 ||
+      data.spans.length > 0)
 
   return (
     <Card className="flex flex-col gap-4 p-5">
@@ -470,16 +504,18 @@ export function ScriptComparison({ data }: { data: ScriptComparison }) {
           <h3 className="text-sm font-semibold">Script head-to-head</h3>
         </div>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          How the two scripts differ in what they say and how they feel, read
-          from each video&apos;s stored script analysis. Every score was measured
-          on that video alone at analysis time, so this comparison is instant and
-          needs no fresh analysis. Scores are correlation, not proof.
+          A written comparison of the two scripts, read from both full
+          transcripts with each video&apos;s packaging as context, followed by
+          the field-by-field diff of their script reads. Observations are
+          correlation, not proof.
         </p>
       </div>
 
-      <IdentityRow comparison={data} />
+      {report && <ReportNarrative report={report} />}
 
-      {!hasBody ? (
+      {data && <IdentityRow comparison={data} />}
+
+      {data == null ? null : !hasBody ? (
         <p className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
           {data.a.hasTaxonomy || data.b.hasTaxonomy
             ? "Only one of these videos has a script read so far. Open the other video's analysis to generate it, then this fills in."

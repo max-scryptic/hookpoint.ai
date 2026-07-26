@@ -11,6 +11,8 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import type { ScriptComparisonReport } from "@/lib/script-comparison-report"
+
 // A row of the compare page's "previous comparisons" list: the saved pair plus
 // the two titles, resolved for display.
 export interface SavedComparison {
@@ -128,6 +130,50 @@ export async function findSavedComparison(
     videoATitle: null,
     videoBTitle: null,
     createdAt: row.created_at,
+  }
+}
+
+// Loads the stored, model-authored script head-to-head for a saved comparison,
+// or null when it has not been generated yet (in which case the report page
+// regenerates it lazily). Scoped to the owning user via RLS.
+export async function getScriptComparisonReport(
+  supabase: SupabaseClient,
+  userId: string,
+  comparisonId: string,
+): Promise<ScriptComparisonReport | null> {
+  const { data, error } = await supabase
+    .from("video_comparisons")
+    .select("script_report")
+    .eq("id", comparisonId)
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(`Failed to load script comparison report: ${error.message}`)
+  }
+
+  return (
+    (data as { script_report: ScriptComparisonReport | null } | null)
+      ?.script_report ?? null
+  )
+}
+
+// Stores the generated script head-to-head on the comparison row. Scoped to the
+// owning user via RLS so a comparison can only be written by its creator.
+export async function saveScriptComparisonReport(
+  supabase: SupabaseClient,
+  userId: string,
+  comparisonId: string,
+  report: ScriptComparisonReport,
+): Promise<void> {
+  const { error } = await supabase
+    .from("video_comparisons")
+    .update({ script_report: report })
+    .eq("id", comparisonId)
+    .eq("user_id", userId)
+
+  if (error) {
+    throw new Error(`Failed to save script comparison report: ${error.message}`)
   }
 }
 

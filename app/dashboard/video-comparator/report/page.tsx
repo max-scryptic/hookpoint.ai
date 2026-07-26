@@ -21,12 +21,19 @@ import {
   type ScriptComparison as ScriptComparisonData,
 } from "@/lib/script-comparison"
 import {
+  buildAndStoreScriptComparisonReport,
+  type ScriptComparisonReport,
+} from "@/lib/script-comparison-report"
+import {
   getRetentionComparison,
   listComparableVideos,
   type ComparableVideo,
   type RetentionComparisonData,
 } from "@/lib/retention-comparison"
-import { findSavedComparison } from "@/lib/video-comparisons"
+import {
+  findSavedComparison,
+  getScriptComparisonReport,
+} from "@/lib/video-comparisons"
 import { createClient } from "@/lib/supabase/server"
 import {
   Breadcrumb,
@@ -49,12 +56,19 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 // COPY GUARDRAIL: no em or en dashes anywhere in this file (comments
 // included). Hyphens are fine.
 
+// The written script report can take a moment to generate on the rare lazy
+// backfill path (a comparison created before this feature, or one whose report
+// generation failed at creation), so give the page the same headroom the
+// analysis routes use.
+export const maxDuration = 300
+
 type ActiveComparison = {
   a: string
   b: string
   data: RetentionComparisonData
   packaging: PackagingComparisonData | null
   script: ScriptComparisonData | null
+  scriptReport: ScriptComparisonReport | null
 }
 
 type ReportResult =
@@ -99,7 +113,7 @@ async function loadActiveComparison(
   // Packaging and script both ride on the same stored analysis; a failure or
   // gap in either must never cost the user the retention comparison, so both
   // are best-effort.
-  const [data, packaging, script] = await Promise.all([
+  const [data, packaging, initialScript, storedReport] = await Promise.all([
     getRetentionComparison(supabase, userId, requestedA, requestedB),
     getPackagingComparison(supabase, userId, requestedA, requestedB).catch(
       (error) => {
@@ -113,9 +127,42 @@ async function loadActiveComparison(
         return null
       },
     ),
+    getScriptComparisonReport(supabase, userId, saved.id).catch((error) => {
+      console.error("Failed to load script comparison report", error)
+      return null
+    }),
   ])
   if (data == null) return null
-  return { a: requestedA, b: requestedB, data, packaging, script }
+
+  // A comparison generated before the written report existed (or one whose
+  // report generation failed at creation) has no stored report. Regenerate it
+  // once, lazily, and store it so the next open is instant. This also backfills
+  // each video's script taxonomy, so re-read the tables afterward to pick that
+  // up. Best-effort: the rest of the report still renders if this fails.
+  let script = initialScript
+  let scriptReport = storedReport
+  if (scriptReport == null) {
+    try {
+      scriptReport = await buildAndStoreScriptComparisonReport(
+        supabase,
+        userId,
+        saved.id,
+        requestedA,
+        requestedB,
+        { userId },
+      )
+      script = await getScriptComparison(
+        supabase,
+        userId,
+        requestedA,
+        requestedB,
+      ).catch(() => initialScript)
+    } catch (error) {
+      console.error("Failed to backfill script comparison report", error)
+    }
+  }
+
+  return { a: requestedA, b: requestedB, data, packaging, script, scriptReport }
 }
 
 async function loadReport(
@@ -235,13 +282,16 @@ export default async function Page({
                 )
               }
               script={
-                result.active.script ? (
-                  <ScriptComparison data={result.active.script} />
+                result.active.script || result.active.scriptReport ? (
+                  <ScriptComparison
+                    data={result.active.script}
+                    report={result.active.scriptReport}
+                  />
                 ) : (
                   <Card className="p-6 text-sm text-muted-foreground">
-                    No script read is available for these two videos yet. Open
-                    each video&apos;s analysis to generate one, then this tab
-                    fills in.
+                    No script read is available for these two videos yet. It is
+                    generated from both videos&apos; transcripts when the
+                    comparison is created, and will fill in shortly.
                   </Card>
                 )
               }
