@@ -11,6 +11,12 @@ import {
   createSavedComparison,
   findSavedComparison,
 } from "@/lib/video-comparisons"
+import { buildAndStoreScriptComparisonReport } from "@/lib/script-comparison-report"
+
+// The script head-to-head is written by a model over both full transcripts at
+// creation time, so give the request the same headroom the analysis paths use
+// rather than the default serverless timeout.
+export const maxDuration = 300
 
 // POST /api/video-comparisons
 // Body: { videoAId: string, videoBId: string }
@@ -19,6 +25,8 @@ import {
 // unordered pair: re-generating a pair that already exists (in either order)
 // re-opens it for free. On success the pair is saved and the client navigates
 // to the comparison, which renders from the two videos' stored deep analysis.
+// The written script report is generated once here and stored on the row; the
+// retention and packaging comparisons are still recomputed live on the page.
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -123,6 +131,23 @@ export async function POST(request: NextRequest) {
       })
     } catch (error) {
       console.error("Failed to charge for video comparison", error)
+    }
+
+    // Write the script head-to-head now so the report is ready when the client
+    // opens it. Best-effort: the pair is already saved and charged, so a
+    // generation failure must not fail the request. The report page regenerates
+    // a missing report lazily on open.
+    try {
+      await buildAndStoreScriptComparisonReport(
+        supabase,
+        user.id,
+        saved.id,
+        videoAId,
+        videoBId,
+        { userId: user.id, userEmail: user.email ?? null },
+      )
+    } catch (error) {
+      console.error("Failed to generate script comparison report", error)
     }
 
     return NextResponse.json({

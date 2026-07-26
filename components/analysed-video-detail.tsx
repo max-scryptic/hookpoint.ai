@@ -5,7 +5,6 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import {
   AlignHorizontalJustifyCenterIcon,
   AreaChartIcon,
-  FileTextIcon,
   GaugeIcon,
   ImageIcon,
   ListChecksIcon,
@@ -19,7 +18,6 @@ import {
 } from "lucide-react"
 
 import { HookIcon } from "@/components/hook-icon"
-import { ScriptRead } from "@/components/script-read"
 import type { ScriptTaxonomy } from "@/lib/script-taxonomy"
 import type { DeepAnalysisEvidence } from "@/lib/deep-analysis-evidence"
 import type { RankedRetentionWindowEvent } from "@/lib/deep-analysis-insight-ranking"
@@ -1216,7 +1214,6 @@ export function AnalysedVideoDetail({
   pacingAnalysis = null,
   retentionAttribution = null,
   packagingAlignment = null,
-  scriptTaxonomy = null,
   analyticsSummary = null,
   deepAnalysisEvidence = null,
   showDeepRecommendations = true,
@@ -1540,22 +1537,6 @@ export function AnalysedVideoDetail({
               <MetadataHygieneSection video={video} />
             </TabsContent>
           </Tabs>
-        </section>
-
-        <section className="flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <FileTextIcon className="size-4 text-muted-foreground" />
-            <h2 className="text-sm font-medium">Script</h2>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            A content and emotion read of the whole script: what kind of content
-            it is, how it is structured, and how it feels. Each score is measured
-            on this video alone, so it describes the video rather than ranking it.
-          </p>
-          <ScriptRead
-            taxonomy={scriptTaxonomy}
-            hasTranscript={transcript.length > 0}
-          />
         </section>
 
         <section className="flex flex-col gap-3">
