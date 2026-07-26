@@ -9,6 +9,7 @@ import {
   MinusIcon,
   ScissorsIcon,
   SparklesIcon,
+  TagsIcon,
   TrendingDownIcon,
   TrendingUpIcon,
 } from "lucide-react"
@@ -43,6 +44,8 @@ import type {
   DeepAnalysisEvidence as DeepAnalysisEvidenceData,
   WindowEvidence,
 } from "@/lib/deep-analysis-evidence"
+import type { WindowTranscriptTaxonomy } from "@/lib/retention-window-transcript-taxonomy"
+import type { RetentionWindowTaxonomyStatus } from "@/lib/retention-window-transcripts"
 import { EventTypeBadge } from "@/components/event-type-badge"
 
 function formatTimestamp(totalSeconds: number): string {
@@ -71,6 +74,21 @@ function formatBoolean(value: boolean): string {
   return value ? "Yes" : "No"
 }
 
+// The snapshot/transcript-taxonomy reads added on top of the original schema are
+// optional on rows analysed before they existed, so every accessor tolerates a
+// missing value with an explicit "N/A" rather than rendering "undefined".
+function formatOrdinal(value: number | null | undefined): string {
+  return value == null ? "N/A" : `${value}/10`
+}
+
+function formatOptionalLabel(value: string | null | undefined): string {
+  return value == null || value === "" ? "N/A" : formatLabel(value)
+}
+
+function formatOptionalBoolean(value: boolean | null | undefined): string {
+  return value == null ? "N/A" : formatBoolean(value)
+}
+
 // Deep-analysis costs are small (fractions of a cent to a few cents), so a
 // fixed 4 decimal places keeps sub-cent figures legible rather than rounding
 // them to "$0.00". Anything smaller than the smallest representable figure but
@@ -84,6 +102,7 @@ function formatUsd(value: number): string {
 const COST_STEP_LABELS: Record<string, string> = {
   snapshot: "Snapshots (vision)",
   audio: "Audio",
+  transcript_taxonomy: "Transcript taxonomy",
   event_synthesis: "Event synthesis",
 }
 
@@ -294,6 +313,7 @@ function WindowSummary({ item }: { item: WindowEvidence }) {
         {item.snapshots.length} snapshot{item.snapshots.length === 1 ? "" : "s"}
         {item.audio ? " · audio" : ""}
         {item.transcript ? " · transcript" : ""}
+        {item.transcriptTaxonomy ? " · taxonomy" : ""}
         {item.costs.length > 0 ? ` · ${formatUsd(item.totalCostUsd)}` : ""}
       </span>
     </>
@@ -329,6 +349,10 @@ function WindowEvidenceBody({
         <RetentionSection window={window} />
         <EditingSection editing={item.editing} baseline={item.baseline} />
         <TranscriptSection transcript={item.transcript} />
+        <TranscriptTaxonomySection
+          taxonomy={item.transcriptTaxonomy}
+          status={item.transcriptTaxonomyStatus}
+        />
         <SnapshotsSection snapshots={item.snapshots} />
         <AudioSection audio={item.audio} baseline={item.baseline} />
         <CostSection costs={item.costs} totalCostUsd={item.totalCostUsd} />
@@ -1257,9 +1281,122 @@ function statusLabel(status: string): string {
       return "Ready"
     case "failed":
       return "Failed"
+    case "skipped":
+      return "Skipped"
     default:
       return formatLabel(status)
   }
+}
+
+// The structured read of this window's transcript (lib/retention-window-transcript-taxonomy.ts),
+// on the same closed axes the whole-video script taxonomy uses. Shown in full
+// when ready; otherwise the section states why there's nothing to show — a null
+// status means the window wasn't part of deep analysis at all.
+function TranscriptTaxonomySection({
+  taxonomy,
+  status,
+}: {
+  taxonomy: WindowTranscriptTaxonomy | null
+  status: RetentionWindowTaxonomyStatus | null
+}) {
+  if (!taxonomy) {
+    const message =
+      status == null
+        ? "This window was not part of deep analysis, so no transcript taxonomy was generated."
+        : status === "skipped"
+          ? "Skipped: this window has no transcript to read."
+          : status === "failed"
+            ? "Transcript taxonomy generation failed for this window."
+            : `Transcript taxonomy is ${statusLabel(status).toLowerCase()}.`
+    return (
+      <AccordionSection
+        icon={<TagsIcon className="size-3.5 text-muted-foreground" />}
+        label="Transcript taxonomy"
+      >
+        <p className="text-sm text-muted-foreground">{message}</p>
+      </AccordionSection>
+    )
+  }
+
+  const { detail } = taxonomy
+  const persuasion =
+    detail.rhetoric.persuasionDevices.length > 0
+      ? detail.rhetoric.persuasionDevices.map(formatLabel).join(", ")
+      : "None"
+
+  return (
+    <AccordionSection
+      icon={<TagsIcon className="size-3.5 text-muted-foreground" />}
+      label="Transcript taxonomy"
+    >
+      <p className="rounded-lg bg-muted/40 p-3 text-sm">
+        {taxonomy.momentSummary}
+      </p>
+
+      <TaxonomyGroup label="Content">
+        <Field label="Substance density" value={formatOrdinal(detail.content.substanceDensity)} />
+        <Field label="Concreteness" value={formatOrdinal(detail.content.concreteness)} />
+        <Field label="Novelty" value={formatOrdinal(detail.content.novelty)} />
+        <Field label="Clarity" value={formatOrdinal(detail.content.clarity)} />
+      </TaxonomyGroup>
+
+      <TaxonomyGroup label="Emotion">
+        <Field label="Dominant emotion" value={formatLabel(detail.emotion.dominantEmotion)} />
+        <Field label="Energy" value={formatOrdinal(detail.emotion.energy)} />
+        <Field label="Trajectory" value={formatLabel(detail.emotion.trajectory)} />
+        <Field label="Vulnerability" value={formatOrdinal(detail.emotion.vulnerability)} />
+      </TaxonomyGroup>
+
+      <TaxonomyGroup label="Rhetoric">
+        <Field label="Narrative voice" value={formatLabel(detail.rhetoric.narrativeVoice)} />
+        <Field label="Direct address" value={formatOrdinal(detail.rhetoric.directAddress)} />
+        <Field label="Stakes" value={formatOrdinal(detail.rhetoric.stakes)} />
+        <Field label="Poses question" value={formatBoolean(detail.rhetoric.posesQuestion)} />
+        <Field label="Persuasion devices" value={persuasion} />
+      </TaxonomyGroup>
+
+      <TaxonomyGroup label="Flow">
+        <Field label="Topic shift" value={formatOrdinal(detail.flow.topicShift)} />
+        <Field label="Opens loop" value={formatBoolean(detail.flow.openLoopOpened)} />
+        <Field label="Resolves loop" value={formatBoolean(detail.flow.openLoopResolved)} />
+        <Field label="Has CTA" value={formatBoolean(detail.flow.hasCta)} />
+        <Field label="Filler level" value={formatOrdinal(detail.flow.fillerLevel)} />
+      </TaxonomyGroup>
+
+      <TaxonomyGroup label="Driver">
+        <Field
+          label="Primary engagement driver"
+          value={formatLabel(detail.primaryEngagementDriver)}
+        />
+      </TaxonomyGroup>
+
+      <p className="text-xs text-muted-foreground">
+        {taxonomy.wordCount} words · schema v{taxonomy.schemaVersion} ·{" "}
+        <span className="font-mono">{taxonomy.model}</span>. Scored on this
+        window&apos;s words in isolation, on the same axes as the whole-video
+        script taxonomy.
+      </p>
+    </AccordionSection>
+  )
+}
+
+// A labelled cluster of taxonomy fields, so the read groups the way it is
+// generated (content, emotion, rhetoric, flow) rather than as one flat list.
+function TaxonomyGroup({
+  label,
+  children,
+}: {
+  label: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+        {label}
+      </span>
+      <dl className="flex flex-wrap gap-x-8 gap-y-2 text-sm">{children}</dl>
+    </div>
+  )
 }
 
 function SnapshotsSection({
@@ -1291,12 +1428,20 @@ function SnapshotsSection({
             <TableHead>Frame</TableHead>
             <TableHead>Time</TableHead>
             <TableHead>Scene</TableHead>
+            <TableHead>Shot scale</TableHead>
             <TableHead>Motion</TableHead>
             <TableHead>Camera</TableHead>
             <TableHead>People</TableHead>
             <TableHead>Face</TableHead>
+            <TableHead>Face prom.</TableHead>
+            <TableHead>Eye contact</TableHead>
+            <TableHead>Expression</TableHead>
             <TableHead>Text</TableHead>
+            <TableHead>Text prom.</TableHead>
             <TableHead>Code</TableHead>
+            <TableHead>Contrast</TableHead>
+            <TableHead>Complexity</TableHead>
+            <TableHead>Brightness</TableHead>
             <TableHead>OCR text</TableHead>
             <TableHead className="whitespace-normal">Notable event</TableHead>
             <TableHead className="whitespace-normal">Description</TableHead>
@@ -1331,12 +1476,32 @@ function SnapshotsSection({
                 {analysis ? (
                   <>
                     <TableCell>{formatLabel(analysis.scene)}</TableCell>
+                    <TableCell>{formatOptionalLabel(analysis.shot_scale)}</TableCell>
                     <TableCell>{formatLabel(analysis.motion)}</TableCell>
                     <TableCell>{formatLabel(analysis.camera_movement)}</TableCell>
                     <TableCell>{analysis.people_count}</TableCell>
                     <TableCell>{formatBoolean(analysis.face_visible)}</TableCell>
+                    <TableCell className="tabular-nums">
+                      {formatOrdinal(analysis.face_prominence)}
+                    </TableCell>
+                    <TableCell>
+                      {formatOptionalBoolean(analysis.eye_contact)}
+                    </TableCell>
+                    <TableCell className="tabular-nums">
+                      {formatOrdinal(analysis.expression_intensity)}
+                    </TableCell>
                     <TableCell>{formatBoolean(analysis.contains_text)}</TableCell>
+                    <TableCell className="tabular-nums">
+                      {formatOrdinal(analysis.text_prominence)}
+                    </TableCell>
                     <TableCell>{formatBoolean(analysis.contains_code)}</TableCell>
+                    <TableCell className="tabular-nums">
+                      {formatOrdinal(analysis.color_contrast)}
+                    </TableCell>
+                    <TableCell className="tabular-nums">
+                      {formatOrdinal(analysis.visual_complexity)}
+                    </TableCell>
+                    <TableCell>{formatOptionalLabel(analysis.brightness)}</TableCell>
                     <TableCell className="max-w-40 text-wrap whitespace-normal text-xs text-muted-foreground">
                       {snapshot.ocrText ?? "N/A"}
                     </TableCell>
@@ -1349,7 +1514,7 @@ function SnapshotsSection({
                   </>
                 ) : (
                   <TableCell
-                    colSpan={10}
+                    colSpan={18}
                     className="text-xs text-muted-foreground"
                   >
                     {snapshot.analysisError ??
