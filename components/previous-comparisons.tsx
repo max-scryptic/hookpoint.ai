@@ -190,7 +190,7 @@ export function PreviousComparisons({
         <>
           {/* Filter bar */}
           <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-[12rem] flex-1">
+            <div className="relative w-full sm:w-64">
               <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 type="search"
@@ -217,13 +217,17 @@ export function PreviousComparisons({
                 <ArrowUpDownIcon className="size-4" />
                 {sortLabel}
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
+              <DropdownMenuContent align="start" className="w-auto min-w-[10rem]">
                 <DropdownMenuRadioGroup
                   value={sort}
                   onValueChange={(value) => setSort(value as SortOption)}
                 >
                   {SORT_OPTIONS.map(({ value, label }) => (
-                    <DropdownMenuRadioItem key={value} value={value}>
+                    <DropdownMenuRadioItem
+                      key={value}
+                      value={value}
+                      className="whitespace-nowrap"
+                    >
                       {label}
                     </DropdownMenuRadioItem>
                   ))}
