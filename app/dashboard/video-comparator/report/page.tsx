@@ -1,5 +1,6 @@
+import { Suspense } from "react"
 import Link from "next/link"
-import { ArrowLeftIcon, LockIcon } from "lucide-react"
+import { ArrowLeftIcon, Loader2Icon, LockIcon } from "lucide-react"
 
 import { PackagingComparison } from "@/components/packaging-comparison"
 import { ScriptComparison } from "@/components/script-comparison"
@@ -10,6 +11,7 @@ import {
 import { VideoComparisonTabs } from "@/components/video-comparison-tabs"
 import { buttonVariants } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import { requireAuthenticatedUser } from "@/lib/auth"
 import { getEntitlement } from "@/lib/billing/entitlements"
 import {
@@ -65,6 +67,9 @@ export const maxDuration = 300
 type ActiveComparison = {
   a: string
   b: string
+  // The saved comparison row id, needed to store the written script report on
+  // the lazy backfill path.
+  comparisonId: string
   data: RetentionComparisonData
   packaging: PackagingComparisonData | null
   script: ScriptComparisonData | null
@@ -113,7 +118,12 @@ async function loadActiveComparison(
   // Packaging and script both ride on the same stored analysis; a failure or
   // gap in either must never cost the user the retention comparison, so both
   // are best-effort.
-  const [data, packaging, initialScript, storedReport] = await Promise.all([
+  // Only the fast, already-stored reads happen here so the report shell renders
+  // right away. The written script report can require an expensive one-time
+  // generation for a comparison created before that feature existed; that runs
+  // in a streamed Suspense boundary (ScriptComparisonSection) rather than
+  // blocking the whole page behind the loading skeleton.
+  const [data, packaging, script, scriptReport] = await Promise.all([
     getRetentionComparison(supabase, userId, requestedA, requestedB),
     getPackagingComparison(supabase, userId, requestedA, requestedB).catch(
       (error) => {
@@ -134,35 +144,91 @@ async function loadActiveComparison(
   ])
   if (data == null) return null
 
-  // A comparison generated before the written report existed (or one whose
-  // report generation failed at creation) has no stored report. Regenerate it
-  // once, lazily, and store it so the next open is instant. This also backfills
-  // each video's script taxonomy, so re-read the tables afterward to pick that
-  // up. Best-effort: the rest of the report still renders if this fails.
+  return {
+    a: requestedA,
+    b: requestedB,
+    comparisonId: saved.id,
+    data,
+    packaging,
+    script,
+    scriptReport,
+  }
+}
+
+// The Script tab body, streamed in a Suspense boundary. When the comparison
+// already has a stored written report (every comparison created since that
+// feature shipped), this resolves instantly. When it does not (a comparison
+// generated before the feature, or one whose generation failed at creation),
+// it regenerates the report once, lazily, and stores it so the next open is
+// instant. Running here instead of in loadActiveComparison means the rest of
+// the report renders immediately and only this tab shows a loading state while
+// the report is written, rather than the whole page sitting on the skeleton.
+async function ScriptComparisonSection({
+  userId,
+  comparisonId,
+  a,
+  b,
+  initialScript,
+  storedReport,
+}: {
+  userId: string
+  comparisonId: string
+  a: string
+  b: string
+  initialScript: ScriptComparisonData | null
+  storedReport: ScriptComparisonReport | null
+}) {
   let script = initialScript
   let scriptReport = storedReport
+
   if (scriptReport == null) {
     try {
+      const supabase = await createClient()
       scriptReport = await buildAndStoreScriptComparisonReport(
         supabase,
         userId,
-        saved.id,
-        requestedA,
-        requestedB,
+        comparisonId,
+        a,
+        b,
         { userId },
       )
-      script = await getScriptComparison(
-        supabase,
-        userId,
-        requestedA,
-        requestedB,
-      ).catch(() => initialScript)
+      // The backfill also fills each video's script taxonomy, so re-read the
+      // deterministic tables to pick that up.
+      script = await getScriptComparison(supabase, userId, a, b).catch(
+        () => initialScript,
+      )
     } catch (error) {
       console.error("Failed to backfill script comparison report", error)
     }
   }
 
-  return { a: requestedA, b: requestedB, data, packaging, script, scriptReport }
+  if (script || scriptReport) {
+    return <ScriptComparison data={script} report={scriptReport} />
+  }
+
+  return (
+    <Card className="p-6 text-sm text-muted-foreground">
+      No script read is available for these two videos yet. It is generated from
+      both videos&apos; transcripts when the comparison is created, and will
+      fill in shortly.
+    </Card>
+  )
+}
+
+// Shown while ScriptComparisonSection generates a missing report. Comparisons
+// that already have a stored report never see this: their section resolves
+// before the first paint.
+function ScriptComparisonFallback() {
+  return (
+    <Card className="flex flex-col gap-4 p-6">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2Icon className="size-4 animate-spin" />
+        Writing the script head-to-head from both transcripts...
+      </div>
+      <Skeleton className="h-24 w-full" />
+      <Skeleton className="h-48 w-full" />
+    </Card>
+  )
 }
 
 async function loadReport(
@@ -282,18 +348,16 @@ export default async function Page({
                 )
               }
               script={
-                result.active.script || result.active.scriptReport ? (
-                  <ScriptComparison
-                    data={result.active.script}
-                    report={result.active.scriptReport}
+                <Suspense fallback={<ScriptComparisonFallback />}>
+                  <ScriptComparisonSection
+                    userId={user.id}
+                    comparisonId={result.active.comparisonId}
+                    a={result.active.a}
+                    b={result.active.b}
+                    initialScript={result.active.script}
+                    storedReport={result.active.scriptReport}
                   />
-                ) : (
-                  <Card className="p-6 text-sm text-muted-foreground">
-                    No script read is available for these two videos yet. It is
-                    generated from both videos&apos; transcripts when the
-                    comparison is created, and will fill in shortly.
-                  </Card>
-                )
+                </Suspense>
               }
             />
           </>
