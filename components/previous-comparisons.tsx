@@ -76,7 +76,7 @@ function VideoCell({
 }) {
   const label = title ?? "Untitled video"
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-start gap-3">
       <div className="relative aspect-video w-24 shrink-0 overflow-hidden rounded-md bg-muted sm:w-28">
         {thumbnailUrl ? (
           <Image
