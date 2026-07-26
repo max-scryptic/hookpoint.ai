@@ -31,6 +31,7 @@ export const LLM_CALL_TYPES = [
   "snapshot",
   "audio",
   "event_synthesis",
+  "transcript_taxonomy",
 ] as const
 
 export type LlmCallType = (typeof LLM_CALL_TYPES)[number]
@@ -45,6 +46,7 @@ export const LLM_CALL_TYPE_LABELS: Record<LlmCallType, string> = {
   snapshot: "Deep video analysis · snapshot",
   audio: "Deep video analysis · audio",
   event_synthesis: "Deep video analysis · event synthesis",
+  transcript_taxonomy: "Deep video analysis · transcript taxonomy",
 }
 
 // The two spend buckets a video's costs roll up into. "Light analysis" is the
@@ -58,6 +60,7 @@ const DEEP_LLM_CALL_TYPES = new Set<LlmCallType>([
   "snapshot",
   "audio",
   "event_synthesis",
+  "transcript_taxonomy",
 ])
 
 // Classifies a logged cost into its light/deep bucket. Qencode transcodes only

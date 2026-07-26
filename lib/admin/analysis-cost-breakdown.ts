@@ -31,6 +31,7 @@ export const ANALYSIS_COST_SECTION_LABELS: Record<AnalysisCostSection, string> =
     retention_attribution: "Retention attribution",
     snapshot: "Snapshots (vision)",
     audio: "Audio",
+    transcript_taxonomy: "Transcript taxonomy",
     event_synthesis: "Event synthesis",
     qencode_transcode: "Transcoding",
   }
@@ -76,6 +77,7 @@ const SECTION_ORDER: AnalysisCostSection[] = [
   "qencode_transcode",
   "snapshot",
   "audio",
+  "transcript_taxonomy",
   "event_synthesis",
 ]
 

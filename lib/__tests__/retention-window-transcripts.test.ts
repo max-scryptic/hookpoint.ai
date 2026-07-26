@@ -83,7 +83,42 @@ describe("saveRetentionWindowTranscripts", () => {
       from_seconds: 30,
       to_seconds: 70,
       transcript: "leading into the drop the drop-off moment itself",
+      // A lone window is inside the deep-analysis budget, so it is marked for a
+      // per-window transcript taxonomy, with any prior read cleared.
+      taxonomy_status: "pending",
+      taxonomy: null,
+      taxonomy_error: null,
+      taxonomy_model: null,
     })
+  })
+
+  it("only marks the deep-analysis-selected windows for a taxonomy", async () => {
+    const previous = process.env.DEEP_ANALYSIS_MAX_WINDOWS
+    process.env.DEEP_ANALYSIS_MAX_WINDOWS = "1"
+    try {
+      const { supabase, upserts } = makeFakeSupabase()
+      // With a budget of one, the mandatory hook is kept and the drop-off is
+      // not — so only the hook's row is pended for a taxonomy; the drop-off's
+      // stays null ("not part of deep analysis").
+      const hook = makeWindow({ id: "hook-1", kind: "hook", windowIndex: 0 })
+      const dropOff = makeWindow({ id: "drop-1", kind: "drop_off" })
+
+      await saveRetentionWindowTranscripts(
+        supabase,
+        "user-1",
+        "av-1",
+        [hook, dropOff],
+        cues,
+      )
+
+      const rows = upserts["retention_window_transcripts"]
+      const byId = new Map(rows.map((row) => [row.retention_window_id, row]))
+      expect(byId.get("hook-1")).toMatchObject({ taxonomy_status: "pending" })
+      expect(byId.get("drop-1")).toMatchObject({ taxonomy_status: null })
+    } finally {
+      if (previous == null) delete process.env.DEEP_ANALYSIS_MAX_WINDOWS
+      else process.env.DEEP_ANALYSIS_MAX_WINDOWS = previous
+    }
   })
 
   it("skips windows with no analysis window and prunes any stale row", async () => {

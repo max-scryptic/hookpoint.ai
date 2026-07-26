@@ -48,7 +48,11 @@ import {
   getRetentionWindowEvents,
   type RetentionWindowEvent,
 } from "@/lib/retention-window-events"
-import { getRetentionWindowTranscripts } from "@/lib/retention-window-transcripts"
+import {
+  getRetentionWindowTranscripts,
+  type RetentionWindowTaxonomyStatus,
+} from "@/lib/retention-window-transcripts"
+import type { WindowTranscriptTaxonomy } from "@/lib/retention-window-transcript-taxonomy"
 import {
   getRetentionWindows,
   type PersistedRetentionWindow,
@@ -93,6 +97,14 @@ export interface WindowEvidence {
   recommendations: DeepAnalysisRecommendation[]
   suppressedInsights: SuppressedRetentionWindowEvent[]
   transcript: string | null
+  // This window's structured transcript read (lib/retention-window-transcript-taxonomy.ts),
+  // when one has been generated for it. Null for windows outside the deep-analysis
+  // set, or whose taxonomy is still pending / failed / was skipped (empty text).
+  transcriptTaxonomy: WindowTranscriptTaxonomy | null
+  // The lifecycle of that read, so the oversight view can distinguish "not part
+  // of deep analysis" (null) from pending / failed / skipped even when there is
+  // no taxonomy JSON to show.
+  transcriptTaxonomyStatus: RetentionWindowTaxonomyStatus | null
   snapshots: DeepAnalysisSnapshotView[]
   audio: DeepAnalysisAudioView | null
   // Deterministic cut/freeze/black metrics for this window's analysis range
@@ -225,6 +237,14 @@ export async function getDeepAnalysisEvidence(
   const transcriptByWindow = new Map(
     transcripts.map((t) => [t.retentionWindowId, t.transcript]),
   )
+  const transcriptTaxonomyByWindow = new Map(
+    transcripts
+      .filter((t) => t.taxonomyStatus === "ready" && t.taxonomy != null)
+      .map((t) => [t.retentionWindowId, t.taxonomy as WindowTranscriptTaxonomy]),
+  )
+  const transcriptTaxonomyStatusByWindow = new Map(
+    transcripts.map((t) => [t.retentionWindowId, t.taxonomyStatus]),
+  )
 
   const snapshotsByWindow = new Map<string, RetentionWindowSnapshot[]>()
   for (const snapshot of snapshots) {
@@ -341,6 +361,9 @@ export async function getDeepAnalysisEvidence(
       recommendations,
       suppressedInsights: insightEvaluation.suppressed,
       transcript,
+      transcriptTaxonomy: transcriptTaxonomyByWindow.get(window.id) ?? null,
+      transcriptTaxonomyStatus:
+        transcriptTaxonomyStatusByWindow.get(window.id) ?? null,
       snapshots: snapshotViews,
       audio: audioView,
       editing,

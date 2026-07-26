@@ -50,6 +50,7 @@ import {
 } from "@/lib/retention-window-events"
 import { getRetentionAttribution } from "@/lib/retention-attributions"
 import { getRetentionWindowTranscripts } from "@/lib/retention-window-transcripts"
+import type { WindowTranscriptTaxonomy } from "@/lib/retention-window-transcript-taxonomy"
 import { getRetentionWindows } from "@/lib/retention-windows"
 import { transcriptForSegment, type TranscriptCue } from "@/lib/youtube/youtube"
 import type { MotionBucket } from "@/lib/media/scene-detection"
@@ -213,6 +214,13 @@ export interface WindowEvidence {
   // restating a cause the free tier already gave. Null when no script
   // attribution exists yet for this video.
   scriptExplanation: string | null
+  // This window's own structured transcript read (lib/retention-window-transcript-taxonomy.ts):
+  // what the words in this span say and how they feel, on the same closed axes
+  // the whole-video script taxonomy uses. Best-effort context, never a
+  // prerequisite — null when it hasn't been generated (or failed/was skipped),
+  // and synthesis never waits on it. Lets an event lean on, say, a topic shift
+  // or an energy dip the words carry without re-deriving it from raw transcript.
+  transcriptTaxonomy: WindowTranscriptTaxonomy | null
   editing: {
     cutCount: number
     cutsPerMinute: number | null
@@ -394,6 +402,13 @@ export async function synthesizeRetentionWindowEvents(
   )
   const transcriptByWindow = new Map(
     transcripts.map((t) => [t.retentionWindowId, t.transcript]),
+  )
+  // Only ready taxonomies are handed to the synthesizer — a pending/failed/
+  // skipped one contributes nothing and must never masquerade as a read.
+  const transcriptTaxonomyByWindow = new Map(
+    transcripts
+      .filter((t) => t.taxonomyStatus === "ready" && t.taxonomy != null)
+      .map((t) => [t.retentionWindowId, t.taxonomy as WindowTranscriptTaxonomy]),
   )
 
   // The script-only explanation the user was already shown for each window,
@@ -634,6 +649,8 @@ export async function synthesizeRetentionWindowEvents(
             scriptExplanationByWindow.get(
               `${window.kind}:${window.windowIndex}`,
             ) ?? null,
+          transcriptTaxonomy:
+            transcriptTaxonomyByWindow.get(job.retentionWindowId) ?? null,
           editing: {
             cutCount: metrics.cutCount,
             cutsPerMinute: metrics.cutsPerMinute,
@@ -748,6 +765,7 @@ const EVENT_SYNTHESIS_INSTRUCTIONS = [
   "Judge editing and pacing as deviations from the given baseline, not in absolute terms: a static, low-cut, low-energy stretch only explains a drop when it is slower or flatter than this video's own norm, and a burst of cuts or rising energy only explains a gain when it is livelier than the norm. Where a metric drives an event, reference the deviation in the narrative (for example 'your cuts fall to about 2 per minute here versus roughly 11 across the video').",
   "For non-hook windows you are also given contrast: a target range covering the detected retention episode and the immediately preceding control range. It contains editing, deterministic audio, and deterministic visual-motion summaries for both ranges, target-minus-control deltas, and chunkIndex lists identifying which visual frames belong to each range. Motion is normalised 0..1 frame difference, so use it comparatively rather than assigning a universal good/bad threshold. Prefer this local comparison over a generic absolute judgment. Only attribute a change to editing, audio, speech rate, motion, or visuals when the target actually differs meaningfully from the control; unchanged evidence is evidence against that hypothesis. If the target has no sampled visual frame, audio coverage, or motion coverage, do not infer a change from missing data.",
   "You may also be given scriptExplanation: the transcript-only explanation the user has already been shown for this window. Your job is to add what the words alone cannot reveal. Only surface an event that ADDS a non-verbal cause (a cut, a freeze or dead air, an energy or pacing shift, a graphic appearing or disappearing) or that CONTRADICTS the script explanation. Never emit an event that merely restates scriptExplanation. When scriptExplanation is null, none has been generated yet, so surface the genuinely notable multimodal moments as usual.",
+  "You may also be given transcriptTaxonomy: a structured read of this window's own spoken words (content density and concreteness, dominant emotion and energy and its trajectory, narrative voice and stakes, and flow signals such as topicShift, openLoopOpened/openLoopResolved and hasCta). Use it as corroborating context for what the words are doing, for example when a high topicShift or an energy dip lines up with a drop, or an opened loop lines up with a gain. It is a read of the transcript, not an independent modality, so never treat it as separate evidence from the transcript itself, and never surface an event on the taxonomy alone; the multimodal evidence still decides whether an event exists. It may be null when it has not been generated.",
   "You may also be given channelHistory: a compact summary of the retention events previously synthesized across this uploader's other deeply analysed videos, covering how many videos it draws on, which event types recur in their hooks, drop-offs, and gains (with how many distinct videos each recurs in), and a few example narratives. Treat it as prior context about what habitually moves retention on this channel: when the local evidence supports an event that matches a recurring channel pattern, note the recurrence in the narrative (for example 'a pattern that shows up across your other videos as well') and let the convergence nudge confidence up slightly. Never surface an event on channel history alone, and never let history suppress a well-evidenced local event that breaks the pattern; the local evidence always decides whether an event exists. channelHistory is null when too few other videos have been deeply analysed to establish a trend.",
   "For each event, give: event_type (the best-fitting category), timestamp_seconds (must fall within the window's fromSeconds/toSeconds), a one- or two-sentence narrative tying the evidence to the retention change, primary_evidence (which evidence source most explains it; use 'combined' only when multiple sources genuinely converge on the same moment), and confidence (0..1: how strongly the supplied evidence supports both that this moment happened AND that it plausibly moved retention). Reserve confidence above 0.7 for moments where the evidence clearly converges, for example a hard cut plus an energy drop plus a matching retention step.",
   "Only surface events actually supported by the evidence given. Never invent frame content, transcript text, or audio characteristics that weren't provided. Prefer a few high-confidence, genuinely new events over many weak ones; if nothing clears a modest bar of being both well-supported and new, return an empty events array rather than padding.",

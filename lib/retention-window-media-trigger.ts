@@ -1,8 +1,9 @@
 // Best-effort kickoff for retention-window media extraction, immediately
-// followed by AI analysis of whatever extraction just finished, immediately
-// followed by cross-modal event synthesis for whichever windows' evidence
-// just finished settling. Called from whichever of the two independent async
-// processes finishes second for a given video:
+// followed by AI analysis of whatever extraction just finished, then a
+// structured transcript read per window, immediately followed by cross-modal
+// event synthesis for whichever windows' evidence just finished settling.
+// Called from whichever of the two independent async processes finishes second
+// for a given video:
 //   • /api/analyze, right after the retention windows (and their pending
 //     audio/scene-cue-scan/event-synthesis rows) are saved — the source
 //     video may already be uploaded and normalised by then.
@@ -25,6 +26,7 @@
 import { after } from "next/server"
 
 import { analyzeRetentionWindowMedia } from "@/lib/retention-window-media-analysis"
+import { analyzeRetentionWindowTranscriptTaxonomies } from "@/lib/retention-window-transcript-taxonomy"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getStorageProvider } from "@/lib/storage/provider"
 import {
@@ -62,6 +64,16 @@ export function triggerRetentionWindowMediaExtraction(
       )
       await runObservedPipelineStage(admin, run, "media_analysis", () =>
         analyzeRetentionWindowMedia(admin, file.userId, file.analysedVideoId),
+      )
+      // Runs before event synthesis so the synthesizer can fold each window's
+      // structured transcript read into its evidence. Text-only and best-effort
+      // per row, like the media analysis before it.
+      await runObservedPipelineStage(admin, run, "transcript_taxonomy", () =>
+        analyzeRetentionWindowTranscriptTaxonomies(
+          admin,
+          file.userId,
+          file.analysedVideoId,
+        ),
       )
       await runObservedPipelineStage(admin, run, "event_synthesis", () =>
         synthesizeRetentionWindowEvents(admin, file.userId, file.analysedVideoId),
