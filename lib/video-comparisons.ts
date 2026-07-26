@@ -14,13 +14,15 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import type { ScriptComparisonReport } from "@/lib/script-comparison-report"
 
 // A row of the compare page's "previous comparisons" list: the saved pair plus
-// the two titles, resolved for display.
+// the two titles and thumbnails, resolved for display.
 export interface SavedComparison {
   id: string
   videoAId: string
   videoBId: string
   videoATitle: string | null
   videoBTitle: string | null
+  videoAThumbnailUrl: string | null
+  videoBThumbnailUrl: string | null
   createdAt: string
 }
 
@@ -71,7 +73,7 @@ export async function listSavedComparisons(
   ]
   const { data: titleData, error: titleError } = await supabase
     .from("analysed_videos")
-    .select("id, video_title")
+    .select("id, video_title, thumbnail_url:video_details->>thumbnailUrl")
     .eq("user_id", userId)
     .in("id", videoIds)
 
@@ -81,18 +83,27 @@ export async function listSavedComparisons(
     )
   }
 
-  const titleById = new Map(
-    ((titleData ?? []) as Array<{ id: string; video_title: string | null }>).map(
-      (row) => [row.id, row.video_title],
-    ),
+  const videoById = new Map(
+    (
+      (titleData ?? []) as Array<{
+        id: string
+        video_title: string | null
+        thumbnail_url: string | null
+      }>
+    ).map((row) => [
+      row.id,
+      { title: row.video_title, thumbnailUrl: row.thumbnail_url },
+    ]),
   )
 
   return rows.map((row) => ({
     id: row.id,
     videoAId: row.video_a_id,
     videoBId: row.video_b_id,
-    videoATitle: titleById.get(row.video_a_id) ?? null,
-    videoBTitle: titleById.get(row.video_b_id) ?? null,
+    videoATitle: videoById.get(row.video_a_id)?.title ?? null,
+    videoBTitle: videoById.get(row.video_b_id)?.title ?? null,
+    videoAThumbnailUrl: videoById.get(row.video_a_id)?.thumbnailUrl ?? null,
+    videoBThumbnailUrl: videoById.get(row.video_b_id)?.thumbnailUrl ?? null,
     createdAt: row.created_at,
   }))
 }
@@ -129,6 +140,8 @@ export async function findSavedComparison(
     videoBId: row.video_b_id,
     videoATitle: null,
     videoBTitle: null,
+    videoAThumbnailUrl: null,
+    videoBThumbnailUrl: null,
     createdAt: row.created_at,
   }
 }
@@ -208,6 +221,8 @@ export async function createSavedComparison(
     videoBId: row.video_b_id,
     videoATitle: null,
     videoBTitle: null,
+    videoAThumbnailUrl: null,
+    videoBThumbnailUrl: null,
     createdAt: row.created_at,
   }
 }
