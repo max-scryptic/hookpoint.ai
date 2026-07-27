@@ -1151,7 +1151,7 @@ export function ChannelTrendsLocked() {
         <h2 className="text-base font-semibold">
           Cross-video intelligence is a paid feature
         </h2>
-        <p className="mt-1 max-w-prose text-sm text-muted-foreground">
+        <p className="mt-1 text-sm text-muted-foreground">
           On Starter and Pro, every deep analysis adds its retention events to
           a private library of your content. This page then surfaces the
           trends that repeat across your channel: what loses viewers, what

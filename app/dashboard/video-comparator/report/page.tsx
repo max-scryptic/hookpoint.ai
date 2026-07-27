@@ -389,7 +389,7 @@ export default async function Page({
               <h2 className="text-base font-semibold">
                 Video comparison is a paid feature
               </h2>
-              <p className="mt-1 max-w-prose text-sm text-muted-foreground">
+              <p className="mt-1 text-sm text-muted-foreground">
                 On Starter and Pro, any two analysed videos can be compared side
                 by side: where their retention curves diverge, how their hooks
                 stack up, and the event evidence for what happened in each
