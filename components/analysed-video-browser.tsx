@@ -509,9 +509,6 @@ export function AnalysedVideoBrowser({
                 <TableHead className="hidden px-4 py-3 text-right text-accent-foreground sm:table-cell">
                   Subs gained
                 </TableHead>
-                <TableHead className="hidden px-4 py-3 text-right text-accent-foreground lg:table-cell">
-                  Comments
-                </TableHead>
                 <TableHead className="hidden px-4 py-3 text-accent-foreground sm:table-cell">
                   Analysed
                 </TableHead>
@@ -592,9 +589,6 @@ export function AnalysedVideoBrowser({
                   </TableCell>
                   <TableCell className="hidden px-4 py-3 align-top text-right text-sm tabular-nums text-muted-foreground sm:table-cell">
                     {formatCount(video.subscribersGained)}
-                  </TableCell>
-                  <TableCell className="hidden px-4 py-3 align-top text-right text-sm tabular-nums text-muted-foreground lg:table-cell">
-                    {formatCount(video.commentCount)}
                   </TableCell>
                   <TableCell className="hidden px-4 py-3 align-top text-sm text-muted-foreground sm:table-cell">
                     {formatAnalysedAt(dateAnalysed)}
