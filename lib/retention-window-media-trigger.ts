@@ -67,14 +67,30 @@ export function triggerRetentionWindowMediaExtraction(
       )
       // Runs before event synthesis so the synthesizer can fold each window's
       // structured transcript read into its evidence. Text-only and best-effort
-      // per row, like the media analysis before it.
-      await runObservedPipelineStage(admin, run, "transcript_taxonomy", () =>
-        analyzeRetentionWindowTranscriptTaxonomies(
-          admin,
-          file.userId,
-          file.analysedVideoId,
-        ),
-      )
+      // per row, like the media analysis before it. Crucially, the taxonomy is
+      // pure ENRICHMENT for synthesis: WindowEvidence.transcriptTaxonomy is
+      // nullable and the synthesizer treats a missing read as "not generated,"
+      // never a prerequisite. So a failure of this whole stage (a transient
+      // OpenAI outage, or — as shipped once — a schema drift where its columns
+      // don't yet exist) must not abort the pipeline before the events
+      // themselves are synthesized. Record the stage failure (runObservedPipeline
+      // Stage already persisted it into the run's stages) and continue to
+      // synthesis, rather than letting a re-thrown error skip the core step and
+      // strand every window's synthesis job 'pending' with zero events.
+      try {
+        await runObservedPipelineStage(admin, run, "transcript_taxonomy", () =>
+          analyzeRetentionWindowTranscriptTaxonomies(
+            admin,
+            file.userId,
+            file.analysedVideoId,
+          ),
+        )
+      } catch (taxonomyError) {
+        console.error(
+          "Transcript taxonomy stage failed; continuing to event synthesis",
+          taxonomyError,
+        )
+      }
       await runObservedPipelineStage(admin, run, "event_synthesis", () =>
         synthesizeRetentionWindowEvents(admin, file.userId, file.analysedVideoId),
       )
