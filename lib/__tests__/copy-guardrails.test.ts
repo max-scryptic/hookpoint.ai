@@ -18,6 +18,7 @@ const CHANNEL_TRENDS_SOURCE_FILES = [
   "app/dashboard/video-comparator/report/page.tsx",
   "components/channel-trends.tsx",
   "components/channel-trends-copy.ts",
+  "components/channel-trends-tabs.tsx",
   "components/event-type-badge.tsx",
   "components/packaging-comparison.tsx",
   "components/previous-comparisons.tsx",
