@@ -43,6 +43,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { cleanCopy } from "@/lib/copy-guardrails"
 import type { PacingAnalysis } from "@/lib/pacing-analysis"
 import {
   prioritizePackagingImprovements,
@@ -414,7 +415,7 @@ function ScriptFeedbackBody({
 }) {
   return (
     <>
-      <p className="text-sm">{attribution.explanation}</p>
+      <p className="text-sm">{cleanCopy(attribution.explanation)}</p>
       {attribution.tip && (
         <div className="mt-2">
           <TryCallout>{attribution.tip}</TryCallout>
@@ -446,7 +447,7 @@ function MultimodalInsightBody({
     <div className="flex gap-2 rounded-lg border bg-muted/30 p-3 text-sm">
       <SparklesIcon className="mt-0.5 size-4 shrink-0 text-violet-500" />
       <div>
-        <p>{insight.narrative}</p>
+        <p>{cleanCopy(insight.narrative)}</p>
         <p className="mt-1 text-xs text-muted-foreground">
           Multimodal evidence · {insight.evidenceQuality} confidence
         </p>
@@ -477,7 +478,7 @@ function ActionableRecommendationBody({
     <>
       <TryCallout>{recommendation.action}</TryCallout>
       <p className="mt-1 text-xs text-muted-foreground">
-        {recommendation.expectedPurpose}
+        {cleanCopy(recommendation.expectedPurpose)}
       </p>
     </>
   )
@@ -497,7 +498,7 @@ function DeepFeedbackBody({
 }) {
   return (
     <>
-      <p className="text-sm">{insight.narrative}</p>
+      <p className="text-sm">{cleanCopy(insight.narrative)}</p>
       {recommendation && (
         <div className="mt-2">
           <TryCallout>{recommendation.action}</TryCallout>
@@ -962,7 +963,9 @@ function PackagingAlignmentSection({
     <div className="flex flex-col gap-4">
       <div className="rounded-xl border bg-card p-4">
         <h3 className="text-sm font-medium">Alignment Summary</h3>
-        <p className="mt-2 text-sm text-muted-foreground">{alignment.overall}</p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {cleanCopy(alignment.overall)}
+        </p>
       </div>
 
       {alignment.components ? (
@@ -1099,7 +1102,7 @@ function PackagingComponentCard({
           )}
           {feedback.summary && (
             <span className="text-sm text-muted-foreground">
-              {feedback.summary}
+              {cleanCopy(feedback.summary)}
             </span>
           )}
         </div>
@@ -1114,7 +1117,7 @@ function PackagingComponentCard({
         <div className="flex flex-col gap-2">
           {feedback.whatWorked.slice(0, 1).map((point, index) => (
             <p key={index} className="text-sm">
-              {point}
+              {cleanCopy(point)}
             </p>
           ))}
           {feedback.whatCouldBeBetter.slice(0, 1).map((point, index) => (
@@ -1149,7 +1152,7 @@ function PointsCard({
           {points.map((point, index) => (
             <li key={index} className="flex gap-2 text-sm">
               <span className={`mt-1.5 size-1.5 shrink-0 rounded-full ${dot}`} />
-              <span>{point}</span>
+              <span>{cleanCopy(point)}</span>
             </li>
           ))}
         </ul>

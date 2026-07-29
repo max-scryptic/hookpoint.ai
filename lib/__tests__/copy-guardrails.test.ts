@@ -3,7 +3,7 @@ import { join } from "node:path"
 
 import { describe, expect, it } from "vitest"
 
-import { stripEmDashes } from "@/lib/copy-guardrails"
+import { cleanCopy, stripEmDashes } from "@/lib/copy-guardrails"
 
 // GUARDRAIL: the Channel Trends page must never render an em dash (U+2014)
 // or an en dash (U+2013), in hard-coded copy or comments alike. Hyphens are
@@ -61,5 +61,39 @@ describe("channel trends copy guardrails", () => {
     expect(stripEmDashes("a plain hyphen - stays put")).toBe(
       "a plain hyphen - stays put",
     )
+  })
+})
+
+describe("cleanCopy", () => {
+  it("strips a leaked JSON structural artifact off the end of a tip", () => {
+    expect(
+      cleanCopy(
+        'Make the title more descriptive, e.g., "THE MINER MADE IT OUT THE MINE: Reaching Arena 16."]},',
+      ),
+    ).toBe(
+      'Make the title more descriptive, e.g., "THE MINER MADE IT OUT THE MINE: Reaching Arena 16."',
+    )
+  })
+
+  it("strips leaked braces and brackets off either end", () => {
+    expect(cleanCopy("{Tighten the hook.")).toBe("Tighten the hook.")
+    expect(cleanCopy("Tighten the hook.}")).toBe("Tighten the hook.")
+    expect(cleanCopy("Tighten the hook.]}")).toBe("Tighten the hook.")
+  })
+
+  it("leaves ordinary sentence punctuation untouched", () => {
+    expect(cleanCopy("Keep it short, direct, and clear.")).toBe(
+      "Keep it short, direct, and clear.",
+    )
+    expect(cleanCopy("Ask yourself: does the promise land?")).toBe(
+      "Ask yourself: does the promise land?",
+    )
+  })
+
+  it("also removes em dashes and collapses runaway whitespace", () => {
+    expect(cleanCopy("pace drops — viewers   leave")).toBe(
+      "pace drops - viewers leave",
+    )
+    expect(cleanCopy("  Trim the intro.  ")).toBe("Trim the intro.")
   })
 })
