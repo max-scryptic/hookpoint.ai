@@ -3,7 +3,7 @@
 import { format } from "date-fns"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ExternalLinkIcon } from "lucide-react"
+import { ExternalLinkIcon, Loader2Icon } from "lucide-react"
 
 import type { AdminVideoAnalysis } from "@/lib/admin/video-analysis"
 import {
@@ -51,6 +51,33 @@ function DateCell({ value }: { value: string | null }) {
         format(new Date(value), "d MMM yyyy, HH:mm")
       ) : (
         <span className="text-muted-foreground">—</span>
+      )}
+    </TableCell>
+  )
+}
+
+// The "Raw file uploaded" cell: the upload timestamp, plus a spinner while the
+// deep-analysis pipeline is still running so an admin can see at a glance which
+// videos are mid-analysis. Opening the row shows the per-stage breakdown.
+function RawFileCell({
+  uploadedAt,
+  processing,
+}: {
+  uploadedAt: string | null
+  processing: boolean
+}) {
+  return (
+    <TableCell className="px-4 py-3 text-sm text-muted-foreground">
+      {uploadedAt ? (
+        format(new Date(uploadedAt), "d MMM yyyy, HH:mm")
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      )}
+      {processing && (
+        <span className="mt-1 flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-500">
+          <Loader2Icon className="size-3 animate-spin" />
+          Processing…
+        </span>
       )}
     </TableCell>
   )
@@ -150,7 +177,10 @@ export function AdminVideoAnalysesTable({
                 </TableCell>
                 <DateCell value={video.dateAnalysed} />
                 <CostCell value={video.lightCostUsd} />
-                <DateCell value={video.rawFileUploadedAt} />
+                <RawFileCell
+                  uploadedAt={video.rawFileUploadedAt}
+                  processing={video.processing}
+                />
                 <CostCell value={video.deepCostUsd} />
                 <TableCell className="px-4 py-3 text-right tabular-nums">
                   {video.eventCount > 0 ? (

@@ -4,6 +4,8 @@ import {
   type CostType,
   type LlmCallType,
 } from "@/lib/llm-call-types"
+import { listProcessingAnalysedVideoIds } from "@/lib/retention-window-media-progress"
+import type { NormalisationStatus } from "@/lib/source-files/source-files"
 import type { VideoDetails } from "@/lib/youtube/youtube"
 
 // Read-side helper for the admin user-detail "Video analysis" tab. Uses the
@@ -20,6 +22,10 @@ export type AdminVideoAnalysis = {
   // When the user uploaded the raw source file for this video (the prerequisite
   // for deep analysis), or null when no raw file has been uploaded yet.
   rawFileUploadedAt: string | null
+  // Whether the deep-analysis pipeline is still running for this video — the raw
+  // file has landed but the deeper analysis hasn't finished. Drives the admin
+  // table's "Processing…" spinner.
+  processing: boolean
   // Retention-window events synthesized for this video (0 when it has only had
   // light analysis, or deep analysis hasn't produced events yet).
   eventCount: number
@@ -55,7 +61,7 @@ export async function getUserVideoAnalyses(
       .eq("user_id", userId),
     supabase
       .from("source_files")
-      .select("analysed_video_id, created_at")
+      .select("analysed_video_id, created_at, upload_status, normalisation_status")
       .eq("user_id", userId),
   ])
 
@@ -112,13 +118,40 @@ export async function getUserVideoAnalyses(
 
   // Map each video to when its raw source file was uploaded. There's one source
   // file per analysed video, so the created_at doubles as the upload timestamp.
+  // Ready source files are also collected so their deep-analysis progress can be
+  // resolved in one bulk query below.
   const rawFileUploads = new Map<string, string>()
+  const readyFiles: {
+    analysedVideoId: string
+    normalisationStatus: NormalisationStatus
+  }[] = []
   for (const row of (sourceFiles.error ? [] : (sourceFiles.data ?? [])) as {
     analysed_video_id: string | null
     created_at: string
+    upload_status: string
+    normalisation_status: NormalisationStatus
   }[]) {
     if (!row.analysed_video_id) continue
     rawFileUploads.set(row.analysed_video_id, row.created_at)
+    if (row.upload_status === "ready") {
+      readyFiles.push({
+        analysedVideoId: row.analysed_video_id,
+        normalisationStatus: row.normalisation_status,
+      })
+    }
+  }
+
+  // Which of the ready-file videos are still being deep-analysed. Best-effort —
+  // a failure here just leaves every row un-flagged rather than sinking the tab.
+  let processingIds = new Set<string>()
+  try {
+    processingIds = await listProcessingAnalysedVideoIds(
+      supabase,
+      userId,
+      readyFiles,
+    )
+  } catch (error) {
+    console.error("Failed to load deep-analysis processing status", error)
   }
 
   return ((videos.data ?? []) as {
@@ -134,6 +167,7 @@ export async function getUserVideoAnalyses(
       title: row.video_title,
       dateAnalysed: row.date_analysed,
       rawFileUploadedAt: rawFileUploads.get(row.id) ?? null,
+      processing: processingIds.has(row.id),
       eventCount: eventCounts.get(row.id) ?? 0,
       lightCostUsd: totals?.light ?? 0,
       deepCostUsd: totals?.deep ?? 0,

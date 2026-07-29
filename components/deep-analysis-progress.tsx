@@ -9,7 +9,10 @@ import {
 } from "lucide-react"
 
 import type { DeepAnalysisPipelineRunSummary } from "@/lib/deep-analysis-pipeline-runs"
-import type { DeepAnalysisProgress as ProgressResponse } from "@/lib/retention-window-media-progress"
+import type {
+  DeepAnalysisProgress as ProgressResponse,
+  DeepAnalysisStages,
+} from "@/lib/retention-window-media-progress"
 
 const POLL_INTERVAL_MS = 4000
 
@@ -126,6 +129,29 @@ export function useDeepAnalysisProgress(videoId: string): DeepAnalysisStatus {
   return { analysing, failed, progress }
 }
 
+// The bare per-stage checklist. Presentational only: given a stage snapshot it
+// renders each labelled stage with its status icon. Shared by the source-file
+// card's live progress list (below) and the admin video-detail view, so both
+// read the pipeline's stages the same way.
+export function DeepAnalysisStageChecklist({
+  stages,
+  title = "Conducting deeper analysis…",
+}: {
+  stages: DeepAnalysisStages
+  title?: string
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-sm font-medium">{title}</p>
+      <ul className="flex flex-col gap-1.5">
+        {STAGE_LABELS.map(({ key, label }) => (
+          <StageRow key={key} label={label} status={stages[key]} />
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 // The per-stage checklist rendered under the source-file card while deep
 // analysis runs. Presentational only — it reads the status the card already
 // polled. Renders nothing unless there's a live, fully-detailed breakdown to
@@ -145,13 +171,8 @@ export function DeepAnalysisProgressList({
   }
 
   return (
-    <div className="mt-4 flex flex-col gap-2 border-t pt-4">
-      <p className="text-sm font-medium">Conducting deeper analysis…</p>
-      <ul className="flex flex-col gap-1.5">
-        {STAGE_LABELS.map(({ key, label }) => (
-          <StageRow key={key} label={label} status={progress.stages![key]} />
-        ))}
-      </ul>
+    <div className="mt-4 border-t pt-4">
+      <DeepAnalysisStageChecklist stages={progress.stages} />
     </div>
   )
 }

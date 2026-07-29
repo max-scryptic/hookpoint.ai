@@ -186,6 +186,68 @@ export function shouldResumeDeepAnalysis(progress: DeepAnalysisProgress): boolea
   return progress.active && progress.stages != null && !progress.complete
 }
 
+// Given a user's ready source files, returns the set of analysed-video ids whose
+// deep-analysis pipeline is still in flight — i.e. the raw file has landed but
+// the deeper analysis hasn't finished. This is the cheap, list-friendly answer
+// to "is this video still processing?" without computing the full per-stage
+// breakdown (getDeepAnalysisProgress) for every video, which would be one fan-out
+// of queries per video.
+//
+// It leans on two facts about the pipeline: transcoding (normalisation) is its
+// first stage, and event synthesis is its terminal one — and synthesis jobs are
+// created eagerly at analyse time (see createPendingRetentionWindowEventSynthesis),
+// so a settled set of synthesis rows means every upstream stage that fed them has
+// settled too. A video is therefore still processing when its transcoding hasn't
+// settled, or any of its synthesis rows is still pending/processing. A video with
+// no synthesis rows and settled transcoding had nothing to deep-analyse, so it
+// isn't counted.
+export async function listProcessingAnalysedVideoIds(
+  supabase: SupabaseClient,
+  userId: string,
+  readyFiles: {
+    analysedVideoId: string
+    normalisationStatus: NormalisationStatus
+  }[],
+): Promise<Set<string>> {
+  const processing = new Set<string>()
+  if (readyFiles.length === 0) return processing
+
+  const analysedVideoIds = readyFiles.map((file) => file.analysedVideoId)
+
+  const { data, error } = await supabase
+    .from("retention_window_event_synthesis")
+    .select("analysed_video_id, status")
+    .eq("user_id", userId)
+    .in("analysed_video_id", analysedVideoIds)
+
+  if (error) {
+    throw new Error(
+      `Failed to load event synthesis statuses for processing check: ${error.message}`,
+    )
+  }
+
+  const synthesisPending = new Set<string>()
+  for (const row of (data ?? []) as {
+    analysed_video_id: string
+    status: string
+  }[]) {
+    if (row.status === "pending" || row.status === "processing") {
+      synthesisPending.add(row.analysed_video_id)
+    }
+  }
+
+  for (const file of readyFiles) {
+    const transcodingUnsettled =
+      file.normalisationStatus === "pending" ||
+      file.normalisationStatus === "processing"
+    if (transcodingUnsettled || synthesisPending.has(file.analysedVideoId)) {
+      processing.add(file.analysedVideoId)
+    }
+  }
+
+  return processing
+}
+
 // Loads the current stage statuses for a video whose source file has finished
 // uploading. Callers must have already confirmed `sourceFile.uploadStatus ===
 // "ready"` — this only reports on what happens after that point.

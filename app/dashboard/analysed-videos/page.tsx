@@ -2,7 +2,8 @@ import { AnalysedVideoBrowser } from "@/components/analysed-video-browser"
 import { requireAuthenticatedUser } from "@/lib/auth"
 import { createClient } from "@/lib/supabase/server"
 import { listAnalysedVideos, type AnalysedVideo } from "@/lib/analysed-videos"
-import { listReadySourceFileVideoIds } from "@/lib/source-files/source-files"
+import { listReadySourceFileSummaries } from "@/lib/source-files/source-files"
+import { listProcessingAnalysedVideoIds } from "@/lib/retention-window-media-progress"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -31,24 +32,40 @@ async function loadAnalysedVideos(
   }
 }
 
-// Best-effort fetch of the YouTube video IDs whose raw source file has finished
-// uploading. Used to flag which analysed videos have been deeply analysed; the
-// list still renders if this fails — videos just won't be flagged.
-async function loadRawFileVideoIds(userId: string): Promise<string[]> {
+// Best-effort fetch of which analysed videos have a raw source file and which of
+// those are still being deep-analysed. Returns the YouTube video IDs whose raw
+// file has finished uploading (used to flag rows with the "uploaded" tick) and
+// the subset still processing post-upload (used to show a "Processing…"
+// indicator instead of the tick). The list still renders if this fails — videos
+// just won't be flagged.
+async function loadRawFileStatuses(
+  userId: string,
+): Promise<{ rawFileVideoIds: string[]; processingVideoIds: string[] }> {
   try {
     const supabase = await createClient()
-    return await listReadySourceFileVideoIds(supabase, userId)
+    const summaries = await listReadySourceFileSummaries(supabase, userId)
+    const processingAnalysedIds = await listProcessingAnalysedVideoIds(
+      supabase,
+      userId,
+      summaries,
+    )
+    return {
+      rawFileVideoIds: summaries.map((file) => file.youtubeVideoId),
+      processingVideoIds: summaries
+        .filter((file) => processingAnalysedIds.has(file.analysedVideoId))
+        .map((file) => file.youtubeVideoId),
+    }
   } catch (error) {
-    console.error("Failed to load raw source file video ids", error)
-    return []
+    console.error("Failed to load raw source file statuses", error)
+    return { rawFileVideoIds: [], processingVideoIds: [] }
   }
 }
 
 export default async function Page() {
   const user = await requireAuthenticatedUser()
-  const [result, rawFileVideoIds] = await Promise.all([
+  const [result, { rawFileVideoIds, processingVideoIds }] = await Promise.all([
     loadAnalysedVideos(user.id),
-    loadRawFileVideoIds(user.id),
+    loadRawFileStatuses(user.id),
   ])
 
   return (
@@ -88,6 +105,7 @@ export default async function Page() {
           <AnalysedVideoBrowser
             videos={result.videos}
             rawFileVideoIds={rawFileVideoIds}
+            processingVideoIds={processingVideoIds}
           />
         )}
 

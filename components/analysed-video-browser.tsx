@@ -12,6 +12,7 @@ import {
   GlobeIcon,
   LinkIcon,
   ListFilterIcon,
+  Loader2Icon,
   LockIcon,
   SearchIcon,
   VideoOffIcon,
@@ -184,8 +185,9 @@ function formatAnalysedAt(iso: string): string {
   })
 }
 
-// A green tick shown for videos whose raw source file has been uploaded — the
-// signal that a video has been deeply analysed rather than only retention-scanned.
+// A green tick shown for videos whose raw source file has been uploaded and whose
+// deep analysis has finished — the signal that a video has been deeply analysed
+// rather than only retention-scanned.
 function RawFileBadge() {
   return (
     <span className="inline-flex items-center text-sm font-medium text-emerald-600 dark:text-emerald-500">
@@ -195,20 +197,40 @@ function RawFileBadge() {
   )
 }
 
+// Shown in place of the tick while a raw file has landed but its deeper analysis
+// (transcoding, scene detection, event synthesis, …) is still running in the
+// background, so the row makes clear the video isn't fully analysed yet.
+function ProcessingBadge() {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-600 dark:text-amber-500">
+      <Loader2Icon className="size-3.5 animate-spin" />
+      Processing…
+    </span>
+  )
+}
+
 export function AnalysedVideoBrowser({
   videos,
   rawFileVideoIds = [],
+  processingVideoIds = [],
 }: {
   videos: AnalysedVideo[]
   // YouTube video IDs whose raw source file has finished uploading. Checked per
   // row to flag which analysed videos have had their raw file uploaded.
   rawFileVideoIds?: string[]
+  // The subset of the above whose deep analysis is still running post-upload.
+  // Those rows show a "Processing…" indicator instead of the uploaded tick.
+  processingVideoIds?: string[]
 }) {
   const router = useRouter()
   const rows = useMemo(() => videos.map(toRow), [videos])
   const rawFileIds = useMemo(
     () => new Set(rawFileVideoIds),
     [rawFileVideoIds],
+  )
+  const processingIds = useMemo(
+    () => new Set(processingVideoIds),
+    [processingVideoIds],
   )
 
   // Filter inputs. All filtering is client-side because the full set is already
@@ -521,6 +543,7 @@ export function AnalysedVideoBrowser({
               {pageRows.map(({ video, dateAnalysed, privacyKnown }) => {
                 const href = `/dashboard/analysed-video/${video.id}`
                 const rawFileUploaded = rawFileIds.has(video.id)
+                const processing = processingIds.has(video.id)
                 return (
                 <TableRow
                   key={video.id}
@@ -565,10 +588,16 @@ export function AnalysedVideoBrowser({
                           <span className="sm:hidden">
                             Analysed {formatAnalysedAt(dateAnalysed)}
                           </span>
-                          {rawFileUploaded && (
+                          {processing ? (
                             <span className="sm:hidden">
-                              <RawFileBadge />
+                              <ProcessingBadge />
                             </span>
+                          ) : (
+                            rawFileUploaded && (
+                              <span className="sm:hidden">
+                                <RawFileBadge />
+                              </span>
+                            )
                           )}
                         </div>
                       </div>
@@ -594,7 +623,9 @@ export function AnalysedVideoBrowser({
                     {formatAnalysedAt(dateAnalysed)}
                   </TableCell>
                   <TableCell className="hidden px-4 py-3 align-top sm:table-cell">
-                    {rawFileUploaded ? (
+                    {processing ? (
+                      <ProcessingBadge />
+                    ) : rawFileUploaded ? (
                       <RawFileBadge />
                     ) : (
                       <span className="text-sm text-muted-foreground">—</span>
