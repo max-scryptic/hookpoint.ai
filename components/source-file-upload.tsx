@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useRef, useState } from "react"
 import {
   AlertTriangleIcon,
   CheckCircle2Icon,
@@ -28,6 +28,7 @@ import {
   useDeepAnalysisProgress,
 } from "@/components/deep-analysis-progress"
 import { notifySourceFileReady } from "@/components/source-video-thumbnail"
+import { useNavigationGuard } from "@/hooks/use-navigation-guard"
 import { ACCEPTED_EXTENSIONS, isAcceptedExtension } from "@/lib/source-files/config"
 import type { SerialisedSourceFile } from "@/lib/source-files/serialise"
 import {
@@ -335,22 +336,15 @@ export function SourceFileUpload({
     client.phase === "uploading" ||
     client.phase === "processing"
 
-  // While an upload is in flight, warn the user before they unload the page
-  // (reload, tab close, or navigating to another site). Leaving would abort the
-  // direct-to-storage transfer and strand the record mid-upload. The listener is
-  // only attached while busy so it never blocks navigation at rest. Note: this
-  // covers hard navigations only — the browser's native prompt can't be invoked
-  // from client-side (in-app) route changes.
-  useEffect(() => {
-    if (!isBusy) return
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault()
-      // Legacy browsers require returnValue to be set for the prompt to show.
-      event.returnValue = ""
-    }
-    window.addEventListener("beforeunload", handleBeforeUnload)
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload)
-  }, [isBusy])
+  // While an upload is in flight, warn the user before they leave the page —
+  // whether by reloading, closing the tab, or navigating to another page —
+  // because leaving would abort the direct-to-storage transfer and strand the
+  // record mid-upload. Only active while busy so it never blocks navigation at
+  // rest.
+  useNavigationGuard(
+    isBusy,
+    "An upload is still in progress. Leaving this page will cancel it. Are you sure you want to leave?",
+  )
 
   async function preflightFile(file: File) {
     // A fresh attempt clears any stale credit notice from a previous try.
