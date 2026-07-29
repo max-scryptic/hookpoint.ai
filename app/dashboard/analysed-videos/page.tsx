@@ -2,8 +2,10 @@ import { AnalysedVideoBrowser } from "@/components/analysed-video-browser"
 import { requireAuthenticatedUser } from "@/lib/auth"
 import { createClient } from "@/lib/supabase/server"
 import { listAnalysedVideos, type AnalysedVideo } from "@/lib/analysed-videos"
-import { listReadySourceFileSummaries } from "@/lib/source-files/source-files"
-import { listProcessingAnalysedVideoIds } from "@/lib/retention-window-media-progress"
+import {
+  getVideoProcessingStatus,
+  type VideoProcessingStatus,
+} from "@/lib/retention-window-media-progress"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -37,24 +39,15 @@ async function loadAnalysedVideos(
 // file has finished uploading (used to flag rows with the "uploaded" tick) and
 // the subset still processing post-upload (used to show a "Processing…"
 // indicator instead of the tick). The list still renders if this fails — videos
-// just won't be flagged.
+// just won't be flagged. The browser polls the same read
+// (/api/videos/processing-status) onwards from this snapshot, so rows settle
+// without a reload as each pipeline finishes.
 async function loadRawFileStatuses(
   userId: string,
-): Promise<{ rawFileVideoIds: string[]; processingVideoIds: string[] }> {
+): Promise<VideoProcessingStatus> {
   try {
     const supabase = await createClient()
-    const summaries = await listReadySourceFileSummaries(supabase, userId)
-    const processingAnalysedIds = await listProcessingAnalysedVideoIds(
-      supabase,
-      userId,
-      summaries,
-    )
-    return {
-      rawFileVideoIds: summaries.map((file) => file.youtubeVideoId),
-      processingVideoIds: summaries
-        .filter((file) => processingAnalysedIds.has(file.analysedVideoId))
-        .map((file) => file.youtubeVideoId),
-    }
+    return await getVideoProcessingStatus(supabase, userId)
   } catch (error) {
     console.error("Failed to load raw source file statuses", error)
     return { rawFileVideoIds: [], processingVideoIds: [] }

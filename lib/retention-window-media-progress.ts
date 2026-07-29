@@ -12,7 +12,11 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import type { NormalisationStatus, SourceFile } from "@/lib/source-files/source-files"
+import {
+  listReadySourceFileSummaries,
+  type NormalisationStatus,
+  type SourceFile,
+} from "@/lib/source-files/source-files"
 import { SCAN_RETRY_STALE_MS } from "@/lib/video-scene-cues"
 
 export type DeepAnalysisStageStatus = "pending" | "in_progress" | "ready" | "failed"
@@ -246,6 +250,40 @@ export async function listProcessingAnalysedVideoIds(
   }
 
   return processing
+}
+
+// The list-level view of raw-file/deep-analysis state for one user, keyed by
+// YouTube video id so a list of analysed videos can flag its rows directly.
+export interface VideoProcessingStatus {
+  // Videos whose raw source file has finished uploading.
+  rawFileVideoIds: string[]
+  // The subset of the above whose deep analysis is still running post-upload.
+  processingVideoIds: string[]
+}
+
+// The whole-list answer to "which of this user's videos have a raw file, and
+// which of those are still being deep-analysed?" — the pair the analysed-videos
+// table needs to draw its uploaded tick and its "Processing…" badge.
+//
+// Shared by the page's server render and the status endpoint the table polls
+// (app/api/videos/processing-status), so the live updates a browser applies
+// while a pipeline finishes are computed exactly the way the first paint was.
+export async function getVideoProcessingStatus(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<VideoProcessingStatus> {
+  const summaries = await listReadySourceFileSummaries(supabase, userId)
+  const processingAnalysedIds = await listProcessingAnalysedVideoIds(
+    supabase,
+    userId,
+    summaries,
+  )
+  return {
+    rawFileVideoIds: summaries.map((file) => file.youtubeVideoId),
+    processingVideoIds: summaries
+      .filter((file) => processingAnalysedIds.has(file.analysedVideoId))
+      .map((file) => file.youtubeVideoId),
+  }
 }
 
 // Loads the current stage statuses for a video whose source file has finished

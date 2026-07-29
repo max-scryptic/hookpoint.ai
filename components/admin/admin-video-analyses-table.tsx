@@ -18,6 +18,7 @@ import {
   TablePagination,
   usePagination,
 } from "@/components/ui/table-pagination"
+import { useProcessingRefresh } from "@/hooks/use-processing-refresh"
 
 // Enough precision for the sub-cent figures a single video can cost, without
 // trailing noise on larger totals. Matches the cost-log table's formatting.
@@ -58,7 +59,9 @@ function DateCell({ value }: { value: string | null }) {
 
 // The "Raw file uploaded" cell: the upload timestamp, plus a spinner while the
 // deep-analysis pipeline is still running so an admin can see at a glance which
-// videos are mid-analysis. Opening the row shows the per-stage breakdown.
+// videos are mid-analysis. Opening the row shows the per-stage breakdown. The
+// table re-fetches itself while any row is processing, so the spinner clears —
+// and the events/cost columns fill in — as each pipeline finishes.
 function RawFileCell({
   uploadedAt,
   processing,
@@ -102,6 +105,17 @@ export function AdminVideoAnalysesTable({
   const router = useRouter()
   const { pageRows, currentPage, pageCount, setPageNumber } =
     usePagination(videos)
+  // Keep the listing live while any video is mid-analysis: the processing flag,
+  // the deep spend and the event count all come from a server snapshot, so
+  // without this an admin watching a video finish would see a spinner that
+  // never resolves. Checks every row (not just the visible page) so paging
+  // around doesn't stop the refresh. A gentler cadence than the default because
+  // refreshing this route re-reads the whole user page — including its
+  // Stripe-backed revenue and billing history — for what is a background check.
+  useProcessingRefresh(
+    videos.some((video) => video.processing),
+    { intervalMs: 15000 },
+  )
 
   if (videos.length === 0) {
     return (

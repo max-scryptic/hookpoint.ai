@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { useRouter } from "next/navigation"
 import {
   CheckCircle2Icon,
   CircleIcon,
@@ -65,7 +66,16 @@ const STAGE_LABELS: {
 // or failed — the resting "Source file ready" row covers steady state. To
 // restart it after a manual retry, remount the caller (via a `key`) rather than
 // resetting state here.
+//
+// When a run finishes while the page is open it also refreshes the route once.
+// The card's own state comes from this poll, but everything else about a
+// finished deep analysis is server-rendered and gated on the pipeline having
+// settled — most visibly the report's deep-analysis insights, which the page
+// only loads once progress is complete. Without that refresh the checklist would
+// tick every stage green and the insights it produced still wouldn't appear
+// until the user reloaded by hand.
 export function useDeepAnalysisProgress(videoId: string): DeepAnalysisStatus {
+  const router = useRouter()
   const [progress, setProgress] = useState<DeepAnalysisProgressResponse | null>(
     null,
   )
@@ -74,6 +84,10 @@ export function useDeepAnalysisProgress(videoId: string): DeepAnalysisStatus {
 
   useEffect(() => {
     let cancelled = false
+    // Whether this mount has actually seen the pipeline unsettled. A page opened
+    // on an already-finished analysis settles on its first poll with nothing new
+    // to show, so only a run that finished *under us* is worth a refresh.
+    let sawUnsettled = false
 
     async function poll() {
       try {
@@ -91,12 +105,17 @@ export function useDeepAnalysisProgress(videoId: string): DeepAnalysisStatus {
         // Stop once the run has genuinely settled, or failed outright — either
         // way there's no more live work to reflect. A degraded read is not
         // settled: we still can't see the stages, so keep watching for recovery.
-        const done =
-          (data.complete && !data.degraded) ||
-          data.pipelineRun?.status === "failed"
+        const complete = data.complete && !data.degraded
+        const done = complete || data.pipelineRun?.status === "failed"
         if (!done) {
+          sawUnsettled = true
           timerRef.current = setTimeout(poll, POLL_INTERVAL_MS)
+          return
         }
+        // The run landed while the user was watching: pull the freshly unlocked
+        // server-rendered sections in. A failed run has nothing new to render,
+        // so it just leaves the card's retry prompt in place.
+        if (complete && sawUnsettled) router.refresh()
       } catch {
         if (cancelled) return
         setUnreachable(true)
@@ -110,7 +129,7 @@ export function useDeepAnalysisProgress(videoId: string): DeepAnalysisStatus {
       cancelled = true
       if (timerRef.current) clearTimeout(timerRef.current)
     }
-  }, [videoId])
+  }, [videoId, router])
 
   const pipelineRun = progress?.pipelineRun ?? null
   const failed = pipelineRun?.status === "failed"
