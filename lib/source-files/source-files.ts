@@ -343,6 +343,51 @@ export async function listReadySourceFileVideoIds(
   )
 }
 
+// A ready source file, pared down to just what the analysed-videos list needs to
+// decide whether a video's deep analysis is still running: the analysed-video
+// row it belongs to, its YouTube id (for flagging the row), and its
+// transcoding (normalisation) status — one of the pipeline's stages.
+export interface ReadySourceFileSummary {
+  analysedVideoId: string
+  youtubeVideoId: string
+  normalisationStatus: NormalisationStatus
+}
+
+// Lists the ready ("uploaded") source files for a user as lightweight summaries.
+// Like listReadySourceFileVideoIds but also carries the analysed-video id and
+// normalisation status, so the caller can both flag which videos have a raw file
+// and work out which of those are still being deep-analysed.
+export async function listReadySourceFileSummaries(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<ReadySourceFileSummary[]> {
+  const { data, error } = await supabase
+    .from("source_files")
+    .select("analysed_video_id, youtube_video_id, normalisation_status")
+    .eq("user_id", userId)
+    .eq("upload_status", "ready")
+
+  if (error) {
+    throw new Error(
+      `Failed to load ready source file summaries: ${error.message}`,
+    )
+  }
+
+  return (
+    (data as
+      | {
+          analysed_video_id: string
+          youtube_video_id: string
+          normalisation_status: NormalisationStatus
+        }[]
+      | null)?.map((r) => ({
+      analysedVideoId: r.analysed_video_id,
+      youtubeVideoId: r.youtube_video_id,
+      normalisationStatus: r.normalisation_status,
+    })) ?? []
+  )
+}
+
 // Finds a source file by its transcoder job id. Used by the normalisation status
 // callback, which is an unauthenticated server-to-server request and therefore
 // runs through the service-role admin client (RLS would otherwise hide the row).

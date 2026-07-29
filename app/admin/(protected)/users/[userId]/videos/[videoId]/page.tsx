@@ -13,6 +13,10 @@ import { getUserById } from "@/lib/admin/users"
 import { getUserAnalysedVideoById } from "@/lib/admin/video-analysis"
 import { getDeepAnalysisEvidence } from "@/lib/deep-analysis-evidence"
 import { getSourceFileForVideo } from "@/lib/source-files/source-files"
+import {
+  getDeepAnalysisProgress,
+  type DeepAnalysisProgress,
+} from "@/lib/retention-window-media-progress"
 import { createAdminClient } from "@/lib/supabase/admin"
 
 // Per-request admin data behind an auth check — never statically prerender.
@@ -64,10 +68,27 @@ export default async function AdminUserVideoDetailPage({
   // tab (and the events it surfaces) stay hidden until the upload has landed —
   // mirroring the front-end's "ready" gate.
   let sourceFileUploaded = false
+  // The live per-stage breakdown of the deep-analysis pipeline, so the detail
+  // view can show where a currently-processing video is (transcoding, fetching
+  // events, …) — the same steps the front end surfaces. Null unless a raw file
+  // has landed and its stages could be computed.
+  let deepAnalysisProgress: DeepAnalysisProgress | null = null
   try {
     const sourceFile = await getSourceFileForVideo(supabase, userId, video.videoId)
     if (sourceFile?.uploadStatus === "ready") {
       sourceFileUploaded = true
+      // Best-effort: a failure computing the stage breakdown just omits the
+      // in-progress checklist rather than sinking the page.
+      try {
+        deepAnalysisProgress = await getDeepAnalysisProgress(
+          supabase,
+          userId,
+          video.id,
+          sourceFile,
+        )
+      } catch (error) {
+        console.error("Failed to load deep analysis progress for admin", error)
+      }
     }
     if (sourceFile?.normalisationStatus === "ready") {
       transcodedDurationSeconds = video.durationSeconds
@@ -148,6 +169,7 @@ export default async function AdminUserVideoDetailPage({
         lightEvidence={lightEvidence}
         deepEvidence={deepEvidence}
         sourceFileUploaded={sourceFileUploaded}
+        deepAnalysisProgress={deepAnalysisProgress}
         costLogRows={costLogs.rows}
         costLogsTruncated={costLogs.truncated}
       />

@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import {
   getDeepAnalysisProgress,
+  listProcessingAnalysedVideoIds,
   shouldResumeDeepAnalysis,
 } from "@/lib/retention-window-media-progress"
 import type { SourceFile } from "@/lib/source-files/source-files"
@@ -330,6 +331,84 @@ describe("getDeepAnalysisProgress", () => {
       audioAnalysis: "ready",
     })
     expect(progress.complete).toBe(true)
+  })
+})
+
+// A fake that serves canned event-synthesis rows for the single
+// "select ... .eq(user).in(analysed_video_id)" read this helper issues.
+function makeProcessingFakeSupabase(rows: Record<string, unknown>[]) {
+  return {
+    from() {
+      const builder = {
+        select: () => builder,
+        eq: () => builder,
+        in: () => builder,
+        then: (resolve: (v: unknown) => unknown) =>
+          Promise.resolve({ data: rows, error: null }).then(resolve),
+      }
+      return builder
+    },
+  } as unknown as SupabaseClient
+}
+
+describe("listProcessingAnalysedVideoIds", () => {
+  it("returns an empty set (and issues no query) when there are no ready files", async () => {
+    // A builder that throws if touched proves the short-circuit skips the query.
+    const supabase = {
+      from() {
+        throw new Error("should not query when there are no ready files")
+      },
+    } as unknown as SupabaseClient
+
+    const result = await listProcessingAnalysedVideoIds(supabase, "user-1", [])
+    expect(result.size).toBe(0)
+  })
+
+  it("flags a video whose transcoding hasn't settled, regardless of synthesis rows", async () => {
+    const supabase = makeProcessingFakeSupabase([
+      { analysed_video_id: "av-1", status: "ready" },
+    ])
+
+    const result = await listProcessingAnalysedVideoIds(supabase, "user-1", [
+      { analysedVideoId: "av-1", normalisationStatus: "processing" },
+    ])
+    expect(result.has("av-1")).toBe(true)
+  })
+
+  it("flags a video with a pending or processing synthesis row", async () => {
+    const supabase = makeProcessingFakeSupabase([
+      { analysed_video_id: "av-1", status: "ready" },
+      { analysed_video_id: "av-1", status: "pending" },
+      { analysed_video_id: "av-2", status: "processing" },
+    ])
+
+    const result = await listProcessingAnalysedVideoIds(supabase, "user-1", [
+      { analysedVideoId: "av-1", normalisationStatus: "ready" },
+      { analysedVideoId: "av-2", normalisationStatus: "ready" },
+    ])
+    expect(result.has("av-1")).toBe(true)
+    expect(result.has("av-2")).toBe(true)
+  })
+
+  it("does not flag a video whose transcoding and synthesis have all settled", async () => {
+    const supabase = makeProcessingFakeSupabase([
+      { analysed_video_id: "av-1", status: "ready" },
+      { analysed_video_id: "av-1", status: "failed" },
+    ])
+
+    const result = await listProcessingAnalysedVideoIds(supabase, "user-1", [
+      { analysedVideoId: "av-1", normalisationStatus: "ready" },
+    ])
+    expect(result.has("av-1")).toBe(false)
+  })
+
+  it("does not flag a ready file with no synthesis rows at all", async () => {
+    const supabase = makeProcessingFakeSupabase([])
+
+    const result = await listProcessingAnalysedVideoIds(supabase, "user-1", [
+      { analysedVideoId: "av-1", normalisationStatus: "skipped" },
+    ])
+    expect(result.has("av-1")).toBe(false)
   })
 })
 
