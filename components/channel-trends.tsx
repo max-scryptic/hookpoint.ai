@@ -1,7 +1,6 @@
 import Link from "next/link"
 import {
   AreaChartIcon,
-  BookOpenIcon,
   ChevronDownIcon,
   Clock3Icon,
   ImageIcon,
@@ -79,25 +78,6 @@ function formatTimestamp(totalSeconds: number): string {
   return hours > 0
     ? `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
     : `${minutes}:${String(seconds).padStart(2, "0")}`
-}
-
-function StatTile({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="flex flex-col gap-1 rounded-lg border bg-card p-4">
-      <span className="text-2xl font-semibold tabular-nums">{value}</span>
-      <span className="text-xs text-muted-foreground">{label}</span>
-    </div>
-  )
-}
-
-function LibraryStats({ data }: { data: ChannelTrendsData }) {
-  return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-      <StatTile label="Videos in your library" value={data.libraryVideoCount} />
-      <StatTile label="Retention windows analysed" value={data.windowCount} />
-      <StatTile label="Retention events collected" value={data.eventCount} />
-    </div>
-  )
 }
 
 // The progressive-unlock meter. Building toward EARLY it counts down to the
@@ -324,17 +304,6 @@ function PlaybookRuleCard({ rule }: { rule: ChannelPlaybookRule }) {
 function ChannelPlaybook({ rules }: { rules: ChannelPlaybookRule[] }) {
   return (
     <section className="flex flex-col gap-3">
-      <div className="rounded-xl border bg-card p-5">
-        <div className="flex items-center gap-2">
-          <BookOpenIcon className="size-5 text-primary" />
-          <h2 className="text-lg font-semibold">Your next-video playbook</h2>
-        </div>
-        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          The clearest repeat, repair and recovery rules from your channel.
-          Audience holds act as the control, so common editing habits are not
-          mistaken for useful signals.
-        </p>
-      </div>
       <div className="grid gap-3 lg:grid-cols-3">
         {rules.map((rule) => (
           <PlaybookRuleCard key={rule.kind} rule={rule} />
@@ -1085,7 +1054,6 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <LibraryStats data={data} />
       <StageProgress data={data} />
       {showTrends && data.playbook.length > 0 && (
         <ChannelPlaybook rules={data.playbook} />
