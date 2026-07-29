@@ -52,7 +52,7 @@ import {
 } from "@/lib/channel-trends"
 import { stripEmDashes } from "@/lib/copy-guardrails"
 
-// The Channel Trends page body: the library header, then three tabs.
+// The Channel Trends page body: the unlock meter, then three tabs.
 // Retention holds the insight cards (written feedback for the few patterns
 // that earned it), the drop-vs-gain signature chart, the recurrence strip
 // across recent uploads, and the full per-type breakdown as an appendix.
@@ -78,25 +78,6 @@ function formatTimestamp(totalSeconds: number): string {
   return hours > 0
     ? `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
     : `${minutes}:${String(seconds).padStart(2, "0")}`
-}
-
-function StatTile({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="flex flex-col gap-1 rounded-lg border bg-card p-4">
-      <span className="text-2xl font-semibold tabular-nums">{value}</span>
-      <span className="text-xs text-muted-foreground">{label}</span>
-    </div>
-  )
-}
-
-function LibraryStats({ data }: { data: ChannelTrendsData }) {
-  return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-      <StatTile label="Videos in your library" value={data.libraryVideoCount} />
-      <StatTile label="Retention windows analysed" value={data.windowCount} />
-      <StatTile label="Retention events collected" value={data.eventCount} />
-    </div>
-  )
 }
 
 // The progressive-unlock meter. Building toward EARLY it counts down to the
@@ -1031,17 +1012,20 @@ function EarlySignalNote({ data }: { data: ChannelTrendsData }) {
 
 // One tab's body. The tab bar already names and illustrates the section, so
 // the panel opens with the standfirst that used to sit under the section
-// heading, then the cards.
+// heading, then the cards. The playbook passes no description: its intro copy
+// was cut for restating the page header, and the tab label carries the name.
 function TrendsPanel({
   description,
   children,
 }: {
-  description: string
+  description?: string
   children: React.ReactNode
 }) {
   return (
     <section className="flex flex-col gap-3">
-      <p className="max-w-3xl text-sm text-muted-foreground">{description}</p>
+      {description && (
+        <p className="max-w-3xl text-sm text-muted-foreground">{description}</p>
+      )}
       {children}
     </section>
   )
@@ -1061,7 +1045,6 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <LibraryStats data={data} />
       <StageProgress data={data} />
       {showTrends ? (
         <>
@@ -1104,7 +1087,7 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
             }
             playbook={
               data.playbook.length > 0 ? (
-                <TrendsPanel description="The clearest repeat, repair and recovery rules from your channel. Audience holds act as the control, so common editing habits are not mistaken for useful signals.">
+                <TrendsPanel>
                   <ChannelPlaybook rules={data.playbook} />
                 </TrendsPanel>
               ) : undefined
