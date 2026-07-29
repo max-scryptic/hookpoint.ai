@@ -393,7 +393,7 @@ function RecommendationsSection({
     <div className="flex flex-col gap-2">
       <SubsectionHeader
         icon={<LightbulbIcon className="size-3.5 text-muted-foreground" />}
-        label="Recommended tests"
+        label="Recommendations for future videos"
       />
       {recommendations.map((recommendation) => (
         <div key={recommendation.id} className="rounded-lg border p-3 text-sm">
@@ -743,17 +743,22 @@ function editPhrase(
 
 // A concrete, direction-aware pacing tip: too few cuts wants more, too many
 // wants room to breathe, and an unknown direction falls back to smoothing.
+// Every tip below is guidance for the uploader's next videos, never an
+// instruction to re-edit this one: it is already published, so "trim this" or
+// "compare a shorter cut against the current edit" is not an action they have.
+// `at` names the moment that taught the lesson, not frames to go and change.
 function editTip(
   editing: WindowEvidence["editing"],
   baseline: WindowEvidence["baseline"],
   at: string,
 ): string {
   const trend = cutTrend(editing, baseline)
+  const moment = `Where the cut rhythm shifts${at}:`
   if (trend === "slower")
-    return `Add a few more cuts or a b-roll insert${at} to lift the pace before viewers drop off.`
+    return `${moment} in future videos, plan a few more cuts or a b-roll insert through a section like this to lift the pace.`
   if (trend === "faster")
-    return `Let a shot or two breathe${at} so the fast cutting doesn't tire viewers out.`
-  return `Even out the pacing${at} so the cuts keep carrying attention through it.`
+    return `${moment} in future videos, let a shot or two breathe so fast cutting doesn't tire viewers out.`
+  return `${moment} in future videos, keep the cut rhythm steadier through a section like this so the pacing carries attention through it.`
 }
 
 function takeawayFor({
@@ -808,8 +813,8 @@ function takeawayFor({
             ? `Here ${phrase}, so the picture stops carrying the moment.`
             : "The frame holds too long or shifts abruptly here, so the visual is doing the work.",
           tip: holdsStill
-            ? `Drop in a b-roll insert or graphic${at} to refresh the shot before viewers slip away.`
-            : `Vary the framing${at} to refresh the shot before viewers slip away.`,
+            ? `Where the shot goes static${at}: in future videos, plan a b-roll insert or graphic to refresh the picture before viewers slip away.`
+            : `Where the framing stops carrying the moment${at}: in future videos, vary the shot to refresh the picture before viewers slip away.`,
         }
       }
       case "audio": {
@@ -818,7 +823,7 @@ function takeawayFor({
           observation: phrase
             ? `The sound is what shifts here: ${phrase}.`
             : "Energy and sound are what shift here.",
-          tip: `Lift the delivery or trim the dead air${at} to keep viewers with you.`,
+          tip: `Where the sound drops off${at}: in future videos, keep the delivery lifted and cut dead air like this out in the edit.`,
         }
       }
       case "combined": {
@@ -832,7 +837,7 @@ function takeawayFor({
             phrases.length > 0
               ? `A few things stack up at this moment: ${joinClauses(phrases)}.`
               : "A few signals reinforce each other here, with the edit and delivery both working against attention at once.",
-          tip: `Tighten the pacing and delivery through this stretch${at}. No single change on its own is likely to move it.`,
+          tip: `Where the signals stack up${at}: in future videos, tighten pacing and delivery together through a stretch like this. No single change on its own is likely to move it.`,
         }
       }
       default:

@@ -1,3 +1,14 @@
+// Turns each ranked retention-window event into one concrete recommendation.
+//
+// COPY CONSTRAINT: the video being analysed is already published on YouTube.
+// Its edit cannot be changed, and there is no way to put an alternate cut up
+// against the live one, so a recommendation phrased as "re-cut this and compare
+// it against the current edit" asks for something impossible. Every action here
+// must read as guidance the uploader applies to the videos they make next:
+// prefer "in future videos ..." / "next time ..." over "trim this" or "test an
+// alternate cut of this". The timestamp stays in the recommendation because it
+// says which moment taught the lesson, not which frames to go and change.
+
 import type { RankedRetentionWindowEvent } from "@/lib/deep-analysis-insight-ranking"
 import type { AudioAnalysis } from "@/lib/retention-window-media-analysis"
 import type { PersistedRetentionWindow } from "@/lib/retention-windows"
@@ -11,6 +22,7 @@ export type RecommendationActionType =
   | "reduce_visual_pacing"
   | "adjust_delivery"
   | "add_visual_support"
+  | "signpost_topic_shift"
   | "preserve_pattern"
   | "review_transition"
 
@@ -19,6 +31,8 @@ export interface DeepAnalysisRecommendation {
   sourceEventId: string
   timestampSeconds: number
   actionType: RecommendationActionType
+  // The forward-looking instruction shown to the uploader as the "Try:" line.
+  // Always about their next videos, never about re-editing this one.
   action: string
   rationale: string
   expectedPurpose: string
@@ -45,10 +59,10 @@ function recommendationForEvent(params: {
     return {
       actionType: "preserve_pattern",
       action:
-        "Mark this moment as a pattern to reuse in the next edit, preserving its delivery, visual change, and transition timing.",
+        "Treat this as a pattern to repeat: when you reach a comparable beat in your next videos, use the same delivery, visual change, and transition timing you used here.",
       rationale: event.narrative,
       expectedPurpose:
-        "Test whether repeating the same proven pattern helps create another retention gain.",
+        "Repeating a proven pattern deliberately is what turns one gain into a habit.",
     }
   }
 
@@ -56,27 +70,27 @@ function recommendationForEvent(params: {
     return {
       actionType: "replace_freeze",
       action:
-        "Shorten the frozen section or cover it with relevant B-roll, a close-up, or a supporting graphic.",
+        "In future videos, keep the picture moving through a stretch like this: plan relevant B-roll, a close-up, or a supporting graphic to cover it rather than letting the frame hold.",
       rationale: event.narrative,
-      expectedPurpose: "Keep the picture advancing while the point is delivered.",
+      expectedPurpose: "Keeps the picture advancing while the point is delivered.",
     }
   }
   if (editing && editing.blackCoverage >= 0.05) {
     return {
       actionType: "remove_black_frame",
       action:
-        "Tighten the black-frame transition or replace it with a continuous visual bridge.",
+        "In future videos, bridge a transition like this with a continuous visual instead of cutting to black, or hold the black for only a few frames.",
       rationale: event.narrative,
-      expectedPurpose: "Test a smoother transition with less visual interruption.",
+      expectedPurpose: "A smoother transition gives viewers less of a cue to leave.",
     }
   }
   if (audio?.silence != null && audio.silence >= 0.1) {
     return {
       actionType: "trim_silence",
       action:
-        "Trim the measurable dead air here, while retaining a short natural pause if the sentence needs it.",
+        "In future videos, cut dead air like this out in the edit, keeping only the short pause a sentence genuinely needs.",
       rationale: event.narrative,
-      expectedPurpose: "Test whether a tighter audio transition sustains momentum.",
+      expectedPurpose: "A tighter audio transition sustains momentum through the point.",
     }
   }
 
@@ -91,10 +105,11 @@ function recommendationForEvent(params: {
         actionType: "adjust_delivery",
         action:
           ratio <= 0.8
-            ? "Tighten the delivery toward the video's usual speaking pace, or shorten this explanation."
-            : "Give the key point slightly more room, or simplify the wording so it remains easy to follow.",
+            ? "When you explain something like this in future videos, keep the delivery closer to your usual speaking pace, or plan a shorter version of the explanation."
+            : "When you land a key point like this in future videos, give it slightly more room, or simplify the wording so it stays easy to follow at speed.",
         rationale: event.narrative,
-        expectedPurpose: "Test a delivery pace closer to the video's established norm.",
+        expectedPurpose:
+          "A pace closer to your established norm is what viewers arrive expecting.",
       }
     }
   }
@@ -109,19 +124,32 @@ function recommendationForEvent(params: {
       return {
         actionType: "increase_visual_pacing",
         action:
-          "Add one purposeful visual change here, such as B-roll, a crop change, a demonstration, or concise on-screen text.",
+          "In future videos, plan at least one purposeful visual change for a stretch like this: B-roll, a crop change, a demonstration, or concise on-screen text.",
         rationale: event.narrative,
-        expectedPurpose: "Test pacing closer to the rest of the video without adding noise.",
+        expectedPurpose: "Pacing closer to the rest of the video, without adding noise.",
       }
     }
     if (ratio >= 1.4) {
       return {
         actionType: "reduce_visual_pacing",
         action:
-          "Remove a non-essential cut or let the most informative shot remain long enough to register.",
+          "In future videos, cut less through a stretch like this: leave out the non-essential cuts and let the most informative shot stay on screen long enough to register.",
         rationale: event.narrative,
-        expectedPurpose: "Test whether clearer visual continuity improves comprehension.",
+        expectedPurpose: "Clearer visual continuity is easier to follow.",
       }
+    }
+  }
+
+  // Structure, not craft: a topic shift needs setup in the script, so the advice
+  // belongs to how the next video is written rather than to any edit decision.
+  if (event.eventType === "topic_shift") {
+    return {
+      actionType: "signpost_topic_shift",
+      action:
+        "In future videos, signpost a shift like this before you make it: say what is coming and why it matters to what viewers came for, then keep the new section short and tie it back to the main topic.",
+      rationale: event.narrative,
+      expectedPurpose:
+        "A signposted shift reads as part of the promise instead of a different video.",
     }
   }
 
@@ -129,18 +157,19 @@ function recommendationForEvent(params: {
     return {
       actionType: "add_visual_support",
       action:
-        "Test an alternative visual treatment at this timestamp, using a relevant demonstration, graphic, or framing change.",
+        "In future videos, give a spoken point like this something to look at as you make it: a relevant demonstration, graphic, or framing change.",
       rationale: event.narrative,
-      expectedPurpose: "Give the spoken point clearer visual support.",
+      expectedPurpose: "Gives the spoken point clearer visual support.",
     }
   }
 
   return {
     actionType: "review_transition",
     action:
-      "Create an alternate cut of this transition and compare a shorter, more direct version against the current edit.",
+      "In future videos, get through a transition like this faster: move straight into the next point rather than talking your way into it.",
     rationale: event.narrative,
-    expectedPurpose: "Turn the observed retention signal into a testable editing decision.",
+    expectedPurpose:
+      "Turns the retention signal at this moment into an editing habit for the next video.",
   }
 }
 

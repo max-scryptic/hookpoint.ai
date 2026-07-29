@@ -19,7 +19,10 @@ import {
 
 export type RetentionMomentKind = "hook" | "drop_off" | "gain" | "hold"
 
-export const RETENTION_ATTRIBUTION_SCHEMA_VERSION = 4
+// Bumped to 5 when tips became strictly forward-looking: stored attributions
+// generated under the old prompt can still say "re-cut this" about a video that
+// is already live, so they need regenerating rather than serving from cache.
+export const RETENTION_ATTRIBUTION_SCHEMA_VERSION = 5
 
 export interface RetentionMomentAttribution {
   kind: RetentionMomentKind
@@ -29,9 +32,12 @@ export interface RetentionMomentAttribution {
   fromSeconds: number
   toSeconds: number
   explanation: string
-  // A concrete, actionable suggestion. Gains always carry one (what proven
-  // thing to keep doing or reuse); it may still be null for other kinds when
-  // there's genuinely nothing worth changing.
+  // A concrete, actionable suggestion for the uploader's *next* videos. The
+  // video being attributed is already published, so a tip that asks for a
+  // re-edit or an A/B against the current cut is not something they can act on;
+  // the prompt below forbids that framing. Gains always carry a tip (what proven
+  // thing to keep doing); it may still be null for other kinds when there's
+  // genuinely nothing worth changing.
   tip: string | null
   confidence: number
 }
@@ -183,10 +189,11 @@ export async function generateRetentionAttribution(
                 "Write to the uploader in the second person (you, your video), reviewing their own video. Whoever is heard speaking may be the uploader, a co-host, a guest, or a voiceover, so never pin what is said on a specific or gendered person (he, she, the creator, the host); frame it as the uploader's own video instead (say 'here you are still laying out the context', not 'he is still laying out the context').",
                 "Each moment is either a hook (one of the opening hook windows), a drop_off (viewers left), a gain (viewers returned or re-watched), or a hold (viewers stayed).",
                 "Reason only from the supplied transcript, timestamps and retention numbers. Do not infer visuals, editing, music, thumbnails or vocal delivery; you cannot see or hear the video.",
-                "For a hook, explain how effectively the words create curiosity, establish the promise, and move toward delivering it. Ground the explanation in the supplied transcript and give one concrete way to make the opening hold more viewers.",
-                "For a drop_off, explain the most likely reason viewers left based on what was being said (e.g. a topic change, a slow tangent, an unmet promise, an ad or sponsor read, a natural stopping point), and give one concrete tip to reduce that loss next time.",
-                "For a gain, explain what likely pulled viewers back or made them re-watch, and always give a concrete tip (never null for a gain): name the specific thing that worked here and tell the uploader how to deliberately reuse it, phrased as an action they can take again elsewhere in this or a future video rather than generic praise.",
-                "For a hold, explain what in the supplied words likely sustained attention without a meaningful gain or loss, and set tip to a short note on what to preserve.",
+                "This video is already published, so its edit cannot be changed and there is no way to put an alternate version up against the live one. Every tip must be forward-looking guidance the uploader applies to the videos they make next, phrased as something to do differently or keep doing (for example 'next time, ...' or 'in future videos, ...'). Never tell the uploader to re-edit, re-cut, trim, reshoot, re-upload or replace anything in this video, and never suggest comparing an alternate cut against the current one. Where a moment shows a weakness, say what to do instead of what they did here, so the tip reads as advice for the next video and not as a change to this one.",
+                "For a hook, explain how effectively the words create curiosity, establish the promise, and move toward delivering it. Ground the explanation in the supplied transcript and give one concrete way to open a future video so it holds more viewers.",
+                "For a drop_off, explain the most likely reason viewers left based on what was being said (e.g. a topic change, a slow tangent, an unmet promise, an ad or sponsor read, a natural stopping point), and give one concrete tip for handling that same situation differently in a future video.",
+                "For a gain, explain what likely pulled viewers back or made them re-watch, and always give a concrete tip (never null for a gain): name the specific thing that worked here and tell the uploader how to deliberately reuse it in their next videos rather than generic praise.",
+                "For a hold, explain what in the supplied words likely sustained attention without a meaningful gain or loss, and set tip to a short note on what to keep doing in future videos.",
                 "relativePerformance (0..1) compares this moment to similar videos; below 0.5 is underperforming. Use it to judge severity, not as the explanation itself.",
                 "Keep each explanation to 1-2 specific sentences that reference what is actually said. Never invent dialogue that isn't in the transcript.",
                 "Return exactly one moments entry for every supplied moment, using its momentIndex. Write a one-sentence overview of the video's overall retention story.",
@@ -279,7 +286,7 @@ export async function generateRetentionAttribution(
         tip:
           tip ??
           (moment.kind === "gain"
-            ? "Note what worked in this moment and deliberately reuse the same approach elsewhere in this or a future video."
+            ? "Note what worked in this moment and deliberately reuse the same approach in your next videos."
             : null),
         confidence: Math.min(1, Math.max(0, analysis?.confidence ?? 0)),
       }
