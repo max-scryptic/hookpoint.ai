@@ -38,6 +38,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { DatePickerWithRange } from "@/components/date-range-picker"
+import { useVideoProcessingStatus } from "@/hooks/use-video-processing-status"
 import {
   Thumbnail,
   VisibilityCell,
@@ -199,10 +200,16 @@ function RawFileBadge() {
 
 // Shown in place of the tick while a raw file has landed but its deeper analysis
 // (transcoding, scene detection, event synthesis, …) is still running in the
-// background, so the row makes clear the video isn't fully analysed yet.
+// background, so the row makes clear the video isn't fully analysed yet. The
+// table keeps polling while any row is in this state (see
+// useVideoProcessingStatus below), so the badge gives way to the tick on its own
+// once the pipeline finishes.
 function ProcessingBadge() {
   return (
-    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-600 dark:text-amber-500">
+    <span
+      className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-600 dark:text-amber-500"
+      title="Deeper analysis is still running. This updates automatically when it finishes."
+    >
       <Loader2Icon className="size-3.5 animate-spin" />
       Processing…
     </span>
@@ -224,13 +231,25 @@ export function AnalysedVideoBrowser({
 }) {
   const router = useRouter()
   const rows = useMemo(() => videos.map(toRow), [videos])
+
+  // The raw-file props are a snapshot from the server render, so on their own a
+  // row whose deep analysis finished in the background would spin on
+  // "Processing…" until the user reloaded. Polled onwards from that snapshot
+  // while anything is in flight, so those rows settle into their uploaded tick
+  // by themselves. Returns the props unchanged (and polls nothing) once nothing
+  // is processing.
+  const liveStatus = useVideoProcessingStatus({
+    rawFileVideoIds,
+    processingVideoIds,
+  })
+
   const rawFileIds = useMemo(
-    () => new Set(rawFileVideoIds),
-    [rawFileVideoIds],
+    () => new Set(liveStatus.rawFileVideoIds),
+    [liveStatus.rawFileVideoIds],
   )
   const processingIds = useMemo(
-    () => new Set(processingVideoIds),
-    [processingVideoIds],
+    () => new Set(liveStatus.processingVideoIds),
+    [liveStatus.processingVideoIds],
   )
 
   // Filter inputs. All filtering is client-side because the full set is already

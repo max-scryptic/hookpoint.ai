@@ -1,7 +1,5 @@
 "use client"
 
-import { useEffect } from "react"
-import { useRouter } from "next/navigation"
 import { Loader2Icon } from "lucide-react"
 
 import { AnalysisCostKpis } from "@/components/admin/analysis-cost-kpis"
@@ -19,11 +17,8 @@ import type { AnalysisCostBreakdown } from "@/lib/admin/analysis-cost-breakdown"
 import type { CostLogRow } from "@/lib/admin/llm-calls"
 import type { LightAnalysisEvidence } from "@/lib/admin/light-analysis-evidence"
 import type { DeepAnalysisEvidence as DeepAnalysisEvidenceData } from "@/lib/deep-analysis-evidence"
+import { useProcessingRefresh } from "@/hooks/use-processing-refresh"
 import type { DeepAnalysisProgress } from "@/lib/retention-window-media-progress"
-
-// How often the view re-fetches its server data while a video is still being
-// deep-analysed, so the stage checklist advances without a manual refresh.
-const PROGRESS_REFRESH_MS = 5000
 
 // The admin video-analysis oversight view: a Light Analysis / Deep Analysis
 // tab split. Each tab leads with the cost KPIs for that bucket (its total plus
@@ -57,26 +52,22 @@ export function AdminVideoAnalysisDetail({
   costLogRows: CostLogRow[]
   costLogsTruncated?: boolean
 }) {
-  const router = useRouter()
   const lightLines = costs.lines.filter((line) => line.bucket === "light")
   const deepLines = costs.lines.filter((line) => line.bucket === "deep")
   const hasDeepWindows = Boolean(
     deepEvidence && deepEvidence.windows.length > 0,
   )
   // The pipeline is still running when it's active but hasn't settled every
-  // stage. The stages snapshot is server-rendered, so poll for fresh server data
-  // while it's in flight to keep the checklist moving.
+  // stage. The stages snapshot is server-rendered, so re-fetch fresh server data
+  // while it's in flight to keep the checklist moving — and to swap in the
+  // evidence once the run lands.
   const analysisInProgress = Boolean(
     deepAnalysisProgress?.active &&
       !deepAnalysisProgress.complete &&
       deepAnalysisProgress.stages,
   )
 
-  useEffect(() => {
-    if (!analysisInProgress) return
-    const id = setInterval(() => router.refresh(), PROGRESS_REFRESH_MS)
-    return () => clearInterval(id)
-  }, [analysisInProgress, router])
+  useProcessingRefresh(analysisInProgress)
 
   return (
     <Tabs defaultValue="light" className="gap-4">

@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import {
   getDeepAnalysisProgress,
+  getVideoProcessingStatus,
   listProcessingAnalysedVideoIds,
   shouldResumeDeepAnalysis,
 } from "@/lib/retention-window-media-progress"
@@ -46,13 +47,14 @@ function makeSourceFile(overrides: Partial<SourceFile> = {}): SourceFile {
 }
 
 // A minimal fake of the Supabase query builder that just serves canned rows
-// for the three "select status[, analysis_status]" reads this module issues.
+// per table, whatever filters the module under test chains onto the select.
 function makeFakeSupabase(tables: Record<string, Record<string, unknown>[]>) {
   return {
     from(table: string) {
       const builder = {
         select: () => builder,
         eq: () => builder,
+        in: () => builder,
         then: (resolve: (v: unknown) => unknown) =>
           Promise.resolve({ data: tables[table] ?? [], error: null }).then(resolve),
       }
@@ -471,5 +473,48 @@ describe("shouldResumeDeepAnalysis", () => {
     expect(
       shouldResumeDeepAnalysis({ active: false, complete: true, stages: null }),
     ).toBe(false)
+  })
+})
+
+describe("getVideoProcessingStatus", () => {
+  it("flags every ready raw file and the subset still being deep-analysed", async () => {
+    const supabase = makeFakeSupabase({
+      source_files: [
+        {
+          analysed_video_id: "av-1",
+          youtube_video_id: "vid-1",
+          normalisation_status: "ready",
+        },
+        {
+          analysed_video_id: "av-2",
+          youtube_video_id: "vid-2",
+          normalisation_status: "ready",
+        },
+        {
+          analysed_video_id: "av-3",
+          youtube_video_id: "vid-3",
+          normalisation_status: "processing",
+        },
+      ],
+      // av-1 has settled; av-2 is still synthesizing. av-3 is caught by its
+      // unsettled transcoding instead.
+      retention_window_event_synthesis: [
+        { analysed_video_id: "av-1", status: "ready" },
+        { analysed_video_id: "av-2", status: "pending" },
+      ],
+    })
+
+    const status = await getVideoProcessingStatus(supabase, "user-1")
+
+    // Every uploaded file earns the tick; only the unsettled ones spin.
+    expect(status.rawFileVideoIds).toEqual(["vid-1", "vid-2", "vid-3"])
+    expect(status.processingVideoIds).toEqual(["vid-2", "vid-3"])
+  })
+
+  it("reports nothing when the user has no ready raw files", async () => {
+    const status = await getVideoProcessingStatus(makeFakeSupabase({}), "user-1")
+
+    expect(status.rawFileVideoIds).toEqual([])
+    expect(status.processingVideoIds).toEqual([])
   })
 })
