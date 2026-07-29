@@ -354,12 +354,14 @@ export function VideoBrowser({
   const canGoPrev = pageNumber > 1
   const canGoNext = visibleVideos.length > pageNumber * PAGE_SIZE
 
-  // While a page is still being buffered we won't yet have a full slice of rows.
-  // Rather than flash that partial set (and then have it jump to the full page
-  // once the remaining batches land), show the table skeleton until the page is
-  // complete. A settled last page legitimately holds fewer than PAGE_SIZE rows,
-  // but by then `loading` is false, so it renders normally.
-  const showSkeleton = loading && pageVideos.length < PAGE_SIZE
+  // Any time the list is loading — the initial buffer, a new query, or paging —
+  // show the table skeleton rather than the current rows. A single loading visual
+  // keeps the wait looking the same in every scenario: without this we'd
+  // sometimes dim a full page of already-buffered rows (e.g. when no uploads are
+  // filtered out, so a page fills immediately) and sometimes show the skeleton
+  // (when analysed uploads are filtered out and the visible count dips below a
+  // full page). A settled page renders its rows because `loading` is then false.
+  const showSkeleton = loading
 
   // When a query returns nothing, show a blank slate instead of the list and
   // hide the pagination controls — there are no further pages to step through.
@@ -471,29 +473,23 @@ export function VideoBrowser({
 
       {/* Results */}
       {showSkeleton ? (
-        // The page isn't fully buffered yet — show the skeleton rather than the
-        // partial row set so the table doesn't visibly grow as batches land.
+        // While loading, always show the skeleton — never the current rows dimmed
+        // — so the loading state looks identical in every scenario, and the table
+        // never visibly grows as buffered batches land.
         <VideoTableRowsSkeleton rows={PAGE_SIZE} />
-      ) : (
-        <div
-          aria-busy={loading}
-          className={loading ? "pointer-events-none opacity-60 transition-opacity" : "transition-opacity"}
-        >
-          {isEmpty ? (
-            <div className="flex flex-col items-center justify-center gap-3 rounded-xl border bg-card px-6 py-16 text-center">
-              <div className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                <VideoOffIcon className="size-6" />
-              </div>
-              <p className="text-sm text-muted-foreground">{emptyMessage}</p>
-            </div>
-          ) : (
-            <VideoList
-              videos={pageVideos}
-              analysedIds={analysedIds}
-              showAnalysedColumn={showAnalysed}
-            />
-          )}
+      ) : isEmpty ? (
+        <div className="flex flex-col items-center justify-center gap-3 rounded-xl border bg-card px-6 py-16 text-center">
+          <div className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+            <VideoOffIcon className="size-6" />
+          </div>
+          <p className="text-sm text-muted-foreground">{emptyMessage}</p>
         </div>
+      ) : (
+        <VideoList
+          videos={pageVideos}
+          analysedIds={analysedIds}
+          showAnalysedColumn={showAnalysed}
+        />
       )}
 
       {/* Pagination — hidden when there are no videos to page through, and while
