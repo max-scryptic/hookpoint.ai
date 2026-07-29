@@ -1,14 +1,11 @@
 import Link from "next/link"
 import {
-  AreaChartIcon,
-  BookOpenIcon,
   ChevronDownIcon,
   Clock3Icon,
   ImageIcon,
   LibraryIcon,
   LockIcon,
   MinusIcon,
-  PackageIcon,
   RefreshCwIcon,
   ShieldCheckIcon,
   SparklesIcon,
@@ -22,6 +19,7 @@ import {
   insightCopy,
   playbookCopy,
 } from "@/components/channel-trends-copy"
+import { ChannelTrendsTabs } from "@/components/channel-trends-tabs"
 import { EventTypeBadge } from "@/components/event-type-badge"
 import { HookIcon } from "@/components/hook-icon"
 import { buttonVariants } from "@/components/ui/button"
@@ -54,13 +52,14 @@ import {
 } from "@/lib/channel-trends"
 import { stripEmDashes } from "@/lib/copy-guardrails"
 
-// The Channel Trends page body: the library header, then two titled
-// sections. Retention holds the insight cards (written feedback for the few
-// patterns that earned it), the drop-vs-gain signature chart, the recurrence
-// strip across recent uploads, and the full per-type breakdown as an
-// appendix. Packaging holds which uploads earn reach and which convert
-// viewers into subscribers. Purely presentational; all aggregation and
-// gating lives in lib/channel-trends.ts, all insight copy in
+// The Channel Trends page body: the library header, then three tabs.
+// Retention holds the insight cards (written feedback for the few patterns
+// that earned it), the drop-vs-gain signature chart, the recurrence strip
+// across recent uploads, and the full per-type breakdown as an appendix.
+// Packaging holds which uploads earn reach and which convert viewers into
+// subscribers. Playbook holds the next-video repeat, repair and recovery
+// rules. Purely presentational; all aggregation and gating lives in
+// lib/channel-trends.ts, all insight copy in
 // components/channel-trends-copy.ts.
 //
 // COPY GUARDRAIL: no em dashes (U+2014), ever, in any text on this page.
@@ -323,24 +322,11 @@ function PlaybookRuleCard({ rule }: { rule: ChannelPlaybookRule }) {
 
 function ChannelPlaybook({ rules }: { rules: ChannelPlaybookRule[] }) {
   return (
-    <section className="flex flex-col gap-3">
-      <div className="rounded-xl border bg-card p-5">
-        <div className="flex items-center gap-2">
-          <BookOpenIcon className="size-5 text-primary" />
-          <h2 className="text-lg font-semibold">Your next-video playbook</h2>
-        </div>
-        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          The clearest repeat, repair and recovery rules from your channel.
-          Audience holds act as the control, so common editing habits are not
-          mistaken for useful signals.
-        </p>
-      </div>
-      <div className="grid gap-3 lg:grid-cols-3">
-        {rules.map((rule) => (
-          <PlaybookRuleCard key={rule.kind} rule={rule} />
-        ))}
-      </div>
-    </section>
+    <div className="grid gap-3 lg:grid-cols-3">
+      {rules.map((rule) => (
+        <PlaybookRuleCard key={rule.kind} rule={rule} />
+      ))}
+    </div>
   )
 }
 
@@ -1043,29 +1029,19 @@ function EarlySignalNote({ data }: { data: ChannelTrendsData }) {
   )
 }
 
-// A titled band of the page. The trends body reads as two of these: Retention
-// (what keeps viewers watching) and Packaging (what earns clicks, reach and
-// subscribers).
-function TrendsSection({
-  title,
+// One tab's body. The tab bar already names and illustrates the section, so
+// the panel opens with the standfirst that used to sit under the section
+// heading, then the cards.
+function TrendsPanel({
   description,
-  icon,
   children,
 }: {
-  title: string
   description: string
-  icon: React.ReactNode
   children: React.ReactNode
 }) {
   return (
     <section className="flex flex-col gap-3">
-      <div className="border-b pb-2">
-        <div className="flex items-center gap-2">
-          {icon}
-          <h2 className="text-lg font-semibold">{title}</h2>
-        </div>
-        <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
-      </div>
+      <p className="max-w-3xl text-sm text-muted-foreground">{description}</p>
       {children}
     </section>
   )
@@ -1087,51 +1063,53 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
     <div className="flex flex-col gap-6">
       <LibraryStats data={data} />
       <StageProgress data={data} />
-      {showTrends && data.playbook.length > 0 && (
-        <ChannelPlaybook rules={data.playbook} />
-      )}
       {showTrends ? (
         <>
           <EarlySignalNote data={data} />
-          {hasRetention && (
-            <TrendsSection
-              title="Retention"
-              description="What keeps viewers watching and where they leave, across every deeply analysed upload."
-              icon={<AreaChartIcon className="size-4 text-muted-foreground" />}
-            >
-              {data.insights.length > 0 && (
-                <div className="flex flex-col gap-3">
-                  {data.insights.map((insight) => (
-                    <InsightCard
-                      key={insight.kind}
-                      insight={insight}
-                      trend={trendForInsight(data, insight)}
-                    />
-                  ))}
-                </div>
-              )}
-              <RetentionTrendsTabs
-                dropOffs={data.dropOffs}
-                gains={data.gains}
-                holds={data.holds}
-              />
-              <FullBreakdown data={data} />
-            </TrendsSection>
-          )}
-          {hasPackaging && (
-            <TrendsSection
-              title="Packaging"
-              description="How your titles, thumbnails and promises translate into reach and subscribers."
-              icon={<PackageIcon className="size-4 text-muted-foreground" />}
-            >
-              {data.packaging != null && (
-                <PackagingPatternsCard packaging={data.packaging} />
-              )}
-              {data.subscribers != null && (
-                <SubscriberConversionCard conversion={data.subscribers} />
-              )}
-            </TrendsSection>
-          )}
+          <ChannelTrendsTabs
+            retention={
+              hasRetention ? (
+                <TrendsPanel description="What keeps viewers watching and where they leave, across every deeply analysed upload.">
+                  {data.insights.length > 0 && (
+                    <div className="flex flex-col gap-3">
+                      {data.insights.map((insight) => (
+                        <InsightCard
+                          key={insight.kind}
+                          insight={insight}
+                          trend={trendForInsight(data, insight)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  <RetentionTrendsTabs
+                    dropOffs={data.dropOffs}
+                    gains={data.gains}
+                    holds={data.holds}
+                  />
+                  <FullBreakdown data={data} />
+                </TrendsPanel>
+              ) : undefined
+            }
+            packaging={
+              hasPackaging ? (
+                <TrendsPanel description="How your titles, thumbnails and promises translate into reach and subscribers.">
+                  {data.packaging != null && (
+                    <PackagingPatternsCard packaging={data.packaging} />
+                  )}
+                  {data.subscribers != null && (
+                    <SubscriberConversionCard conversion={data.subscribers} />
+                  )}
+                </TrendsPanel>
+              ) : undefined
+            }
+            playbook={
+              data.playbook.length > 0 ? (
+                <TrendsPanel description="The clearest repeat, repair and recovery rules from your channel. Audience holds act as the control, so common editing habits are not mistaken for useful signals.">
+                  <ChannelPlaybook rules={data.playbook} />
+                </TrendsPanel>
+              ) : undefined
+            }
+          />
         </>
       ) : (
         <BuildingCard />
