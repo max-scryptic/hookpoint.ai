@@ -52,12 +52,41 @@ export async function GET(
       return NextResponse.json(idle)
     }
 
-    const progress = await getDeepAnalysisProgress(
+    // The pipeline-run summary is the card's failure signal, so read it up
+    // front and independently of the per-stage breakdown: even if computing the
+    // stages throws (a transient DB error, or code that reads a column a
+    // migration hasn't added yet), the card can still surface a failed run and
+    // prompt a retry instead of a silent green check.
+    const pipelineRun = await getLatestDeepAnalysisPipelineRun(
       supabase,
       user.id,
       analysedVideo.id,
-      sourceFile,
-    )
+    ).catch(() => null)
+
+    let progress: DeepAnalysisProgress
+    try {
+      progress = await getDeepAnalysisProgress(
+        supabase,
+        user.id,
+        analysedVideo.id,
+        sourceFile,
+      )
+    } catch (error) {
+      // A ready source file whose stage breakdown we can't compute is still
+      // being (or meant to be) analysed. Return a degraded-but-active read so
+      // the card shows a generic "analysing" spinner rather than nothing at
+      // all — the blank-card failure mode that used to hide a broken pipeline.
+      // Skip the resume kick: without the breakdown we can't tell what stalled,
+      // and whatever broke the read would likely break the resumed stage too.
+      console.error("Failed to compute deep analysis stages", error)
+      const degraded: DeepAnalysisProgress & { degraded: true } = {
+        active: true,
+        complete: false,
+        stages: null,
+        degraded: true,
+      }
+      return NextResponse.json({ ...degraded, pipelineRun })
+    }
 
     // The original pipeline kickoff is a long best-effort after() callback.
     // Large source files can exhaust that invocation partway through — stalling
@@ -72,11 +101,6 @@ export async function GET(
     if (shouldResumeDeepAnalysis(progress)) {
       triggerRetentionWindowMediaExtraction(sourceFile)
     }
-    const pipelineRun = await getLatestDeepAnalysisPipelineRun(
-      supabase,
-      user.id,
-      analysedVideo.id,
-    ).catch(() => null)
     return NextResponse.json({ ...progress, pipelineRun })
   } catch (error) {
     console.error("Failed to load analysis progress", error)
