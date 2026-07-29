@@ -743,6 +743,16 @@ function Body({
           title="Please check this file before uploading"
           subtitle={client.file.name}
         />
+        {/* A successful duration match is worth confirming positively, so when
+            the only concern is the filename the user still sees that the more
+            important check — the duration — lines up. Shown only when the
+            comparison actually ran (differenceSeconds is non-null) and passed. */}
+        {!client.durationMismatch && client.durationDifferenceSeconds != null && (
+          <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400">
+            <CheckCircle2Icon className="size-4 shrink-0" />
+            <span>The video durations match.</span>
+          </div>
+        )}
         <ul className="list-disc space-y-1 pl-5 text-sm text-amber-800 dark:text-amber-300">
           {client.durationMismatch && (
             <li>
