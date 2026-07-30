@@ -746,6 +746,9 @@ function editPhrase(
 // Every tip below is guidance for the uploader's next videos, never an
 // instruction to re-edit this one: it is already published, so "trim this" or
 // "compare a shorter cut against the current edit" is not an action they have.
+// That framing lives in how the advice is written ("plan ...", "a section like
+// this"), not in a "next time, ..." lead-in, which only delays the advice and
+// reads as a tic once every tip on the page opens the same way.
 // `at` names the moment that taught the lesson, not frames to go and change.
 function editTip(
   editing: WindowEvidence["editing"],
@@ -755,10 +758,10 @@ function editTip(
   const trend = cutTrend(editing, baseline)
   const moment = `Where the cut rhythm shifts${at}:`
   if (trend === "slower")
-    return `${moment} in future videos, plan a few more cuts or a b-roll insert through a section like this to lift the pace.`
+    return `${moment} plan a few more cuts or a b-roll insert through a section like this to lift the pace.`
   if (trend === "faster")
-    return `${moment} in future videos, let a shot or two breathe so fast cutting doesn't tire viewers out.`
-  return `${moment} in future videos, keep the cut rhythm steadier through a section like this so the pacing carries attention through it.`
+    return `${moment} let a shot or two breathe so fast cutting doesn't tire viewers out.`
+  return `${moment} keep the cut rhythm steadier through a section like this so the pacing carries attention through it.`
 }
 
 function takeawayFor({
@@ -813,8 +816,8 @@ function takeawayFor({
             ? `Here ${phrase}, so the picture stops carrying the moment.`
             : "The frame holds too long or shifts abruptly here, so the visual is doing the work.",
           tip: holdsStill
-            ? `Where the shot goes static${at}: in future videos, plan a b-roll insert or graphic to refresh the picture before viewers slip away.`
-            : `Where the framing stops carrying the moment${at}: in future videos, vary the shot to refresh the picture before viewers slip away.`,
+            ? `Where the shot goes static${at}: plan a b-roll insert or graphic to refresh the picture before viewers slip away.`
+            : `Where the framing stops carrying the moment${at}: vary the shot to refresh the picture before viewers slip away.`,
         }
       }
       case "audio": {
@@ -823,7 +826,7 @@ function takeawayFor({
           observation: phrase
             ? `The sound is what shifts here: ${phrase}.`
             : "Energy and sound are what shift here.",
-          tip: `Where the sound drops off${at}: in future videos, keep the delivery lifted and cut dead air like this out in the edit.`,
+          tip: `Where the sound drops off${at}: keep the delivery lifted and cut dead air like this out in the edit.`,
         }
       }
       case "combined": {
@@ -837,7 +840,7 @@ function takeawayFor({
             phrases.length > 0
               ? `A few things stack up at this moment: ${joinClauses(phrases)}.`
               : "A few signals reinforce each other here, with the edit and delivery both working against attention at once.",
-          tip: `Where the signals stack up${at}: in future videos, tighten pacing and delivery together through a stretch like this. No single change on its own is likely to move it.`,
+          tip: `Where the signals stack up${at}: tighten pacing and delivery together through a stretch like this. No single change on its own is likely to move it.`,
         }
       }
       default:

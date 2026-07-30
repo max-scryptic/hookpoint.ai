@@ -4,10 +4,16 @@
 // Its edit cannot be changed, and there is no way to put an alternate cut up
 // against the live one, so a recommendation phrased as "re-cut this and compare
 // it against the current edit" asks for something impossible. Every action here
-// must read as guidance the uploader applies to the videos they make next:
-// prefer "in future videos ..." / "next time ..." over "trim this" or "test an
-// alternate cut of this". The timestamp stays in the recommendation because it
-// says which moment taught the lesson, not which frames to go and change.
+// must read as guidance the uploader applies to the videos they make next.
+//
+// Carry that framing in the body of the sentence - "plan ...", "a stretch like
+// this" - rather than in a "next time, ..." / "in future videos, ..." lead-in.
+// The "Try:" label already says these are for the next video, so a lead-in only
+// delays the advice, and it turns into a tic when every tip on the page opens
+// the same way. cleanCopy (lib/copy-guardrails.ts) strips one at render time if
+// it slips through, here or from a model-written tip. The timestamp stays in
+// the recommendation because it says which moment taught the lesson, not which
+// frames to go and change.
 
 import type { RankedRetentionWindowEvent } from "@/lib/deep-analysis-insight-ranking"
 import type { AudioAnalysis } from "@/lib/retention-window-media-analysis"
@@ -70,7 +76,7 @@ function recommendationForEvent(params: {
     return {
       actionType: "replace_freeze",
       action:
-        "In future videos, keep the picture moving through a stretch like this: plan relevant B-roll, a close-up, or a supporting graphic to cover it rather than letting the frame hold.",
+        "Keep the picture moving through a stretch like this: plan relevant B-roll, a close-up, or a supporting graphic to cover it rather than letting the frame hold.",
       rationale: event.narrative,
       expectedPurpose: "Keeps the picture advancing while the point is delivered.",
     }
@@ -79,7 +85,7 @@ function recommendationForEvent(params: {
     return {
       actionType: "remove_black_frame",
       action:
-        "In future videos, bridge a transition like this with a continuous visual instead of cutting to black, or hold the black for only a few frames.",
+        "Bridge a transition like this with a continuous visual instead of cutting to black, or hold the black for only a few frames.",
       rationale: event.narrative,
       expectedPurpose: "A smoother transition gives viewers less of a cue to leave.",
     }
@@ -88,7 +94,7 @@ function recommendationForEvent(params: {
     return {
       actionType: "trim_silence",
       action:
-        "In future videos, cut dead air like this out in the edit, keeping only the short pause a sentence genuinely needs.",
+        "Cut dead air like this out in the edit, keeping only the short pause a sentence genuinely needs.",
       rationale: event.narrative,
       expectedPurpose: "A tighter audio transition sustains momentum through the point.",
     }
@@ -105,8 +111,8 @@ function recommendationForEvent(params: {
         actionType: "adjust_delivery",
         action:
           ratio <= 0.8
-            ? "When you explain something like this in future videos, keep the delivery closer to your usual speaking pace, or plan a shorter version of the explanation."
-            : "When you land a key point like this in future videos, give it slightly more room, or simplify the wording so it stays easy to follow at speed.",
+            ? "Keep the delivery on an explanation like this closer to your usual speaking pace, or plan a shorter version of it."
+            : "Give a key point like this slightly more room, or simplify the wording so it stays easy to follow at speed.",
         rationale: event.narrative,
         expectedPurpose:
           "A pace closer to your established norm is what viewers arrive expecting.",
@@ -124,7 +130,7 @@ function recommendationForEvent(params: {
       return {
         actionType: "increase_visual_pacing",
         action:
-          "In future videos, plan at least one purposeful visual change for a stretch like this: B-roll, a crop change, a demonstration, or concise on-screen text.",
+          "Plan at least one purposeful visual change for a stretch like this: B-roll, a crop change, a demonstration, or concise on-screen text.",
         rationale: event.narrative,
         expectedPurpose: "Pacing closer to the rest of the video, without adding noise.",
       }
@@ -133,7 +139,7 @@ function recommendationForEvent(params: {
       return {
         actionType: "reduce_visual_pacing",
         action:
-          "In future videos, cut less through a stretch like this: leave out the non-essential cuts and let the most informative shot stay on screen long enough to register.",
+          "Cut less through a stretch like this: leave out the non-essential cuts and let the most informative shot stay on screen long enough to register.",
         rationale: event.narrative,
         expectedPurpose: "Clearer visual continuity is easier to follow.",
       }
@@ -146,7 +152,7 @@ function recommendationForEvent(params: {
     return {
       actionType: "signpost_topic_shift",
       action:
-        "In future videos, signpost a shift like this before you make it: say what is coming and why it matters to what viewers came for, then keep the new section short and tie it back to the main topic.",
+        "Signpost a shift like this before you make it: say what is coming and why it matters to what viewers came for, then keep the new section short and tie it back to the main topic.",
       rationale: event.narrative,
       expectedPurpose:
         "A signposted shift reads as part of the promise instead of a different video.",
@@ -157,7 +163,7 @@ function recommendationForEvent(params: {
     return {
       actionType: "add_visual_support",
       action:
-        "In future videos, give a spoken point like this something to look at as you make it: a relevant demonstration, graphic, or framing change.",
+        "Give a spoken point like this something to look at as you make it: a relevant demonstration, graphic, or framing change.",
       rationale: event.narrative,
       expectedPurpose: "Gives the spoken point clearer visual support.",
     }
@@ -166,7 +172,7 @@ function recommendationForEvent(params: {
   return {
     actionType: "review_transition",
     action:
-      "In future videos, get through a transition like this faster: move straight into the next point rather than talking your way into it.",
+      "Get through a transition like this faster: move straight into the next point rather than talking your way into it.",
     rationale: event.narrative,
     expectedPurpose:
       "Turns the retention signal at this moment into an editing habit for the next video.",

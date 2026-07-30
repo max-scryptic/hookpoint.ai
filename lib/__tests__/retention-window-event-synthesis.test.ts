@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import {
   buildWindowContrastRanges,
+  compareToBaseline,
   dedupeAdjacentVisualFrames,
   synthesizeRetentionWindowEvents,
   type RetentionWindowEventSynthesizer,
@@ -231,6 +232,42 @@ describe("dedupeAdjacentVisualFrames", () => {
 
   it("returns an empty array unchanged", () => {
     expect(dedupeAdjacentVisualFrames([])).toEqual([])
+  })
+})
+
+describe("compareToBaseline", () => {
+  it("reports the direction once a value clears the tolerance", () => {
+    expect(compareToBaseline(2, 11, { floor: 0.5 })).toBe("below")
+    expect(compareToBaseline(20, 11, { floor: 0.5 })).toBe("above")
+  })
+
+  it("calls a value that matches the baseline 'at', not a deviation", () => {
+    expect(compareToBaseline(11, 11, { floor: 0.5 })).toBe("at")
+    expect(compareToBaseline(11.5, 11, { floor: 0.5 })).toBe("at")
+  })
+
+  // The narrative this fixes: a hook with no cuts in a video that barely cuts
+  // anywhere came back as "no cuts, which contrasts with your usual baseline of
+  // about 0 cuts per minute". Two values in the noise are the same value.
+  it("calls a flat-near-zero metric 'at' instead of a contrast", () => {
+    expect(compareToBaseline(0, 0, { floor: 0.5 })).toBe("at")
+    expect(compareToBaseline(0, 0.2, { floor: 0.5 })).toBe("at")
+    expect(compareToBaseline(0.01, 0.015, { floor: 0.02 })).toBe("at")
+  })
+
+  // The floor also keeps the relative tolerance from collapsing when the
+  // baseline is tiny: real cutting against a near-zero norm still reads as a
+  // deviation.
+  it("still reports a real deviation from a near-zero baseline", () => {
+    expect(compareToBaseline(6, 0.2, { floor: 0.5 })).toBe("above")
+  })
+
+  it("reports unavailable when either number is missing", () => {
+    expect(compareToBaseline(null, 11, { floor: 0.5 })).toBe("unavailable")
+    expect(compareToBaseline(4, null, { floor: 0.5 })).toBe("unavailable")
+    expect(compareToBaseline(undefined, undefined, { floor: 0.5 })).toBe(
+      "unavailable",
+    )
   })
 })
 
@@ -509,6 +546,22 @@ describe("synthesizeRetentionWindowEvents", () => {
     expect(evidence.visual[0].ocrText).toBe("SALE 50% OFF")
     expect(evidence.visual[1].ocrText).toBeNull()
     expect(evidence.audio).toMatchObject({ tone: "excited", speech_rate: 148 })
+    // This window's own motion, on the same 0..1 scale as baseline.motion, so
+    // the narrative never has to reach for a frame's categorical motion label
+    // to compare against the video's norm.
+    expect(evidence.motion).toBeCloseTo(0.125)
+    // The window's single cut over 62s is the whole video's cut rate here, and
+    // its speech rate is the average of the analysed clips, so neither is a
+    // deviation the narrative may describe as a contrast. Motion has no
+    // full-video baseline in this fixture, so it stays unavailable rather than
+    // being compared against nothing.
+    expect(evidence.baselineDeviation).toEqual({
+      cutsPerMinute: "at",
+      freezeCoverage: "at",
+      blackCoverage: "at",
+      speechRate: "at",
+      motion: "unavailable",
+    })
     expect(evidence.contrast).toMatchObject({
       controlRange: { fromSeconds: 132, toSeconds: 154 },
       targetRange: { fromSeconds: 154, toSeconds: 176 },

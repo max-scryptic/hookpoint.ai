@@ -42,7 +42,6 @@ describe("compileDeepAnalysisRecommendations", () => {
     })
     expect(recommendations[0]).toMatchObject({ actionType: "trim_silence" })
     expect(recommendations[0].action).toContain("dead air")
-    expect(recommendations[0].action).toContain("future videos")
   })
 
   it("preserves a successful pattern for a gain", () => {
@@ -65,7 +64,7 @@ describe("compileDeepAnalysisRecommendations", () => {
       audio: null,
     })
     expect(recommendations[0].actionType).toBe("signpost_topic_shift")
-    expect(recommendations[0].action).toContain("signpost")
+    expect(recommendations[0].action).toMatch(/signpost/i)
   })
 
   // The video being analysed is already live on YouTube, so no recommendation may
@@ -99,6 +98,33 @@ describe("compileDeepAnalysisRecommendations", () => {
     // Guards the loop itself: if a new branch is added without a case here, the
     // count stops matching and this test asks for the missing coverage.
     expect(seen.size).toBe(10)
+  })
+
+  // The tip is already labelled as advice for the next video, so a "next time"
+  // lead-in only pushes the action further down the sentence, and reads as a
+  // tic once every tip on the page opens the same way. Each action starts on
+  // the thing to do.
+  it("never opens an action with a forward-looking preamble", () => {
+    const cases: Parameters<typeof compileDeepAnalysisRecommendations>[0][] = [
+      { events: [event()], window, editing: null, baseline: { cutsPerMinute: null, speechRate: null }, audio: null },
+      { events: [event()], window: { ...window, kind: "gain" }, editing: null, baseline: { cutsPerMinute: null, speechRate: null }, audio: null },
+      { events: [event()], window, editing: { freezeCoverage: 0.2 } as never, baseline: { cutsPerMinute: null, speechRate: null }, audio: null },
+      { events: [event()], window, editing: { freezeCoverage: 0, blackCoverage: 0.2 } as never, baseline: { cutsPerMinute: null, speechRate: null }, audio: null },
+      { events: [event()], window, editing: null, baseline: { cutsPerMinute: null, speechRate: null }, audio: { silence: 0.2 } as never },
+      { events: [event()], window, editing: null, baseline: { cutsPerMinute: null, speechRate: 150 }, audio: { speech_rate: 100 } as never },
+      { events: [event()], window, editing: null, baseline: { cutsPerMinute: null, speechRate: 150 }, audio: { speech_rate: 220 } as never },
+      { events: [event()], window, editing: { cutsPerMinute: 2 } as never, baseline: { cutsPerMinute: 10, speechRate: null }, audio: null },
+      { events: [event()], window, editing: { cutsPerMinute: 20 } as never, baseline: { cutsPerMinute: 10, speechRate: null }, audio: null },
+      { events: [event({ eventType: "topic_shift" })], window, editing: null, baseline: { cutsPerMinute: null, speechRate: null }, audio: null },
+      { events: [event({ primaryEvidence: "visual" })], window, editing: null, baseline: { cutsPerMinute: null, speechRate: null }, audio: null },
+    ]
+
+    for (const params of cases) {
+      const [recommendation] = compileDeepAnalysisRecommendations(params)
+      expect(recommendation.action).not.toMatch(
+        /^(next time|next video|in (your |the )?(next|future)|for (your |the )?(next|future)|going forward|from now on)/i,
+      )
+    }
   })
 
   it("deduplicates the same nearby action across overlapping windows", () => {
