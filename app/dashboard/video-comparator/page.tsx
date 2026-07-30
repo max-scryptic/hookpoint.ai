@@ -119,6 +119,7 @@ export default async function Page() {
               savedPairs={result.comparisons.map((comparison) => ({
                 a: comparison.videoAId,
                 b: comparison.videoBId,
+                reportsReady: comparison.reportsReady,
               }))}
             />
             <PreviousComparisons comparisons={result.comparisons} />

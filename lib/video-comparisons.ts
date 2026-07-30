@@ -31,6 +31,11 @@ export interface SavedComparison {
   videoAThumbnailUrl: string | null
   videoBThumbnailUrl: string | null
   createdAt: string
+  // True when both written head-to-heads are stored, so this pair opens into a
+  // complete report with nothing left to write. False for a pair created before
+  // one of those reports existed, or one whose generation failed: pressing the
+  // button on it again writes the missing part, for free.
+  reportsReady: boolean
 }
 
 interface ComparisonRow {
@@ -38,6 +43,19 @@ interface ComparisonRow {
   video_a_id: string
   video_b_id: string
   created_at: string
+  script_ready: string | null
+  packaging_ready: string | null
+}
+
+// Whether a stored report is present, without dragging the whole JSON blob back
+// for every row. Both reports always carry a schemaVersion (see each report
+// module's normalizer), so probing that one key is a cheap stand-in for "is not
+// null".
+const REPORT_READY_PROBE =
+  "script_ready:script_report->>schemaVersion, packaging_ready:packaging_report->>schemaVersion"
+
+function reportsReady(row: ComparisonRow): boolean {
+  return row.script_ready != null && row.packaging_ready != null
 }
 
 // True when two saved pairs are the same head-to-head, regardless of the order
@@ -63,7 +81,7 @@ export async function listSavedComparisons(
 ): Promise<SavedComparison[]> {
   const { data, error } = await supabase
     .from("video_comparisons")
-    .select("id, video_a_id, video_b_id, created_at")
+    .select(`id, video_a_id, video_b_id, created_at, ${REPORT_READY_PROBE}`)
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(limit)
@@ -112,6 +130,7 @@ export async function listSavedComparisons(
     videoAThumbnailUrl: videoById.get(row.video_a_id)?.thumbnailUrl ?? null,
     videoBThumbnailUrl: videoById.get(row.video_b_id)?.thumbnailUrl ?? null,
     createdAt: row.created_at,
+    reportsReady: reportsReady(row),
   }))
 }
 
@@ -127,7 +146,7 @@ export async function findSavedComparison(
 ): Promise<SavedComparison | null> {
   const { data, error } = await supabase
     .from("video_comparisons")
-    .select("id, video_a_id, video_b_id, created_at")
+    .select(`id, video_a_id, video_b_id, created_at, ${REPORT_READY_PROBE}`)
     .eq("user_id", userId)
     .or(
       `and(video_a_id.eq.${videoAId},video_b_id.eq.${videoBId}),and(video_a_id.eq.${videoBId},video_b_id.eq.${videoAId})`,
@@ -150,6 +169,7 @@ export async function findSavedComparison(
     videoAThumbnailUrl: null,
     videoBThumbnailUrl: null,
     createdAt: row.created_at,
+    reportsReady: reportsReady(row),
   }
 }
 
@@ -254,7 +274,7 @@ export async function createSavedComparison(
     throw new Error(`Failed to save comparison: ${error.message}`)
   }
 
-  const row = data as ComparisonRow
+  const row = data as Omit<ComparisonRow, "script_ready" | "packaging_ready">
   return {
     id: row.id,
     videoAId: row.video_a_id,
@@ -264,5 +284,8 @@ export async function createSavedComparison(
     videoAThumbnailUrl: null,
     videoBThumbnailUrl: null,
     createdAt: row.created_at,
+    // The row is one insert old, so neither head-to-head can be on it yet. The
+    // caller writes both before it responds.
+    reportsReady: false,
   }
 }

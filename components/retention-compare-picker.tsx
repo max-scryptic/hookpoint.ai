@@ -1,10 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useCallback, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeftRightIcon, Loader2Icon } from "lucide-react"
+import { ArrowLeftRightIcon } from "lucide-react"
 
+import { ComparisonProcessingOverlay } from "@/components/comparison-processing"
+import { ConfettiBurst } from "@/components/confetti-burst"
 import { Button } from "@/components/ui/button"
+import { useNavigationGuard } from "@/hooks/use-navigation-guard"
 import { VIDEO_COMPARISON_CREDIT_COST } from "@/lib/plans"
 import type { ComparableVideo } from "@/lib/retention-comparison"
 import { isSamePair } from "@/lib/video-comparisons"
@@ -15,18 +18,31 @@ import { isSamePair } from "@/lib/video-comparisons"
 // presses the button. A pair that was already generated (in either order)
 // re-opens for free, and the button says so.
 //
-// The button is the one and only trigger for writing a report: the whole thing
-// (both written head-to-heads included) is produced by the endpoint while the
-// spinner runs here, so the report page it lands on is a pure read with no
-// loading state of its own.
+// This button is the one and only trigger for writing a report: the report page
+// is a pure read and never generates anything, so a saved pair that is missing
+// a section (one generated before that section existed, or one whose generation
+// failed) is finished here, for free, rather than on view.
 //
-// Selecting a pair is local state here; generating (or re-opening) a report is a
-// navigation to the dedicated report page at
+// Generating never navigates early. Writing a head-to-head runs two model
+// passes (see app/api/video-comparisons/route.ts), so pressing "Generate
+// report" raises the full-screen popup and holds it for the whole run, the same
+// way analysing a video does. Only once the endpoint has finished and stored
+// every part of the report does the popup flip to its done state: confetti,
+// then a button through to the finished report. That way the creator never
+// lands on a report page that is still writing itself.
+//
+// Selecting a pair is local state here; opening a finished report (or
+// re-opening a paid-for one) is a navigation to the dedicated report page at
 // video-comparator/report?a=..&b=.. so the report renders on its own page and
 // the URL stays shareable.
 //
 // COPY GUARDRAIL: no em or en dashes anywhere in this file (comments
 // included). Hyphens are fine.
+
+type Phase = "idle" | "generating" | "done" | "error"
+
+const LEAVE_WARNING =
+  "Your comparison report is still being generated. Leaving now will stop it, and the credits you just spent will be used up."
 
 function optionLabel(video: ComparableVideo): string {
   const title = video.title ?? "Untitled video"
@@ -35,42 +51,73 @@ function optionLabel(video: ComparableVideo): string {
     : title
 }
 
+function reportHref(a: string, b: string): string {
+  return `/dashboard/video-comparator/report?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`
+}
+
 export function RetentionComparePicker({
   videos,
   savedPairs,
 }: {
   videos: ComparableVideo[]
   // The unordered pairs the creator has already generated, so the button can
-  // offer a free re-open instead of another charge.
-  savedPairs: Array<{ a: string; b: string }>
+  // offer a free re-open instead of another charge. reportsReady says whether
+  // that pair's report is complete: a saved pair missing a written section is
+  // still free, but it has to go through the endpoint to be finished.
+  savedPairs: Array<{ a: string; b: string; reportsReady: boolean }>
 }) {
   const router = useRouter()
   const [a, setA] = useState("")
   const [b, setB] = useState("")
-  const [pending, setPending] = useState(false)
+  const [phase, setPhase] = useState<Phase>("idle")
+  const [opening, setOpening] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // True when the run finished but a section could not be written, so the done
+  // state promises a little less than a clean run does.
+  const [partial, setPartial] = useState(false)
+  // Guards against re-entrant generates (for example a double click) without
+  // waiting on the async state updates.
+  const activeRef = useRef(false)
 
   const bothPicked = a !== "" && b !== "" && a !== b
-  const alreadyGenerated =
-    bothPicked && savedPairs.some((pair) => isSamePair(pair, { a, b }))
+  const saved = bothPicked
+    ? savedPairs.find((pair) => isSamePair(pair, { a, b }))
+    : undefined
+  const alreadyGenerated = saved != null
+  // Paid for and finished: this press is a straight re-open. Paid for but
+  // missing a section still costs nothing, but it runs the generate flow to
+  // write what is missing.
+  const alreadyComplete = alreadyGenerated && saved.reportsReady
+  const busy = phase === "generating" || phase === "done"
 
-  const open = (nextA: string, nextB: string) => {
-    router.push(
-      `/dashboard/video-comparator/report?a=${encodeURIComponent(nextA)}&b=${encodeURIComponent(nextB)}`,
-    )
-    router.refresh()
-  }
+  // A reload or a tab close mid-generation abandons a run that has already been
+  // charged for, so warn before the page goes away. Only while the work is
+  // actually in flight: once the report is written there is nothing to lose.
+  useNavigationGuard(phase === "generating", LEAVE_WARNING)
+
+  const open = useCallback(
+    (nextA: string, nextB: string) => {
+      router.push(reportHref(nextA, nextB))
+      router.refresh()
+    },
+    [router],
+  )
 
   const generate = async () => {
-    if (!bothPicked) return
+    if (!bothPicked || activeRef.current) return
+    // A pair already paid for whose report is complete just re-opens: nothing
+    // to write, so no popup and no round-trip. A saved pair that is missing a
+    // section goes through the endpoint like a new one (for free) so the part
+    // that never made it onto the row is written now. The report page itself
+    // never generates, so this button is the only way a report gets written.
+    if (alreadyComplete) {
+      open(a, b)
+      return
+    }
 
-    // Always go through the endpoint, even for a pair that is already paid for.
-    // It is the single place the report is written: for a new pair it charges
-    // and generates, and for an existing one it charges nothing and only fills
-    // in a head-to-head that is missing. That keeps every report complete before
-    // the report page opens, so the page itself never has to generate anything.
-    setPending(true)
+    activeRef.current = true
     setError(null)
+    setPhase("generating")
     try {
       const response = await fetch("/api/video-comparisons", {
         method: "POST",
@@ -79,17 +126,41 @@ export function RetentionComparePicker({
       })
       const payload = (await response.json().catch(() => null)) as {
         error?: string
+        reportsReady?: boolean
       } | null
       if (!response.ok) {
         setError(payload?.error ?? "We couldn't generate that comparison.")
+        setPhase("error")
+        activeRef.current = false
         return
       }
-      open(a, b)
+      // The endpoint only resolves once both head-to-heads have been written
+      // and stored, so by here the report is finished. reportsReady is false
+      // only when a section could not be written at all, in which case the
+      // report opens without it and the popup says so. Warm the route while the
+      // creator reads the done state so pressing through is instant.
+      setPartial(payload?.reportsReady === false)
+      router.prefetch(reportHref(a, b))
+      setPhase("done")
     } catch {
       setError("We couldn't reach the server. Please try again.")
-    } finally {
-      setPending(false)
+      setPhase("error")
+      activeRef.current = false
     }
+  }
+
+  const dismiss = () => {
+    setPhase("idle")
+    setError(null)
+    setPartial(false)
+    activeRef.current = false
+  }
+
+  // The popup stays up through the navigation (it only unmounts when this page
+  // does), so the creator never sees a flash of the picker on the way out.
+  const openReport = () => {
+    setOpening(true)
+    open(a, b)
   }
 
   const selectClass =
@@ -102,6 +173,7 @@ export function RetentionComparePicker({
           aria-label="First video"
           className={selectClass}
           value={a}
+          disabled={busy}
           onChange={(event) => setA(event.target.value)}
         >
           <option value="">Select a video</option>
@@ -114,7 +186,8 @@ export function RetentionComparePicker({
         <button
           type="button"
           aria-label="Swap the two videos"
-          className="mx-auto flex size-9 shrink-0 items-center justify-center rounded-md border bg-card text-muted-foreground hover:text-foreground"
+          disabled={busy}
+          className="mx-auto flex size-9 shrink-0 items-center justify-center rounded-md border bg-card text-muted-foreground hover:text-foreground disabled:opacity-50"
           onClick={() => {
             setA(b)
             setB(a)
@@ -126,6 +199,7 @@ export function RetentionComparePicker({
           aria-label="Second video"
           className={selectClass}
           value={b}
+          disabled={busy}
           onChange={(event) => setB(event.target.value)}
         >
           <option value="">Select a video</option>
@@ -138,25 +212,47 @@ export function RetentionComparePicker({
         <Button
           type="button"
           onClick={generate}
-          disabled={!bothPicked || pending}
+          disabled={!bothPicked || busy}
           className="shrink-0 sm:w-auto"
         >
-          {pending && <Loader2Icon className="size-4 animate-spin" />}
-          {alreadyGenerated ? "View report" : "Generate report"}
+          {alreadyComplete
+            ? "View report"
+            : alreadyGenerated
+              ? "Finish report"
+              : "Generate report"}
         </Button>
       </div>
 
-      {(!alreadyGenerated || error) && (
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          {!alreadyGenerated && (
-            <p className="text-xs text-muted-foreground">
-              A comparison costs {VIDEO_COMPARISON_CREDIT_COST} deep-dive
-              credits.
-            </p>
-          )}
-          {error && <p className="text-xs text-destructive">{error}</p>}
-        </div>
+      {!alreadyGenerated && (
+        <p className="text-xs text-muted-foreground">
+          A comparison costs {VIDEO_COMPARISON_CREDIT_COST} deep-dive credits,
+          and takes a couple of minutes to write.
+        </p>
       )}
+      {alreadyGenerated && !alreadyComplete && (
+        <p className="text-xs text-muted-foreground">
+          Part of this report was never written. Finishing it is free, since you
+          have already paid for this pair, and takes a couple of minutes.
+        </p>
+      )}
+
+      {phase !== "idle" && (
+        <ComparisonProcessingOverlay
+          status={
+            phase === "done"
+              ? "done"
+              : phase === "error"
+                ? "error"
+                : "generating"
+          }
+          error={error}
+          partial={partial}
+          opening={opening}
+          onDismiss={dismiss}
+          onOpenReport={openReport}
+        />
+      )}
+      {phase === "done" && <ConfettiBurst />}
     </div>
   )
 }
