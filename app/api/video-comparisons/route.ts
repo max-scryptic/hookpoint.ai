@@ -25,10 +25,13 @@ export const maxDuration = 300
 // Generates (and pays for) one video-vs-video comparison report. A comparison
 // costs a flat VIDEO_COMPARISON_CREDIT_COST deep-dive credits, charged once per
 // unordered pair: re-generating a pair that already exists (in either order)
-// re-opens it for free. On success the pair is saved and the client navigates
-// to the comparison, which renders from the two videos' stored deep analysis.
-// The written script report is generated once here and stored on the row; the
-// retention and packaging comparisons are still recomputed live on the page.
+// re-opens it for free. The request does not resolve until both written
+// head-to-heads have been generated and stored, so the client can keep its
+// "generating" popup up for the whole run and only offer the way through to the
+// report once there is a finished report to open. The response carries
+// reportsReady so the client knows whether anything is still outstanding.
+// The written script and packaging reports are generated once here and stored
+// on the row; the retention comparison is still recomputed live on the page.
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -72,7 +75,11 @@ export async function POST(request: NextRequest) {
       videoBId,
     )
     if (existing) {
-      return NextResponse.json({ id: existing.id, charged: 0 })
+      return NextResponse.json({
+        id: existing.id,
+        charged: 0,
+        reportsReady: true,
+      })
     }
 
     // Comparisons ride on the same deep-dive credit budget as deep analysis;
@@ -120,7 +127,13 @@ export async function POST(request: NextRequest) {
         videoAId,
         videoBId,
       )
-      if (raced) return NextResponse.json({ id: raced.id, charged: 0 })
+      if (raced) {
+        return NextResponse.json({
+          id: raced.id,
+          charged: 0,
+          reportsReady: true,
+        })
+      }
       throw error
     }
 
@@ -172,9 +185,22 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // The client holds its "generating" popup until this response lands and
+    // only then offers the way through to the report, so tell it whether the
+    // report it is about to open is complete. A section is only "ready" when it
+    // was actually written and stored: a rejection, or a null result (a video
+    // that has gone missing), both leave the stored report empty and send the
+    // report page down its lazy backfill path on open.
+    const reportsReady =
+      scriptResult.status === "fulfilled" &&
+      scriptResult.value != null &&
+      packagingResult.status === "fulfilled" &&
+      packagingResult.value != null
+
     return NextResponse.json({
       id: saved.id,
       charged: VIDEO_COMPARISON_CREDIT_COST,
+      reportsReady,
     })
   } catch (error) {
     console.error("Failed to generate video comparison", error)
