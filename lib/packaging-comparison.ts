@@ -44,6 +44,10 @@ export type Side = "a" | "b"
 export interface PackagingComparisonSide {
   id: string
   title: string | null
+  // The real thumbnail, so the surface the report argues about is on screen
+  // next to the argument. Null when the video was analysed before thumbnails
+  // were captured.
+  thumbnailUrl: string | null
   views: number | null
   hasTaxonomy: boolean
   hasDetail: boolean
@@ -126,6 +130,7 @@ export interface PackagingComparison {
 export interface PackagingComparisonInput {
   id: string
   title: string | null
+  thumbnailUrl: string | null
   views: number | null
   taxonomy: PackagingTaxonomy | null
 }
@@ -666,6 +671,7 @@ function sideFor(
   return {
     id: input.id,
     title: input.title,
+    thumbnailUrl: input.thumbnailUrl,
     views: input.views,
     hasTaxonomy: input.taxonomy != null,
     hasDetail: input.taxonomy?.detail != null,
@@ -733,6 +739,7 @@ export function buildPackagingComparison(
 interface PackagingRow {
   id: string
   video_title: string | null
+  thumbnail_url: string | null
   analytics_summary: { views?: number | null } | null
   packaging_taxonomy: PackagingTaxonomy | null
 }
@@ -751,7 +758,7 @@ export async function getPackagingComparison(
   const { data, error } = await supabase
     .from("analysed_videos")
     .select(
-      "id, video_title, analytics_summary, packaging_taxonomy:packaging_alignment->taxonomy",
+      "id, video_title, thumbnail_url:video_details->>thumbnailUrl, analytics_summary, packaging_taxonomy:packaging_alignment->taxonomy",
     )
     .eq("user_id", userId)
     .in("id", [videoIdA, videoIdB])
@@ -768,6 +775,7 @@ export async function getPackagingComparison(
   const toInput = (row: PackagingRow): PackagingComparisonInput => ({
     id: row.id,
     title: row.video_title,
+    thumbnailUrl: row.thumbnail_url,
     views: row.analytics_summary?.views ?? null,
     taxonomy: row.packaging_taxonomy,
   })
