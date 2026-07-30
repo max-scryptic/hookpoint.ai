@@ -18,6 +18,11 @@ import { isSamePair } from "@/lib/video-comparisons"
 // presses the button. A pair that was already generated (in either order)
 // re-opens for free, and the button says so.
 //
+// This button is the one and only trigger for writing a report: the report page
+// is a pure read and never generates anything, so a saved pair that is missing
+// a section (one generated before that section existed, or one whose generation
+// failed) is finished here, for free, rather than on view.
+//
 // Generating never navigates early. Writing a head-to-head runs two model
 // passes (see app/api/video-comparisons/route.ts), so pressing "Generate
 // report" raises the full-screen popup and holds it for the whole run, the same
@@ -56,8 +61,10 @@ export function RetentionComparePicker({
 }: {
   videos: ComparableVideo[]
   // The unordered pairs the creator has already generated, so the button can
-  // offer a free re-open instead of another charge.
-  savedPairs: Array<{ a: string; b: string }>
+  // offer a free re-open instead of another charge. reportsReady says whether
+  // that pair's report is complete: a saved pair missing a written section is
+  // still free, but it has to go through the endpoint to be finished.
+  savedPairs: Array<{ a: string; b: string; reportsReady: boolean }>
 }) {
   const router = useRouter()
   const [a, setA] = useState("")
@@ -73,8 +80,14 @@ export function RetentionComparePicker({
   const activeRef = useRef(false)
 
   const bothPicked = a !== "" && b !== "" && a !== b
-  const alreadyGenerated =
-    bothPicked && savedPairs.some((pair) => isSamePair(pair, { a, b }))
+  const saved = bothPicked
+    ? savedPairs.find((pair) => isSamePair(pair, { a, b }))
+    : undefined
+  const alreadyGenerated = saved != null
+  // Paid for and finished: this press is a straight re-open. Paid for but
+  // missing a section still costs nothing, but it runs the generate flow to
+  // write what is missing.
+  const alreadyComplete = alreadyGenerated && saved.reportsReady
   const busy = phase === "generating" || phase === "done"
 
   // A reload or a tab close mid-generation abandons a run that has already been
@@ -92,9 +105,12 @@ export function RetentionComparePicker({
 
   const generate = async () => {
     if (!bothPicked || activeRef.current) return
-    // A pair already paid for has its report stored, so it just re-opens; no
-    // generation and no round-trip needed.
-    if (alreadyGenerated) {
+    // A pair already paid for whose report is complete just re-opens: nothing
+    // to write, so no popup and no round-trip. A saved pair that is missing a
+    // section goes through the endpoint like a new one (for free) so the part
+    // that never made it onto the row is written now. The report page itself
+    // never generates, so this button is the only way a report gets written.
+    if (alreadyComplete) {
       open(a, b)
       return
     }
@@ -121,8 +137,8 @@ export function RetentionComparePicker({
       // The endpoint only resolves once both head-to-heads have been written
       // and stored, so by here the report is finished. reportsReady is false
       // only when a section could not be written at all, in which case the
-      // report page fills it in on open and the popup says so. Warm the route
-      // while the creator reads the done state so pressing through is instant.
+      // report opens without it and the popup says so. Warm the route while the
+      // creator reads the done state so pressing through is instant.
       setPartial(payload?.reportsReady === false)
       router.prefetch(reportHref(a, b))
       setPhase("done")
@@ -199,7 +215,11 @@ export function RetentionComparePicker({
           disabled={!bothPicked || busy}
           className="shrink-0 sm:w-auto"
         >
-          {alreadyGenerated ? "View report" : "Generate report"}
+          {alreadyComplete
+            ? "View report"
+            : alreadyGenerated
+              ? "Finish report"
+              : "Generate report"}
         </Button>
       </div>
 
@@ -207,6 +227,12 @@ export function RetentionComparePicker({
         <p className="text-xs text-muted-foreground">
           A comparison costs {VIDEO_COMPARISON_CREDIT_COST} deep-dive credits,
           and takes a couple of minutes to write.
+        </p>
+      )}
+      {alreadyGenerated && !alreadyComplete && (
+        <p className="text-xs text-muted-foreground">
+          Part of this report was never written. Finishing it is free, since you
+          have already paid for this pair, and takes a couple of minutes.
         </p>
       )}
 

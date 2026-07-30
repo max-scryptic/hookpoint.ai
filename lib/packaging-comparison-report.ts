@@ -18,10 +18,11 @@
 // The paid audio read is excluded on purpose; see the evidence module's header.
 //
 // Unlike lib/packaging-comparison.ts (a pure diff of two stored taxonomies with
-// no model call at view time), this is one vision call, made once when a pair is
-// first created and stored on the video_comparisons row. The report page reads
-// the stored report and regenerates a missing one lazily, exactly like the
-// script report it sits beside.
+// no model call at view time), this is one vision call. It is made once, from
+// the generate endpoint while the creator waits on the button, and stored on the
+// video_comparisons row; the report page only ever reads it back. Nothing on the
+// report page calls this, so a report is never re-written just because someone
+// opened the page or switched to the Packaging tab.
 //
 // COPY GUARDRAIL: no em or en dashes (U+2014 / U+2013), ever, in any generated
 // or literal text in this file. Hyphens are fine.

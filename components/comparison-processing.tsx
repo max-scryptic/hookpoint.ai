@@ -182,7 +182,7 @@ export function ComparisonProcessing({
         <p className="min-h-[1.25rem] text-sm text-muted-foreground transition-opacity">
           {isDone
             ? partial
-              ? "One section is still being written and will fill in when you open the report."
+              ? "One section could not be written this time. The rest of the report is ready."
               : "Retention, packaging and script are all written up."
             : STAGES[stage]}
         </p>

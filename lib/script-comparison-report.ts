@@ -4,9 +4,10 @@
 // lib/script-comparison.ts (which diff two stored script taxonomies with no
 // model call), this is a prose report that reads both scripts directly and
 // explains how they differ and what in the writing likely moved retention. It
-// is generated once, when a comparison pair is first created, and stored on the
-// video_comparisons row (see the 20260726120000 migration); the report page
-// reads the stored report and, if one is missing, regenerates it lazily.
+// is generated once, from the generate endpoint while the creator waits on the
+// button, and stored on the video_comparisons row (see the 20260726120000
+// migration); the report page only ever reads it back and never calls this, so
+// a report is never re-written just because someone opened the page.
 //
 // COPY GUARDRAIL: no em or en dashes (U+2014 / U+2013), ever, in any generated
 // or literal text in this file. Hyphens are fine.

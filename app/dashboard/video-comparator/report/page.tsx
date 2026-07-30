@@ -1,6 +1,6 @@
-import { Suspense } from "react"
+import type { ReactNode } from "react"
 import Link from "next/link"
-import { ArrowLeftIcon, Loader2Icon, LockIcon } from "lucide-react"
+import { ArrowLeftIcon, LockIcon } from "lucide-react"
 
 import { PackagingComparison } from "@/components/packaging-comparison"
 import { ScriptComparison } from "@/components/script-comparison"
@@ -11,25 +11,18 @@ import {
 import { VideoComparisonTabs } from "@/components/video-comparison-tabs"
 import { buttonVariants } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
 import { requireAuthenticatedUser } from "@/lib/auth"
 import { getEntitlement } from "@/lib/billing/entitlements"
 import {
   getPackagingComparison,
   type PackagingComparison as PackagingComparisonData,
 } from "@/lib/packaging-comparison"
-import {
-  buildAndStorePackagingComparisonReport,
-  type PackagingComparisonReport,
-} from "@/lib/packaging-comparison-report"
+import type { PackagingComparisonReport } from "@/lib/packaging-comparison-report"
 import {
   getScriptComparison,
   type ScriptComparison as ScriptComparisonData,
 } from "@/lib/script-comparison"
-import {
-  buildAndStoreScriptComparisonReport,
-  type ScriptComparisonReport,
-} from "@/lib/script-comparison-report"
+import type { ScriptComparisonReport } from "@/lib/script-comparison-report"
 import {
   getRetentionComparison,
   listComparableVideos,
@@ -38,8 +31,7 @@ import {
 } from "@/lib/retention-comparison"
 import {
   findSavedComparison,
-  getPackagingComparisonReport,
-  getScriptComparisonReport,
+  getComparisonReports,
 } from "@/lib/video-comparisons"
 import { createClient } from "@/lib/supabase/server"
 import {
@@ -60,21 +52,23 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 // the creator has actually generated, so a shared or hand-edited URL never
 // loads a report they never paid for.
 //
+// This page is read-only. The whole report is produced once, when the creator
+// presses Generate report (see app/api/video-comparisons/route.ts): the two
+// written head-to-heads are stored on the comparison row there, and everything
+// else is pure arithmetic over each video's stored analysis. Nothing on this
+// page calls a model, and nothing generates on the fly, so every tab is fully
+// rendered by the time the page paints instead of streaming in behind a
+// spinner. A pair that is missing a written report (one created before those
+// reports existed, or one whose generation failed) says so and is filled in for
+// free by re-opening the pair from the Video Comparator; it is never quietly
+// regenerated on view.
+//
 // COPY GUARDRAIL: no em or en dashes anywhere in this file (comments
 // included). Hyphens are fine.
-
-// The written script report can take a moment to generate on the rare lazy
-// backfill path (a comparison created before this feature, or one whose report
-// generation failed at creation), so give the page the same headroom the
-// analysis routes use.
-export const maxDuration = 300
 
 type ActiveComparison = {
   a: string
   b: string
-  // The saved comparison row id, needed to store the written script report on
-  // the lazy backfill path.
-  comparisonId: string
   data: RetentionComparisonData
   packaging: PackagingComparisonData | null
   packagingReport: PackagingComparisonReport | null
@@ -121,194 +115,108 @@ async function loadActiveComparison(
   )
   if (saved == null) return null
 
-  // Packaging and script both ride on the same stored analysis; a failure or
-  // gap in either must never cost the user the retention comparison, so both
-  // are best-effort.
-  // Only the fast, already-stored reads happen here so the report shell renders
-  // right away. The written script and packaging reports can require an
-  // expensive one-time generation for a comparison created before those
-  // features existed; those run in streamed Suspense boundaries
-  // (ScriptComparisonSection, PackagingComparisonSection) rather than blocking
-  // the whole page behind the loading skeleton.
-  const [data, packaging, script, scriptReport, packagingReport] = await Promise.all([
-    getRetentionComparison(supabase, userId, requestedA, requestedB),
-    getPackagingComparison(supabase, userId, requestedA, requestedB).catch(
-      (error) => {
-        console.error("Failed to load packaging comparison", error)
-        return null
-      },
-    ),
-    getScriptComparison(supabase, userId, requestedA, requestedB).catch(
-      (error) => {
-        console.error("Failed to load script comparison", error)
-        return null
-      },
-    ),
-    getScriptComparisonReport(supabase, userId, saved.id).catch((error) => {
-      console.error("Failed to load script comparison report", error)
+  // Which video is A and which is B comes from the saved row, not from the URL.
+  // The written head-to-heads were generated in the stored order and talk about
+  // "Video A" and "Video B" throughout, so a swapped link (?a=B&b=A) must not
+  // flip the tables underneath them and leave the two disagreeing about which
+  // video is which.
+  const sideA = saved.videoAId
+  const sideB = saved.videoBId
+
+  // Every read here is a stored read: the two written head-to-heads come back
+  // as JSON from the comparison row, and the packaging, script and retention
+  // diffs are derived from each video's stored analysis. Packaging and script
+  // are best-effort, since a failure or gap in either must never cost the user
+  // the retention comparison.
+  const [data, packaging, script, reports] = await Promise.all([
+    getRetentionComparison(supabase, userId, sideA, sideB),
+    getPackagingComparison(supabase, userId, sideA, sideB).catch((error) => {
+      console.error("Failed to load packaging comparison", error)
       return null
     }),
-    getPackagingComparisonReport(supabase, userId, saved.id).catch((error) => {
-      console.error("Failed to load packaging comparison report", error)
+    getScriptComparison(supabase, userId, sideA, sideB).catch((error) => {
+      console.error("Failed to load script comparison", error)
       return null
+    }),
+    getComparisonReports(supabase, userId, saved.id).catch((error) => {
+      console.error("Failed to load stored comparison reports", error)
+      return { script: null, packaging: null }
     }),
   ])
   if (data == null) return null
 
   return {
-    a: requestedA,
-    b: requestedB,
-    comparisonId: saved.id,
+    a: sideA,
+    b: sideB,
     data,
     packaging,
-    packagingReport,
+    packagingReport: reports.packaging,
     script,
-    scriptReport,
+    scriptReport: reports.script,
   }
 }
 
-// The Script tab body, streamed in a Suspense boundary. When the comparison
-// already has a stored written report (every comparison created since that
-// feature shipped), this resolves instantly. When it does not (a comparison
-// generated before the feature, or one whose generation failed at creation),
-// it regenerates the report once, lazily, and stores it so the next open is
-// instant. Running here instead of in loadActiveComparison means the rest of
-// the report renders immediately and only this tab shows a loading state while
-// the report is written, rather than the whole page sitting on the skeleton.
-async function ScriptComparisonSection({
-  userId,
-  comparisonId,
-  a,
-  b,
-  initialScript,
-  storedReport,
-}: {
-  userId: string
-  comparisonId: string
-  a: string
-  b: string
-  initialScript: ScriptComparisonData | null
-  storedReport: ScriptComparisonReport | null
-}) {
-  let script = initialScript
-  let scriptReport = storedReport
-
-  if (scriptReport == null) {
-    try {
-      const supabase = await createClient()
-      scriptReport = await buildAndStoreScriptComparisonReport(
-        supabase,
-        userId,
-        comparisonId,
-        a,
-        b,
-        { userId },
-      )
-      // The backfill also fills each video's script taxonomy, so re-read the
-      // deterministic tables to pick that up.
-      script = await getScriptComparison(supabase, userId, a, b).catch(
-        () => initialScript,
-      )
-    } catch (error) {
-      console.error("Failed to backfill script comparison report", error)
-    }
-  }
-
-  if (script || scriptReport) {
-    return <ScriptComparison data={script} report={scriptReport} />
-  }
-
+// Shown in place of a tab body whose written head-to-head was never stored: a
+// pair generated before that report existed, or one whose generation failed at
+// creation. Re-opening the pair from the Video Comparator writes it, for free,
+// so the fix stays behind the same button that generates everything else.
+function MissingReportCard({ children }: { children: ReactNode }) {
   return (
-    <Card className="p-6 text-sm text-muted-foreground">
-      No script read is available for these two videos yet. It is generated from
-      both videos&apos; transcripts when the comparison is created, and will
-      fill in shortly.
+    <Card className="flex flex-col items-start gap-3 p-6">
+      <p className="max-w-prose text-sm text-muted-foreground">{children}</p>
+      <Link
+        href="/dashboard/video-comparator"
+        className={buttonVariants({ variant: "outline", size: "sm" })}
+      >
+        Back to Video Comparator
+      </Link>
     </Card>
   )
 }
 
-// The Packaging tab body, streamed the same way the Script tab is. A pair
-// created since the written packaging report shipped already has one stored, so
-// this resolves instantly; an older pair (or one whose generation failed at
-// creation) has it written once here, lazily, and stored so the next open is
-// instant. The generation also heals each video's packaging taxonomy, so the
-// deterministic tables are re-read afterwards to pick that up.
-async function PackagingComparisonSection({
-  userId,
-  comparisonId,
-  a,
-  b,
-  initialPackaging,
-  storedReport,
+// The Script tab body, rendered straight from what is stored. Nothing is
+// generated here.
+function ScriptComparisonSection({
+  script,
+  report,
 }: {
-  userId: string
-  comparisonId: string
-  a: string
-  b: string
-  initialPackaging: PackagingComparisonData | null
-  storedReport: PackagingComparisonReport | null
+  script: ScriptComparisonData | null
+  report: ScriptComparisonReport | null
 }) {
-  let packaging = initialPackaging
-  let report = storedReport
-
-  if (report == null) {
-    try {
-      const supabase = await createClient()
-      report = await buildAndStorePackagingComparisonReport(
-        supabase,
-        userId,
-        comparisonId,
-        a,
-        b,
-        { userId },
-      )
-      packaging = await getPackagingComparison(supabase, userId, a, b).catch(
-        () => initialPackaging,
-      )
-    } catch (error) {
-      console.error("Failed to backfill packaging comparison report", error)
-    }
+  if (script || report) {
+    return <ScriptComparison data={script} report={report} />
   }
 
+  return (
+    <MissingReportCard>
+      No script read is stored for these two videos. It is written from both
+      videos&apos; transcripts when the comparison is generated, so re-open this
+      pair from the Video Comparator to fill it in. Re-opening a pair you have
+      already paid for is free.
+    </MissingReportCard>
+  )
+}
+
+// The Packaging tab body, rendered straight from what is stored. Nothing is
+// generated here.
+function PackagingComparisonSection({
+  packaging,
+  report,
+}: {
+  packaging: PackagingComparisonData | null
+  report: PackagingComparisonReport | null
+}) {
   if (packaging) {
     return <PackagingComparison data={packaging} report={report} />
   }
 
   return (
-    <Card className="p-6 text-sm text-muted-foreground">
-      No packaging read is available for these two videos yet. Open each
-      video&apos;s analysis to generate one, then this tab fills in.
-    </Card>
-  )
-}
-
-// Shown while PackagingComparisonSection writes a missing report.
-function PackagingComparisonFallback() {
-  return (
-    <Card className="flex flex-col gap-4 p-6">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2Icon className="size-4 animate-spin" />
-        Reading both thumbnails, titles and openings...
-      </div>
-      <Skeleton className="h-24 w-full" />
-      <Skeleton className="h-48 w-full" />
-    </Card>
-  )
-}
-
-// Shown while ScriptComparisonSection generates a missing report. Comparisons
-// that already have a stored report never see this: their section resolves
-// before the first paint.
-function ScriptComparisonFallback() {
-  return (
-    <Card className="flex flex-col gap-4 p-6">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2Icon className="size-4 animate-spin" />
-        Writing the script head-to-head from both transcripts...
-      </div>
-      <Skeleton className="h-24 w-full" />
-      <Skeleton className="h-48 w-full" />
-    </Card>
+    <MissingReportCard>
+      No packaging read is stored for these two videos. It is written from both
+      thumbnails, titles and openings when the comparison is generated, so
+      re-open this pair from the Video Comparator to fill it in. Re-opening a
+      pair you have already paid for is free.
+    </MissingReportCard>
   )
 }
 
@@ -418,28 +326,16 @@ export default async function Page({
                 <RetentionComparisonDetail data={result.active.data} />
               }
               packaging={
-                <Suspense fallback={<PackagingComparisonFallback />}>
-                  <PackagingComparisonSection
-                    userId={user.id}
-                    comparisonId={result.active.comparisonId}
-                    a={result.active.a}
-                    b={result.active.b}
-                    initialPackaging={result.active.packaging}
-                    storedReport={result.active.packagingReport}
-                  />
-                </Suspense>
+                <PackagingComparisonSection
+                  packaging={result.active.packaging}
+                  report={result.active.packagingReport}
+                />
               }
               script={
-                <Suspense fallback={<ScriptComparisonFallback />}>
-                  <ScriptComparisonSection
-                    userId={user.id}
-                    comparisonId={result.active.comparisonId}
-                    a={result.active.a}
-                    b={result.active.b}
-                    initialScript={result.active.script}
-                    storedReport={result.active.scriptReport}
-                  />
-                </Suspense>
+                <ScriptComparisonSection
+                  script={result.active.script}
+                  report={result.active.scriptReport}
+                />
               }
             />
           </>

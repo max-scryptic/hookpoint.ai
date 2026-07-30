@@ -1,10 +1,16 @@
 // Persistence for saved Video Comparator head-to-heads. Generating a comparison
 // costs deep-dive credits, so each generated pair is stored (see the
 // video_comparisons migration): it powers the "previous comparisons" list and
-// lets an already-paid-for pair be re-opened for free. The comparison report
-// itself is never stored here; it is recomputed from each video's stored deep
-// analysis on load (see lib/retention-comparison.ts), so a re-open always
-// reflects the freshest analysis.
+// lets an already-paid-for pair be re-opened for free.
+//
+// The two written head-to-heads (script and packaging) are each one model call,
+// so they are generated once, when the creator presses the button, and stored on
+// the row here. The report page only ever reads them back: it never generates,
+// so opening or re-opening a report costs nothing and shows no loading state.
+// The retention and packaging diffs below the written reports are pure
+// arithmetic over each video's stored analysis and are still derived on load
+// (see lib/retention-comparison.ts), so a re-open reflects the freshest
+// analysis without any model call.
 //
 // COPY GUARDRAIL: no em or en dashes anywhere in this file (comments
 // included). Hyphens are fine.
@@ -25,6 +31,11 @@ export interface SavedComparison {
   videoAThumbnailUrl: string | null
   videoBThumbnailUrl: string | null
   createdAt: string
+  // True when both written head-to-heads are stored, so this pair opens into a
+  // complete report with nothing left to write. False for a pair created before
+  // one of those reports existed, or one whose generation failed: pressing the
+  // button on it again writes the missing part, for free.
+  reportsReady: boolean
 }
 
 interface ComparisonRow {
@@ -32,6 +43,19 @@ interface ComparisonRow {
   video_a_id: string
   video_b_id: string
   created_at: string
+  script_ready: string | null
+  packaging_ready: string | null
+}
+
+// Whether a stored report is present, without dragging the whole JSON blob back
+// for every row. Both reports always carry a schemaVersion (see each report
+// module's normalizer), so probing that one key is a cheap stand-in for "is not
+// null".
+const REPORT_READY_PROBE =
+  "script_ready:script_report->>schemaVersion, packaging_ready:packaging_report->>schemaVersion"
+
+function reportsReady(row: ComparisonRow): boolean {
+  return row.script_ready != null && row.packaging_ready != null
 }
 
 // True when two saved pairs are the same head-to-head, regardless of the order
@@ -57,7 +81,7 @@ export async function listSavedComparisons(
 ): Promise<SavedComparison[]> {
   const { data, error } = await supabase
     .from("video_comparisons")
-    .select("id, video_a_id, video_b_id, created_at")
+    .select(`id, video_a_id, video_b_id, created_at, ${REPORT_READY_PROBE}`)
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(limit)
@@ -106,6 +130,7 @@ export async function listSavedComparisons(
     videoAThumbnailUrl: videoById.get(row.video_a_id)?.thumbnailUrl ?? null,
     videoBThumbnailUrl: videoById.get(row.video_b_id)?.thumbnailUrl ?? null,
     createdAt: row.created_at,
+    reportsReady: reportsReady(row),
   }))
 }
 
@@ -121,7 +146,7 @@ export async function findSavedComparison(
 ): Promise<SavedComparison | null> {
   const { data, error } = await supabase
     .from("video_comparisons")
-    .select("id, video_a_id, video_b_id, created_at")
+    .select(`id, video_a_id, video_b_id, created_at, ${REPORT_READY_PROBE}`)
     .eq("user_id", userId)
     .or(
       `and(video_a_id.eq.${videoAId},video_b_id.eq.${videoBId}),and(video_a_id.eq.${videoBId},video_b_id.eq.${videoAId})`,
@@ -144,32 +169,45 @@ export async function findSavedComparison(
     videoAThumbnailUrl: null,
     videoBThumbnailUrl: null,
     createdAt: row.created_at,
+    reportsReady: reportsReady(row),
   }
 }
 
-// Loads the stored, model-authored script head-to-head for a saved comparison,
-// or null when it has not been generated yet (in which case the report page
-// regenerates it lazily). Scoped to the owning user via RLS.
-export async function getScriptComparisonReport(
+// Both stored, model-authored head-to-heads for a saved comparison, read in a
+// single query. A null side means that report has not been generated yet: the
+// report page renders without it rather than writing one on the fly, and
+// re-opening the pair from the Video Comparator fills it in for free. Scoped to
+// the owning user via RLS.
+export interface StoredComparisonReports {
+  script: ScriptComparisonReport | null
+  packaging: PackagingComparisonReport | null
+}
+
+export async function getComparisonReports(
   supabase: SupabaseClient,
   userId: string,
   comparisonId: string,
-): Promise<ScriptComparisonReport | null> {
+): Promise<StoredComparisonReports> {
   const { data, error } = await supabase
     .from("video_comparisons")
-    .select("script_report")
+    .select("script_report, packaging_report")
     .eq("id", comparisonId)
     .eq("user_id", userId)
     .maybeSingle()
 
   if (error) {
-    throw new Error(`Failed to load script comparison report: ${error.message}`)
+    throw new Error(`Failed to load comparison reports: ${error.message}`)
   }
 
-  return (
-    (data as { script_report: ScriptComparisonReport | null } | null)
-      ?.script_report ?? null
-  )
+  const row = data as {
+    script_report: ScriptComparisonReport | null
+    packaging_report: PackagingComparisonReport | null
+  } | null
+
+  return {
+    script: row?.script_report ?? null,
+    packaging: row?.packaging_report ?? null,
+  }
 }
 
 // Stores the generated script head-to-head on the comparison row. Scoped to the
@@ -189,33 +227,6 @@ export async function saveScriptComparisonReport(
   if (error) {
     throw new Error(`Failed to save script comparison report: ${error.message}`)
   }
-}
-
-// Loads the stored, model-authored packaging head-to-head for a saved
-// comparison, or null when it has not been generated yet (in which case the
-// report page regenerates it lazily). Scoped to the owning user via RLS.
-export async function getPackagingComparisonReport(
-  supabase: SupabaseClient,
-  userId: string,
-  comparisonId: string,
-): Promise<PackagingComparisonReport | null> {
-  const { data, error } = await supabase
-    .from("video_comparisons")
-    .select("packaging_report")
-    .eq("id", comparisonId)
-    .eq("user_id", userId)
-    .maybeSingle()
-
-  if (error) {
-    throw new Error(
-      `Failed to load packaging comparison report: ${error.message}`,
-    )
-  }
-
-  return (
-    (data as { packaging_report: PackagingComparisonReport | null } | null)
-      ?.packaging_report ?? null
-  )
 }
 
 // Stores the generated packaging head-to-head on the comparison row. Scoped to
@@ -263,7 +274,7 @@ export async function createSavedComparison(
     throw new Error(`Failed to save comparison: ${error.message}`)
   }
 
-  const row = data as ComparisonRow
+  const row = data as Omit<ComparisonRow, "script_ready" | "packaging_ready">
   return {
     id: row.id,
     videoAId: row.video_a_id,
@@ -273,5 +284,8 @@ export async function createSavedComparison(
     videoAThumbnailUrl: null,
     videoBThumbnailUrl: null,
     createdAt: row.created_at,
+    // The row is one insert old, so neither head-to-head can be on it yet. The
+    // caller writes both before it responds.
+    reportsReady: false,
   }
 }
