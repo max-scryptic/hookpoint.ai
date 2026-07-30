@@ -1,10 +1,16 @@
 // Persistence for saved Video Comparator head-to-heads. Generating a comparison
 // costs deep-dive credits, so each generated pair is stored (see the
 // video_comparisons migration): it powers the "previous comparisons" list and
-// lets an already-paid-for pair be re-opened for free. The comparison report
-// itself is never stored here; it is recomputed from each video's stored deep
-// analysis on load (see lib/retention-comparison.ts), so a re-open always
-// reflects the freshest analysis.
+// lets an already-paid-for pair be re-opened for free.
+//
+// The two written head-to-heads (script and packaging) are each one model call,
+// so they are generated once, when the creator presses the button, and stored on
+// the row here. The report page only ever reads them back: it never generates,
+// so opening or re-opening a report costs nothing and shows no loading state.
+// The retention and packaging diffs below the written reports are pure
+// arithmetic over each video's stored analysis and are still derived on load
+// (see lib/retention-comparison.ts), so a re-open reflects the freshest
+// analysis without any model call.
 //
 // COPY GUARDRAIL: no em or en dashes anywhere in this file (comments
 // included). Hyphens are fine.
@@ -147,29 +153,41 @@ export async function findSavedComparison(
   }
 }
 
-// Loads the stored, model-authored script head-to-head for a saved comparison,
-// or null when it has not been generated yet (in which case the report page
-// regenerates it lazily). Scoped to the owning user via RLS.
-export async function getScriptComparisonReport(
+// Both stored, model-authored head-to-heads for a saved comparison, read in a
+// single query. A null side means that report has not been generated yet: the
+// report page renders without it rather than writing one on the fly, and
+// re-opening the pair from the Video Comparator fills it in for free. Scoped to
+// the owning user via RLS.
+export interface StoredComparisonReports {
+  script: ScriptComparisonReport | null
+  packaging: PackagingComparisonReport | null
+}
+
+export async function getComparisonReports(
   supabase: SupabaseClient,
   userId: string,
   comparisonId: string,
-): Promise<ScriptComparisonReport | null> {
+): Promise<StoredComparisonReports> {
   const { data, error } = await supabase
     .from("video_comparisons")
-    .select("script_report")
+    .select("script_report, packaging_report")
     .eq("id", comparisonId)
     .eq("user_id", userId)
     .maybeSingle()
 
   if (error) {
-    throw new Error(`Failed to load script comparison report: ${error.message}`)
+    throw new Error(`Failed to load comparison reports: ${error.message}`)
   }
 
-  return (
-    (data as { script_report: ScriptComparisonReport | null } | null)
-      ?.script_report ?? null
-  )
+  const row = data as {
+    script_report: ScriptComparisonReport | null
+    packaging_report: PackagingComparisonReport | null
+  } | null
+
+  return {
+    script: row?.script_report ?? null,
+    packaging: row?.packaging_report ?? null,
+  }
 }
 
 // Stores the generated script head-to-head on the comparison row. Scoped to the
@@ -189,33 +207,6 @@ export async function saveScriptComparisonReport(
   if (error) {
     throw new Error(`Failed to save script comparison report: ${error.message}`)
   }
-}
-
-// Loads the stored, model-authored packaging head-to-head for a saved
-// comparison, or null when it has not been generated yet (in which case the
-// report page regenerates it lazily). Scoped to the owning user via RLS.
-export async function getPackagingComparisonReport(
-  supabase: SupabaseClient,
-  userId: string,
-  comparisonId: string,
-): Promise<PackagingComparisonReport | null> {
-  const { data, error } = await supabase
-    .from("video_comparisons")
-    .select("packaging_report")
-    .eq("id", comparisonId)
-    .eq("user_id", userId)
-    .maybeSingle()
-
-  if (error) {
-    throw new Error(
-      `Failed to load packaging comparison report: ${error.message}`,
-    )
-  }
-
-  return (
-    (data as { packaging_report: PackagingComparisonReport | null } | null)
-      ?.packaging_report ?? null
-  )
 }
 
 // Stores the generated packaging head-to-head on the comparison row. Scoped to

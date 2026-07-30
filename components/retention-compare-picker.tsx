@@ -15,6 +15,11 @@ import { isSamePair } from "@/lib/video-comparisons"
 // presses the button. A pair that was already generated (in either order)
 // re-opens for free, and the button says so.
 //
+// The button is the one and only trigger for writing a report: the whole thing
+// (both written head-to-heads included) is produced by the endpoint while the
+// spinner runs here, so the report page it lands on is a pure read with no
+// loading state of its own.
+//
 // Selecting a pair is local state here; generating (or re-opening) a report is a
 // navigation to the dedicated report page at
 // video-comparator/report?a=..&b=.. so the report renders on its own page and
@@ -58,12 +63,12 @@ export function RetentionComparePicker({
 
   const generate = async () => {
     if (!bothPicked) return
-    // A pair already paid for just re-opens; no round-trip needed.
-    if (alreadyGenerated) {
-      open(a, b)
-      return
-    }
 
+    // Always go through the endpoint, even for a pair that is already paid for.
+    // It is the single place the report is written: for a new pair it charges
+    // and generates, and for an existing one it charges nothing and only fills
+    // in a head-to-head that is missing. That keeps every report complete before
+    // the report page opens, so the page itself never has to generate anything.
     setPending(true)
     setError(null)
     try {

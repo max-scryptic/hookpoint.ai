@@ -3,13 +3,14 @@
 -- recomputed on the fly from each video's stored taxonomy), this is a written,
 -- model-authored comparison: both thumbnails as images, both titles, and the
 -- full stored evidence for each video's first ten seconds. It is generated once
--- when the pair is first created and stored here, so a re-open reads it back
+-- when the pair is generated and stored here, so a re-open reads it back
 -- rather than paying for it again.
 alter table public.video_comparisons
   -- The full PackagingComparisonReport JSON
   -- (lib/packaging-comparison-report.ts). null = not generated yet (or
-  -- generation failed); a missing report is regenerated on the next
-  -- report-page visit.
+  -- generation failed). The report page never writes this column: a missing
+  -- report is filled in the next time the creator presses the button on that
+  -- pair in the Video Comparator, which is free for a pair already paid for.
   add column if not exists packaging_report jsonb;
 
 -- The packaging comparison is one more LLM call, so it needs to be a permitted
