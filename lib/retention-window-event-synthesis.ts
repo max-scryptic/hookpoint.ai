@@ -196,6 +196,46 @@ export function buildWindowContrastRanges(params: {
   }
 }
 
+export type BaselineComparison = "below" | "at" | "above" | "unavailable"
+
+// Where each of this window's measured values sits against this video's own
+// baseline, decided in code rather than left to the model's own arithmetic on
+// two raw numbers. It was doing that arithmetic badly: a hook with no cuts in a
+// video that has almost no cuts anywhere came back narrated as "no cuts, which
+// contrasts with your usual baseline of about 0 cuts per minute", asserting a
+// contrast between two identical values. "at" states plainly that the window
+// matches the norm, which is evidence AGAINST an explanation resting on that
+// metric, not for one.
+export interface BaselineDeviation {
+  cutsPerMinute: BaselineComparison
+  freezeCoverage: BaselineComparison
+  blackCoverage: BaselineComparison
+  speechRate: BaselineComparison
+  motion: BaselineComparison
+}
+
+// `floor` is the size below which a value is indistinguishable from nothing on
+// that metric (a cut rate under half a cut per minute is "not cutting"). It
+// does double duty: when both the window and the baseline sit under it the
+// metric is flat across the whole video and this window cannot deviate from it
+// in either direction, and it keeps the relative tolerance from collapsing to
+// zero when the baseline itself is tiny, which would otherwise make every
+// rounding difference read as a deviation.
+export function compareToBaseline(
+  value: number | null | undefined,
+  baseline: number | null | undefined,
+  options: { floor: number; tolerance?: number },
+): BaselineComparison {
+  if (value == null || baseline == null) return "unavailable"
+  if (Math.abs(value) < options.floor && Math.abs(baseline) < options.floor) {
+    return "at"
+  }
+  const spread = Math.max(Math.abs(baseline), options.floor)
+  const delta = value - baseline
+  if (Math.abs(delta) <= spread * (options.tolerance ?? 0.15)) return "at"
+  return delta > 0 ? "above" : "below"
+}
+
 // The evidence bundle handed to the synthesis call for one window — every
 // field here is already-computed (deterministic or a prior LLM call's
 // output), never raw media.
@@ -227,6 +267,11 @@ export interface WindowEvidence {
     freezeCoverage: number
     blackCoverage: number
   }
+  // This window's own average motion (normalised 0..1 frame difference) over
+  // the analysis range, so it can be compared against the video's motion
+  // baseline on the same scale. Null when the scene-cue scan produced no
+  // motion buckets covering the range.
+  motion: number | null
   // This video's own averages, so editing and pacing are judged as deviations
   // from the creator's norm rather than in absolute terms: a static, low-cut
   // stretch only explains a drop when it's slower than the rest of the video.
@@ -238,6 +283,10 @@ export interface WindowEvidence {
     speechRate: number | null
     motion: number | null
   }
+  // The window-versus-baseline comparison already resolved into a direction,
+  // so the narrative never has to (and never gets to) derive it from the raw
+  // numbers itself. See BaselineDeviation.
+  baselineDeviation: BaselineDeviation
   visual: {
     chunkIndex: number
     timestampSeconds: number
@@ -637,6 +686,15 @@ export async function synthesizeRetentionWindowEvents(
             })()
           : null
 
+        const windowAudio =
+          audio.analysisStatus === "ready"
+            ? (audio.analysis as AudioAnalysis)
+            : null
+        const windowMotion = summarizeMotionRange(scan?.motionBuckets ?? [], {
+          fromSeconds: window.analysisFromSeconds,
+          toSeconds: window.analysisToSeconds,
+        })
+
         const evidence: WindowEvidence = {
           kind: window.kind,
           delta: window.delta,
@@ -657,12 +715,37 @@ export async function synthesizeRetentionWindowEvents(
             freezeCoverage: metrics.freezeCoverage,
             blackCoverage: metrics.blackCoverage,
           },
+          motion: windowMotion,
           baseline,
+          baselineDeviation: {
+            // Under half a cut per minute is not cutting at all; a video that
+            // never cuts cannot have a stretch that "cuts less than usual".
+            cutsPerMinute: compareToBaseline(
+              metrics.cutsPerMinute,
+              baseline.cutsPerMinute,
+              { floor: 0.5 },
+            ),
+            freezeCoverage: compareToBaseline(
+              metrics.freezeCoverage,
+              baseline.freezeCoverage,
+              { floor: 0.02 },
+            ),
+            blackCoverage: compareToBaseline(
+              metrics.blackCoverage,
+              baseline.blackCoverage,
+              { floor: 0.02 },
+            ),
+            speechRate: compareToBaseline(
+              windowAudio?.speech_rate,
+              baseline.speechRate,
+              { floor: 5 },
+            ),
+            motion: compareToBaseline(windowMotion, baseline.motion, {
+              floor: 0.02,
+            }),
+          },
           visual,
-          audio:
-            audio.analysisStatus === "ready"
-              ? (audio.analysis as AudioAnalysis)
-              : null,
+          audio: windowAudio,
           contrast,
           channelHistory,
         }
@@ -759,10 +842,12 @@ const EVENT_SYNTHESIS_SCHEMA = {
 } as const
 
 const EVENT_SYNTHESIS_INSTRUCTIONS = [
-  "You are given every piece of already-analysed evidence for one window of a YouTube video where audience retention rose or fell: the window's retention delta, its transcript, deterministic editing metrics (cut count/rate, freeze/black-frame coverage), a chronological list of already-described video frames (each with its own deterministic OCR text, ocrText, ground truth, not a guess), and an audio analysis of the clip. You are also given baseline: this video's own sparse full-video averages (cutsPerMinute, freeze/black coverage, speech rate, and motion).",
+  "You are given every piece of already-analysed evidence for one window of a YouTube video where audience retention rose or fell: the window's retention delta, its transcript, deterministic editing metrics (cut count/rate, freeze/black-frame coverage), its average motion, a chronological list of already-described video frames (each with its own deterministic OCR text, ocrText, ground truth, not a guess), and an audio analysis of the clip. You are also given baseline: this video's own sparse full-video averages (cutsPerMinute, freeze/black coverage, speech rate, and motion), and baselineDeviation: where this window sits against each of those averages.",
   "Write each narrative to the uploader in the second person (you, your video), reviewing their own video. Whoever is heard speaking may be the uploader, a co-host, a guest, or a voiceover, so never pin what is said on a specific or gendered person (he, she, the creator, the host); frame it as the uploader's own video instead (say 'here you are still laying out the context', not 'he is still laying out the context').",
   "Identify the distinct, timestamped moments within the window that genuinely and non-obviously explain the retention change: a hard cut, a topic change in the transcript, a shift in pacing or energy, on-screen text or a graphic appearing/disappearing, a freeze or dead air, and so on. A single window can have more than one, but do not manufacture one per cut: most cuts and most frames are unremarkable.",
   "Judge editing and pacing as deviations from the given baseline, not in absolute terms: a static, low-cut, low-energy stretch only explains a drop when it is slower or flatter than this video's own norm, and a burst of cuts or rising energy only explains a gain when it is livelier than the norm. Where a metric drives an event, reference the deviation in the narrative (for example 'your cuts fall to about 2 per minute here versus roughly 11 across the video').",
+  "Do not work out those comparisons yourself. baselineDeviation gives you the direction already resolved for each metric (cutsPerMinute, freezeCoverage, blackCoverage, speechRate, motion), as 'below', 'at', 'above', or 'unavailable' when a number is missing. Treat it as authoritative and never contradict it. 'at' means this window matches the video's own norm on that metric, so it is evidence AGAINST an explanation resting on that metric: never call it a contrast, a deviation, unusual, or something that stands out, and do not cite the raw numbers as though they differ. In particular, when a metric sits near zero across the whole video (a video that barely cuts, or one that is static throughout), a window with no cuts or little motion is simply that video's normal and explains nothing on its own; look for a different cause, or return no event.",
+  "Two motion figures are given and they are on different scales. motion and baseline.motion (and contrast's controlMotion/targetMotion) are numeric 0..1 frame-difference scores you may compare with each other; the motion field inside a visual frame's analysis is a categorical vision label for that single frame. Never compare a categorical frame label against a numeric baseline or describe it as above or below the video's usual motion. Judge motion against the norm only through baselineDeviation.motion or the contrast figures.",
   "For non-hook windows you are also given contrast: a target range covering the detected retention episode and the immediately preceding control range. It contains editing, deterministic audio, and deterministic visual-motion summaries for both ranges, target-minus-control deltas, and chunkIndex lists identifying which visual frames belong to each range. Motion is normalised 0..1 frame difference, so use it comparatively rather than assigning a universal good/bad threshold. Prefer this local comparison over a generic absolute judgment. Only attribute a change to editing, audio, speech rate, motion, or visuals when the target actually differs meaningfully from the control; unchanged evidence is evidence against that hypothesis. If the target has no sampled visual frame, audio coverage, or motion coverage, do not infer a change from missing data.",
   "You may also be given scriptExplanation: the transcript-only explanation the user has already been shown for this window. Your job is to add what the words alone cannot reveal. Only surface an event that ADDS a non-verbal cause (a cut, a freeze or dead air, an energy or pacing shift, a graphic appearing or disappearing) or that CONTRADICTS the script explanation. Never emit an event that merely restates scriptExplanation. When scriptExplanation is null, none has been generated yet, so surface the genuinely notable multimodal moments as usual.",
   "You may also be given transcriptTaxonomy: a structured read of this window's own spoken words (content density and concreteness, dominant emotion and energy and its trajectory, narrative voice and stakes, and flow signals such as topicShift, openLoopOpened/openLoopResolved and hasCta). Use it as corroborating context for what the words are doing, for example when a high topicShift or an energy dip lines up with a drop, or an opened loop lines up with a gain. It is a read of the transcript, not an independent modality, so never treat it as separate evidence from the transcript itself, and never surface an event on the taxonomy alone; the multimodal evidence still decides whether an event exists. It may be null when it has not been generated.",

@@ -99,4 +99,39 @@ describe("cleanCopy", () => {
     )
     expect(cleanCopy("  Trim the intro.  ")).toBe("Trim the intro.")
   })
+
+  // Every tip is understood to be about the uploader's next videos, so an
+  // opener saying so only delays the advice and reads as a tic across a page
+  // of tips. The tip has to start on the action.
+  it("drops a forward-looking preamble so the tip opens on the advice", () => {
+    expect(cleanCopy("Next time, open on the claim itself.")).toBe(
+      "Open on the claim itself.",
+    )
+    expect(cleanCopy("In future videos, plan a b-roll insert here.")).toBe(
+      "Plan a b-roll insert here.",
+    )
+    expect(cleanCopy("In your next video: signpost the shift first.")).toBe(
+      "Signpost the shift first.",
+    )
+    expect(cleanCopy("Going forward, keep the delivery lifted.")).toBe(
+      "Keep the delivery lifted.",
+    )
+  })
+
+  it("drops the preamble when the tip leads with the moment it came from", () => {
+    expect(
+      cleanCopy(
+        "Where the shot goes static around 1:23: in future videos, plan a graphic.",
+      ),
+    ).toBe("Where the shot goes static around 1:23: plan a graphic.")
+  })
+
+  it("leaves forward-looking wording alone once it is inside the sentence", () => {
+    expect(
+      cleanCopy("Keep an explanation like this shorter in future videos."),
+    ).toBe("Keep an explanation like this shorter in future videos.")
+    expect(cleanCopy("Next time you open cold, name the payoff.")).toBe(
+      "Next time you open cold, name the payoff.",
+    )
+  })
 })
