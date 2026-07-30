@@ -19,6 +19,10 @@ import {
   type PackagingComparison as PackagingComparisonData,
 } from "@/lib/packaging-comparison"
 import {
+  buildAndStorePackagingComparisonReport,
+  type PackagingComparisonReport,
+} from "@/lib/packaging-comparison-report"
+import {
   getScriptComparison,
   type ScriptComparison as ScriptComparisonData,
 } from "@/lib/script-comparison"
@@ -34,6 +38,7 @@ import {
 } from "@/lib/retention-comparison"
 import {
   findSavedComparison,
+  getPackagingComparisonReport,
   getScriptComparisonReport,
 } from "@/lib/video-comparisons"
 import { createClient } from "@/lib/supabase/server"
@@ -72,6 +77,7 @@ type ActiveComparison = {
   comparisonId: string
   data: RetentionComparisonData
   packaging: PackagingComparisonData | null
+  packagingReport: PackagingComparisonReport | null
   script: ScriptComparisonData | null
   scriptReport: ScriptComparisonReport | null
 }
@@ -119,11 +125,12 @@ async function loadActiveComparison(
   // gap in either must never cost the user the retention comparison, so both
   // are best-effort.
   // Only the fast, already-stored reads happen here so the report shell renders
-  // right away. The written script report can require an expensive one-time
-  // generation for a comparison created before that feature existed; that runs
-  // in a streamed Suspense boundary (ScriptComparisonSection) rather than
-  // blocking the whole page behind the loading skeleton.
-  const [data, packaging, script, scriptReport] = await Promise.all([
+  // right away. The written script and packaging reports can require an
+  // expensive one-time generation for a comparison created before those
+  // features existed; those run in streamed Suspense boundaries
+  // (ScriptComparisonSection, PackagingComparisonSection) rather than blocking
+  // the whole page behind the loading skeleton.
+  const [data, packaging, script, scriptReport, packagingReport] = await Promise.all([
     getRetentionComparison(supabase, userId, requestedA, requestedB),
     getPackagingComparison(supabase, userId, requestedA, requestedB).catch(
       (error) => {
@@ -141,6 +148,10 @@ async function loadActiveComparison(
       console.error("Failed to load script comparison report", error)
       return null
     }),
+    getPackagingComparisonReport(supabase, userId, saved.id).catch((error) => {
+      console.error("Failed to load packaging comparison report", error)
+      return null
+    }),
   ])
   if (data == null) return null
 
@@ -150,6 +161,7 @@ async function loadActiveComparison(
     comparisonId: saved.id,
     data,
     packaging,
+    packagingReport,
     script,
     scriptReport,
   }
@@ -211,6 +223,75 @@ async function ScriptComparisonSection({
       No script read is available for these two videos yet. It is generated from
       both videos&apos; transcripts when the comparison is created, and will
       fill in shortly.
+    </Card>
+  )
+}
+
+// The Packaging tab body, streamed the same way the Script tab is. A pair
+// created since the written packaging report shipped already has one stored, so
+// this resolves instantly; an older pair (or one whose generation failed at
+// creation) has it written once here, lazily, and stored so the next open is
+// instant. The generation also heals each video's packaging taxonomy, so the
+// deterministic tables are re-read afterwards to pick that up.
+async function PackagingComparisonSection({
+  userId,
+  comparisonId,
+  a,
+  b,
+  initialPackaging,
+  storedReport,
+}: {
+  userId: string
+  comparisonId: string
+  a: string
+  b: string
+  initialPackaging: PackagingComparisonData | null
+  storedReport: PackagingComparisonReport | null
+}) {
+  let packaging = initialPackaging
+  let report = storedReport
+
+  if (report == null) {
+    try {
+      const supabase = await createClient()
+      report = await buildAndStorePackagingComparisonReport(
+        supabase,
+        userId,
+        comparisonId,
+        a,
+        b,
+        { userId },
+      )
+      packaging = await getPackagingComparison(supabase, userId, a, b).catch(
+        () => initialPackaging,
+      )
+    } catch (error) {
+      console.error("Failed to backfill packaging comparison report", error)
+    }
+  }
+
+  if (packaging) {
+    return <PackagingComparison data={packaging} report={report} />
+  }
+
+  return (
+    <Card className="p-6 text-sm text-muted-foreground">
+      No packaging read is available for these two videos yet. Open each
+      video&apos;s analysis to generate one, then this tab fills in.
+    </Card>
+  )
+}
+
+// Shown while PackagingComparisonSection writes a missing report.
+function PackagingComparisonFallback() {
+  return (
+    <Card className="flex flex-col gap-4 p-6">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2Icon className="size-4 animate-spin" />
+        Reading both thumbnails, titles and openings...
+      </div>
+      <Skeleton className="h-24 w-full" />
+      <Skeleton className="h-48 w-full" />
     </Card>
   )
 }
@@ -337,15 +418,16 @@ export default async function Page({
                 <RetentionComparisonDetail data={result.active.data} />
               }
               packaging={
-                result.active.packaging ? (
-                  <PackagingComparison data={result.active.packaging} />
-                ) : (
-                  <Card className="p-6 text-sm text-muted-foreground">
-                    No packaging read is available for these two videos yet.
-                    Open each video&apos;s analysis to generate one, then this
-                    tab fills in.
-                  </Card>
-                )
+                <Suspense fallback={<PackagingComparisonFallback />}>
+                  <PackagingComparisonSection
+                    userId={user.id}
+                    comparisonId={result.active.comparisonId}
+                    a={result.active.a}
+                    b={result.active.b}
+                    initialPackaging={result.active.packaging}
+                    storedReport={result.active.packagingReport}
+                  />
+                </Suspense>
               }
               script={
                 <Suspense fallback={<ScriptComparisonFallback />}>

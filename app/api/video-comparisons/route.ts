@@ -11,11 +11,13 @@ import {
   createSavedComparison,
   findSavedComparison,
 } from "@/lib/video-comparisons"
+import { buildAndStorePackagingComparisonReport } from "@/lib/packaging-comparison-report"
 import { buildAndStoreScriptComparisonReport } from "@/lib/script-comparison-report"
 
-// The script head-to-head is written by a model over both full transcripts at
-// creation time, so give the request the same headroom the analysis paths use
-// rather than the default serverless timeout.
+// The script and packaging head-to-heads are both written by a model at
+// creation time (over both full transcripts, and over both thumbnails plus each
+// opening's evidence), so give the request the same headroom the analysis paths
+// use rather than the default serverless timeout.
 export const maxDuration = 300
 
 // POST /api/video-comparisons
@@ -133,21 +135,41 @@ export async function POST(request: NextRequest) {
       console.error("Failed to charge for video comparison", error)
     }
 
-    // Write the script head-to-head now so the report is ready when the client
-    // opens it. Best-effort: the pair is already saved and charged, so a
-    // generation failure must not fail the request. The report page regenerates
-    // a missing report lazily on open.
-    try {
-      await buildAndStoreScriptComparisonReport(
+    // Write both head-to-heads now so the report is ready when the client opens
+    // it. Best-effort and independent: the pair is already saved and charged, so
+    // a generation failure must not fail the request, and one report failing
+    // must not cost the user the other. The report page regenerates a missing
+    // report lazily on open.
+    const logContext = { userId: user.id, userEmail: user.email ?? null }
+    const [scriptResult, packagingResult] = await Promise.allSettled([
+      buildAndStoreScriptComparisonReport(
         supabase,
         user.id,
         saved.id,
         videoAId,
         videoBId,
-        { userId: user.id, userEmail: user.email ?? null },
+        logContext,
+      ),
+      buildAndStorePackagingComparisonReport(
+        supabase,
+        user.id,
+        saved.id,
+        videoAId,
+        videoBId,
+        logContext,
+      ),
+    ])
+    if (scriptResult.status === "rejected") {
+      console.error(
+        "Failed to generate script comparison report",
+        scriptResult.reason,
       )
-    } catch (error) {
-      console.error("Failed to generate script comparison report", error)
+    }
+    if (packagingResult.status === "rejected") {
+      console.error(
+        "Failed to generate packaging comparison report",
+        packagingResult.reason,
+      )
     }
 
     return NextResponse.json({

@@ -199,6 +199,7 @@ const stopChartsTaxonomy = taxonomy(
 const cryptoInput = {
   id: "crypto",
   title: "I'm 26, Living With My Parents, And Have Invested Everything Into Crypto",
+  thumbnailUrl: "https://i.ytimg.com/vi/crypto/maxresdefault.jpg",
   views: 3515,
   taxonomy: cryptoTaxonomy,
 }
@@ -206,6 +207,7 @@ const cryptoInput = {
 const stopInput = {
   id: "stop",
   title: "STOP CHECKING THE CHARTS",
+  thumbnailUrl: "https://i.ytimg.com/vi/stop/maxresdefault.jpg",
   views: 131,
   taxonomy: stopChartsTaxonomy,
 }

@@ -1,12 +1,24 @@
+import Image from "next/image"
 import {
   ArrowRightIcon,
   LayersIcon,
+  LightbulbIcon,
   MinusIcon,
+  PlayIcon,
   TrophyIcon,
 } from "lucide-react"
 
 import { Card } from "@/components/ui/card"
 import { stripEmDashes } from "@/lib/copy-guardrails"
+import {
+  PACKAGING_REPORT_SURFACE_LABEL,
+  PACKAGING_REPORT_SURFACES,
+  type PackagingComparisonReport,
+  type PackagingReportDriver,
+  type PackagingReportRecommendation,
+  type PackagingReportSurface,
+  type PackagingReportSurfaceRead,
+} from "@/lib/packaging-comparison-report"
 import {
   SURFACE_LABEL,
   type CategoricalComparisonRow,
@@ -90,7 +102,22 @@ function IdentityRow({ comparison }: { comparison: PackagingComparison }) {
                 </span>
               )}
             </div>
-            <span className="truncate text-sm font-medium">
+            <div className="relative aspect-video w-full overflow-hidden rounded-md bg-muted">
+              {s.thumbnailUrl ? (
+                <Image
+                  src={s.thumbnailUrl}
+                  alt=""
+                  fill
+                  sizes="(min-width: 640px) 50vw, 100vw"
+                  className="object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                  <PlayIcon className="size-5" />
+                </div>
+              )}
+            </div>
+            <span className="line-clamp-2 text-sm font-medium">
               {s.title ? clean(s.title) : "Untitled video"}
             </span>
             <span className="text-xs tabular-nums text-muted-foreground">
@@ -101,6 +128,246 @@ function IdentityRow({ comparison }: { comparison: PackagingComparison }) {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// --- The written report ------------------------------------------------------
+// A model reads both thumbnails, both titles and the full stored evidence for
+// each video's first ten seconds, then explains why one out-performed the
+// other. Generated once when the pair is created and stored on the comparison,
+// so this renders from JSON with no call at view time.
+
+function confidenceLabel(confidence: number): string {
+  if (confidence >= 0.75) return "high confidence"
+  if (confidence >= 0.45) return "moderate confidence"
+  return "low confidence"
+}
+
+function SideBadge({ side }: { side: Side }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[11px] font-medium">
+      <SideDot side={side} />
+      Video {SIDE_META[side].name}
+    </span>
+  )
+}
+
+function ReportVerdict({
+  verdict,
+  higherViewsSide,
+}: {
+  verdict: PackagingComparisonReport["verdict"]
+  higherViewsSide: Side | null
+}) {
+  const stronger = verdict.strongerSide
+  const matchesViews = stronger !== "neither" && stronger === higherViewsSide
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <h4 className="text-sm font-semibold">The packaging verdict</h4>
+        {stronger === "neither" ? (
+          <span className="text-xs text-muted-foreground">
+            too close to call
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+            stronger packaging: <SideBadge side={stronger} />
+            {matchesViews && (
+              <span className="text-emerald-600 dark:text-emerald-500">
+                (also the higher-viewed one)
+              </span>
+            )}
+          </span>
+        )}
+        <span className="ml-auto text-[11px] text-muted-foreground">
+          {confidenceLabel(verdict.confidence)}
+        </span>
+      </div>
+      {verdict.summary && <p className="text-sm">{clean(verdict.summary)}</p>}
+    </div>
+  )
+}
+
+function ReportDrivers({
+  drivers,
+  higherViewsSide,
+}: {
+  drivers: PackagingReportDriver[]
+  higherViewsSide: Side | null
+}) {
+  if (drivers.length === 0) return null
+  return (
+    <div className="flex flex-col gap-2">
+      <h4 className="text-sm font-semibold">Why one pulled ahead</h4>
+      <div className="flex flex-col divide-y rounded-lg border">
+        {drivers.map((driver, index) => (
+          <div
+            key={`${driver.surface}:${driver.label}:${index}`}
+            className="flex flex-col gap-1.5 px-3 py-2.5"
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+                {PACKAGING_REPORT_SURFACE_LABEL[driver.surface]}
+              </span>
+              <span className="text-sm font-medium">{clean(driver.label)}</span>
+              <span className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground">
+                favours {SIDE_META[driver.favours].name}
+                {higherViewsSide === driver.favours && (
+                  <span className="text-emerald-600 dark:text-emerald-500">
+                    (the higher-viewed one)
+                  </span>
+                )}
+              </span>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {clean(driver.detail)}
+            </p>
+            {driver.evidence.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {driver.evidence.map((item, evidenceIndex) => (
+                  <span
+                    key={`${item}:${evidenceIndex}`}
+                    className="rounded-full border bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
+                  >
+                    {clean(item)}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ReportSurfaceCard({ read }: { read: PackagingReportSurfaceRead }) {
+  return (
+    <section className="flex flex-col gap-2 rounded-lg border p-3">
+      <div className="flex items-center gap-2">
+        <h4 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+          {PACKAGING_REPORT_SURFACE_LABEL[read.surface]}
+        </h4>
+        {read.strongerSide !== "neither" && (
+          <span className="ml-auto inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+            <SideDot side={read.strongerSide} />
+            {SIDE_META[read.strongerSide].name} is stronger here
+          </span>
+        )}
+      </div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {(["a", "b"] as Side[]).map((side) => {
+          const text = side === "a" ? read.aRead : read.bRead
+          return (
+            <div
+              key={side}
+              className="flex items-start gap-1.5 rounded-md border bg-muted/40 px-2 py-1.5 text-xs"
+            >
+              <span className="mt-1">
+                <SideDot side={side} />
+              </span>
+              <span className="text-muted-foreground">
+                {text.length > 0 ? clean(text) : "nothing to read on this side"}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+      {read.whyItMatters && (
+        <p className="text-xs text-muted-foreground">
+          {clean(read.whyItMatters)}
+        </p>
+      )}
+    </section>
+  )
+}
+
+function ReportRecommendations({
+  recommendations,
+}: {
+  recommendations: PackagingReportRecommendation[]
+}) {
+  if (recommendations.length === 0) return null
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-1.5">
+        <LightbulbIcon className="size-4 text-muted-foreground" />
+        <h4 className="text-sm font-semibold">What to try next</h4>
+      </div>
+      <div className="flex flex-col divide-y rounded-lg border">
+        {recommendations.map((recommendation, index) => (
+          <div
+            key={`${recommendation.surface}:${index}`}
+            className="flex flex-col gap-1 px-3 py-2.5"
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+                {PACKAGING_REPORT_SURFACE_LABEL[recommendation.surface]}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {recommendation.target === "both"
+                  ? "for both videos"
+                  : `for Video ${SIDE_META[recommendation.target].name}`}
+              </span>
+              <span className="ml-auto rounded-full border px-1.5 py-px text-[10px] text-muted-foreground">
+                {recommendation.effort === "quick"
+                  ? "quick change"
+                  : "bigger rework"}
+              </span>
+            </div>
+            <p className="text-sm">{clean(recommendation.action)}</p>
+            {recommendation.rationale && (
+              <p className="text-xs text-muted-foreground">
+                {clean(recommendation.rationale)}
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ReportNarrative({
+  report,
+  higherViewsSide,
+}: {
+  report: PackagingComparisonReport
+  higherViewsSide: Side | null
+}) {
+  const surfaceOrder = new Map<PackagingReportSurface, number>(
+    PACKAGING_REPORT_SURFACES.map((surface, index) => [surface, index]),
+  )
+  const surfaces = [...report.surfaces].sort(
+    (x, y) =>
+      (surfaceOrder.get(x.surface) ?? 0) - (surfaceOrder.get(y.surface) ?? 0),
+  )
+  return (
+    <div className="flex flex-col gap-4">
+      <ReportVerdict
+        verdict={report.verdict}
+        higherViewsSide={higherViewsSide}
+      />
+      <ReportDrivers
+        drivers={report.drivers}
+        higherViewsSide={higherViewsSide}
+      />
+      {surfaces.length > 0 && (
+        <div className="flex flex-col gap-2">
+          {surfaces.map((read) => (
+            <ReportSurfaceCard key={read.surface} read={read} />
+          ))}
+        </div>
+      )}
+      <ReportRecommendations recommendations={report.recommendations} />
+      {report.caveats.length > 0 && (
+        <ul className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+          {report.caveats.map((caveat, index) => (
+            <li key={`${caveat}:${index}`}>{clean(caveat)}</li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }
@@ -364,7 +631,13 @@ function SurfaceSection({
   )
 }
 
-export function PackagingComparison({ data }: { data: PackagingComparison }) {
+export function PackagingComparison({
+  data,
+  report = null,
+}: {
+  data: PackagingComparison
+  report?: PackagingComparisonReport | null
+}) {
   const bySurface = (surface: ComparisonSurface) => ({
     ordinals: data.ordinals.filter((row) => row.surface === surface),
     categoricals: data.categoricals.filter((row) => row.surface === surface),
@@ -386,14 +659,21 @@ export function PackagingComparison({ data }: { data: PackagingComparison }) {
           <h3 className="text-sm font-semibold">Packaging head-to-head</h3>
         </div>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          Why one of these earned the click and the other did not, read from
-          each video&apos;s stored packaging analysis. Every score was measured
-          on that video alone at analysis time, so this comparison is instant
-          and needs no fresh analysis. Scores are correlation, not proof.
+          Why one of these earned the click and the other did not: a written
+          read of both thumbnails, both titles and both openings, followed by
+          the field-by-field diff of each video&apos;s stored packaging
+          analysis. Observations are correlation, not proof.
         </p>
       </div>
 
       <IdentityRow comparison={data} />
+
+      {report && (
+        <ReportNarrative
+          report={report}
+          higherViewsSide={data.higherViewsSide}
+        />
+      )}
 
       {!hasBody ? (
         <p className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">

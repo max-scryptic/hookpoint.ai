@@ -11,6 +11,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import type { PackagingComparisonReport } from "@/lib/packaging-comparison-report"
 import type { ScriptComparisonReport } from "@/lib/script-comparison-report"
 
 // A row of the compare page's "previous comparisons" list: the saved pair plus
@@ -187,6 +188,54 @@ export async function saveScriptComparisonReport(
 
   if (error) {
     throw new Error(`Failed to save script comparison report: ${error.message}`)
+  }
+}
+
+// Loads the stored, model-authored packaging head-to-head for a saved
+// comparison, or null when it has not been generated yet (in which case the
+// report page regenerates it lazily). Scoped to the owning user via RLS.
+export async function getPackagingComparisonReport(
+  supabase: SupabaseClient,
+  userId: string,
+  comparisonId: string,
+): Promise<PackagingComparisonReport | null> {
+  const { data, error } = await supabase
+    .from("video_comparisons")
+    .select("packaging_report")
+    .eq("id", comparisonId)
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(
+      `Failed to load packaging comparison report: ${error.message}`,
+    )
+  }
+
+  return (
+    (data as { packaging_report: PackagingComparisonReport | null } | null)
+      ?.packaging_report ?? null
+  )
+}
+
+// Stores the generated packaging head-to-head on the comparison row. Scoped to
+// the owning user via RLS so a comparison can only be written by its creator.
+export async function savePackagingComparisonReport(
+  supabase: SupabaseClient,
+  userId: string,
+  comparisonId: string,
+  report: PackagingComparisonReport,
+): Promise<void> {
+  const { error } = await supabase
+    .from("video_comparisons")
+    .update({ packaging_report: report })
+    .eq("id", comparisonId)
+    .eq("user_id", userId)
+
+  if (error) {
+    throw new Error(
+      `Failed to save packaging comparison report: ${error.message}`,
+    )
   }
 }
 
