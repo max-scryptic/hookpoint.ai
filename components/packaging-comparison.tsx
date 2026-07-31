@@ -77,55 +77,17 @@ function SideDot({ side }: { side: Side }) {
 // other. Generated once when the pair is created and stored on the comparison,
 // so this renders from JSON with no call at view time.
 
-function confidenceLabel(confidence: number): string {
-  if (confidence >= 0.75) return "high confidence"
-  if (confidence >= 0.45) return "moderate confidence"
-  return "low confidence"
-}
-
-function SideBadge({ side }: { side: Side }) {
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[11px] font-medium">
-      <SideDot side={side} />
-      Video {SIDE_META[side].name}
-    </span>
-  )
-}
-
+// The one-paragraph read of which video packaged itself better, sitting bare
+// above the tabs rather than in a card of its own: the surrounding section is
+// already a card, and the badges and confidence label it used to carry are
+// restated by the per-surface panels below.
 function ReportVerdict({
   verdict,
-  higherViewsSide,
 }: {
   verdict: PackagingComparisonReport["verdict"]
-  higherViewsSide: Side | null
 }) {
-  const stronger = verdict.strongerSide
-  const matchesViews = stronger !== "neither" && stronger === higherViewsSide
-  return (
-    <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <h4 className="text-sm font-semibold">The verdict</h4>
-        {stronger === "neither" ? (
-          <span className="text-xs text-muted-foreground">
-            too close to call
-          </span>
-        ) : (
-          <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-            stronger packaging: <SideBadge side={stronger} />
-            {matchesViews && (
-              <span className="text-emerald-600 dark:text-emerald-500">
-                (also the higher-viewed one)
-              </span>
-            )}
-          </span>
-        )}
-        <span className="ml-auto text-[11px] text-muted-foreground">
-          {confidenceLabel(verdict.confidence)}
-        </span>
-      </div>
-      {verdict.summary && <p className="text-sm">{clean(verdict.summary)}</p>}
-    </div>
-  )
+  if (!verdict.summary) return null
+  return <p className="text-sm">{clean(verdict.summary)}</p>
 }
 
 // The verbatim span behind one surface on one side, read off the deterministic
@@ -435,10 +397,7 @@ function ReportNarrative({
 
   return (
     <div className="flex flex-col gap-4">
-      <ReportVerdict
-        verdict={report.verdict}
-        higherViewsSide={comparison.higherViewsSide}
-      />
+      <ReportVerdict verdict={report.verdict} />
       {tabs.length > 0 && (
         <PackagingReportTabs
           tabs={tabs.map((tab) => ({
