@@ -202,6 +202,9 @@ function SurfaceColumns({
 }) {
   const sides: Side[] = ["a", "b"]
   const hasEvidence = surface !== "alignment"
+  // A thumbnail argues for itself: the image is right there, so a written
+  // account of what it depicts only restates what the reader already sees.
+  const showRead = surface !== "thumbnail"
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2">
       {sides.map((side, index) => {
@@ -244,7 +247,7 @@ function SurfaceColumns({
                 comparison={comparison}
               />
             )}
-            {readText.length > 0 && (
+            {showRead && readText.length > 0 && (
               <p className="text-sm text-muted-foreground">
                 {clean(readText)}
               </p>
