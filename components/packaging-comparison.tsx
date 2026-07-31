@@ -28,18 +28,17 @@ import {
   type FlagComparisonRow,
   type OrdinalComparisonRow,
   type PackagingComparison,
-  type PackagingHighlight,
   type Side,
   type SpanComparisonRow,
 } from "@/lib/packaging-comparison"
 
 // The packaging head-to-head body: which of two uploads the packaging favours
 // and why, read straight from the stored per-video taxonomies with no model
-// call at view time. A ranked "biggest differences" list tells the story, then
-// each surface (title, thumbnail, hook, cross-surface, drivers) shows its
-// field-by-field diff, and the verbatim spans put the real titles, thumbnail
-// text and opening lines side by side. Purely presentational; all the maths
-// live in lib/packaging-comparison.ts.
+// call at view time. The written report tells the story, then each surface
+// (title, thumbnail, hook, cross-surface, drivers) shows its field-by-field
+// diff, and the verbatim spans put the real titles, thumbnail text and opening
+// lines side by side. Purely presentational; all the maths live in
+// lib/packaging-comparison.ts.
 //
 // COPY GUARDRAIL: no em or en dashes (U+2014 / U+2013), ever, in any text in
 // this file. Hyphens are fine. Enforced by lib/__tests__/copy-guardrails.
@@ -530,52 +529,6 @@ function ReportNarrative({
   )
 }
 
-// The ranked story. Each row states the difference in plain numbers and, when
-// the packaging leans toward the higher-viewed video, says so.
-function Highlights({
-  highlights,
-  higherViewsSide,
-}: {
-  highlights: PackagingHighlight[]
-  higherViewsSide: Side | null
-}) {
-  if (highlights.length === 0) return null
-  return (
-    <div className="flex flex-col gap-2">
-      <h4 className="text-sm font-semibold">Biggest packaging differences</h4>
-      <div className="flex flex-col divide-y rounded-lg border">
-        {highlights.map((highlight) => {
-          const leansTop =
-            higherViewsSide != null && highlight.favours === higherViewsSide
-          return (
-            <div
-              key={highlight.key}
-              className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-sm"
-            >
-              <span className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
-                {SURFACE_LABEL[highlight.surface]}
-              </span>
-              <span>{clean(highlight.detail)}</span>
-              {highlight.favours !== "neither" && (
-                <span className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground">
-                  <SideDot side={highlight.favours} />
-                  favours {SIDE_META[highlight.favours].name}
-                  {leansTop && (
-                    <span className="text-emerald-600 dark:text-emerald-500">
-                      {" "}
-                      (the higher-viewed one)
-                    </span>
-                  )}
-                </span>
-              )}
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
 // A 0-10 dual bar: A grows left-to-right, B mirrored, so the longer bar reads
 // as the stronger score at a glance.
 function OrdinalBars({ a, b }: { a: number | null; b: number | null }) {
@@ -836,11 +789,6 @@ export function PackagingComparison({
         </p>
       ) : (
         <>
-          <Highlights
-            highlights={data.highlights}
-            higherViewsSide={data.higherViewsSide}
-          />
-
           <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
             <span className="inline-flex items-center gap-1">
               <SideDot side="a" />
