@@ -6,6 +6,9 @@
 // on any pair. The output is three layers: a ranked "biggest differences"
 // list that tells the story, the full per-surface field-by-field diff, and the
 // verbatim spans (real titles, thumbnail text, opening lines) side by side.
+// Each side also carries the whole spoken first ten seconds, cut out of the
+// stored transcript, so the report's hook surface can quote the hook in full
+// rather than a single sentence off the taxonomy.
 //
 // Everything degrades: the v1 taxonomy (flat fields) still yields the title
 // styles, promise, hook delivery and alignment diffs even when the enriched
@@ -18,6 +21,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import type { PackagingTaxonomy } from "@/lib/packaging-taxonomy"
+import { transcriptForSegment, type TranscriptCue } from "@/lib/youtube/youtube"
+
+// The opening window the head-to-head argues about, in seconds. Same bounds as
+// HOOK_EVIDENCE_FROM_SECONDS / HOOK_EVIDENCE_TO_SECONDS in
+// lib/packaging-comparison-evidence.ts, restated here so this pure diff module
+// does not pull in that module's Supabase and media dependencies. Kept in step
+// with it: the two must always describe the same ten seconds.
+const HOOK_TRANSCRIPT_FROM_SECONDS = 0
+const HOOK_TRANSCRIPT_TO_SECONDS = 10
 
 // ---------------------------------------------------------------------------
 // Types
@@ -49,6 +61,11 @@ export interface PackagingComparisonSide {
   // were captured.
   thumbnailUrl: string | null
   views: number | null
+  // Everything spoken in the first ten seconds, verbatim, cut out of the
+  // video's stored transcript. This is the hook itself, so the report's hook
+  // surface quotes it in full rather than the taxonomy's single opening line.
+  // Null when the video has no transcript, or none of it lands in the window.
+  hookTranscript: string | null
   hasTaxonomy: boolean
   hasDetail: boolean
 }
@@ -132,6 +149,9 @@ export interface PackagingComparisonInput {
   title: string | null
   thumbnailUrl: string | null
   views: number | null
+  // The whole video's cue list, from which the opening ten seconds are cut.
+  // Empty for a video whose transcript was never captured.
+  transcript: TranscriptCue[]
   taxonomy: PackagingTaxonomy | null
 }
 
@@ -665,6 +685,19 @@ function buildHighlights(
     .slice(0, MAX_HIGHLIGHTS)
 }
 
+// The spoken opening, verbatim. Any cue overlapping the window is carried
+// whole, so a sentence still running at the ten second mark is quoted to its
+// end rather than cut mid-word; that is the same rule the stored hook evidence
+// is clipped by, so the two never disagree about what was said.
+function hookTranscriptFor(cues: TranscriptCue[]): string | null {
+  const text = transcriptForSegment(
+    cues,
+    HOOK_TRANSCRIPT_FROM_SECONDS,
+    HOOK_TRANSCRIPT_TO_SECONDS,
+  ).trim()
+  return text.length > 0 ? text : null
+}
+
 function sideFor(
   input: PackagingComparisonInput,
 ): PackagingComparisonSide {
@@ -673,6 +706,7 @@ function sideFor(
     title: input.title,
     thumbnailUrl: input.thumbnailUrl,
     views: input.views,
+    hookTranscript: hookTranscriptFor(input.transcript),
     hasTaxonomy: input.taxonomy != null,
     hasDetail: input.taxonomy?.detail != null,
   }
@@ -741,11 +775,13 @@ interface PackagingRow {
   video_title: string | null
   thumbnail_url: string | null
   analytics_summary: { views?: number | null } | null
+  transcript: TranscriptCue[] | null
   packaging_taxonomy: PackagingTaxonomy | null
 }
 
 // Loads the two videos' stored taxonomies (from the same
-// packaging_alignment->taxonomy JSON path the channel trends page reads) and
+// packaging_alignment->taxonomy JSON path the channel trends page reads) plus
+// their transcripts, from which each side's opening ten seconds is cut, and
 // diffs them. Returns null when either video is missing or belongs to someone
 // else (the user-scoped client cannot see it either way), or when neither
 // carries a taxonomy.
@@ -758,7 +794,7 @@ export async function getPackagingComparison(
   const { data, error } = await supabase
     .from("analysed_videos")
     .select(
-      "id, video_title, thumbnail_url:video_details->>thumbnailUrl, analytics_summary, packaging_taxonomy:packaging_alignment->taxonomy",
+      "id, video_title, thumbnail_url:video_details->>thumbnailUrl, analytics_summary, transcript, packaging_taxonomy:packaging_alignment->taxonomy",
     )
     .eq("user_id", userId)
     .in("id", [videoIdA, videoIdB])
@@ -777,6 +813,7 @@ export async function getPackagingComparison(
     title: row.video_title,
     thumbnailUrl: row.thumbnail_url,
     views: row.analytics_summary?.views ?? null,
+    transcript: row.transcript ?? [],
     taxonomy: row.packaging_taxonomy,
   })
 

@@ -7,6 +7,7 @@ import {
   type PackagingDetail,
   type PackagingTaxonomy,
 } from "@/lib/packaging-taxonomy"
+import type { TranscriptCue } from "@/lib/youtube/youtube"
 
 // The two fixtures model the real head-to-head the feature was built for: a
 // high-view first-person confession ("I'm 26, Living With My Parents, And Have
@@ -196,11 +197,27 @@ const stopChartsTaxonomy = taxonomy(
   }),
 )
 
+// Cue lists long enough to run past the ten second mark, so the opening the
+// comparison carries is a real slice rather than the whole transcript.
+const cryptoCues: TranscriptCue[] = [
+  { startSeconds: 0, endSeconds: 4, text: "I'm 26 and I live with my parents." },
+  { startSeconds: 4, endSeconds: 9, text: "Every pound I have is in crypto." },
+  { startSeconds: 9, endSeconds: 12, text: "Here is what that actually feels like." },
+  { startSeconds: 12, endSeconds: 18, text: "So let's start with the numbers." },
+]
+
+const stopCues: TranscriptCue[] = [
+  { startSeconds: 0, endSeconds: 5, text: "Hey guys, welcome back to the channel." },
+  { startSeconds: 5, endSeconds: 10, text: "Before we start, hit that subscribe button." },
+  { startSeconds: 10.5, endSeconds: 16, text: "Right, so the charts have been wild." },
+]
+
 const cryptoInput = {
   id: "crypto",
   title: "I'm 26, Living With My Parents, And Have Invested Everything Into Crypto",
   thumbnailUrl: "https://i.ytimg.com/vi/crypto/maxresdefault.jpg",
   views: 3515,
+  transcript: cryptoCues,
   taxonomy: cryptoTaxonomy,
 }
 
@@ -209,6 +226,7 @@ const stopInput = {
   title: "STOP CHECKING THE CHARTS",
   thumbnailUrl: "https://i.ytimg.com/vi/stop/maxresdefault.jpg",
   views: 131,
+  transcript: stopCues,
   taxonomy: stopChartsTaxonomy,
 }
 
@@ -265,6 +283,34 @@ describe("buildPackagingComparison", () => {
       (s) => s.key === "hook.firstSentence",
     )
     expect(firstSentence?.b).toContain("welcome back")
+  })
+
+  it("carries the whole spoken first ten seconds, not just the opening line", () => {
+    const result = buildPackagingComparison(cryptoInput, stopInput)
+    expect(result?.a.hookTranscript).toBe(
+      "I'm 26 and I live with my parents. Every pound I have is in crypto. Here is what that actually feels like.",
+    )
+    // The whole hook, so every sentence inside the window is present rather
+    // than only the first one the taxonomy recorded.
+    expect(result?.b.hookTranscript).toContain("welcome back to the channel")
+    expect(result?.b.hookTranscript).toContain("hit that subscribe button")
+  })
+
+  it("stops the opening at the ten second mark", () => {
+    const result = buildPackagingComparison(cryptoInput, stopInput)
+    // Cues starting after the window are left out; one still running at ten
+    // seconds is carried whole rather than cut mid-sentence.
+    expect(result?.a.hookTranscript).not.toContain("start with the numbers")
+    expect(result?.b.hookTranscript).not.toContain("charts have been wild")
+  })
+
+  it("leaves the opening unset when the video has no transcript", () => {
+    const result = buildPackagingComparison(
+      { ...cryptoInput, transcript: [] },
+      stopInput,
+    )
+    expect(result?.a.hookTranscript).toBeNull()
+    expect(result?.b.hookTranscript).not.toBeNull()
   })
 
   it("diffs the topic's trend relevance as a driver ordinal", () => {
