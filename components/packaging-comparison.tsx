@@ -1,10 +1,8 @@
-import Image from "next/image"
 import {
   ArrowRightIcon,
   LayersIcon,
   LightbulbIcon,
   MinusIcon,
-  PlayIcon,
   TrophyIcon,
 } from "lucide-react"
 
@@ -100,21 +98,6 @@ function IdentityRow({ comparison }: { comparison: PackagingComparison }) {
                   <TrophyIcon className="size-3" />
                   most views
                 </span>
-              )}
-            </div>
-            <div className="relative aspect-video w-full overflow-hidden rounded-md bg-muted">
-              {s.thumbnailUrl ? (
-                <Image
-                  src={s.thumbnailUrl}
-                  alt=""
-                  fill
-                  sizes="(min-width: 640px) 50vw, 100vw"
-                  className="object-cover"
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-                  <PlayIcon className="size-5" />
-                </div>
               )}
             </div>
             <span className="line-clamp-2 text-sm font-medium">
