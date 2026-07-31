@@ -113,7 +113,17 @@ function modelOutput() {
         favours: "a",
         detail: "Video B's thumbnail splits attention across three subjects.",
         evidence: ["  frame text: MY BIGGEST MISTAKE  ", "", "visualComplexity 8 vs 3"],
+        tip: "  Cut Video B's thumbnail back to one subject and one line of text.  ",
         confidence: 0.8,
+      },
+      {
+        label: "Title buries the number",
+        surface: "title",
+        favours: "a",
+        detail: "Video A names the figure, Video B gestures at it.",
+        evidence: ["title A: I Lost Everything In Crypto At 26"],
+        tip: "   ",
+        confidence: 0.6,
       },
     ],
     recommendations: [
@@ -217,6 +227,18 @@ describe("isPackagingComparisonReportOutput", () => {
     output.verdict.confidence = 4
     expect(isPackagingComparisonReportOutput(output)).toBe(false)
   })
+
+  it("rejects a non-string driver tip", () => {
+    const output = modelOutput()
+    ;(output.drivers[0] as { tip: unknown }).tip = 7
+    expect(isPackagingComparisonReportOutput(output)).toBe(false)
+  })
+
+  it("still accepts a driver with no tip, as stored before schema version 2", () => {
+    const output = modelOutput()
+    delete (output.drivers[0] as { tip?: string }).tip
+    expect(isPackagingComparisonReportOutput(output)).toBe(true)
+  })
 })
 
 describe("normalizePackagingComparisonReport", () => {
@@ -242,6 +264,12 @@ describe("normalizePackagingComparisonReport", () => {
       "frame text: MY BIGGEST MISTAKE",
       "visualComplexity 8 vs 3",
     ])
+    expect(report.drivers[0].tip).toBe(
+      "Cut Video B's thumbnail back to one subject and one line of text.",
+    )
+    // A whitespace-only tip is dropped rather than stored blank, so the report
+    // renders no empty "Try:" line under that driver.
+    expect(report.drivers[1].tip).toBeUndefined()
     // The recommendation with a blank action is dropped, the real one kept.
     expect(report.recommendations).toHaveLength(1)
     expect(report.recommendations[0].action).toBe(

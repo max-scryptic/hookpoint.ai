@@ -46,8 +46,9 @@ import type {
   VideoDetails,
 } from "@/lib/youtube/youtube"
 
-// Bumped whenever the stored report shape changes.
-export const PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION = 1
+// Bumped whenever the stored report shape changes. Version 2 added the per
+// driver "Try:" tip; reports stored at version 1 simply render without one.
+export const PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION = 2
 
 export const PACKAGING_REPORT_SURFACES = [
   "thumbnail",
@@ -65,6 +66,18 @@ export const PACKAGING_REPORT_SURFACE_LABEL: Record<
   title: "Title",
   hook: "First 10 seconds",
   alignment: "How the three fit together",
+}
+
+// The short form, for the tab strip on the report where four labels have to sit
+// on one row.
+export const PACKAGING_REPORT_SURFACE_TAB_LABEL: Record<
+  PackagingReportSurface,
+  string
+> = {
+  thumbnail: "Thumbnail",
+  title: "Title",
+  hook: "Hook",
+  alignment: "Summary",
 }
 
 export type ReportSide = "a" | "b"
@@ -94,6 +107,10 @@ export interface PackagingReportDriver {
   // Pointers back to the real inputs: a verbatim title, thumbnail text, a
   // frame at 0:04, a cuts-per-minute figure.
   evidence: string[]
+  // The one change this driver's evidence argues for, rendered as the blue
+  // "Try:" line under the driver. Optional only because reports stored before
+  // schema version 2 predate it; the model always writes one now.
+  tip?: string
   confidence: number
 }
 
@@ -188,7 +205,15 @@ const REPORT_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["label", "surface", "favours", "detail", "evidence", "confidence"],
+        required: [
+          "label",
+          "surface",
+          "favours",
+          "detail",
+          "evidence",
+          "tip",
+          "confidence",
+        ],
         properties: {
           label: { type: "string" },
           surface: { type: "string", enum: surfaceEnum },
@@ -199,6 +224,7 @@ const REPORT_SCHEMA = {
             items: { type: "string" },
             maxItems: MAX_EVIDENCE_PER_DRIVER,
           },
+          tip: { type: "string" },
           confidence: { type: "number", minimum: 0, maximum: 1 },
         },
       },
@@ -240,7 +266,8 @@ const INSTRUCTIONS = [
   "verdict: strongerSide is the video whose packaging is the stronger play (or neither when they are genuinely close), summary is two to three sentences on why, and confidence is 0 to 1 in how strongly the evidence supports that verdict. Lower it when the two are close, when evidence is thin on one side, or when views are unknown.",
   "surfaces: one entry for each of thumbnail, title, hook and alignment that you have evidence for. aRead and bRead describe what that video's surface actually does, concretely (what is in the frame, what the title claims, what the opening says and shows). whyItMatters explains in one or two sentences why that difference would move clicks or hold the opening. Use surface 'alignment' for whether the title, thumbnail and opening promise one thing or pull apart.",
   "drivers: the ranked reasons the stronger video is stronger, most important first, one to six of them. label is a short phrase (for example 'Thumbnail is doing three things at once'). detail is one or two sentences. evidence is up to four short pointers back to the supplied inputs, quoting the real thing where possible (a verbatim title fragment, the thumbnail's overlaid words, 'frame at 0:04 is a wide shot with no face', 'one cut in the first ten seconds versus eleven per minute across the video'). Only emit a driver where the evidence genuinely supports it.",
-  "recommendations: one to six things to actually try, ordered by expected payoff. target names which video the change is for, or both when it is a habit worth carrying into the next upload. action is the concrete change, phrased as an instruction. rationale ties it back to what this comparison showed. effort is 'quick' for a title or thumbnail rewrite and 'rework' for anything needing a reshoot or re-edit.",
+  "tip: every driver is a comparison you have evidence for, so every driver carries one. It is the single change that evidence argues for, written as a short instruction the uploader can act on next time (for example 'Cut the thumbnail back to one subject and one line of text, sized to read at phone width'). Name the change rather than restating detail, keep it to one sentence, and make it specific to these two videos rather than generic packaging advice. The interface prefixes it with 'Try:', so do not begin it with 'Try' yourself.",
+  "recommendations: one to six things to actually try, ordered by expected payoff. target names which video the change is for, or both when it is a habit worth carrying into the next upload. action is the concrete change, phrased as an instruction. rationale ties it back to what this comparison showed. effort is 'quick' for a title or thumbnail rewrite and 'rework' for anything needing a reshoot or re-edit. These sit alongside the driver tips in the interface, so do not repeat a tip you already wrote; use recommendations for changes the drivers did not cover, or for the bigger reworks a single driver does not carry.",
   "caveats: one to three honest limits on this comparison, for example that it reads two videos rather than a pattern, that views are shaped by traffic source, subscriber base, topic and timing as well as packaging, or that one side's evidence was thin.",
   "Write in plain, direct prose with no marketing filler. Never output an em dash character (U+2014) or en dash (U+2013) anywhere in your response; if you would use one, rewrite with a comma, colon, parentheses or two sentences instead.",
 ].join(" ")
@@ -321,6 +348,9 @@ export function isPackagingComparisonReportOutput(
         isSide(d.favours) &&
         typeof d.detail === "string" &&
         isStringArray(d.evidence) &&
+        // Optional so a report stored before schema version 2 still validates
+        // if it is ever fed back through here.
+        (d.tip === undefined || typeof d.tip === "string") &&
         isUnitNumber(d.confidence)
       )
     })
@@ -583,6 +613,11 @@ export function normalizePackagingComparisonReport(
           .map((item) => item.trim())
           .filter((item) => item.length > 0)
           .slice(0, MAX_EVIDENCE_PER_DRIVER),
+        // Dropped rather than stored empty, so the renderer's "has a tip" test
+        // is a plain presence check.
+        ...(driver.tip != null && driver.tip.trim().length > 0
+          ? { tip: driver.tip.trim() }
+          : {}),
         confidence: clamp(driver.confidence),
       }))
       .filter((driver) => driver.label.length > 0 || driver.detail.length > 0)
