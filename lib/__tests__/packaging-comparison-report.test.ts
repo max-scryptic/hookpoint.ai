@@ -97,6 +97,7 @@ function modelOutput() {
         aRead: " One face, one line of text. ",
         bRead: "Three subjects competing for the eye.",
         whyItMatters: "A single subject survives the feed at thumbnail size.",
+        tip: "  Build the thumbnail around one subject at phone width.  ",
       },
       {
         surface: "hook",
@@ -104,6 +105,7 @@ function modelOutput() {
         aRead: "States the loss in the first sentence.",
         bRead: "Spends ten seconds on a channel intro.",
         whyItMatters: "The opening either cashes the title's promise or does not.",
+        tip: "   ",
       },
     ],
     drivers: [
@@ -238,6 +240,18 @@ describe("isPackagingComparisonReportOutput", () => {
     expect(isPackagingComparisonReportOutput(output)).toBe(true)
   })
 
+  it("rejects a non-string surface tip", () => {
+    const output = modelOutput()
+    ;(output.surfaces[0] as { tip: unknown }).tip = 7
+    expect(isPackagingComparisonReportOutput(output)).toBe(false)
+  })
+
+  it("still accepts a surface with no tip, as stored before schema version 4", () => {
+    const output = modelOutput()
+    delete (output.surfaces[0] as { tip?: string }).tip
+    expect(isPackagingComparisonReportOutput(output)).toBe(true)
+  })
+
   it("still accepts a recommendation that names a target side, as stored before schema version 3", () => {
     const output = modelOutput()
     ;(output.recommendations[0] as { target?: string }).target = "b"
@@ -277,6 +291,13 @@ describe("normalizePackagingComparisonReport", () => {
     expect(report.drivers[0].tip).toBe(
       "Cut the thumbnail to one subject and one line of text.",
     )
+    // Each surface carries its own tip, so a tab the drivers passed over still
+    // closes on advice. Trimmed like the driver tips, and dropped rather than
+    // stored blank when the model wrote only whitespace.
+    expect(report.surfaces[0].tip).toBe(
+      "Build the thumbnail around one subject at phone width.",
+    )
+    expect(report.surfaces[1].tip).toBeUndefined()
     // A whitespace-only tip is dropped rather than stored blank, so the report
     // renders no empty "Try:" line under that driver.
     expect(report.drivers[1].tip).toBeUndefined()

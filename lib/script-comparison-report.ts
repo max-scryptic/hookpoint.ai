@@ -14,6 +14,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import { SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION } from "@/lib/comparison-report-versions"
 import { recordLlmCallCost, type LlmLogContext } from "@/lib/llm-calls"
 import { responsesCallCost, type ResponsesUsage } from "@/lib/llm-cost"
 import type { PackagingTaxonomy } from "@/lib/packaging-taxonomy"
@@ -25,8 +26,10 @@ import type {
   VideoDetails,
 } from "@/lib/youtube/youtube"
 
-// Bumped whenever the stored report shape changes.
-export const SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION = 1
+// The stored shape version lives in lib/comparison-report-versions.ts;
+// re-exported here so this module stays the one import for everything about the
+// script report.
+export { SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION }
 
 // One titled paragraph of the written comparison.
 export interface ScriptComparisonReportSection {
