@@ -17,6 +17,10 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import {
+  PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION,
+  SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION,
+} from "@/lib/comparison-report-versions"
 import type { PackagingComparisonReport } from "@/lib/packaging-comparison-report"
 import type { ScriptComparisonReport } from "@/lib/script-comparison-report"
 
@@ -31,10 +35,11 @@ export interface SavedComparison {
   videoAThumbnailUrl: string | null
   videoBThumbnailUrl: string | null
   createdAt: string
-  // True when both written head-to-heads are stored, so this pair opens into a
-  // complete report with nothing left to write. False for a pair created before
-  // one of those reports existed, or one whose generation failed: pressing the
-  // button on it again writes the missing part, for free.
+  // True when both written head-to-heads are stored at the current shape, so
+  // this pair opens into a complete report with nothing left to write. False for
+  // a pair created before one of those reports existed, one whose generation
+  // failed, or one whose report was written against an older shape: pressing the
+  // button on it again writes the missing or outdated part, for free.
   reportsReady: boolean
 }
 
@@ -47,15 +52,62 @@ interface ComparisonRow {
   packaging_ready: string | null
 }
 
-// Whether a stored report is present, without dragging the whole JSON blob back
-// for every row. Both reports always carry a schemaVersion (see each report
-// module's normalizer), so probing that one key is a cheap stand-in for "is not
-// null".
+// Whether a stored report is present and current, without dragging the whole
+// JSON blob back for every row. Both reports always carry a schemaVersion (see
+// each report module's normalizer), so that one key answers both questions.
 const REPORT_READY_PROBE =
   "script_ready:script_report->>schemaVersion, packaging_ready:packaging_report->>schemaVersion"
 
+// A report only counts as ready at the current shape version: an older one is
+// missing whatever the bump added (version 5 of the packaging report, for
+// example, is what guarantees every surface a "Try:" line), and the creator has
+// no way to ask for the newer shape other than the generate button, which
+// rewrites it for free. A version we do not recognise (a row written by a newer
+// deploy, or a non-numeric value) reads as ready rather than sending it round
+// the generator again.
+function reportIsCurrent(
+  storedVersion: string | null,
+  currentVersion: number,
+): boolean {
+  if (storedVersion == null) return false
+  const version = Number(storedVersion)
+  return Number.isFinite(version) ? version >= currentVersion : true
+}
+
 function reportsReady(row: ComparisonRow): boolean {
-  return row.script_ready != null && row.packaging_ready != null
+  return (
+    reportIsCurrent(row.script_ready, SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION) &&
+    reportIsCurrent(
+      row.packaging_ready,
+      PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION,
+    )
+  )
+}
+
+// The same test against a report already read back in full, for the generate
+// endpoint deciding which of the two it has to write on this press.
+export function isScriptReportCurrent(
+  report: ScriptComparisonReport | null,
+): boolean {
+  return (
+    report != null &&
+    reportIsCurrent(
+      String(report.schemaVersion),
+      SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION,
+    )
+  )
+}
+
+export function isPackagingReportCurrent(
+  report: PackagingComparisonReport | null,
+): boolean {
+  return (
+    report != null &&
+    reportIsCurrent(
+      String(report.schemaVersion),
+      PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION,
+    )
+  )
 }
 
 // True when two saved pairs are the same head-to-head, regardless of the order
@@ -176,7 +228,10 @@ export async function findSavedComparison(
 // Both stored, model-authored head-to-heads for a saved comparison, read in a
 // single query. A null side means that report has not been generated yet: the
 // report page renders without it rather than writing one on the fly, and
-// re-opening the pair from the Video Comparator fills it in for free. Scoped to
+// re-opening the pair from the Video Comparator fills it in for free. A report
+// stored against an older shape comes back as it was stored, so the page can
+// render what it has; isScriptReportCurrent and isPackagingReportCurrent are
+// what the generate endpoint uses to decide it is worth rewriting. Scoped to
 // the owning user via RLS.
 export interface StoredComparisonReports {
   script: ScriptComparisonReport | null

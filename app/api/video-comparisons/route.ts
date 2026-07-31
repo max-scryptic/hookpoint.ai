@@ -12,6 +12,8 @@ import {
   createSavedComparison,
   findSavedComparison,
   getComparisonReports,
+  isPackagingReportCurrent,
+  isScriptReportCurrent,
 } from "@/lib/video-comparisons"
 import { buildAndStorePackagingComparisonReport } from "@/lib/packaging-comparison-report"
 import { buildAndStoreScriptComparisonReport } from "@/lib/script-comparison-report"
@@ -38,9 +40,10 @@ export const maxDuration = 300
 // written here, once, and stored on the comparison row; the report page reads
 // them back and never generates anything itself, so no part of a report is ever
 // re-written just because someone opened the page. Pressing the button on a
-// pair that already exists is free and fills in whichever report is missing (a
-// pair created before these reports existed, or one whose generation failed),
-// so a stale pair is repaired by the same deliberate action.
+// pair that already exists is free and fills in whichever report is missing or
+// out of date (a pair created before these reports existed, one whose
+// generation failed, or one written against an older shape than the code now
+// renders), so a stale pair is repaired by the same deliberate action.
 
 // Which of the two head-to-heads a comparison row is carrying.
 interface ReportReadiness {
@@ -48,7 +51,8 @@ interface ReportReadiness {
   packaging: boolean
 }
 
-// Writes whichever of the two head-to-heads this comparison is missing, stores
+// Writes whichever of the two head-to-heads this comparison is missing or is
+// carrying against an older stored shape (present says which are current), stores
 // it on the row, and reports what the row carries afterwards. Best-effort and
 // independent: the pair is already saved (and charged), so a generation failure
 // must not fail the request, and one report failing must not cost the creator
@@ -164,7 +168,8 @@ export async function POST(request: NextRequest) {
         })
       }
 
-      // Otherwise the pair is missing a section. Write it now, on this press,
+      // Otherwise the pair is missing a section, or carries one written against
+      // an older shape than the report page now renders. Write it now, on this press,
       // using the row's own A/B order so the new report is oriented the same way
       // as the one already stored beside it.
       const stored = await getComparisonReports(
@@ -183,8 +188,8 @@ export async function POST(request: NextRequest) {
         existing.videoBId,
         logContext,
         {
-          script: stored.script != null,
-          packaging: stored.packaging != null,
+          script: isScriptReportCurrent(stored.script),
+          packaging: isPackagingReportCurrent(stored.packaging),
         },
       )
       return NextResponse.json({

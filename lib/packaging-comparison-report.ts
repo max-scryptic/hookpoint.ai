@@ -29,6 +29,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import { PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION } from "@/lib/comparison-report-versions"
 import { recordLlmCallCost, type LlmLogContext } from "@/lib/llm-calls"
 import { responsesCallCost, type ResponsesUsage } from "@/lib/llm-cost"
 import { getOrGeneratePackagingAlignment } from "@/lib/packaging-alignments"
@@ -46,14 +47,10 @@ import type {
   VideoDetails,
 } from "@/lib/youtube/youtube"
 
-// Bumped whenever the stored report shape changes. Version 2 added the per
-// driver "Try:" tip; reports stored at version 1 simply render without one.
-// Version 3 made every tip and recommendation forward-looking advice for the
-// uploader's next video and dropped the recommendation's target side with it;
-// reports stored at version 2 still carry a target, which nothing reads.
-// Version 4 dropped the caveats list; reports stored at version 3 and earlier
-// still carry one, which nothing reads.
-export const PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION = 4
+// The stored shape version, and its history, live in
+// lib/comparison-report-versions.ts; re-exported here so this module stays the
+// one import for everything about the packaging report.
+export { PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION }
 
 export const PACKAGING_REPORT_SURFACES = [
   "thumbnail",
@@ -101,6 +98,13 @@ export interface PackagingReportSurfaceRead {
   aRead: string
   bRead: string
   whyItMatters: string
+  // This surface's own "Try:" line, so every tab of the report closes on
+  // something to do next rather than only the tabs the drivers happened to land
+  // on. Written under the same forward-looking rules as a driver tip, and shown
+  // only when no driver on this surface carried one. Optional only because
+  // reports stored before schema version 5 predate it; the model always writes
+  // one now.
+  tip?: string
 }
 
 // One ranked reason the stronger video is stronger.
@@ -201,6 +205,7 @@ const REPORT_SCHEMA = {
           "aRead",
           "bRead",
           "whyItMatters",
+          "tip",
         ],
         properties: {
           surface: { type: "string", enum: surfaceEnum },
@@ -208,6 +213,7 @@ const REPORT_SCHEMA = {
           aRead: { type: "string" },
           bRead: { type: "string" },
           whyItMatters: { type: "string" },
+          tip: { type: "string" },
         },
       },
     },
@@ -274,6 +280,7 @@ const INSTRUCTIONS = [
   "drivers: the ranked reasons the stronger video is stronger, most important first, one to six of them. label is a short phrase (for example 'Thumbnail is doing three things at once'). detail is one or two sentences. evidence is up to four short pointers back to the supplied inputs, quoting the real thing where possible (a verbatim title fragment, the thumbnail's overlaid words, 'frame at 0:04 is a wide shot with no face', 'one cut in the first ten seconds versus eleven per minute across the video'). Only emit a driver where the evidence genuinely supports it.",
   "Both of these videos are already published, so nothing you suggest can be applied to them. Every tip and every recommendation is forward-looking advice for the videos the uploader makes next. Never tell them to change, re-title, re-cut, reshoot, re-upload or otherwise fix Video A or Video B, never name Video A or Video B inside a tip or a recommendation, and never phrase advice as something one of these two videos should have done. Say what to do on the next video instead, so the advice stands on its own without either video in front of the reader (for example 'Show the payoff itself in the first three seconds, not only in the title and thumbnail'). Your reads, drivers and evidence are the opposite: those describe what these two videos already did, so they name Video A and Video B freely.",
   "tip: every driver is a comparison you have evidence for, so every driver carries one. It is the single change that driver's evidence argues for, written as a one-sentence instruction for the uploader's next video (for example 'Cut the thumbnail to one subject and one line of text, sized to read at phone width'). Name the change rather than restating detail, and keep it specific to what this comparison actually showed rather than generic packaging advice, while phrasing it as a rule to apply next time. The interface prefixes it with 'Try:', so do not begin it with 'Try' yourself; do not begin it with 'Next time', 'In future videos', 'Going forward' or any similar lead-in either, since the forward-looking framing belongs in how the advice is worded and a lead-in only delays the point.",
+  "Every entry in surfaces carries a tip of its own as well, written under exactly those same rules: the single change that surface's comparison argues for, in one sentence, for the uploader's next video. Write one for every surface you cover, including the surfaces your drivers already speak to. The interface shows it only when no driver landed on that surface, so it has to stand on its own rather than continue a driver, and it must not repeat a driver tip for the same surface word for word.",
   "recommendations: one to six further things to try on the next upload, ordered by expected payoff. action is the concrete change, phrased as a one-sentence instruction for the next video under exactly the same rules as tip. rationale ties it back to what this comparison showed and may name the videos, since it is not shown as advice. effort is 'quick' for something settled while writing a title or building a thumbnail and 'rework' for anything needing a different shoot or edit. The interface renders each action as an 'Or:' line directly under that surface's driver tips, as the next thing to try after them, so file each one under the surface it changes, write it to stand on its own, do not begin it with 'Try' or 'Or', and do not repeat a tip you already wrote; use recommendations for changes the drivers did not cover, or for the bigger reworks a single driver does not carry.",
   "Write in plain, direct prose with no marketing filler. Never output an em dash character (U+2014) or en dash (U+2013) anywhere in your response; if you would use one, rewrite with a comma, colon, parentheses or two sentences instead.",
 ].join(" ")
@@ -335,7 +342,11 @@ export function isPackagingComparisonReportOutput(
         isSideOrNeither(s.strongerSide) &&
         typeof s.aRead === "string" &&
         typeof s.bRead === "string" &&
-        typeof s.whyItMatters === "string"
+        typeof s.whyItMatters === "string" &&
+        // Optional so a report stored before schema version 5, when a surface
+        // carried no tip of its own, still validates if it is ever fed back
+        // through here.
+        (s.tip === undefined || typeof s.tip === "string")
       )
     })
   ) {
@@ -597,18 +608,25 @@ export function normalizePackagingComparisonReport(
       confidence: clamp(parsed.verdict.confidence),
     },
     surfaces: parsed.surfaces
-      .map((surface) => ({
-        surface: surface.surface,
-        strongerSide: surface.strongerSide,
-        aRead: surface.aRead.trim(),
-        bRead: surface.bRead.trim(),
-        whyItMatters: surface.whyItMatters.trim(),
-      }))
+      .map((surface) => {
+        const tip = surface.tip?.trim() ?? ""
+        return {
+          surface: surface.surface,
+          strongerSide: surface.strongerSide,
+          aRead: surface.aRead.trim(),
+          bRead: surface.bRead.trim(),
+          whyItMatters: surface.whyItMatters.trim(),
+          // Dropped rather than stored empty, so the renderer's "has a tip"
+          // test is a plain presence check.
+          ...(tip.length > 0 ? { tip } : {}),
+        }
+      })
       .filter(
         (surface) =>
           surface.aRead.length > 0 ||
           surface.bRead.length > 0 ||
-          surface.whyItMatters.length > 0,
+          surface.whyItMatters.length > 0 ||
+          (surface.tip?.length ?? 0) > 0,
       )
       .slice(0, MAX_SURFACES),
     drivers: parsed.drivers

@@ -332,7 +332,9 @@ interface SurfaceTab {
 
 // Everything the report has to say about one surface, in one panel: the two
 // videos' own material, the read of each, why the difference matters, then the
-// drivers, whose tips carry the rest of this surface's advice with them.
+// drivers, whose tips carry the rest of this surface's advice with them. A
+// surface no driver tipped closes on its own tip instead, so every tab ends on
+// a "Try:" line.
 function SurfacePanel({
   tab,
   comparison,
@@ -344,13 +346,23 @@ function SurfacePanel({
   const showCaption = caption !== PACKAGING_REPORT_SURFACE_TAB_LABEL[tab.surface]
   // The recommendations ride along with the driver tips as bare "Or:" lines:
   // like the tips, each one is advice for the uploader's next video rather than
-  // a change to either published video, so none of them names a side. When no
-  // driver on this surface carried a tip (reports stored before schema version
-  // 2 have no tips at all), the first recommendation leads the callout instead.
+  // a change to either published video, so none of them names a side.
   const alternatives = tab.recommendations.map(
     (recommendation) => recommendation.action,
   )
   const hasDriverTip = tab.drivers.some((driver) => driver.tip)
+  // Every tab has to close on something to try, and a surface the drivers
+  // passed over has no tip inside the drivers list to hang one off. So when no
+  // driver here carried a tip, this surface's own tip leads a callout of its
+  // own and the recommendations follow it as "Or:" lines. Reports stored before
+  // schema version 5 carry no surface tip, and ones before version 2 no driver
+  // tips either, so the first recommendation leads for those; a surface with
+  // none of the three is the one case that still closes without advice.
+  const surfaceTip = tab.read?.tip?.trim() ?? ""
+  const standaloneTip =
+    surfaceTip.length > 0 ? surfaceTip : (alternatives[0] ?? null)
+  const standaloneAlternatives =
+    surfaceTip.length > 0 ? alternatives : alternatives.slice(1)
   return (
     <div className="flex flex-col gap-4">
       {showCaption && (
@@ -375,9 +387,9 @@ function SurfacePanel({
           alternatives={hasDriverTip ? alternatives : []}
         />
       )}
-      {!hasDriverTip && alternatives.length > 0 && (
-        <TryCallout alternatives={alternatives.slice(1)}>
-          {alternatives[0]}
+      {!hasDriverTip && standaloneTip != null && (
+        <TryCallout alternatives={standaloneAlternatives}>
+          {standaloneTip}
         </TryCallout>
       )}
     </div>
