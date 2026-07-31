@@ -48,7 +48,10 @@ import type {
 
 // Bumped whenever the stored report shape changes. Version 2 added the per
 // driver "Try:" tip; reports stored at version 1 simply render without one.
-export const PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION = 2
+// Version 3 made every tip and recommendation forward-looking advice for the
+// uploader's next video and dropped the recommendation's target side with it;
+// reports stored at version 2 still carry a target, which nothing reads.
+export const PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION = 3
 
 export const PACKAGING_REPORT_SURFACES = [
   "thumbnail",
@@ -108,18 +111,23 @@ export interface PackagingReportDriver {
   // frame at 0:04, a cuts-per-minute figure.
   evidence: string[]
   // The one change this driver's evidence argues for, rendered as the blue
-  // "Try:" line under the driver. Optional only because reports stored before
-  // schema version 2 predate it; the model always writes one now.
+  // "Try:" line under the driver. Both videos are already published, so this is
+  // written as advice for the next video rather than as a fix to either of
+  // them. Optional only because reports stored before schema version 2 predate
+  // it; the model always writes one now.
   tip?: string
   confidence: number
 }
 
-// Something to try on the weaker video, or on the next upload. Rendered as an
-// "Or:" line under the driver tips for the same surface, so it reads as one more
-// thing to try rather than as a list of its own.
+// Something to try on the next upload. Rendered as an "Or:" line under the
+// driver tips for the same surface, so it reads as one more thing to try rather
+// than as a list of its own.
 export interface PackagingReportRecommendation {
   surface: PackagingReportSurface
-  target: ReportSide | "both"
+  // Which of the two videos the change was for, on reports stored before schema
+  // version 3. Recommendations are now always advice for the next video, so
+  // nothing writes this and nothing renders it.
+  target?: ReportSide | "both"
   action: string
   rationale: string
   effort: "quick" | "rework"
@@ -238,10 +246,9 @@ const REPORT_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["surface", "target", "action", "rationale", "effort"],
+        required: ["surface", "action", "rationale", "effort"],
         properties: {
           surface: { type: "string", enum: surfaceEnum },
-          target: { type: "string", enum: ["a", "b", "both"] },
           action: { type: "string" },
           rationale: { type: "string" },
           effort: { type: "string", enum: ["quick", "rework"] },
@@ -268,8 +275,9 @@ const INSTRUCTIONS = [
   "verdict: strongerSide is the video whose packaging is the stronger play (or neither when they are genuinely close), summary is two to three sentences on why, and confidence is 0 to 1 in how strongly the evidence supports that verdict. Lower it when the two are close, when evidence is thin on one side, or when views are unknown.",
   "surfaces: one entry for each of thumbnail, title, hook and alignment that you have evidence for. aRead and bRead describe what that video's surface actually does, concretely (what is in the frame, what the title claims, what the opening says and shows). whyItMatters explains in one or two sentences why that difference would move clicks or hold the opening. Use surface 'alignment' for whether the title, thumbnail and opening promise one thing or pull apart.",
   "drivers: the ranked reasons the stronger video is stronger, most important first, one to six of them. label is a short phrase (for example 'Thumbnail is doing three things at once'). detail is one or two sentences. evidence is up to four short pointers back to the supplied inputs, quoting the real thing where possible (a verbatim title fragment, the thumbnail's overlaid words, 'frame at 0:04 is a wide shot with no face', 'one cut in the first ten seconds versus eleven per minute across the video'). Only emit a driver where the evidence genuinely supports it.",
-  "tip: every driver is a comparison you have evidence for, so every driver carries one. It is the single change that evidence argues for, written as a short instruction the uploader can act on next time (for example 'Cut the thumbnail back to one subject and one line of text, sized to read at phone width'). Name the change rather than restating detail, keep it to one sentence, and make it specific to these two videos rather than generic packaging advice. The interface prefixes it with 'Try:', so do not begin it with 'Try' yourself.",
-  "recommendations: one to six things to actually try, ordered by expected payoff. target names which video the change is for, or both when it is a habit worth carrying into the next upload. action is the concrete change, phrased as an instruction in one sentence. rationale ties it back to what this comparison showed. effort is 'quick' for a title or thumbnail rewrite and 'rework' for anything needing a reshoot or re-edit. The interface renders each action as an 'Or:' line directly under that surface's driver tips, as the next thing to try after them, so file each one under the surface it changes, write it to stand on its own, do not begin it with 'Try' or 'Or', and do not repeat a tip you already wrote; use recommendations for changes the drivers did not cover, or for the bigger reworks a single driver does not carry.",
+  "Both of these videos are already published, so nothing you suggest can be applied to them. Every tip and every recommendation is forward-looking advice for the videos the uploader makes next. Never tell them to change, re-title, re-cut, reshoot, re-upload or otherwise fix Video A or Video B, never name Video A or Video B inside a tip or a recommendation, and never phrase advice as something one of these two videos should have done. Say what to do on the next video instead, so the advice stands on its own without either video in front of the reader (for example 'Show the payoff itself in the first three seconds, not only in the title and thumbnail'). Your reads, drivers and evidence are the opposite: those describe what these two videos already did, so they name Video A and Video B freely.",
+  "tip: every driver is a comparison you have evidence for, so every driver carries one. It is the single change that driver's evidence argues for, written as a one-sentence instruction for the uploader's next video (for example 'Cut the thumbnail to one subject and one line of text, sized to read at phone width'). Name the change rather than restating detail, and keep it specific to what this comparison actually showed rather than generic packaging advice, while phrasing it as a rule to apply next time. The interface prefixes it with 'Try:', so do not begin it with 'Try' yourself; do not begin it with 'Next time', 'In future videos', 'Going forward' or any similar lead-in either, since the forward-looking framing belongs in how the advice is worded and a lead-in only delays the point.",
+  "recommendations: one to six further things to try on the next upload, ordered by expected payoff. action is the concrete change, phrased as a one-sentence instruction for the next video under exactly the same rules as tip. rationale ties it back to what this comparison showed and may name the videos, since it is not shown as advice. effort is 'quick' for something settled while writing a title or building a thumbnail and 'rework' for anything needing a different shoot or edit. The interface renders each action as an 'Or:' line directly under that surface's driver tips, as the next thing to try after them, so file each one under the surface it changes, write it to stand on its own, do not begin it with 'Try' or 'Or', and do not repeat a tip you already wrote; use recommendations for changes the drivers did not cover, or for the bigger reworks a single driver does not carry.",
   "caveats: one to three honest limits on this comparison, for example that it reads two videos rather than a pattern, that views are shaped by traffic source, subscriber base, topic and timing as well as packaging, or that one side's evidence was thin.",
   "Write in plain, direct prose with no marketing filler. Never output an em dash character (U+2014) or en dash (U+2013) anywhere in your response; if you would use one, rewrite with a comma, colon, parentheses or two sentences instead.",
 ].join(" ")
@@ -367,7 +375,10 @@ export function isPackagingComparisonReportOutput(
       const r = recommendation as Record<string, unknown>
       return (
         isSurface(r.surface) &&
-        (isSide(r.target) || r.target === "both") &&
+        // Optional so a report stored before schema version 3, when a
+        // recommendation still named the video it was for, still validates if
+        // it is ever fed back through here.
+        (r.target === undefined || isSide(r.target) || r.target === "both") &&
         typeof r.action === "string" &&
         typeof r.rationale === "string" &&
         (r.effort === "quick" || r.effort === "rework")
@@ -627,7 +638,6 @@ export function normalizePackagingComparisonReport(
     recommendations: parsed.recommendations
       .map((recommendation) => ({
         surface: recommendation.surface,
-        target: recommendation.target,
         action: recommendation.action.trim(),
         rationale: recommendation.rationale.trim(),
         effort: recommendation.effort,
