@@ -140,7 +140,6 @@ function modelOutput() {
         effort: "rework",
       },
     ],
-    caveats: ["  This reads two videos, not a pattern.  ", ""],
   }
 }
 
@@ -288,7 +287,9 @@ describe("normalizePackagingComparisonReport", () => {
     // A stored recommendation carries no side any more: it is advice for the
     // next video, not a change to either published one.
     expect(report.recommendations[0]).not.toHaveProperty("target")
-    expect(report.caveats).toEqual(["This reads two videos, not a pattern."])
+    // The report no longer carries a caveats list: the tabs render the reads,
+    // drivers and recommendations only.
+    expect(report).not.toHaveProperty("caveats")
     expect(report.model).toBe("test-gpt")
     expect(report.schemaVersion).toBe(
       PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION,

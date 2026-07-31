@@ -416,13 +416,6 @@ function ReportNarrative({
           }))}
         />
       )}
-      {report.caveats.length > 0 && (
-        <ul className="flex flex-col gap-1 text-[11px] text-muted-foreground">
-          {report.caveats.map((caveat, index) => (
-            <li key={`${caveat}:${index}`}>{clean(caveat)}</li>
-          ))}
-        </ul>
-      )}
     </div>
   )
 }
