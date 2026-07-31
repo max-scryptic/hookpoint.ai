@@ -113,7 +113,7 @@ function modelOutput() {
         favours: "a",
         detail: "Video B's thumbnail splits attention across three subjects.",
         evidence: ["  frame text: MY BIGGEST MISTAKE  ", "", "visualComplexity 8 vs 3"],
-        tip: "  Cut Video B's thumbnail back to one subject and one line of text.  ",
+        tip: "  Cut the thumbnail to one subject and one line of text.  ",
         confidence: 0.8,
       },
       {
@@ -129,14 +129,12 @@ function modelOutput() {
     recommendations: [
       {
         surface: "title",
-        target: "b",
         action: "  Name the number the title is hiding.  ",
         rationale: "Video A's concrete figure is what makes its promise legible.",
         effort: "quick",
       },
       {
         surface: "hook",
-        target: "b",
         action: "   ",
         rationale: "Dropped because it has no action.",
         effort: "rework",
@@ -239,6 +237,18 @@ describe("isPackagingComparisonReportOutput", () => {
     delete (output.drivers[0] as { tip?: string }).tip
     expect(isPackagingComparisonReportOutput(output)).toBe(true)
   })
+
+  it("still accepts a recommendation that names a target side, as stored before schema version 3", () => {
+    const output = modelOutput()
+    ;(output.recommendations[0] as { target?: string }).target = "b"
+    expect(isPackagingComparisonReportOutput(output)).toBe(true)
+  })
+
+  it("rejects a recommendation whose target is neither a side nor 'both'", () => {
+    const output = modelOutput()
+    ;(output.recommendations[0] as { target?: string }).target = "neither"
+    expect(isPackagingComparisonReportOutput(output)).toBe(false)
+  })
 })
 
 describe("normalizePackagingComparisonReport", () => {
@@ -265,7 +275,7 @@ describe("normalizePackagingComparisonReport", () => {
       "visualComplexity 8 vs 3",
     ])
     expect(report.drivers[0].tip).toBe(
-      "Cut Video B's thumbnail back to one subject and one line of text.",
+      "Cut the thumbnail to one subject and one line of text.",
     )
     // A whitespace-only tip is dropped rather than stored blank, so the report
     // renders no empty "Try:" line under that driver.
@@ -275,6 +285,9 @@ describe("normalizePackagingComparisonReport", () => {
     expect(report.recommendations[0].action).toBe(
       "Name the number the title is hiding.",
     )
+    // A stored recommendation carries no side any more: it is advice for the
+    // next video, not a change to either published one.
+    expect(report.recommendations[0]).not.toHaveProperty("target")
     expect(report.caveats).toEqual(["This reads two videos, not a pattern."])
     expect(report.model).toBe("test-gpt")
     expect(report.schemaVersion).toBe(

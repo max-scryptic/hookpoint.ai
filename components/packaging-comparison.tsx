@@ -11,7 +11,7 @@ import {
 import { PackagingReportTabs } from "@/components/packaging-report-tabs"
 import { TryCallout } from "@/components/try-callout"
 import { Card } from "@/components/ui/card"
-import { cleanCopy, stripEmDashes } from "@/lib/copy-guardrails"
+import { stripEmDashes } from "@/lib/copy-guardrails"
 import {
   PACKAGING_REPORT_SURFACE_LABEL,
   PACKAGING_REPORT_SURFACE_TAB_LABEL,
@@ -369,24 +369,6 @@ function SurfaceDrivers({
   )
 }
 
-// One recommendation as an "Or:" line: the bare instruction, kept to the same
-// shape as a driver tip, with the video it is for named up front whenever it is
-// not advice for both.
-function recommendationLine(
-  recommendation: PackagingReportRecommendation,
-): ReactNode {
-  const action = cleanCopy(recommendation.action)
-  if (recommendation.target === "both") return action
-  return (
-    <>
-      <span className="opacity-70">
-        for Video {SIDE_META[recommendation.target].name}:{" "}
-      </span>
-      {action}
-    </>
-  )
-}
-
 interface SurfaceTab {
   surface: PackagingReportSurface
   read: PackagingReportSurfaceRead | null
@@ -406,10 +388,14 @@ function SurfacePanel({
 }) {
   const caption = PACKAGING_REPORT_SURFACE_LABEL[tab.surface]
   const showCaption = caption !== PACKAGING_REPORT_SURFACE_TAB_LABEL[tab.surface]
-  // The recommendations ride along with the driver tips. When no driver on this
-  // surface carried one (reports stored before schema version 2 have no tips at
-  // all), the first recommendation leads the callout instead.
-  const alternatives = tab.recommendations.map(recommendationLine)
+  // The recommendations ride along with the driver tips as bare "Or:" lines:
+  // like the tips, each one is advice for the uploader's next video rather than
+  // a change to either published video, so none of them names a side. When no
+  // driver on this surface carried a tip (reports stored before schema version
+  // 2 have no tips at all), the first recommendation leads the callout instead.
+  const alternatives = tab.recommendations.map(
+    (recommendation) => recommendation.action,
+  )
   const hasDriverTip = tab.drivers.some((driver) => driver.tip)
   return (
     <div className="flex flex-col gap-3">
