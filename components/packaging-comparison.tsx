@@ -6,6 +6,7 @@ import { PackagingReportTabs } from "@/components/packaging-report-tabs"
 import { TryCallout } from "@/components/try-callout"
 import { Card } from "@/components/ui/card"
 import { stripEmDashes } from "@/lib/copy-guardrails"
+import { cn } from "@/lib/utils"
 import {
   PACKAGING_REPORT_SURFACE_LABEL,
   PACKAGING_REPORT_SURFACE_TAB_LABEL,
@@ -157,7 +158,7 @@ function SurfaceEvidence({
 
   if (surface === "title") {
     return (
-      <p className="text-sm font-medium">
+      <p className="text-lg leading-snug font-semibold">
         {video.title ? clean(video.title) : "Untitled video"}
       </p>
     )
@@ -166,24 +167,24 @@ function SurfaceEvidence({
   if (surface === "thumbnail") {
     const text = spanText(comparison, SURFACE_SPAN_KEY.thumbnail ?? "", side)
     return (
-      <div className="flex flex-col gap-1.5">
-        <div className="relative aspect-video w-full max-w-56 overflow-hidden rounded-md bg-background">
+      <div className="flex flex-col gap-2">
+        <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-background">
           {video.thumbnailUrl ? (
             <Image
               src={video.thumbnailUrl}
               alt=""
               fill
-              sizes="224px"
+              sizes="(min-width: 640px) 50vw, 100vw"
               className="object-cover"
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-              <PlayIcon className="size-5" />
+              <PlayIcon className="size-6" />
             </div>
           )}
         </div>
         {text.length > 0 && (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Thumbnail text: {clean(text)}
           </p>
         )}
@@ -200,16 +201,16 @@ function SurfaceEvidence({
     const text = transcript.length > 0 ? transcript : firstSentence
     if (text.length === 0) {
       return (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-base text-muted-foreground">
           No opening captured for this video.
         </p>
       )
     }
     return (
       <div className="flex flex-col gap-1">
-        <p className="text-sm">{`"${clean(text)}"`}</p>
+        <p className="text-base leading-relaxed">{`"${clean(text)}"`}</p>
         {transcript.length === 0 && (
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Opening line only; no transcript is stored for this video&apos;s
             first 10 seconds.
           </p>
@@ -223,8 +224,11 @@ function SurfaceEvidence({
 
 // Both videos side by side for one surface: A on the left, B on the right, each
 // column carrying that video's own material and then what the report makes of
-// it. The summary tab is about how the other three fit together rather than
-// about a surface of its own, so it shows the reads alone.
+// it. No cards here; the two sides are separated by a single dotted rule down
+// the middle, which stops where the columns do, so whatever the panel says
+// about the pair as a whole sits below both of them unenclosed. The summary tab
+// is about how the other three fit together rather than about a surface of its
+// own, so it shows the reads alone.
 function SurfaceColumns({
   surface,
   comparison,
@@ -237,8 +241,8 @@ function SurfaceColumns({
   const sides: Side[] = ["a", "b"]
   const hasEvidence = surface !== "alignment"
   return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-      {sides.map((side) => {
+    <div className="grid grid-cols-1 sm:grid-cols-2">
+      {sides.map((side, index) => {
         const readText = (
           read == null ? "" : side === "a" ? read.aRead : read.bRead
         ).trim()
@@ -247,21 +251,26 @@ function SurfaceColumns({
         return (
           <div
             key={side}
-            className="flex flex-col gap-2 rounded-md border bg-muted/40 p-2.5"
+            className={cn(
+              "flex flex-col gap-3",
+              index === 0
+                ? "pb-5 sm:pr-6 sm:pb-0"
+                : "border-t border-dotted pt-5 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-6",
+            )}
           >
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-2">
               <SideDot side={side} />
-              <span className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+              <span className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
                 Video {SIDE_META[side].name}
               </span>
               {isTop && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-1.5 py-px text-[10px] font-medium text-emerald-600 dark:text-emerald-500">
-                  <TrophyIcon className="size-3" />
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-500">
+                  <TrophyIcon className="size-3.5" />
                   most views
                 </span>
               )}
               {isStronger && (
-                <span className="ml-auto rounded-full border bg-card px-1.5 py-px text-[10px] text-muted-foreground">
+                <span className="ml-auto rounded-full border bg-card px-2 py-0.5 text-xs text-muted-foreground">
                   stronger here
                 </span>
               )}
@@ -274,7 +283,7 @@ function SurfaceColumns({
               />
             )}
             {readText.length > 0 && (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 {clean(readText)}
               </p>
             )}
@@ -378,7 +387,7 @@ function SurfacePanel({
   )
   const hasDriverTip = tab.drivers.some((driver) => driver.tip)
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       {showCaption && (
         <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
           {caption}
@@ -390,7 +399,7 @@ function SurfacePanel({
         read={tab.read}
       />
       {tab.read?.whyItMatters && (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-base leading-relaxed text-muted-foreground">
           {clean(tab.read.whyItMatters)}
         </p>
       )}
