@@ -1,16 +1,20 @@
+import Image from "next/image"
 import {
   ArrowRightIcon,
   LayersIcon,
   LightbulbIcon,
   MinusIcon,
+  PlayIcon,
   TrophyIcon,
 } from "lucide-react"
 
+import { PackagingReportTabs } from "@/components/packaging-report-tabs"
+import { TryCallout } from "@/components/try-callout"
 import { Card } from "@/components/ui/card"
 import { stripEmDashes } from "@/lib/copy-guardrails"
 import {
   PACKAGING_REPORT_SURFACE_LABEL,
-  PACKAGING_REPORT_SURFACES,
+  PACKAGING_REPORT_SURFACE_TAB_LABEL,
   type PackagingComparisonReport,
   type PackagingReportDriver,
   type PackagingReportRecommendation,
@@ -44,6 +48,24 @@ const SIDE_META = {
   a: { dot: "var(--chart-1)", name: "A", bar: "bg-[var(--chart-1)]" },
   b: { dot: "var(--chart-2)", name: "B", bar: "bg-[var(--chart-2)]" },
 } as const
+
+// The report's four surfaces, in the order their tabs read: the three things a
+// viewer meets (title, thumbnail, opening) and then the summary of how those
+// three fit together.
+const SURFACE_TAB_ORDER: PackagingReportSurface[] = [
+  "title",
+  "thumbnail",
+  "hook",
+  "alignment",
+]
+
+// The verbatim span each surface tab quotes above the model's read of it. The
+// title comes off the video itself, and the summary tab is about the other
+// three rather than about a surface of its own, so neither appears here.
+const SURFACE_SPAN_KEY: Partial<Record<PackagingReportSurface, string>> = {
+  thumbnail: "thumbnail.textVerbatim",
+  hook: "hook.firstSentence",
+}
 
 const SURFACE_ORDER: ComparisonSurface[] = [
   "title",
@@ -172,111 +194,209 @@ function ReportVerdict({
   )
 }
 
-function ReportDrivers({
+// The verbatim span behind one surface on one side, read off the deterministic
+// diff rather than the report so the tab quotes the stored taxonomy rather than
+// the model's paraphrase of it.
+function spanText(
+  comparison: PackagingComparison,
+  key: string,
+  side: Side,
+): string {
+  const row = comparison.spans.find((candidate) => candidate.key === key)
+  if (!row) return ""
+  return (side === "a" ? row.a : row.b).trim()
+}
+
+// The actual thing being argued about, for one video: its real title, its real
+// thumbnail, the real first line out of its mouth. It sits above the model's
+// read of that side so the read always has its subject next to it.
+function SurfaceEvidence({
+  surface,
+  side,
+  comparison,
+}: {
+  surface: PackagingReportSurface
+  side: Side
+  comparison: PackagingComparison
+}) {
+  const video = comparison[side]
+
+  if (surface === "title") {
+    return (
+      <p className="text-sm font-medium">
+        {video.title ? clean(video.title) : "Untitled video"}
+      </p>
+    )
+  }
+
+  if (surface === "thumbnail") {
+    const text = spanText(comparison, SURFACE_SPAN_KEY.thumbnail ?? "", side)
+    return (
+      <div className="flex flex-col gap-1.5">
+        <div className="relative aspect-video w-full max-w-56 overflow-hidden rounded-md bg-background">
+          {video.thumbnailUrl ? (
+            <Image
+              src={video.thumbnailUrl}
+              alt=""
+              fill
+              sizes="224px"
+              className="object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+              <PlayIcon className="size-5" />
+            </div>
+          )}
+        </div>
+        {text.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            Thumbnail text: {clean(text)}
+          </p>
+        )}
+      </div>
+    )
+  }
+
+  if (surface === "hook") {
+    const text = spanText(comparison, SURFACE_SPAN_KEY.hook ?? "", side)
+    return (
+      <p className="text-sm">
+        {text.length > 0
+          ? `"${clean(text)}"`
+          : "No opening line captured for this video."}
+      </p>
+    )
+  }
+
+  return null
+}
+
+// Both videos side by side for one surface: A on the left, B on the right, each
+// column carrying that video's own material and then what the report makes of
+// it. The summary tab is about how the other three fit together rather than
+// about a surface of its own, so it shows the reads alone.
+function SurfaceColumns({
+  surface,
+  comparison,
+  read,
+}: {
+  surface: PackagingReportSurface
+  comparison: PackagingComparison
+  read: PackagingReportSurfaceRead | null
+}) {
+  const sides: Side[] = ["a", "b"]
+  const hasEvidence = surface !== "alignment"
+  return (
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      {sides.map((side) => {
+        const readText = (
+          read == null ? "" : side === "a" ? read.aRead : read.bRead
+        ).trim()
+        const isTop = comparison.higherViewsSide === side
+        const isStronger = read != null && read.strongerSide === side
+        return (
+          <div
+            key={side}
+            className="flex flex-col gap-2 rounded-md border bg-muted/40 p-2.5"
+          >
+            <div className="flex flex-wrap items-center gap-1.5">
+              <SideDot side={side} />
+              <span className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                Video {SIDE_META[side].name}
+              </span>
+              {isTop && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-1.5 py-px text-[10px] font-medium text-emerald-600 dark:text-emerald-500">
+                  <TrophyIcon className="size-3" />
+                  most views
+                </span>
+              )}
+              {isStronger && (
+                <span className="ml-auto rounded-full border bg-card px-1.5 py-px text-[10px] text-muted-foreground">
+                  stronger here
+                </span>
+              )}
+            </div>
+            {hasEvidence && (
+              <SurfaceEvidence
+                surface={surface}
+                side={side}
+                comparison={comparison}
+              />
+            )}
+            {readText.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {clean(readText)}
+              </p>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// The ranked reasons this surface moved the result, each closing on the one
+// change its evidence argues for.
+function SurfaceDrivers({
   drivers,
   higherViewsSide,
 }: {
   drivers: PackagingReportDriver[]
   higherViewsSide: Side | null
 }) {
-  if (drivers.length === 0) return null
   return (
-    <div className="flex flex-col gap-2">
-      <h4 className="text-sm font-semibold">Why one pulled ahead</h4>
-      <div className="flex flex-col divide-y rounded-lg border">
-        {drivers.map((driver, index) => (
-          <div
-            key={`${driver.surface}:${driver.label}:${index}`}
-            className="flex flex-col gap-1.5 px-3 py-2.5"
-          >
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
-                {PACKAGING_REPORT_SURFACE_LABEL[driver.surface]}
-              </span>
-              <span className="text-sm font-medium">{clean(driver.label)}</span>
-              <span className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground">
-                favours {SIDE_META[driver.favours].name}
-                {higherViewsSide === driver.favours && (
-                  <span className="text-emerald-600 dark:text-emerald-500">
-                    (the higher-viewed one)
-                  </span>
-                )}
-              </span>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {clean(driver.detail)}
-            </p>
-            {driver.evidence.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {driver.evidence.map((item, evidenceIndex) => (
-                  <span
-                    key={`${item}:${evidenceIndex}`}
-                    className="rounded-full border bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
-                  >
-                    {clean(item)}
-                  </span>
-                ))}
-              </div>
-            )}
+    <div className="flex flex-col divide-y rounded-lg border">
+      {drivers.map((driver, index) => (
+        <div
+          key={`${driver.surface}:${driver.label}:${index}`}
+          className="flex flex-col gap-1.5 px-3 py-2.5"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium">{clean(driver.label)}</span>
+            <span className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground">
+              <SideDot side={driver.favours} />
+              favours {SIDE_META[driver.favours].name}
+              {higherViewsSide === driver.favours && (
+                <span className="text-emerald-600 dark:text-emerald-500">
+                  (the higher-viewed one)
+                </span>
+              )}
+            </span>
           </div>
-        ))}
-      </div>
+          <p className="text-sm text-muted-foreground">
+            {clean(driver.detail)}
+          </p>
+          {driver.evidence.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {driver.evidence.map((item, evidenceIndex) => (
+                <span
+                  key={`${item}:${evidenceIndex}`}
+                  className="rounded-full border bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
+                >
+                  {clean(item)}
+                </span>
+              ))}
+            </div>
+          )}
+          {driver.tip && <TryCallout>{driver.tip}</TryCallout>}
+        </div>
+      ))}
     </div>
   )
 }
 
-function ReportSurfaceCard({ read }: { read: PackagingReportSurfaceRead }) {
-  return (
-    <section className="flex flex-col gap-2 rounded-lg border p-3">
-      <div className="flex items-center gap-2">
-        <h4 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-          {PACKAGING_REPORT_SURFACE_LABEL[read.surface]}
-        </h4>
-        {read.strongerSide !== "neither" && (
-          <span className="ml-auto inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-            <SideDot side={read.strongerSide} />
-            {SIDE_META[read.strongerSide].name} is stronger here
-          </span>
-        )}
-      </div>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        {(["a", "b"] as Side[]).map((side) => {
-          const text = side === "a" ? read.aRead : read.bRead
-          return (
-            <div
-              key={side}
-              className="flex items-start gap-1.5 rounded-md border bg-muted/40 px-2 py-1.5 text-xs"
-            >
-              <span className="mt-1">
-                <SideDot side={side} />
-              </span>
-              <span className="text-muted-foreground">
-                {text.length > 0 ? clean(text) : "nothing to read on this side"}
-              </span>
-            </div>
-          )
-        })}
-      </div>
-      {read.whyItMatters && (
-        <p className="text-xs text-muted-foreground">
-          {clean(read.whyItMatters)}
-        </p>
-      )}
-    </section>
-  )
-}
-
-function ReportRecommendations({
+// The bigger changes for this surface: the ones a single driver does not carry,
+// so they keep their target and effort badges.
+function SurfaceRecommendations({
   recommendations,
 }: {
   recommendations: PackagingReportRecommendation[]
 }) {
-  if (recommendations.length === 0) return null
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-1.5">
         <LightbulbIcon className="size-4 text-muted-foreground" />
-        <h4 className="text-sm font-semibold">What to try next</h4>
+        <h5 className="text-sm font-semibold">What to try next</h5>
       </div>
       <div className="flex flex-col divide-y rounded-lg border">
         {recommendations.map((recommendation, index) => (
@@ -285,9 +405,6 @@ function ReportRecommendations({
             className="flex flex-col gap-1 px-3 py-2.5"
           >
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
-                {PACKAGING_REPORT_SURFACE_LABEL[recommendation.surface]}
-              </span>
               <span className="text-xs text-muted-foreground">
                 {recommendation.target === "both"
                   ? "for both videos"
@@ -312,38 +429,96 @@ function ReportRecommendations({
   )
 }
 
+interface SurfaceTab {
+  surface: PackagingReportSurface
+  read: PackagingReportSurfaceRead | null
+  drivers: PackagingReportDriver[]
+  recommendations: PackagingReportRecommendation[]
+}
+
+// Everything the report has to say about one surface, in one panel: the two
+// videos' own material, the read of each, why the difference matters, the
+// drivers with their tips, then anything bigger left to try.
+function SurfacePanel({
+  tab,
+  comparison,
+}: {
+  tab: SurfaceTab
+  comparison: PackagingComparison
+}) {
+  const caption = PACKAGING_REPORT_SURFACE_LABEL[tab.surface]
+  const showCaption = caption !== PACKAGING_REPORT_SURFACE_TAB_LABEL[tab.surface]
+  return (
+    <div className="flex flex-col gap-3">
+      {showCaption && (
+        <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+          {caption}
+        </p>
+      )}
+      <SurfaceColumns
+        surface={tab.surface}
+        comparison={comparison}
+        read={tab.read}
+      />
+      {tab.read?.whyItMatters && (
+        <p className="text-sm text-muted-foreground">
+          {clean(tab.read.whyItMatters)}
+        </p>
+      )}
+      {tab.drivers.length > 0 && (
+        <SurfaceDrivers
+          drivers={tab.drivers}
+          higherViewsSide={comparison.higherViewsSide}
+        />
+      )}
+      {tab.recommendations.length > 0 && (
+        <SurfaceRecommendations recommendations={tab.recommendations} />
+      )}
+    </div>
+  )
+}
+
 function ReportNarrative({
   report,
-  higherViewsSide,
+  comparison,
 }: {
   report: PackagingComparisonReport
-  higherViewsSide: Side | null
+  comparison: PackagingComparison
 }) {
-  const surfaceOrder = new Map<PackagingReportSurface, number>(
-    PACKAGING_REPORT_SURFACES.map((surface, index) => [surface, index]),
+  // One tab per surface, in reading order, skipping any the report had nothing
+  // to say about.
+  const tabs: SurfaceTab[] = SURFACE_TAB_ORDER.map((surface) => ({
+    surface,
+    read: report.surfaces.find((read) => read.surface === surface) ?? null,
+    drivers: report.drivers.filter((driver) => driver.surface === surface),
+    recommendations: report.recommendations.filter(
+      (recommendation) => recommendation.surface === surface,
+    ),
+  })).filter(
+    (tab) =>
+      tab.read != null ||
+      tab.drivers.length > 0 ||
+      tab.recommendations.length > 0,
   )
-  const surfaces = [...report.surfaces].sort(
-    (x, y) =>
-      (surfaceOrder.get(x.surface) ?? 0) - (surfaceOrder.get(y.surface) ?? 0),
-  )
+
   return (
     <div className="flex flex-col gap-4">
       <ReportVerdict
         verdict={report.verdict}
-        higherViewsSide={higherViewsSide}
+        higherViewsSide={comparison.higherViewsSide}
       />
-      <ReportDrivers
-        drivers={report.drivers}
-        higherViewsSide={higherViewsSide}
-      />
-      {surfaces.length > 0 && (
+      {tabs.length > 0 && (
         <div className="flex flex-col gap-2">
-          {surfaces.map((read) => (
-            <ReportSurfaceCard key={read.surface} read={read} />
-          ))}
+          <h4 className="text-sm font-semibold">Why one pulled ahead</h4>
+          <PackagingReportTabs
+            tabs={tabs.map((tab) => ({
+              value: tab.surface,
+              label: PACKAGING_REPORT_SURFACE_TAB_LABEL[tab.surface],
+              content: <SurfacePanel tab={tab} comparison={comparison} />,
+            }))}
+          />
         </div>
       )}
-      <ReportRecommendations recommendations={report.recommendations} />
       {report.caveats.length > 0 && (
         <ul className="flex flex-col gap-1 text-[11px] text-muted-foreground">
           {report.caveats.map((caveat, index) => (
@@ -651,12 +826,7 @@ export function PackagingComparison({
 
       <IdentityRow comparison={data} />
 
-      {report && (
-        <ReportNarrative
-          report={report}
-          higherViewsSide={data.higherViewsSide}
-        />
-      )}
+      {report && <ReportNarrative report={report} comparison={data} />}
 
       {!hasBody ? (
         <p className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
