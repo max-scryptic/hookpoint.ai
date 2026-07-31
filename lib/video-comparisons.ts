@@ -59,7 +59,7 @@ const REPORT_READY_PROBE =
   "script_ready:script_report->>schemaVersion, packaging_ready:packaging_report->>schemaVersion"
 
 // A report only counts as ready at the current shape version: an older one is
-// missing whatever the bump added (version 4 of the packaging report, for
+// missing whatever the bump added (version 5 of the packaging report, for
 // example, is what guarantees every surface a "Try:" line), and the creator has
 // no way to ask for the newer shape other than the generate button, which
 // rewrites it for free. A version we do not recognise (a row written by a newer

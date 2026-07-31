@@ -102,7 +102,7 @@ export interface PackagingReportSurfaceRead {
   // something to do next rather than only the tabs the drivers happened to land
   // on. Written under the same forward-looking rules as a driver tip, and shown
   // only when no driver on this surface carried one. Optional only because
-  // reports stored before schema version 4 predate it; the model always writes
+  // reports stored before schema version 5 predate it; the model always writes
   // one now.
   tip?: string
 }
@@ -144,7 +144,9 @@ export interface PackagingComparisonReport {
   surfaces: PackagingReportSurfaceRead[]
   drivers: PackagingReportDriver[]
   recommendations: PackagingReportRecommendation[]
-  caveats: string[]
+  // The honest limits the model used to write out, on reports stored before
+  // schema version 4. Nothing writes this and nothing renders it.
+  caveats?: string[]
   schemaVersion: number
   model: string
   generatedAt: string
@@ -165,7 +167,6 @@ const MIN_DRIVERS = 1
 const MAX_RECOMMENDATIONS = 6
 const MIN_RECOMMENDATIONS = 1
 const MAX_EVIDENCE_PER_DRIVER = 4
-const MAX_CAVEATS = 3
 // Enough to cover a ten second window even on a heavily cut opening; the
 // dedupe in the evidence loader already collapses unchanged shots.
 const MAX_VISUAL_FRAMES = 10
@@ -179,7 +180,7 @@ const surfaceEnum = [...PACKAGING_REPORT_SURFACES]
 const REPORT_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["verdict", "surfaces", "drivers", "recommendations", "caveats"],
+  required: ["verdict", "surfaces", "drivers", "recommendations"],
   properties: {
     verdict: {
       type: "object",
@@ -263,12 +264,6 @@ const REPORT_SCHEMA = {
         },
       },
     },
-    caveats: {
-      type: "array",
-      items: { type: "string" },
-      minItems: 1,
-      maxItems: MAX_CAVEATS,
-    },
   },
 } as const
 
@@ -287,7 +282,6 @@ const INSTRUCTIONS = [
   "tip: every driver is a comparison you have evidence for, so every driver carries one. It is the single change that driver's evidence argues for, written as a one-sentence instruction for the uploader's next video (for example 'Cut the thumbnail to one subject and one line of text, sized to read at phone width'). Name the change rather than restating detail, and keep it specific to what this comparison actually showed rather than generic packaging advice, while phrasing it as a rule to apply next time. The interface prefixes it with 'Try:', so do not begin it with 'Try' yourself; do not begin it with 'Next time', 'In future videos', 'Going forward' or any similar lead-in either, since the forward-looking framing belongs in how the advice is worded and a lead-in only delays the point.",
   "Every entry in surfaces carries a tip of its own as well, written under exactly those same rules: the single change that surface's comparison argues for, in one sentence, for the uploader's next video. Write one for every surface you cover, including the surfaces your drivers already speak to. The interface shows it only when no driver landed on that surface, so it has to stand on its own rather than continue a driver, and it must not repeat a driver tip for the same surface word for word.",
   "recommendations: one to six further things to try on the next upload, ordered by expected payoff. action is the concrete change, phrased as a one-sentence instruction for the next video under exactly the same rules as tip. rationale ties it back to what this comparison showed and may name the videos, since it is not shown as advice. effort is 'quick' for something settled while writing a title or building a thumbnail and 'rework' for anything needing a different shoot or edit. The interface renders each action as an 'Or:' line directly under that surface's driver tips, as the next thing to try after them, so file each one under the surface it changes, write it to stand on its own, do not begin it with 'Try' or 'Or', and do not repeat a tip you already wrote; use recommendations for changes the drivers did not cover, or for the bigger reworks a single driver does not carry.",
-  "caveats: one to three honest limits on this comparison, for example that it reads two videos rather than a pattern, that views are shaped by traffic source, subscriber base, topic and timing as well as packaging, or that one side's evidence was thin.",
   "Write in plain, direct prose with no marketing filler. Never output an em dash character (U+2014) or en dash (U+2013) anywhere in your response; if you would use one, rewrite with a comma, colon, parentheses or two sentences instead.",
 ].join(" ")
 
@@ -296,7 +290,6 @@ interface ModelReportOutput {
   surfaces: PackagingReportSurfaceRead[]
   drivers: PackagingReportDriver[]
   recommendations: PackagingReportRecommendation[]
-  caveats: string[]
 }
 
 function isSide(value: unknown): value is ReportSide {
@@ -350,7 +343,7 @@ export function isPackagingComparisonReportOutput(
         typeof s.aRead === "string" &&
         typeof s.bRead === "string" &&
         typeof s.whyItMatters === "string" &&
-        // Optional so a report stored before schema version 4, when a surface
+        // Optional so a report stored before schema version 5, when a surface
         // carried no tip of its own, still validates if it is ever fed back
         // through here.
         (s.tip === undefined || typeof s.tip === "string")
@@ -401,7 +394,7 @@ export function isPackagingComparisonReportOutput(
     return false
   }
 
-  return isStringArray(candidate.caveats)
+  return true
 }
 
 // The side with more views, or null when views are unknown or tied. Computed
@@ -664,10 +657,6 @@ export function normalizePackagingComparisonReport(
       }))
       .filter((recommendation) => recommendation.action.length > 0)
       .slice(0, MAX_RECOMMENDATIONS),
-    caveats: parsed.caveats
-      .map((caveat) => caveat.trim())
-      .filter((caveat) => caveat.length > 0)
-      .slice(0, MAX_CAVEATS),
     schemaVersion: PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION,
     model,
     generatedAt: new Date().toISOString(),

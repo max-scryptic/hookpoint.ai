@@ -202,6 +202,9 @@ function SurfaceColumns({
 }) {
   const sides: Side[] = ["a", "b"]
   const hasEvidence = surface !== "alignment"
+  // A thumbnail argues for itself: the image is right there, so a written
+  // account of what it depicts only restates what the reader already sees.
+  const showRead = surface !== "thumbnail"
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2">
       {sides.map((side, index) => {
@@ -244,7 +247,7 @@ function SurfaceColumns({
                 comparison={comparison}
               />
             )}
-            {readText.length > 0 && (
+            {showRead && readText.length > 0 && (
               <p className="text-sm text-muted-foreground">
                 {clean(readText)}
               </p>
@@ -352,7 +355,7 @@ function SurfacePanel({
   // passed over has no tip inside the drivers list to hang one off. So when no
   // driver here carried a tip, this surface's own tip leads a callout of its
   // own and the recommendations follow it as "Or:" lines. Reports stored before
-  // schema version 4 carry no surface tip, and ones before version 2 no driver
+  // schema version 5 carry no surface tip, and ones before version 2 no driver
   // tips either, so the first recommendation leads for those; a surface with
   // none of the three is the one case that still closes without advice.
   const surfaceTip = tab.read?.tip?.trim() ?? ""
@@ -427,13 +430,6 @@ function ReportNarrative({
             content: <SurfacePanel tab={tab} comparison={comparison} />,
           }))}
         />
-      )}
-      {report.caveats.length > 0 && (
-        <ul className="flex flex-col gap-1 text-[11px] text-muted-foreground">
-          {report.caveats.map((caveat, index) => (
-            <li key={`${caveat}:${index}`}>{clean(caveat)}</li>
-          ))}
-        </ul>
       )}
     </div>
   )

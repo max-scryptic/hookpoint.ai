@@ -16,7 +16,8 @@ export const SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION = 1
 // one. Version 3 made every tip and recommendation forward-looking advice for
 // the uploader's next video and dropped the recommendation's target side with
 // it; reports stored at version 2 still carry a target, which nothing reads.
-// Version 4 gave every surface a tip of its own, so each tab of the report
-// closes on advice even when no driver and no recommendation landed on that
-// surface.
-export const PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION = 4
+// Version 4 dropped the caveats list; reports stored at version 3 and earlier
+// still carry one, which nothing reads. Version 5 gave every surface a tip of
+// its own, so each tab of the report closes on advice even when no driver and
+// no recommendation landed on that surface.
+export const PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION = 5
