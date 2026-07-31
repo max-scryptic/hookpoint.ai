@@ -1,12 +1,6 @@
 import Image from "next/image"
 import type { ReactNode } from "react"
-import {
-  ArrowRightIcon,
-  LayersIcon,
-  MinusIcon,
-  PlayIcon,
-  TrophyIcon,
-} from "lucide-react"
+import { LayersIcon, PlayIcon, TrophyIcon } from "lucide-react"
 
 import { PackagingReportTabs } from "@/components/packaging-report-tabs"
 import { TryCallout } from "@/components/try-callout"
@@ -22,30 +16,25 @@ import {
   type PackagingReportSurfaceRead,
 } from "@/lib/packaging-comparison-report"
 import {
-  SURFACE_LABEL,
-  type CategoricalComparisonRow,
-  type ComparisonSurface,
-  type FlagComparisonRow,
-  type OrdinalComparisonRow,
   type PackagingComparison,
   type Side,
-  type SpanComparisonRow,
 } from "@/lib/packaging-comparison"
 
 // The packaging head-to-head body: which of two uploads the packaging favours
 // and why, read straight from the stored per-video taxonomies with no model
-// call at view time. The written report tells the story, then each surface
-// (title, thumbnail, hook, cross-surface, drivers) shows its field-by-field
-// diff, and the verbatim spans put the real titles, thumbnail text and opening
-// lines side by side. Purely presentational; all the maths live in
-// lib/packaging-comparison.ts.
+// call at view time. The written report tells the whole story: a verdict, then
+// one tab per surface (title, thumbnail, hook, cross-surface) carrying the two
+// videos' own material, the read of each and the drivers behind it. The
+// field-by-field taxonomy diff is deliberately not shown; the comparison is
+// still read for the verbatim spans the surface tabs quote. Purely
+// presentational; all the maths live in lib/packaging-comparison.ts.
 //
 // COPY GUARDRAIL: no em or en dashes (U+2014 / U+2013), ever, in any text in
 // this file. Hyphens are fine. Enforced by lib/__tests__/copy-guardrails.
 
 const SIDE_META = {
-  a: { dot: "var(--chart-1)", name: "A", bar: "bg-[var(--chart-1)]" },
-  b: { dot: "var(--chart-2)", name: "B", bar: "bg-[var(--chart-2)]" },
+  a: { dot: "var(--chart-1)", name: "A" },
+  b: { dot: "var(--chart-2)", name: "B" },
 } as const
 
 // The report's four surfaces, in the order their tabs read: the three things a
@@ -68,15 +57,6 @@ const SURFACE_SPAN_KEY: Partial<Record<PackagingReportSurface, string>> = {
   thumbnail: "thumbnail.textVerbatim",
   hook: "hook.firstSentence",
 }
-
-const SURFACE_ORDER: ComparisonSurface[] = [
-  "title",
-  "thumbnail",
-  "hook",
-  "cross",
-  "drivers",
-  "overall",
-]
 
 function clean(text: string): string {
   return stripEmDashes(text)
@@ -493,219 +473,6 @@ function ReportNarrative({
   )
 }
 
-// A 0-10 dual bar: A grows left-to-right, B mirrored, so the longer bar reads
-// as the stronger score at a glance.
-function OrdinalBars({ a, b }: { a: number | null; b: number | null }) {
-  const width = (value: number | null) =>
-    value == null ? 0 : Math.min(100, (value / 10) * 100)
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex h-2.5 flex-1 justify-end overflow-hidden rounded-l-sm bg-muted">
-        <div
-          className={SIDE_META.a.bar}
-          style={{ width: `${width(a)}%` }}
-        />
-      </div>
-      <div className="flex h-2.5 flex-1 justify-start overflow-hidden rounded-r-sm bg-muted">
-        <div
-          className={SIDE_META.b.bar}
-          style={{ width: `${width(b)}%` }}
-        />
-      </div>
-    </div>
-  )
-}
-
-function OrdinalRow({ row }: { row: OrdinalComparisonRow }) {
-  return (
-    <div className="grid grid-cols-[1fr_minmax(8rem,14rem)_1fr] items-center gap-x-3 py-1.5 text-xs">
-      <span className="text-right tabular-nums">
-        {row.a == null ? "-" : row.a}
-      </span>
-      <div className="flex flex-col gap-0.5">
-        <OrdinalBars a={row.a} b={row.b} />
-        <span className="text-center text-[11px] text-muted-foreground">
-          {clean(row.label)}
-          {row.direction === "neutral" && (
-            <span className="text-muted-foreground/70"> (descriptive)</span>
-          )}
-        </span>
-      </div>
-      <span className="tabular-nums">{row.b == null ? "-" : row.b}</span>
-    </div>
-  )
-}
-
-function TokenChips({
-  tokens,
-  tone,
-}: {
-  tokens: string[]
-  tone: "shared" | "a" | "b"
-}) {
-  const toneClass =
-    tone === "shared"
-      ? "border bg-muted text-muted-foreground"
-      : tone === "a"
-        ? "border-[var(--chart-1)]/40 bg-[var(--chart-1)]/10"
-        : "border-[var(--chart-2)]/40 bg-[var(--chart-2)]/10"
-  return (
-    <>
-      {tokens.map((token) => (
-        <span
-          key={`${tone}:${token}`}
-          className={`rounded-full border px-2 py-0.5 text-[11px] ${toneClass}`}
-        >
-          {clean(token)}
-        </span>
-      ))}
-    </>
-  )
-}
-
-function CategoricalRow({ row }: { row: CategoricalComparisonRow }) {
-  return (
-    <div className="flex flex-col gap-1 py-1.5 text-xs">
-      <div className="flex items-center gap-2">
-        <span className="font-medium">{clean(row.label)}</span>
-        {row.match && (
-          <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-            <MinusIcon className="size-3" />
-            same
-          </span>
-        )}
-      </div>
-      {!row.match && (
-        <div className="flex flex-wrap items-center gap-1">
-          {row.onlyA.length > 0 && (
-            <span className="inline-flex items-center gap-1">
-              <SideDot side="a" />
-              <TokenChips tokens={row.onlyA} tone="a" />
-            </span>
-          )}
-          {row.onlyB.length > 0 && (
-            <span className="inline-flex items-center gap-1">
-              <SideDot side="b" />
-              <TokenChips tokens={row.onlyB} tone="b" />
-            </span>
-          )}
-          {row.shared.length > 0 && (
-            <TokenChips tokens={row.shared} tone="shared" />
-          )}
-        </div>
-      )}
-      {row.match && row.a && (
-        <div className="flex flex-wrap gap-1">
-          <TokenChips tokens={row.a} tone="shared" />
-        </div>
-      )}
-    </div>
-  )
-}
-
-function flagText(value: boolean | null): string {
-  if (value == null) return "-"
-  return value ? "yes" : "no"
-}
-
-function FlagRow({ row }: { row: FlagComparisonRow }) {
-  return (
-    <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-3 py-1.5 text-xs">
-      <span>{clean(row.label)}</span>
-      <span className="inline-flex items-center gap-1 tabular-nums">
-        <SideDot side="a" />
-        {flagText(row.a)}
-      </span>
-      <span className="inline-flex items-center gap-1 tabular-nums">
-        <SideDot side="b" />
-        {flagText(row.b)}
-      </span>
-    </div>
-  )
-}
-
-function SpanRow({ row }: { row: SpanComparisonRow }) {
-  return (
-    <div className="flex flex-col gap-1 py-1.5 text-xs">
-      <span className="font-medium">{clean(row.label)}</span>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        {(["a", "b"] as Side[]).map((side) => {
-          const text = side === "a" ? row.a : row.b
-          return (
-            <div
-              key={side}
-              className="flex items-start gap-1.5 rounded-md border bg-muted/40 px-2 py-1.5"
-            >
-              <span className="mt-0.5">
-                <SideDot side={side} />
-              </span>
-              <span className="text-muted-foreground">
-                {text.length > 0 ? clean(text) : "not stated"}
-              </span>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-function SurfaceSection({
-  surface,
-  ordinals,
-  categoricals,
-  flags,
-  spans,
-}: {
-  surface: ComparisonSurface
-  ordinals: OrdinalComparisonRow[]
-  categoricals: CategoricalComparisonRow[]
-  flags: FlagComparisonRow[]
-  spans: SpanComparisonRow[]
-}) {
-  const empty =
-    ordinals.length === 0 &&
-    categoricals.length === 0 &&
-    flags.length === 0 &&
-    spans.length === 0
-  if (empty) return null
-  return (
-    <section className="flex flex-col gap-1.5 rounded-lg border p-3">
-      <h4 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-        {SURFACE_LABEL[surface]}
-      </h4>
-      {ordinals.length > 0 && (
-        <div className="flex flex-col divide-y">
-          {ordinals.map((row) => (
-            <OrdinalRow key={row.key} row={row} />
-          ))}
-        </div>
-      )}
-      {categoricals.length > 0 && (
-        <div className="flex flex-col divide-y border-t pt-1">
-          {categoricals.map((row) => (
-            <CategoricalRow key={row.key} row={row} />
-          ))}
-        </div>
-      )}
-      {flags.length > 0 && (
-        <div className="flex flex-col divide-y border-t pt-1">
-          {flags.map((row) => (
-            <FlagRow key={row.key} row={row} />
-          ))}
-        </div>
-      )}
-      {spans.length > 0 && (
-        <div className="flex flex-col divide-y border-t pt-1">
-          {spans.map((row) => (
-            <SpanRow key={row.key} row={row} />
-          ))}
-        </div>
-      )}
-    </section>
-  )
-}
-
 export function PackagingComparison({
   data,
   report = null,
@@ -713,19 +480,6 @@ export function PackagingComparison({
   data: PackagingComparison
   report?: PackagingComparisonReport | null
 }) {
-  const bySurface = (surface: ComparisonSurface) => ({
-    ordinals: data.ordinals.filter((row) => row.surface === surface),
-    categoricals: data.categoricals.filter((row) => row.surface === surface),
-    flags: data.flags.filter((row) => row.surface === surface),
-    spans: data.spans.filter((row) => row.surface === surface),
-  })
-
-  const hasBody =
-    data.ordinals.length > 0 ||
-    data.categoricals.length > 0 ||
-    data.flags.length > 0 ||
-    data.spans.length > 0
-
   return (
     <Card className="flex flex-col gap-4 p-5">
       <div>
@@ -735,59 +489,21 @@ export function PackagingComparison({
         </div>
         <p className="mt-0.5 text-xs text-muted-foreground">
           Why one of these earned the click and the other did not: a written
-          read of both thumbnails, both titles and both openings, followed by
-          the field-by-field diff of each video&apos;s stored packaging
-          analysis. Observations are correlation, not proof.
+          read of both thumbnails, both titles and both openings. Observations
+          are correlation, not proof.
         </p>
       </div>
 
-      {report && <ReportNarrative report={report} comparison={data} />}
-
-      {!hasBody ? (
-        <p className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-          {data.a.hasTaxonomy || data.b.hasTaxonomy
-            ? "Only one of these videos has a packaging read so far. Open the other video's analysis to generate it, then this fills in."
-            : "Neither video has a packaging read yet."}
-        </p>
+      {report ? (
+        <ReportNarrative report={report} comparison={data} />
       ) : (
-        <>
-          <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-            <span className="inline-flex items-center gap-1">
-              <SideDot side="a" />
-              Video A
-            </span>
-            <ArrowRightIcon className="size-3" />
-            <span className="inline-flex items-center gap-1">
-              <SideDot side="b" />
-              Video B
-            </span>
-            <span className="ml-auto">Bars and scores run 0 to 10.</span>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            {SURFACE_ORDER.map((surface) => {
-              const rows = bySurface(surface)
-              return (
-                <SurfaceSection
-                  key={surface}
-                  surface={surface}
-                  ordinals={rows.ordinals}
-                  categoricals={rows.categoricals}
-                  flags={rows.flags}
-                  spans={rows.spans}
-                />
-              )
-            })}
-          </div>
-
-          {data.detailCoverage !== "both" && (
-            <p className="text-xs text-muted-foreground">
-              One of these videos predates the detailed packaging read, so only
-              the shared fields are compared. It upgrades automatically the next
-              time you open its analysis.
-            </p>
-          )}
-        </>
+        <p className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          {data.a.hasTaxonomy && data.b.hasTaxonomy
+            ? "Both videos have a packaging read, but the written head-to-head has not been generated for this pair yet."
+            : data.a.hasTaxonomy || data.b.hasTaxonomy
+              ? "Only one of these videos has a packaging read so far. Open the other video's analysis to generate it, then this fills in."
+              : "Neither video has a packaging read yet."}
+        </p>
       )}
     </Card>
   )
