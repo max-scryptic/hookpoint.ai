@@ -1,8 +1,8 @@
 import Image from "next/image"
+import type { ReactNode } from "react"
 import {
   ArrowRightIcon,
   LayersIcon,
-  LightbulbIcon,
   MinusIcon,
   PlayIcon,
   TrophyIcon,
@@ -11,7 +11,7 @@ import {
 import { PackagingReportTabs } from "@/components/packaging-report-tabs"
 import { TryCallout } from "@/components/try-callout"
 import { Card } from "@/components/ui/card"
-import { stripEmDashes } from "@/lib/copy-guardrails"
+import { cleanCopy, stripEmDashes } from "@/lib/copy-guardrails"
 import {
   PACKAGING_REPORT_SURFACE_LABEL,
   PACKAGING_REPORT_SURFACE_TAB_LABEL,
@@ -76,13 +76,6 @@ const SURFACE_ORDER: ComparisonSurface[] = [
   "overall",
 ]
 
-function formatCompactNumber(value: number): string {
-  return new Intl.NumberFormat("en", {
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(value)
-}
-
 function clean(text: string): string {
   return stripEmDashes(text)
 }
@@ -93,47 +86,6 @@ function SideDot({ side }: { side: Side }) {
       className="inline-block size-2 shrink-0 rounded-full"
       style={{ backgroundColor: SIDE_META[side].dot }}
     />
-  )
-}
-
-// The two videos, with the higher-viewed one badged so every "favours A"
-// downstream has an anchor.
-function IdentityRow({ comparison }: { comparison: PackagingComparison }) {
-  const sides: Side[] = ["a", "b"]
-  return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-      {sides.map((side) => {
-        const s = comparison[side]
-        const isTop = comparison.higherViewsSide === side
-        return (
-          <div
-            key={side}
-            className="flex flex-col gap-1 rounded-lg border bg-card p-3"
-          >
-            <div className="flex items-center gap-1.5">
-              <SideDot side={side} />
-              <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                Video {SIDE_META[side].name}
-              </span>
-              {isTop && (
-                <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-1.5 py-px text-[10px] font-medium text-emerald-600 dark:text-emerald-500">
-                  <TrophyIcon className="size-3" />
-                  most views
-                </span>
-              )}
-            </div>
-            <span className="line-clamp-2 text-sm font-medium">
-              {s.title ? clean(s.title) : "Untitled video"}
-            </span>
-            <span className="text-xs tabular-nums text-muted-foreground">
-              {s.views == null
-                ? "views unknown"
-                : `${formatCompactNumber(s.views)} views`}
-            </span>
-          </div>
-        )
-      })}
-    </div>
   )
 }
 
@@ -170,7 +122,7 @@ function ReportVerdict({
   return (
     <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <h4 className="text-sm font-semibold">The packaging verdict</h4>
+        <h4 className="text-sm font-semibold">The verdict</h4>
         {stronger === "neither" ? (
           <span className="text-xs text-muted-foreground">
             too close to call
@@ -336,14 +288,22 @@ function SurfaceColumns({
 }
 
 // The ranked reasons this surface moved the result, each closing on the one
-// change its evidence argues for.
+// change its evidence argues for. Anything else this surface is worth trying
+// (the report's recommendations) hangs off the last tip as "Or:" lines, so a
+// surface closes on one block of advice rather than two.
 function SurfaceDrivers({
   drivers,
   higherViewsSide,
+  alternatives,
 }: {
   drivers: PackagingReportDriver[]
   higherViewsSide: Side | null
+  alternatives: ReactNode[]
 }) {
+  const lastTipIndex = drivers.reduce(
+    (last, driver, index) => (driver.tip ? index : last),
+    -1,
+  )
   return (
     <div className="flex flex-col divide-y rounded-lg border">
       {drivers.map((driver, index) => (
@@ -378,54 +338,34 @@ function SurfaceDrivers({
               ))}
             </div>
           )}
-          {driver.tip && <TryCallout>{driver.tip}</TryCallout>}
+          {driver.tip && (
+            <TryCallout
+              alternatives={index === lastTipIndex ? alternatives : []}
+            >
+              {driver.tip}
+            </TryCallout>
+          )}
         </div>
       ))}
     </div>
   )
 }
 
-// The bigger changes for this surface: the ones a single driver does not carry,
-// so they keep their target and effort badges.
-function SurfaceRecommendations({
-  recommendations,
-}: {
-  recommendations: PackagingReportRecommendation[]
-}) {
+// One recommendation as an "Or:" line: the bare instruction, kept to the same
+// shape as a driver tip, with the video it is for named up front whenever it is
+// not advice for both.
+function recommendationLine(
+  recommendation: PackagingReportRecommendation,
+): ReactNode {
+  const action = cleanCopy(recommendation.action)
+  if (recommendation.target === "both") return action
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-1.5">
-        <LightbulbIcon className="size-4 text-muted-foreground" />
-        <h5 className="text-sm font-semibold">What to try next</h5>
-      </div>
-      <div className="flex flex-col divide-y rounded-lg border">
-        {recommendations.map((recommendation, index) => (
-          <div
-            key={`${recommendation.surface}:${index}`}
-            className="flex flex-col gap-1 px-3 py-2.5"
-          >
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs text-muted-foreground">
-                {recommendation.target === "both"
-                  ? "for both videos"
-                  : `for Video ${SIDE_META[recommendation.target].name}`}
-              </span>
-              <span className="ml-auto rounded-full border px-1.5 py-px text-[10px] text-muted-foreground">
-                {recommendation.effort === "quick"
-                  ? "quick change"
-                  : "bigger rework"}
-              </span>
-            </div>
-            <p className="text-sm">{clean(recommendation.action)}</p>
-            {recommendation.rationale && (
-              <p className="text-xs text-muted-foreground">
-                {clean(recommendation.rationale)}
-              </p>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
+    <>
+      <span className="opacity-70">
+        for Video {SIDE_META[recommendation.target].name}:{" "}
+      </span>
+      {action}
+    </>
   )
 }
 
@@ -437,8 +377,8 @@ interface SurfaceTab {
 }
 
 // Everything the report has to say about one surface, in one panel: the two
-// videos' own material, the read of each, why the difference matters, the
-// drivers with their tips, then anything bigger left to try.
+// videos' own material, the read of each, why the difference matters, then the
+// drivers, whose tips carry the rest of this surface's advice with them.
 function SurfacePanel({
   tab,
   comparison,
@@ -448,6 +388,11 @@ function SurfacePanel({
 }) {
   const caption = PACKAGING_REPORT_SURFACE_LABEL[tab.surface]
   const showCaption = caption !== PACKAGING_REPORT_SURFACE_TAB_LABEL[tab.surface]
+  // The recommendations ride along with the driver tips. When no driver on this
+  // surface carried one (reports stored before schema version 2 have no tips at
+  // all), the first recommendation leads the callout instead.
+  const alternatives = tab.recommendations.map(recommendationLine)
+  const hasDriverTip = tab.drivers.some((driver) => driver.tip)
   return (
     <div className="flex flex-col gap-3">
       {showCaption && (
@@ -469,10 +414,13 @@ function SurfacePanel({
         <SurfaceDrivers
           drivers={tab.drivers}
           higherViewsSide={comparison.higherViewsSide}
+          alternatives={hasDriverTip ? alternatives : []}
         />
       )}
-      {tab.recommendations.length > 0 && (
-        <SurfaceRecommendations recommendations={tab.recommendations} />
+      {!hasDriverTip && alternatives.length > 0 && (
+        <TryCallout alternatives={alternatives.slice(1)}>
+          {alternatives[0]}
+        </TryCallout>
       )}
     </div>
   )
@@ -508,16 +456,13 @@ function ReportNarrative({
         higherViewsSide={comparison.higherViewsSide}
       />
       {tabs.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <h4 className="text-sm font-semibold">Why one pulled ahead</h4>
-          <PackagingReportTabs
-            tabs={tabs.map((tab) => ({
-              value: tab.surface,
-              label: PACKAGING_REPORT_SURFACE_TAB_LABEL[tab.surface],
-              content: <SurfacePanel tab={tab} comparison={comparison} />,
-            }))}
-          />
-        </div>
+        <PackagingReportTabs
+          tabs={tabs.map((tab) => ({
+            value: tab.surface,
+            label: PACKAGING_REPORT_SURFACE_TAB_LABEL[tab.surface],
+            content: <SurfacePanel tab={tab} comparison={comparison} />,
+          }))}
+        />
       )}
       {report.caveats.length > 0 && (
         <ul className="flex flex-col gap-1 text-[11px] text-muted-foreground">
@@ -823,8 +768,6 @@ export function PackagingComparison({
           analysis. Observations are correlation, not proof.
         </p>
       </div>
-
-      <IdentityRow comparison={data} />
 
       {report && <ReportNarrative report={report} comparison={data} />}
 
