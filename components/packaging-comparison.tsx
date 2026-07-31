@@ -61,7 +61,10 @@ const SURFACE_TAB_ORDER: PackagingReportSurface[] = [
 
 // The verbatim span each surface tab quotes above the model's read of it. The
 // title comes off the video itself, and the summary tab is about the other
-// three rather than about a surface of its own, so neither appears here.
+// three rather than about a surface of its own, so neither appears here. The
+// hook entry is only a fallback: that tab quotes the whole spoken first ten
+// seconds when the comparison carries it, and drops back to the taxonomy's
+// opening line when it does not.
 const SURFACE_SPAN_KEY: Partial<Record<PackagingReportSurface, string>> = {
   thumbnail: "thumbnail.textVerbatim",
   hook: "hook.firstSentence",
@@ -208,8 +211,8 @@ function spanText(
 }
 
 // The actual thing being argued about, for one video: its real title, its real
-// thumbnail, the real first line out of its mouth. It sits above the model's
-// read of that side so the read always has its subject next to it.
+// thumbnail, everything it says in its real first ten seconds. It sits above
+// the model's read of that side so the read always has its subject next to it.
 function SurfaceEvidence({
   surface,
   side,
@@ -258,13 +261,29 @@ function SurfaceEvidence({
   }
 
   if (surface === "hook") {
-    const text = spanText(comparison, SURFACE_SPAN_KEY.hook ?? "", side)
+    // The hook IS the first ten seconds, so quote all of it. The taxonomy's
+    // single opening line only stands in for a video whose transcript never
+    // reached the comparison, and says so when it does.
+    const transcript = (video.hookTranscript ?? "").trim()
+    const firstSentence = spanText(comparison, SURFACE_SPAN_KEY.hook ?? "", side)
+    const text = transcript.length > 0 ? transcript : firstSentence
+    if (text.length === 0) {
+      return (
+        <p className="text-sm text-muted-foreground">
+          No opening captured for this video.
+        </p>
+      )
+    }
     return (
-      <p className="text-sm">
-        {text.length > 0
-          ? `"${clean(text)}"`
-          : "No opening line captured for this video."}
-      </p>
+      <div className="flex flex-col gap-1">
+        <p className="text-sm">{`"${clean(text)}"`}</p>
+        {transcript.length === 0 && (
+          <p className="text-[11px] text-muted-foreground">
+            Opening line only; no transcript is stored for this video&apos;s
+            first 10 seconds.
+          </p>
+        )}
+      </div>
     )
   }
 
