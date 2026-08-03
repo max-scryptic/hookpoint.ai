@@ -8,8 +8,10 @@
 // COPY GUARDRAIL: no em or en dashes (U+2014 / U+2013), ever, in any text in
 // this file. Hyphens are fine.
 
-// Bumped whenever the stored script report shape changes.
-export const SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION = 1
+// Bumped whenever the stored script report shape changes. Version 2 gave every
+// section its own "Try:" line, so each section of the head-to-head closes on
+// something to do next; reports stored at version 1 simply render without one.
+export const SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION = 2
 
 // Bumped whenever the stored packaging report shape changes. Version 2 added
 // the per driver "Try:" tip; reports stored at version 1 simply render without

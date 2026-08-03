@@ -1,9 +1,9 @@
 // The written Script head-to-head: a model-authored comparison of two videos'
 // full transcripts, with each video's packaging taxonomy (title/thumbnail/hook
-// read) supplied as context. Unlike the deterministic tables in
-// lib/script-comparison.ts (which diff two stored script taxonomies with no
-// model call), this is a prose report that reads both scripts directly and
-// explains how they differ and what in the writing likely moved retention. It
+// read) supplied as context. It is a prose report that reads both scripts
+// directly and explains how they differ and what in the writing likely moved
+// retention, and it is the whole of the Script tab: the deterministic taxonomy
+// diff that used to render beneath it is no longer shown anywhere. It
 // is generated once, from the generate endpoint while the creator waits on the
 // button, and stored on the video_comparisons row (see the 20260726120000
 // migration); the report page only ever reads it back and never calls this, so
@@ -32,10 +32,18 @@ import {
 // script report.
 export { SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION }
 
-// One titled paragraph of the written comparison.
+// One titled paragraph of the written comparison, plus the one change that
+// paragraph argues for.
 export interface ScriptComparisonReportSection {
   heading: string
   body: string
+  // This section's own "Try:" line, so every section of the report closes on
+  // something to do next rather than only stating the difference. Both videos
+  // are already published, so it is written as advice for the uploader's next
+  // script rather than as a fix to either of them. Optional only because
+  // reports stored before schema version 2 predate it; the model always writes
+  // one now.
+  tip?: string
 }
 
 export interface ScriptComparisonReport {
@@ -78,10 +86,11 @@ const REPORT_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["heading", "body"],
+        required: ["heading", "body", "tip"],
         properties: {
           heading: { type: "string" },
           body: { type: "string" },
+          tip: { type: "string" },
         },
       },
     },
@@ -103,7 +112,13 @@ function isModelReportOutput(value: unknown): value is ModelReportOutput {
     candidate.sections.every((section) => {
       if (!section || typeof section !== "object") return false
       const s = section as Record<string, unknown>
-      return typeof s.heading === "string" && typeof s.body === "string"
+      return (
+        typeof s.heading === "string" &&
+        typeof s.body === "string" &&
+        // A report stored before schema version 2 carried no section tip, and
+        // still validates if it is ever fed back through here.
+        (s.tip === undefined || typeof s.tip === "string")
+      )
     })
   )
 }
@@ -196,6 +211,8 @@ export async function generateScriptComparisonReport(
                 "Views and averageViewPercentage are provided for orientation. Treat any link between a script trait and performance as correlation worth noting, never as proof; hedge accordingly.",
                 "summary: two to three sentences giving the overall verdict on how the two scripts compare and which reads as the stronger retention play, if either.",
                 "sections: 3 to 6 titled paragraphs. Give each a short heading (e.g. Structure, Substance and payoff, Hook and opening, Emotion and energy, Likely retention driver) and a body of two to four sentences comparing the two videos on that theme, naming Video A and Video B explicitly.",
+                "Both of these videos are already published, so nothing you suggest can be applied to them. Every tip is forward-looking advice for the scripts the uploader writes next. Never tell them to change, re-cut, rewrite, reshoot or re-upload Video A or Video B, never name Video A or Video B inside a tip, and never phrase a tip as something one of these two videos should have done. The section bodies are the opposite: those describe what these two scripts already did, so they name Video A and Video B freely.",
+                "tip: every section carries one. It is the single change that section's comparison argues for, written as a one-sentence instruction for the uploader's next script (for example 'State the payoff you are building to within the first fifteen seconds, then keep every aside under one sentence'). Name the change rather than restating the paragraph, and keep it specific to what this comparison actually showed rather than generic scripting advice, while phrasing it as a rule to apply next time. The interface prefixes it with 'Try:', so do not begin it with 'Try' yourself; do not begin it with 'Next time', 'In future videos', 'Going forward' or any similar lead-in either, since the forward-looking framing belongs in how the advice is worded and a lead-in only delays the point. Do not repeat another section's tip word for word.",
                 "Write in plain, direct prose. Never output an em dash character (U+2014) or en dash (U+2013) anywhere in your response; if you would use one, rewrite with a comma, colon, parentheses or two sentences instead.",
               ].join(" "),
             },
@@ -253,10 +270,16 @@ export async function generateScriptComparisonReport(
   return {
     summary: parsed.summary.trim(),
     sections: parsed.sections
-      .map((section) => ({
-        heading: section.heading.trim(),
-        body: section.body.trim(),
-      }))
+      .map((section) => {
+        const tip = section.tip?.trim() ?? ""
+        return {
+          heading: section.heading.trim(),
+          body: section.body.trim(),
+          // Dropped rather than stored empty, so the renderer's "has a tip"
+          // test stays a simple presence check.
+          ...(tip.length > 0 ? { tip } : {}),
+        }
+      })
       .filter((section) => section.heading.length > 0 && section.body.length > 0)
       .slice(0, MAX_SECTIONS),
     schemaVersion: SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION,

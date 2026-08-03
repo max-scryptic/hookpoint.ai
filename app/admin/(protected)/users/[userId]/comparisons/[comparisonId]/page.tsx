@@ -18,16 +18,15 @@ import { getUserById } from "@/lib/admin/users"
 import { getUserVideoComparisonById } from "@/lib/admin/video-comparisons"
 import { getPackagingComparison } from "@/lib/packaging-comparison"
 import { getRetentionComparison } from "@/lib/retention-comparison"
-import { getScriptComparison } from "@/lib/script-comparison"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getComparisonReports } from "@/lib/video-comparisons"
 
 // Admin comparison detail: the full head-to-head for one pair a user has
 // generated, rendered from exactly the same components the creator's own report
 // page uses. Read-only, and nothing here generates: the two written reports come
-// back as stored JSON and the retention, packaging and script diffs are derived
-// from each video's stored analysis, so opening this page costs nothing and
-// calls no model.
+// back as stored JSON and the retention and packaging diffs are derived from
+// each video's stored analysis, so opening this page costs nothing and calls no
+// model.
 //
 // Everything is loaded server-side with the service-role client (behind the
 // admin auth check) and scoped to the owning user, so a mistyped or foreign id
@@ -78,9 +77,10 @@ export default async function AdminUserComparisonDetailPage({
   // Which video is A and which is B comes from the stored row, the same way the
   // creator's report reads it: the written head-to-heads talk about "Video A"
   // and "Video B" throughout, so the tables underneath them have to be oriented
-  // the way they were generated. Packaging and script are best-effort, since a
-  // failure or a gap in either must not cost the retention comparison.
-  const [data, packaging, script, reports] = await Promise.all([
+  // the way they were generated. Packaging is best-effort, since a failure or a
+  // gap in it must not cost the retention comparison. The script tab is the
+  // written report alone, so nothing is derived for it.
+  const [data, packaging, reports] = await Promise.all([
     getRetentionComparison(supabase, userId, comparison.a.id, comparison.b.id),
     getPackagingComparison(
       supabase,
@@ -89,15 +89,6 @@ export default async function AdminUserComparisonDetailPage({
       comparison.b.id,
     ).catch((error) => {
       console.error("Failed to load packaging comparison for admin", error)
-      return null
-    }),
-    getScriptComparison(
-      supabase,
-      userId,
-      comparison.a.id,
-      comparison.b.id,
-    ).catch((error) => {
-      console.error("Failed to load script comparison for admin", error)
       return null
     }),
     getComparisonReports(supabase, userId, comparison.id).catch((error) => {
@@ -169,8 +160,8 @@ export default async function AdminUserComparisonDetailPage({
           )
         }
         script={
-          script != null || reports.script != null ? (
-            <ScriptComparison data={script} report={reports.script} />
+          reports.script != null ? (
+            <ScriptComparison report={reports.script} />
           ) : (
             <MissingReportCard>
               No script read is stored for these two videos. It is written from
