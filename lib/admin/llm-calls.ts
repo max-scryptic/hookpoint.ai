@@ -1,5 +1,10 @@
 import { createAdminClient } from "@/lib/supabase/admin"
-import type { CostType, LlmCallType } from "@/lib/llm-call-types"
+import {
+  LLM_CALL_TYPES_BY_GROUP,
+  type CostType,
+  type LlmCallGroup,
+  type LlmCallType,
+} from "@/lib/llm-call-types"
 
 // Read-side helpers for the admin cost log page. Everything here uses the
 // service-role client (the cost_logs table has RLS enabled with no policies, so
@@ -32,6 +37,9 @@ export interface CostLogFilters {
   // userId (a video belongs to one user), which the filter UI enforces.
   videoId?: string
   costType?: CostType
+  // Narrows LLM calls to one kind of work (the analysis pipeline or the
+  // comparison reports). Only meaningful alongside costType: "llm_call".
+  callGroup?: LlmCallGroup
   callType?: LlmCallType
   // ISO timestamps bounding the cost time (inclusive).
   from?: string
@@ -85,6 +93,12 @@ export async function listCostLogs(
   if (filters.userId) query = query.eq("user_id", filters.userId)
   if (filters.videoId) query = query.eq("analysed_video_id", filters.videoId)
   if (filters.costType) query = query.eq("cost_type", filters.costType)
+  // The group narrows to the call types it covers, so it composes with an
+  // explicit call type rather than fighting it (an admin who picks both sees
+  // the one type, or nothing when the two contradict).
+  if (filters.callGroup) {
+    query = query.in("call_type", LLM_CALL_TYPES_BY_GROUP[filters.callGroup])
+  }
   if (filters.callType) query = query.eq("call_type", filters.callType)
   if (filters.from) query = query.gte("created_at", filters.from)
   if (filters.to) query = query.lte("created_at", filters.to)

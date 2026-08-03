@@ -15,11 +15,14 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { DatePickerWithRange } from "@/components/date-range-picker"
 import {
-  COST_TYPES,
-  COST_TYPE_LABELS,
+  callTypeInScope,
+  COST_SCOPES,
+  COST_SCOPE_LABELS,
+  costScopeFilters,
   LLM_CALL_TYPES,
+  LLM_CALL_TYPES_BY_GROUP,
   LLM_CALL_TYPE_LABELS,
-  type CostType,
+  type CostScope,
   type LlmCallType,
 } from "@/lib/llm-call-types"
 import type {
@@ -30,7 +33,8 @@ import type {
 export interface CostLogFilterValues {
   userId?: string
   videoId?: string
-  costType?: CostType
+  // The combined cost-type/LLM-group choice, e.g. "llm_call:comparison".
+  costScope?: CostScope | ""
   callType?: LlmCallType
   from?: string
   to?: string
@@ -70,7 +74,7 @@ export function AdminLlmCallsFilters({
     const next: Record<keyof CostLogFilterValues, string | undefined> = {
       userId: current.userId,
       videoId: current.videoId,
-      costType: current.costType,
+      costScope: current.costScope || undefined,
       callType: current.callType,
       from: current.from,
       to: current.to,
@@ -81,7 +85,9 @@ export function AdminLlmCallsFilters({
     const params = new URLSearchParams()
     if (next.userId) params.set("userId", next.userId)
     if (next.videoId) params.set("videoId", next.videoId)
-    if (next.costType) params.set("costType", next.costType)
+    // The scope rides in the long-standing costType param — it is still the
+    // cost-type filter, now with the LLM groups folded into it.
+    if (next.costScope) params.set("costType", next.costScope)
     if (next.callType) params.set("callType", next.callType)
     if (next.from) params.set("from", next.from)
     if (next.to) params.set("to", next.to)
@@ -109,17 +115,27 @@ export function AdminLlmCallsFilters({
     (option) => option.id === current.videoId,
   )
   const videoLabel = selectedVideo?.title ?? "All videos"
-  const costTypeLabel = current.costType
-    ? COST_TYPE_LABELS[current.costType]
+  const costScopeLabel = current.costScope
+    ? COST_SCOPE_LABELS[current.costScope]
     : "All cost types"
   const callTypeLabel = current.callType
     ? LLM_CALL_TYPE_LABELS[current.callType]
     : "All call types"
 
+  // The call types worth offering under the current scope: an LLM group narrows
+  // the list to its own calls, and a transcode scope has no call types at all.
+  const scope = costScopeFilters(current.costScope || undefined)
+  const callTypeOptions =
+    scope.costType === "qencode_transcode"
+      ? []
+      : scope.callGroup
+        ? LLM_CALL_TYPES_BY_GROUP[scope.callGroup]
+        : LLM_CALL_TYPES
+
   const hasActiveFilters =
     Boolean(current.userId) ||
     Boolean(current.videoId) ||
-    Boolean(current.costType) ||
+    Boolean(current.costScope) ||
     Boolean(current.callType) ||
     Boolean(current.from) ||
     Boolean(current.to)
@@ -202,26 +218,33 @@ export function AdminLlmCallsFilters({
           render={<Button variant="outline" size="sm" className="h-9 gap-2" />}
         >
           <ListFilterIcon className="size-4" />
-          {costTypeLabel}
+          {costScopeLabel}
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="start"
           className="w-auto min-w-(--anchor-width) max-w-[min(28rem,var(--available-width))]"
         >
           <DropdownMenuRadioGroup
-            value={current.costType ?? ""}
-            onValueChange={(value) => pushWith({ costType: value || null })}
+            value={current.costScope ?? ""}
+            onValueChange={(value) =>
+              // A narrower scope invalidates a call type it doesn't cover, so
+              // the two filters can never contradict into an empty table.
+              pushWith({
+                costScope: value || null,
+                callType: callTypeInScope(value, current.callType) ?? null,
+              })
+            }
           >
             <DropdownMenuRadioItem value="" className="whitespace-nowrap">
               All cost types
             </DropdownMenuRadioItem>
-            {COST_TYPES.map((type) => (
+            {COST_SCOPES.map((value) => (
               <DropdownMenuRadioItem
-                key={type}
-                value={type}
+                key={value}
+                value={value}
                 className="whitespace-nowrap"
               >
-                {COST_TYPE_LABELS[type]}
+                {COST_SCOPE_LABELS[value]}
               </DropdownMenuRadioItem>
             ))}
           </DropdownMenuRadioGroup>
@@ -230,6 +253,7 @@ export function AdminLlmCallsFilters({
 
       <DropdownMenu>
         <DropdownMenuTrigger
+          disabled={callTypeOptions.length === 0}
           render={<Button variant="outline" size="sm" className="h-9 gap-2" />}
         >
           <ListFilterIcon className="size-4" />
@@ -246,7 +270,7 @@ export function AdminLlmCallsFilters({
             <DropdownMenuRadioItem value="" className="whitespace-nowrap">
               All call types
             </DropdownMenuRadioItem>
-            {LLM_CALL_TYPES.map((type) => (
+            {callTypeOptions.map((type) => (
               <DropdownMenuRadioItem
                 key={type}
                 value={type}

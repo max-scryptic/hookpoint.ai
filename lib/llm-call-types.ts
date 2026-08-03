@@ -51,6 +51,104 @@ export const LLM_CALL_TYPE_LABELS: Record<LlmCallType, string> = {
   transcript_taxonomy: "Deep video analysis · transcript taxonomy",
 }
 
+// The two kinds of LLM work we bill for, one level above call_type: the
+// analysis pipeline a video goes through (light *and* deep — pacing, packaging,
+// snapshots, audio, synthesis …) and the comparison reports generated between
+// two videos. Every LLM call belongs to exactly one, which is what lets the
+// admin cost surfaces filter and total them apart.
+export const LLM_CALL_GROUPS = ["analysis", "comparison"] as const
+
+export type LlmCallGroup = (typeof LLM_CALL_GROUPS)[number]
+
+export const LLM_CALL_GROUP_LABELS: Record<LlmCallGroup, string> = {
+  analysis: "analysis",
+  comparison: "comparisons",
+}
+
+// The comparison-report calls — every other LLM call type is analysis work.
+const COMPARISON_LLM_CALL_TYPES = new Set<LlmCallType>([
+  "script_comparison",
+  "packaging_comparison",
+])
+
+// Classifies an LLM call into its group. A call with no type recorded counts as
+// analysis, matching how analysisCostBucket treats an untyped call as light.
+export function llmCallGroup(callType: LlmCallType | null): LlmCallGroup {
+  return callType && COMPARISON_LLM_CALL_TYPES.has(callType)
+    ? "comparison"
+    : "analysis"
+}
+
+// The call types each group covers, in the canonical LLM_CALL_TYPES order, so
+// the admin filters can narrow the call-type list to whichever group is picked.
+export const LLM_CALL_TYPES_BY_GROUP: Record<LlmCallGroup, LlmCallType[]> = {
+  analysis: LLM_CALL_TYPES.filter((type) => llmCallGroup(type) === "analysis"),
+  comparison: LLM_CALL_TYPES.filter(
+    (type) => llmCallGroup(type) === "comparison",
+  ),
+}
+
+// The choices the admin cost-log "cost type" filter offers. It is one dropdown
+// over two underlying filters — the cost type and (for LLM calls) the call
+// group — so an admin can pick all LLM calls, just the analysis ones, just the
+// comparison reports, or transcoding, without a second widget.
+export const COST_SCOPES = [
+  "llm_call",
+  "llm_call:analysis",
+  "llm_call:comparison",
+  "qencode_transcode",
+] as const
+
+export type CostScope = (typeof COST_SCOPES)[number]
+
+export const COST_SCOPE_LABELS: Record<CostScope, string> = {
+  llm_call: "All LLM calls",
+  "llm_call:analysis": "LLM calls · analysis",
+  "llm_call:comparison": "LLM calls · comparison reports",
+  qencode_transcode: "Qencode Transcode",
+}
+
+// The dropdown value for a (cost type, call group) pair — the empty string when
+// no cost filter is applied ("All cost types").
+export function costScopeValue(
+  costType?: CostType,
+  callGroup?: LlmCallGroup,
+): CostScope | "" {
+  if (!costType) return ""
+  if (costType !== "llm_call") return costType
+  return callGroup ? (`llm_call:${callGroup}` as CostScope) : "llm_call"
+}
+
+// The inverse: the cost type and call group a dropdown value filters by. An
+// unrecognised value clears both, so a hand-edited query string degrades to
+// "All cost types" rather than filtering everything out.
+export function costScopeFilters(value?: string): {
+  costType?: CostType
+  callGroup?: LlmCallGroup
+} {
+  if (!value || !(COST_SCOPES as readonly string[]).includes(value)) return {}
+  const [costType, callGroup] = value.split(":")
+  return {
+    costType: costType as CostType,
+    callGroup: callGroup as LlmCallGroup | undefined,
+  }
+}
+
+// The call-type filter that survives a change of cost scope: kept when the new
+// scope still covers that call type, cleared otherwise. Without this an admin
+// who picks "comparison reports" while a pacing call type is selected would be
+// left with two filters that contradict into an empty table.
+export function callTypeInScope(
+  scope?: string,
+  callType?: LlmCallType | null,
+): LlmCallType | undefined {
+  if (!callType) return undefined
+  const { costType, callGroup } = costScopeFilters(scope)
+  if (costType === "qencode_transcode") return undefined
+  if (callGroup && llmCallGroup(callType) !== callGroup) return undefined
+  return callType
+}
+
 // The two spend buckets a video's costs roll up into. "Light analysis" is the
 // initial analysis every video goes through (pacing, retention attribution and
 // packaging); "Deep analysis" is the opt-in source-file deep dive (snapshot,

@@ -6,6 +6,7 @@ import { ListFilterIcon, VideoIcon, XIcon } from "lucide-react"
 import { type DateRange } from "react-day-picker"
 
 import { AdminLlmCallsTable } from "@/components/admin/admin-llm-calls-table"
+import { CostLogSummary } from "@/components/admin/cost-log-summary"
 import { DatePickerWithRange } from "@/components/date-range-picker"
 import { Button } from "@/components/ui/button"
 import {
@@ -17,21 +18,17 @@ import {
 } from "@/components/ui/dropdown-menu"
 import type { CostLogRow } from "@/lib/admin/llm-calls"
 import {
-  COST_TYPES,
-  COST_TYPE_LABELS,
+  callTypeInScope,
+  COST_SCOPES,
+  COST_SCOPE_LABELS,
+  costScopeFilters,
   LLM_CALL_TYPES,
+  LLM_CALL_TYPES_BY_GROUP,
   LLM_CALL_TYPE_LABELS,
-  type CostType,
+  llmCallGroup,
+  type CostScope,
   type LlmCallType,
 } from "@/lib/llm-call-types"
-
-// Enough precision for the sub-cent figures a single call is, without trailing
-// noise for larger totals. Matches the cost-log surfaces' formatting.
-function formatUsd(value: number): string {
-  if (value === 0) return "$0.00"
-  if (value < 0.01) return `$${value.toFixed(4)}`
-  return `$${value.toFixed(2)}`
-}
 
 // A single-choice dropdown filter, matching the widgets on the main cost-log
 // page. `value` is the empty string for "all", otherwise the selected key.
@@ -42,6 +39,7 @@ function FilterDropdown<T extends string>({
   value,
   options,
   onChange,
+  disabled = false,
 }: {
   icon: typeof VideoIcon
   label: string
@@ -49,10 +47,12 @@ function FilterDropdown<T extends string>({
   value: string
   options: { value: T; label: string }[]
   onChange: (value: T | null) => void
+  disabled?: boolean
 }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
+        disabled={disabled}
         render={<Button variant="outline" size="sm" className="h-9 gap-2" />}
       >
         <Icon className="size-4" />
@@ -102,9 +102,13 @@ export function AdminCostLogsPanel({
   truncated?: boolean
 }) {
   const [videoId, setVideoId] = useState<string>()
-  const [costType, setCostType] = useState<CostType>()
+  const [costScope, setCostScope] = useState<CostScope>()
   const [callType, setCallType] = useState<LlmCallType>()
   const [range, setRange] = useState<DateRange>()
+
+  // The cost type and (for LLM calls) the call group the picked scope filters
+  // by — one dropdown driving two row predicates.
+  const { costType, callGroup } = costScopeFilters(costScope)
 
   // The videos offered in the filter, derived from the rows themselves so every
   // option yields results. Only videos actually carrying a cost log appear.
@@ -129,6 +133,7 @@ export function AdminCostLogsPanel({
     return rows.filter((row) => {
       if (videoId && row.analysedVideoId !== videoId) return false
       if (costType && row.costType !== costType) return false
+      if (callGroup && llmCallGroup(row.callType) !== callGroup) return false
       if (callType && row.callType !== callType) return false
       if (fromMs != null || toMs != null) {
         const created = new Date(row.createdAt).getTime()
@@ -137,38 +142,39 @@ export function AdminCostLogsPanel({
       }
       return true
     })
-  }, [rows, videoId, costType, callType, fromMs, toMs])
-
-  // Per-cost-type spend for the filtered rows, so the breakdown reads at a
-  // glance and tracks whatever filters are applied.
-  const costBreakdown = useMemo(() => {
-    const byType = new Map<CostType, { count: number; total: number }>()
-    for (const row of filtered) {
-      const entry = byType.get(row.costType) ?? { count: 0, total: 0 }
-      entry.count += 1
-      entry.total += row.costUsd
-      byType.set(row.costType, entry)
-    }
-    return Array.from(byType.entries())
-      .map(([type, entry]) => ({ type, ...entry }))
-      .sort((a, b) => b.total - a.total)
-  }, [filtered])
+  }, [rows, videoId, costType, callGroup, callType, fromMs, toMs])
 
   const totalCostUsd = filtered.reduce((sum, row) => sum + row.costUsd, 0)
 
   const hasActiveFilters =
     Boolean(videoId) ||
-    Boolean(costType) ||
+    Boolean(costScope) ||
     Boolean(callType) ||
     Boolean(range?.from) ||
     Boolean(range?.to)
 
   function clearFilters() {
     setVideoId(undefined)
-    setCostType(undefined)
+    setCostScope(undefined)
     setCallType(undefined)
     setRange(undefined)
   }
+
+  // Narrowing the scope drops a call type it no longer covers, so the two
+  // filters can never contradict into an empty table.
+  function changeCostScope(next: CostScope | null) {
+    setCostScope(next ?? undefined)
+    setCallType(callTypeInScope(next ?? undefined, callType))
+  }
+
+  // The call types worth offering under the current scope: an LLM group narrows
+  // the list to its own calls, and a transcode scope has no call types at all.
+  const callTypeOptions =
+    costType === "qencode_transcode"
+      ? []
+      : callGroup
+        ? LLM_CALL_TYPES_BY_GROUP[callGroup]
+        : LLM_CALL_TYPES
 
   const videoLabel = videoId
     ? videoOptions.find((option) => option.value === videoId)?.label ??
@@ -191,22 +197,23 @@ export function AdminCostLogsPanel({
 
         <FilterDropdown
           icon={ListFilterIcon}
-          label={costType ? COST_TYPE_LABELS[costType] : "All cost types"}
+          label={costScope ? COST_SCOPE_LABELS[costScope] : "All cost types"}
           allLabel="All cost types"
-          value={costType ?? ""}
-          options={COST_TYPES.map((type) => ({
-            value: type,
-            label: COST_TYPE_LABELS[type],
+          value={costScope ?? ""}
+          options={COST_SCOPES.map((value) => ({
+            value,
+            label: COST_SCOPE_LABELS[value],
           }))}
-          onChange={(value) => setCostType(value ?? undefined)}
+          onChange={changeCostScope}
         />
 
         <FilterDropdown
           icon={ListFilterIcon}
           label={callType ? LLM_CALL_TYPE_LABELS[callType] : "All call types"}
           allLabel="All call types"
+          disabled={callTypeOptions.length === 0}
           value={callType ?? ""}
-          options={LLM_CALL_TYPES.map((type) => ({
+          options={callTypeOptions.map((type) => ({
             value: type,
             label: LLM_CALL_TYPE_LABELS[type],
           }))}
@@ -232,29 +239,15 @@ export function AdminCostLogsPanel({
         )}
       </div>
 
-      {/* The per-cost-type spend sits inline beside the grand total rather than
-          in its own KPI cards — the breakdown reads at a glance without eating
-          vertical space. The per-type figures are muted so the total stands
-          out as the headline number. */}
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm">
-        <span className="text-muted-foreground">
-          {filtered.length.toLocaleString()} entr
-          {filtered.length === 1 ? "y" : "ies"}
-          {truncated ? " (showing the most recent 1,000)" : ""}
-        </span>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          {costBreakdown.map((entry) => (
-            <span key={entry.type} className="text-muted-foreground">
-              {COST_TYPE_LABELS[entry.type] ?? entry.type}:{" "}
-              <span className="tabular-nums">{formatUsd(entry.total)}</span>
-            </span>
-          ))}
-          <span className="font-medium">
-            Total cost:{" "}
-            <span className="tabular-nums">{formatUsd(totalCostUsd)}</span>
-          </span>
-        </div>
-      </div>
+      {/* The spend breakdown sits inline beside the grand total rather than in
+          its own KPI cards — it reads at a glance without eating vertical
+          space. Shared with the account-wide cost-log page so both read the
+          same, and it tracks whatever filters are applied here. */}
+      <CostLogSummary
+        rows={filtered}
+        totalCostUsd={totalCostUsd}
+        truncated={truncated}
+      />
 
       {/* The user is fixed on every surface this panel is used on, so the User
           column is always redundant here; the Video column is only redundant
