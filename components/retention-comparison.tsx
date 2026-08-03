@@ -104,9 +104,13 @@ function Kpi({ label, value }: { label: string; value: string }) {
 function VideoHeaderCard({
   video,
   side,
+  href,
 }: {
   video: ComparisonVideo
   side: Side
+  // Where the "open full analysis" arrow points. Defaults to the creator's own
+  // analysed-video page.
+  href?: string
 }) {
   const summary = video.summary
   const published = formatPublished(summary.publishedAt)
@@ -138,7 +142,7 @@ function VideoHeaderCard({
               {summary.title ?? "Untitled video"}
             </h3>
             <Link
-              href={`/dashboard/analysed-video/${summary.videoId}`}
+              href={href ?? `/dashboard/analysed-video/${summary.videoId}`}
               aria-label="Open full analysis"
               title="Open full analysis"
               className={buttonVariants({
@@ -346,13 +350,19 @@ function StretchColumn({ video, side }: { video: ComparisonVideo; side: Side }) 
 // for whichever tab is open.
 export function RetentionComparisonVideos({
   data,
+  videoHrefs,
 }: {
   data: RetentionComparisonData
+  // Where each side's "open full analysis" arrow points. Left unset on the
+  // creator's own report, which links to their analysed-video page; the admin
+  // report passes the admin video detail routes instead, since an admin viewing
+  // someone else's comparison does not own these videos.
+  videoHrefs?: { a: string; b: string }
 }) {
   return (
     <div className="grid gap-3 lg:grid-cols-2">
-      <VideoHeaderCard video={data.a} side="a" />
-      <VideoHeaderCard video={data.b} side="b" />
+      <VideoHeaderCard video={data.a} side="a" href={videoHrefs?.a} />
+      <VideoHeaderCard video={data.b} side="b" href={videoHrefs?.b} />
     </div>
   )
 }

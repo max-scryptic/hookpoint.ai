@@ -38,6 +38,13 @@ const USER_DETAIL_PATTERN = /^\/admin\/users\/([^/]+)$/
 // carries the opaque id.
 const VIDEO_DETAIL_PATTERN = /^\/admin\/users\/([^/]+)\/videos\/[^/]+$/
 
+// A comparison report hangs off the owning user the same way a video does, e.g.
+// "Dashboard / Users / User detail / <video A> vs <video B>". The trailing crumb
+// is supplied by the page via the breadcrumb context, since the pathname only
+// carries the opaque comparison id.
+const COMPARISON_DETAIL_PATTERN =
+  /^\/admin\/users\/([^/]+)\/comparisons\/[^/]+$/
+
 type Crumb = { label: string; href?: string }
 
 // Builds the crumb trail for the current route. The last crumb is always the
@@ -52,6 +59,18 @@ function buildTrail(pathname: string, dynamicLabel: string | null): Crumb[] {
       { label: "User detail", href: `/admin/users/${userId}` },
       // Falls back to a generic label until the page publishes the title.
       { label: dynamicLabel ?? "Video detail" },
+    ]
+  }
+
+  const comparisonMatch = pathname.match(COMPARISON_DETAIL_PATTERN)
+  if (comparisonMatch) {
+    const [, userId] = comparisonMatch
+    return [
+      { label: ADMIN_HOME.title, href: ADMIN_HOME.url },
+      { label: "Users", href: "/admin/users" },
+      { label: "User detail", href: `/admin/users/${userId}` },
+      // Falls back to a generic label until the page publishes the pair.
+      { label: dynamicLabel ?? "Comparison report" },
     ]
   }
 

@@ -64,8 +64,10 @@ const REPORT_READY_PROBE =
 // no way to ask for the newer shape other than the generate button, which
 // rewrites it for free. A version we do not recognise (a row written by a newer
 // deploy, or a non-numeric value) reads as ready rather than sending it round
-// the generator again.
-function reportIsCurrent(
+// the generator again. Exported so the admin read layer can report the same
+// readiness per report (see lib/admin/video-comparisons.ts) instead of
+// re-deriving the rule beside it.
+export function reportIsCurrent(
   storedVersion: string | null,
   currentVersion: number,
 ): boolean {

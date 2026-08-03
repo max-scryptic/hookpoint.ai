@@ -15,12 +15,14 @@ import {
 import { AdminBillingHistoryTable } from "@/components/admin/admin-billing-history-table"
 import { AdminCostLogsPanel } from "@/components/admin/admin-cost-logs-panel"
 import { AdminVideoAnalysesTable } from "@/components/admin/admin-video-analyses-table"
+import { AdminVideoComparisonsTable } from "@/components/admin/admin-video-comparisons-table"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { requireAdminUser } from "@/lib/admin/auth"
 import { getUserById, getUserKpis } from "@/lib/admin/users"
 import { getUserVideoAnalyses } from "@/lib/admin/video-analysis"
+import { getUserVideoComparisons } from "@/lib/admin/video-comparisons"
 import { listCostLogs } from "@/lib/admin/llm-calls"
 import { getBillingInvoices, getUserRevenue } from "@/lib/stripe/invoices"
 import {
@@ -242,8 +244,15 @@ export default async function AdminUserDetailPage({
   // the rest of the page render rather than 500 the whole view. The same goes
   // for the Stripe-backed payment history and revenue total — a failed/absent
   // Stripe lookup falls back rather than sinking the page.
-  const [kpis, snapshot, costLogs, invoices, videoAnalyses, revenue] =
-    await Promise.all([
+  const [
+    kpis,
+    snapshot,
+    costLogs,
+    invoices,
+    videoAnalyses,
+    videoComparisons,
+    revenue,
+  ] = await Promise.all([
       getUserKpis(user.id),
       getBillingSnapshot(user.id).catch((error) => {
         console.error("Failed to load billing snapshot for user", error)
@@ -256,6 +265,10 @@ export default async function AdminUserDetailPage({
       }),
       getUserVideoAnalyses(user.id).catch((error) => {
         console.error("Failed to load video analyses for user", error)
+        return []
+      }),
+      getUserVideoComparisons(user.id).catch((error) => {
+        console.error("Failed to load video comparisons for user", error)
         return []
       }),
       getUserRevenue(user.id).catch((error) => {
@@ -324,6 +337,9 @@ export default async function AdminUserDetailPage({
       <Tabs defaultValue="video-analysis" className="gap-6">
         <TabsList>
           <TabsTrigger value="video-analysis">Video analysis</TabsTrigger>
+          <TabsTrigger value="video-comparisons">
+            Video comparisons
+          </TabsTrigger>
           <TabsTrigger value="plan-billing">Plan &amp; billing</TabsTrigger>
           <TabsTrigger value="cost-logs">Cost logs</TabsTrigger>
         </TabsList>
@@ -372,6 +388,24 @@ export default async function AdminUserDetailPage({
             </div>
             <AdminVideoAnalysesTable userId={user.id} videos={videoAnalyses} />
           </section>
+        </TabsContent>
+
+        <TabsContent value="video-comparisons" className="space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold tracking-normal">
+              Video comparisons
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Every head-to-head this user has generated in the Video
+              Comparator, and whether both written reports made it onto the
+              pair. Select a row for the full comparison report. Most recently
+              compared first.
+            </p>
+          </div>
+          <AdminVideoComparisonsTable
+            userId={user.id}
+            comparisons={videoComparisons}
+          />
         </TabsContent>
 
         <TabsContent value="plan-billing" className="space-y-8">
