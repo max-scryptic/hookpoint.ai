@@ -1,9 +1,10 @@
 import Image from "next/image"
 import Link from "next/link"
-import { Clock3Icon, ImageOffIcon } from "lucide-react"
+import { ArrowUpRightIcon, Clock3Icon, ImageOffIcon } from "lucide-react"
 
 import { EventTypeBadge } from "@/components/event-type-badge"
 import { RetentionComparisonChart } from "@/components/retention-comparison-chart"
+import { buttonVariants } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { stripEmDashes } from "@/lib/copy-guardrails"
 import type {
@@ -127,14 +128,28 @@ function VideoHeaderCard({
             </div>
           )}
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase text-muted-foreground">
             <SideDot side={side} />
             {SIDE_META[side].name}
           </div>
-          <h3 className="mt-1 line-clamp-2 text-sm font-semibold">
-            {summary.title ?? "Untitled video"}
-          </h3>
+          <div className="mt-1 flex items-start gap-2">
+            <h3 className="line-clamp-2 min-w-0 flex-1 text-sm font-semibold">
+              {summary.title ?? "Untitled video"}
+            </h3>
+            <Link
+              href={`/dashboard/analysed-video/${summary.id}`}
+              aria-label="Open full analysis"
+              title="Open full analysis"
+              className={buttonVariants({
+                variant: "ghost",
+                size: "icon-sm",
+                className: "-mt-0.5 text-muted-foreground",
+              })}
+            >
+              <ArrowUpRightIcon />
+            </Link>
+          </div>
           {published && (
             <p className="mt-0.5 text-xs text-muted-foreground">
               Published {published}
@@ -174,12 +189,6 @@ function VideoHeaderCard({
           }
         />
       </div>
-      <Link
-        href={`/dashboard/analysed-video/${summary.id}`}
-        className="text-xs font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-      >
-        Open full analysis
-      </Link>
     </Card>
   )
 }
