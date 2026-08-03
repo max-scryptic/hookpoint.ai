@@ -2,6 +2,7 @@ import { AnalysedVideoBrowser } from "@/components/analysed-video-browser"
 import { requireAuthenticatedUser } from "@/lib/auth"
 import { createClient } from "@/lib/supabase/server"
 import { listAnalysedVideos, type AnalysedVideo } from "@/lib/analysed-videos"
+import { refreshAnalysedVideoStats } from "@/lib/analysed-video-stats"
 import {
   getVideoProcessingStatus,
   type VideoProcessingStatus,
@@ -26,6 +27,12 @@ async function loadAnalysedVideos(
 ): Promise<AnalysedVideosResult> {
   try {
     const supabase = await createClient()
+    // Bring every row's view/comment counts and KPI totals up to date before
+    // reading them, so the table prints today's numbers rather than the ones
+    // each video had when it was analysed. Throttled and best-effort — most
+    // loads skip the YouTube round-trip entirely, and a failure just serves the
+    // last numbers we have.
+    await refreshAnalysedVideoStats(supabase, userId)
     const videos = await listAnalysedVideos(supabase, userId)
     return { status: "ok", videos }
   } catch (error) {

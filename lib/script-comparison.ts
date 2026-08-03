@@ -18,6 +18,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import type { ScriptSegment, ScriptTaxonomy } from "@/lib/script-taxonomy"
+import { preferredViewCount } from "@/lib/youtube/youtube"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -659,6 +660,7 @@ export function buildScriptComparison(
 interface ScriptRow {
   id: string
   video_title: string | null
+  view_count: number | null
   analytics_summary: { views?: number | null } | null
   script_taxonomy: ScriptTaxonomy | null
 }
@@ -674,7 +676,9 @@ export async function getScriptComparison(
 ): Promise<ScriptComparison | null> {
   const { data, error } = await supabase
     .from("analysed_videos")
-    .select("id, video_title, analytics_summary, script_taxonomy")
+    .select(
+      "id, video_title, analytics_summary, script_taxonomy, view_count:video_details->viewCount",
+    )
     .eq("user_id", userId)
     .in("id", [videoIdA, videoIdB])
 
@@ -690,7 +694,10 @@ export async function getScriptComparison(
   const toInput = (row: ScriptRow): ScriptComparisonInput => ({
     id: row.id,
     title: row.video_title,
-    views: row.analytics_summary?.views ?? null,
+    views: preferredViewCount(
+      { viewCount: row.view_count },
+      row.analytics_summary,
+    ),
     taxonomy: row.script_taxonomy,
   })
 

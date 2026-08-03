@@ -1,4 +1,5 @@
 import { ChannelTrends, ChannelTrendsLocked } from "@/components/channel-trends"
+import { refreshAnalysedVideoStats } from "@/lib/analysed-video-stats"
 import { requireAuthenticatedUser } from "@/lib/auth"
 import { getEntitlement } from "@/lib/billing/entitlements"
 import { getChannelTrends, type ChannelTrendsData } from "@/lib/channel-trends"
@@ -34,6 +35,10 @@ async function loadChannelTrends(userId: string): Promise<ChannelTrendsResult> {
 
   try {
     const supabase = await createClient()
+    // Every trend here is derived from the stored analytics snapshots, so bring
+    // them up to date before reading. Throttled and best-effort: most loads
+    // skip the YouTube round-trip and a failure just uses the last snapshots.
+    await refreshAnalysedVideoStats(supabase, userId)
     const data = await getChannelTrends(supabase, userId)
     return { status: "ok", data }
   } catch (error) {

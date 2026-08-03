@@ -11,6 +11,7 @@ import {
 import { VideoComparisonTabs } from "@/components/video-comparison-tabs"
 import { buttonVariants } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { refreshAnalysedVideoStats } from "@/lib/analysed-video-stats"
 import { requireAuthenticatedUser } from "@/lib/auth"
 import { getEntitlement } from "@/lib/billing/entitlements"
 import {
@@ -122,6 +123,15 @@ async function loadActiveComparison(
   // video is which.
   const sideA = saved.videoAId
   const sideB = saved.videoBId
+
+  // The deterministic diffs below print each side's view count, so bring both
+  // rows' stored numbers up to date first. The refresh is throttled, so
+  // re-opening a report twice in a row costs nothing. The written head-to-heads
+  // keep whatever they were generated against; only pressing the button in the
+  // Video Comparator rewrites those.
+  await refreshAnalysedVideoStats(supabase, userId, {
+    analysedVideoIds: [sideA, sideB],
+  })
 
   // Every read here is a stored read: the two written head-to-heads come back
   // as JSON from the comparison row, and the packaging, script and retention

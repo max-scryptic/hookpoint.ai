@@ -41,10 +41,11 @@ import {
 } from "@/lib/packaging-comparison-evidence"
 import type { PackagingTaxonomy } from "@/lib/packaging-taxonomy"
 import { savePackagingComparisonReport } from "@/lib/video-comparisons"
-import type {
-  TranscriptCue,
-  VideoAnalyticsSummary,
-  VideoDetails,
+import {
+  preferredViewCount,
+  type TranscriptCue,
+  type VideoAnalyticsSummary,
+  type VideoDetails,
 } from "@/lib/youtube/youtube"
 
 // The stored shape version, and its history, live in
@@ -763,7 +764,7 @@ export async function buildAndStorePackagingComparisonReport(
   ): PackagingComparisonReportSide => ({
     title: row.video_title ?? row.video_details?.title ?? null,
     thumbnailUrl: row.video_details?.thumbnailUrl ?? null,
-    views: row.analytics_summary?.views ?? null,
+    views: preferredViewCount(row.video_details, row.analytics_summary),
     packagingTaxonomy: taxonomy,
     hook,
   })

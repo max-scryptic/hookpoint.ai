@@ -22,6 +22,12 @@ export interface VideoDetails {
   viewCount?: number | null
   commentCount?: number | null
   privacyStatus?: VideoPrivacyStatus
+  // When viewCount/commentCount/privacyStatus were last read from the Data API.
+  // The rest of this record (title, duration, publish date) is fixed once a
+  // video is published, but the counts keep moving, so they are refreshed on a
+  // TTL rather than frozen at analyse time (see lib/analysed-video-stats.ts).
+  // Absent on rows written before the refresh existed, which reads as "due".
+  statisticsFetchedAt?: string
 }
 
 export interface RecentVideo {
@@ -265,6 +271,88 @@ export async function getRecentVideos(
   }
 }
 
+// The public, near-real-time counters videos.list serves for a video — the same
+// numbers YouTube shows under a video on the watch page. Distinct from the
+// Analytics API's `views` metric, which is processed on a delay and therefore
+// lags this by a day or two.
+export interface VideoStatistics {
+  viewCount: number | null
+  commentCount: number | null
+  durationSeconds: number | null
+  privacyStatus: VideoPrivacyStatus | null
+}
+
+// videos.list accepts up to 50 ids per call, at 1 quota unit per call regardless
+// of how many ids are on it — so a whole library refreshes for a couple of units.
+const VIDEO_STATISTICS_BATCH_SIZE = 50
+
+// Splits a list into fixed-size chunks so batched YouTube calls stay inside the
+// per-request id limits.
+function chunk<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = []
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size))
+  }
+  return chunks
+}
+
+// Reads the public statistics for a batch of videos, keyed by video id. Videos
+// YouTube doesn't return (deleted, or not visible to this token) are simply
+// absent from the map. Throws on an API failure so callers can decide whether
+// the refresh is best-effort — every caller here treats it as such.
+export async function getVideoStatisticsByVideo(
+  accessToken: string,
+  videoIds: string[],
+): Promise<Map<string, VideoStatistics>> {
+  const stats = new Map<string, VideoStatistics>()
+  if (videoIds.length === 0) return stats
+
+  for (const batch of chunk(videoIds, VIDEO_STATISTICS_BATCH_SIZE)) {
+    const url = new URL(`${DATA_API}/videos`)
+    url.searchParams.set("part", "statistics,status,contentDetails")
+    url.searchParams.set("id", batch.join(","))
+
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+    })
+
+    if (!response.ok) {
+      throw new Error(
+        `YouTube Data API error (${response.status}): ${await response.text()}`,
+      )
+    }
+
+    const json = (await response.json()) as {
+      items?: Array<{
+        id?: string
+        statistics?: { viewCount?: string; commentCount?: string }
+        status?: { privacyStatus?: string }
+        contentDetails?: { duration?: string }
+      }>
+    }
+
+    for (const item of json.items ?? []) {
+      if (!item.id) continue
+      const viewCount = item.statistics?.viewCount
+      const commentCount = item.statistics?.commentCount
+      const duration = item.contentDetails?.duration
+      const privacy = item.status?.privacyStatus
+      stats.set(item.id, {
+        viewCount: viewCount != null ? Number(viewCount) : null,
+        commentCount: commentCount != null ? Number(commentCount) : null,
+        durationSeconds: duration ? parseIso8601Duration(duration) : null,
+        privacyStatus:
+          privacy === "public" || privacy === "unlisted" || privacy === "private"
+            ? privacy
+            : null,
+      })
+    }
+  }
+
+  return stats
+}
+
 // Mutates the passed videos in place, filling in viewCount, commentCount,
 // durationSeconds and privacyStatus from the videos.list endpoint. Failures are
 // swallowed so the list still renders with the snippet data already in hand.
@@ -274,58 +362,119 @@ async function enrichWithVideoDetails(
 ): Promise<void> {
   if (videos.length === 0) return
 
-  const url = new URL(`${DATA_API}/videos`)
-  url.searchParams.set("part", "statistics,status,contentDetails")
-  url.searchParams.set("id", videos.map((video) => video.id).join(","))
-
-  let response: Response
+  let stats: Map<string, VideoStatistics>
   try {
-    response = await fetch(url, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      cache: "no-store",
-    })
+    stats = await getVideoStatisticsByVideo(
+      accessToken,
+      videos.map((video) => video.id),
+    )
   } catch (error) {
     console.error("Failed to enrich recent videos with details", error)
     return
   }
 
-  if (!response.ok) {
-    console.error(
-      `YouTube Data API error enriching videos (${response.status}): ${await response.text()}`,
-    )
-    return
-  }
-
-  const json = (await response.json()) as {
-    items?: Array<{
-      id?: string
-      statistics?: { viewCount?: string; commentCount?: string }
-      status?: { privacyStatus?: string }
-      contentDetails?: { duration?: string }
-    }>
-  }
-
-  const byId = new Map(
-    (json.items ?? []).map((item) => [item.id ?? "", item] as const),
-  )
-
   for (const video of videos) {
-    const details = byId.get(video.id)
+    const details = stats.get(video.id)
     if (!details) continue
 
-    const viewCount = details.statistics?.viewCount
-    const commentCount = details.statistics?.commentCount
-    const duration = details.contentDetails?.duration
+    video.viewCount = details.viewCount
+    video.commentCount = details.commentCount
+    video.durationSeconds = details.durationSeconds
+    if (details.privacyStatus) video.privacyStatus = details.privacyStatus
+  }
+}
 
-    video.viewCount = viewCount != null ? Number(viewCount) : null
-    video.commentCount = commentCount != null ? Number(commentCount) : null
-    video.durationSeconds = duration ? parseIso8601Duration(duration) : null
+// The lifetime Analytics figures we track per video. These come from the
+// YouTube Analytics API, which processes data on a delay (typically a day or
+// two), so `views` here trails the near-real-time count videos.list serves and
+// the watch page shows. Every field is null when YouTube reported no value.
+export interface VideoLifetimeMetrics {
+  views: number | null
+  estimatedMinutesWatched: number | null
+  averageViewDurationSeconds: number | null
+  // 0..100 — the average share of the video watched.
+  averageViewPercentage: number | null
+  likes: number | null
+  comments: number | null
+  shares: number | null
+  // Gross counts as YouTube reports them — subscribersGained never goes
+  // negative on its own. Use netSubscribersGained() when displaying a single
+  // "subs gained" figure so a net loss shows as a negative number.
+  subscribersGained: number | null
+  subscribersLost: number | null
+}
 
-    const privacy = details.status?.privacyStatus
-    if (privacy === "public" || privacy === "unlisted" || privacy === "private") {
-      video.privacyStatus = privacy
+// The Analytics metric names behind VideoLifetimeMetrics, in report order.
+const LIFETIME_METRICS =
+  "views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,likes,comments,shares,subscribersGained,subscribersLost"
+
+// The `video` filter accepts up to 500 ids; we keep batches at the same size as
+// the Data API's so one refresh pass makes matching numbers of calls to both.
+const LIFETIME_METRICS_BATCH_SIZE = 50
+
+// Fetches the lifetime KPI totals for a batch of videos the authenticated user
+// owns in one Analytics report per 50 ids (1 quota unit each), dimensioned by
+// video. This is how every already-analysed video's numbers are kept current
+// without re-running a per-video report for each one. Videos with no recorded
+// activity are omitted from the report, so a missing id means "no data", not an
+// error. Throws on an API failure; callers treat refreshing as best-effort.
+export async function getLifetimeMetricsByVideo(
+  accessToken: string,
+  videoIds: string[],
+): Promise<Map<string, VideoLifetimeMetrics>> {
+  const metrics = new Map<string, VideoLifetimeMetrics>()
+  if (videoIds.length === 0) return metrics
+
+  for (const batch of chunk(videoIds, LIFETIME_METRICS_BATCH_SIZE)) {
+    const url = new URL(`${ANALYTICS_API}/reports`)
+    url.searchParams.set("ids", "channel==MINE")
+    // Full channel lifetime — the earliest date YouTube accepts. A video only
+    // has rows from its own publication onwards, so this is its lifetime too.
+    url.searchParams.set("startDate", "2005-02-01")
+    url.searchParams.set("endDate", isoDate(new Date().toISOString())!)
+    url.searchParams.set("dimensions", "video")
+    url.searchParams.set("metrics", LIFETIME_METRICS)
+    url.searchParams.set("filters", `video==${batch.join(",")}`)
+    url.searchParams.set("sort", "-views")
+    url.searchParams.set("maxResults", String(batch.length))
+
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+    })
+
+    if (!response.ok) {
+      throw new Error(
+        `YouTube Analytics API error (${response.status}): ${await response.text()}`,
+      )
+    }
+
+    const json = (await response.json()) as {
+      columnHeaders?: Array<{ name?: string }>
+      rows?: Array<Array<number | string | null>>
+    }
+
+    const headers = (json.columnHeaders ?? []).map((header) => header.name ?? "")
+    const videoIndex = headers.indexOf("video")
+    if (videoIndex === -1) continue
+
+    for (const row of json.rows ?? []) {
+      const read = (name: string) => readMetric(headers, row, name)
+      metrics.set(String(row[videoIndex]), {
+        views: read("views"),
+        estimatedMinutesWatched: read("estimatedMinutesWatched"),
+        averageViewDurationSeconds: read("averageViewDuration"),
+        averageViewPercentage: read("averageViewPercentage"),
+        likes: read("likes"),
+        comments: read("comments"),
+        shares: read("shares"),
+        subscribersGained: read("subscribersGained"),
+        subscribersLost: read("subscribersLost"),
+      })
     }
   }
+
+  return metrics
 }
 
 // Fetches lifetime NET subscribers gained (subscribersGained minus
@@ -566,6 +715,7 @@ export async function getVideoDetails(
     viewCount: viewCount != null ? Number(viewCount) : null,
     commentCount: commentCount != null ? Number(commentCount) : null,
     privacyStatus,
+    statisticsFetchedAt: new Date().toISOString(),
   }
 }
 
@@ -622,20 +772,7 @@ export interface TrafficSource {
 // KPIs, engagement counts, and the traffic-source mix. Everything here comes
 // from the YouTube Analytics API's non-retention reports, so it needs no source
 // file. Individual fields are null when YouTube reports no data for them.
-export interface VideoAnalyticsSummary {
-  views: number | null
-  estimatedMinutesWatched: number | null
-  averageViewDurationSeconds: number | null
-  // 0..100 — the average share of the video watched.
-  averageViewPercentage: number | null
-  likes: number | null
-  comments: number | null
-  shares: number | null
-  // Gross counts as YouTube reports them — subscribersGained never goes
-  // negative on its own. Use netSubscribersGained() when displaying a single
-  // "subs gained" figure so a net loss shows as a negative number.
-  subscribersGained: number | null
-  subscribersLost: number | null
+export interface VideoAnalyticsSummary extends VideoLifetimeMetrics {
   // How many times the video's thumbnail was shown in YouTube's feeds, and the
   // resulting click-through rate. These come from the asynchronous YouTube
   // Reporting API (bulk daily CSV jobs), NOT the synchronous Analytics API,
@@ -653,7 +790,30 @@ export interface VideoAnalyticsSummary {
   reachAttemptedAt?: string
   // Ordered most-viewed first. Empty when YouTube reports no breakdown.
   trafficSources: TrafficSource[]
+  // When the traffic-source breakdown was last fetched. It needs a per-video
+  // report, so the batched refresh that keeps the KPI totals current (see
+  // getLifetimeMetricsByVideo) deliberately leaves it alone — this timestamp is
+  // what tells the per-video path the breakdown is due again. Absent when the
+  // breakdown has never been fetched successfully.
+  trafficSourcesFetchedAt?: string
+  // When the KPI totals above were last read from the Analytics API.
   fetchedAt: string
+}
+
+// The view count to show for a video, from whichever of the two sources we have.
+//
+// YouTube reports views twice and they do not agree: videos.list serves the
+// near-real-time public counter (what the watch page shows), while the Analytics
+// API serves a processed `views` metric that trails it by a day or two. Both are
+// stored, both are kept fresh (see lib/analysed-video-stats.ts), and every
+// surface prints this one — the public counter, falling back to the Analytics
+// figure — so the list, the detail page and every comparison agree with each
+// other and with YouTube on what a video's view count is.
+export function preferredViewCount(
+  details: { viewCount?: number | null } | null | undefined,
+  summary: { views?: number | null } | null | undefined,
+): number | null {
+  return details?.viewCount ?? summary?.views ?? null
 }
 
 // Net subscriber change for a video: gained minus lost, so a video that cost
@@ -741,8 +901,7 @@ export async function getVideoAnalyticsSummary(
   video: VideoDetails,
 ): Promise<VideoAnalyticsSummary> {
   const totals = await runAnalyticsReport(accessToken, video, {
-    metrics:
-      "views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,likes,comments,shares,subscribersGained,subscribersLost",
+    metrics: LIFETIME_METRICS,
   })
 
   const row = totals.rows[0] ?? []
@@ -750,6 +909,9 @@ export async function getVideoAnalyticsSummary(
     readMetric(totals.headers, row, name)
 
   let trafficSources: TrafficSource[] = []
+  // Left undefined when the breakdown report fails, so the caller keeps the
+  // previously stored breakdown rather than recording a successful empty fetch.
+  let trafficSourcesFetchedAt: string | undefined
   try {
     const traffic = await runAnalyticsReport(accessToken, video, {
       metrics: "views",
@@ -767,6 +929,7 @@ export async function getVideoAnalyticsSummary(
         }))
         .filter((entry) => entry.source !== "" && entry.views > 0)
     }
+    trafficSourcesFetchedAt = new Date().toISOString()
   } catch (error) {
     console.error("Failed to fetch traffic sources", error)
   }
@@ -791,6 +954,7 @@ export async function getVideoAnalyticsSummary(
     impressions: null,
     impressionClickThroughRate: null,
     trafficSources,
+    trafficSourcesFetchedAt,
     fetchedAt: new Date().toISOString(),
   }
 }
