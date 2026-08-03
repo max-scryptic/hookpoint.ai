@@ -1,5 +1,6 @@
 import { QuoteIcon } from "lucide-react"
 
+import { ComparisonReportTabs } from "@/components/comparison-report-tabs"
 import { TryCallout } from "@/components/try-callout"
 import { nameVideoSides, stripEmDashes } from "@/lib/copy-guardrails"
 import type {
@@ -10,12 +11,14 @@ import type {
 // The script head-to-head body: how two uploads differ in what they SAY and how
 // they feel, read straight from the written report stored on the comparison
 // with no model call at view time. Laid out the same way the packaging
-// head-to-head beside it is: a summary card, then one card per section of the
-// report. Each section card is kept deliberately short, in three beats: the
-// section's heading, one paragraph weighing Video A against Video B on that
-// theme, then a single "Try:" line. Unlike packaging the headings are written
-// by the model rather than drawn from a fixed set of surfaces, so the sections
-// stack down the page instead of sitting behind a tab strip.
+// head-to-head beside it is: a summary card, then one tab per section of the
+// report. Each section panel is kept deliberately short, in two beats: one
+// paragraph weighing Video A against Video B on that theme, then a single
+// "Try:" line. The tab strip already names the section, so the panel carries no
+// heading of its own, exactly as the packaging surface panels do. Unlike
+// packaging the headings are written by the model rather than drawn from a
+// fixed set of surfaces, so the tabs are labelled with whatever the report
+// called its sections and carry no glyph.
 //
 // The deterministic field-by-field diff (lib/script-comparison.ts) used to
 // render underneath this: the ranked differences, the topic map strip and the
@@ -51,15 +54,14 @@ function ReportSummary({ summary }: { summary: string }) {
   )
 }
 
-// One theme of the comparison: its heading, the paragraph weighing the two
-// scripts against each other, then the one change worth trying next. Reports
-// stored before schema version 2 carry no section tip, so those sections simply
-// close on the paragraph.
+// One theme of the comparison, in the panel behind its tab: the paragraph
+// weighing the two scripts against each other, then the one change worth trying
+// next. Reports stored before schema version 2 carry no section tip, so those
+// sections simply close on the paragraph.
 function ReportSection({ section }: { section: ScriptComparisonReportSection }) {
   const tip = section.tip?.trim() ?? ""
   return (
-    <div className="flex w-full flex-col gap-3 rounded-xl border bg-card p-4">
-      <h3 className="text-sm font-medium">{clean(section.heading)}</h3>
+    <div className="flex w-full flex-col gap-4 rounded-xl border bg-card p-4">
       <p className="text-sm leading-relaxed text-muted-foreground">
         {cleanProse(section.body)}
       </p>
@@ -73,8 +75,18 @@ export function ScriptComparison({
 }: {
   report: ScriptComparisonReport
 }) {
-  // A section rather than a card, so the summary box and the per-theme cards are
-  // the cards here, exactly as the packaging tab beside this one is laid out.
+  // One tab per section, in the order the report wrote them. The heading is the
+  // label, so the value has the index folded in: two sections could be given
+  // the same heading, and the tab strip needs each one to be distinct.
+  const tabs = report.sections.map((section, index) => ({
+    value: `section-${index}`,
+    label: clean(section.heading),
+    content: <ReportSection section={section} />,
+  }))
+
+  // A section rather than a card, so the summary box and the per-theme panels
+  // are the cards here, exactly as the packaging tab beside this one is laid
+  // out.
   return (
     <section className="flex flex-col gap-3">
       <div>
@@ -91,9 +103,7 @@ export function ScriptComparison({
 
       <div className="flex flex-col gap-4">
         <ReportSummary summary={report.summary} />
-        {report.sections.map((section, index) => (
-          <ReportSection key={`${section.heading}-${index}`} section={section} />
-        ))}
+        <ComparisonReportTabs tabs={tabs} />
       </div>
     </section>
   )

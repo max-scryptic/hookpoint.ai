@@ -10,7 +10,7 @@ import {
 } from "lucide-react"
 
 import { HookIcon } from "@/components/hook-icon"
-import { PackagingReportTabs } from "@/components/packaging-report-tabs"
+import { ComparisonReportTabs } from "@/components/comparison-report-tabs"
 import { TryCallout } from "@/components/try-callout"
 import { nameVideoSides, stripEmDashes } from "@/lib/copy-guardrails"
 import { cn } from "@/lib/utils"
@@ -485,7 +485,7 @@ function ReportNarrative({
     <div className="flex flex-col gap-4">
       <ReportVerdict verdict={report.verdict} />
       {tabs.length > 0 && (
-        <PackagingReportTabs
+        <ComparisonReportTabs
           tabs={tabs.map((tab) => ({
             value: tab.surface,
             label: PACKAGING_REPORT_SURFACE_TAB_LABEL[tab.surface],
