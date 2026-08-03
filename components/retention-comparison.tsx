@@ -1,5 +1,6 @@
 import Image from "next/image"
 import Link from "next/link"
+import type { ReactNode } from "react"
 import { ArrowUpRightIcon, Clock3Icon, ImageOffIcon } from "lucide-react"
 
 import { EventTypeBadge } from "@/components/event-type-badge"
@@ -15,11 +16,12 @@ import type {
 } from "@/lib/retention-comparison"
 import type { RetentionWindowKind } from "@/lib/retention-windows"
 
-// The video-vs-video comparison body: head-to-head KPI cards, the overlaid
-// curves with the biggest divergence called out, hook against hook, then each
-// video's deeply analysed stretches with their weighted event evidence.
-// Purely presentational; all loading and maths live in
-// lib/retention-comparison.ts.
+// The video-vs-video comparison body: head-to-head KPI cards, the written
+// retention head-to-head (components/retention-head-to-head.tsx, passed in by
+// the page since only the page knows what is stored), then the overlaid curves
+// with the biggest divergence called out, hook against hook, and each video's
+// deeply analysed stretches with their weighted event evidence. Purely
+// presentational; all loading and maths live in lib/retention-comparison.ts.
 //
 // The copy discipline here is deliberate: events describe stretches, not
 // exact moments (retention curves carry timestamp slop), and everything is
@@ -367,17 +369,26 @@ export function RetentionComparisonVideos({
   )
 }
 
-// Everything from the retention graph down: the overlaid curves, hook against
-// hook, and the stretch-by-stretch evidence. This is the body of the Retention
-// tab.
+// Everything from the written head-to-head down: the overlaid curves, hook
+// against hook, and the stretch-by-stretch evidence. This is the body of the
+// Retention tab.
 export function RetentionComparisonDetail({
   data,
+  writtenReport,
 }: {
   data: RetentionComparisonData
+  // The written retention head-to-head for this pair, rendered above the
+  // deterministic cards. Passed in rather than loaded here because it is stored
+  // JSON on the comparison row, and because a pair that never had one shows a
+  // page-specific note in its place (the creator's report offers the way to
+  // fill it in; the admin view only states the gap).
+  writtenReport?: ReactNode
 }) {
   const sentence = divergenceSentence(data)
   return (
     <div className="flex flex-col gap-4">
+      {writtenReport}
+
       <Card className="flex flex-col gap-3 p-5">
         <div>
           <h3 className="text-sm font-semibold">Where the curves diverge</h3>

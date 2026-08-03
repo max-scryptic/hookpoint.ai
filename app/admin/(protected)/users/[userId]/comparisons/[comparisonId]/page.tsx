@@ -10,6 +10,7 @@ import {
   RetentionComparisonDetail,
   RetentionComparisonVideos,
 } from "@/components/retention-comparison"
+import { RetentionHeadToHead } from "@/components/retention-head-to-head"
 import { ScriptComparison } from "@/components/script-comparison"
 import { VideoComparisonTabs } from "@/components/video-comparison-tabs"
 import { Card } from "@/components/ui/card"
@@ -93,7 +94,7 @@ export default async function AdminUserComparisonDetailPage({
     }),
     getComparisonReports(supabase, userId, comparison.id).catch((error) => {
       console.error("Failed to load stored comparison reports for admin", error)
-      return { script: null, packaging: null }
+      return { script: null, packaging: null, retention: null }
     }),
   ])
 
@@ -137,7 +138,23 @@ export default async function AdminUserComparisonDetailPage({
       <VideoComparisonTabs
         retention={
           data != null ? (
-            <RetentionComparisonDetail data={data} />
+            <RetentionComparisonDetail
+              data={data}
+              writtenReport={
+                reports.retention != null ? (
+                  <RetentionHeadToHead report={reports.retention} />
+                ) : (
+                  <MissingReportCard>
+                    No written retention read is stored for these two videos. It
+                    is written from both curves, both videos&apos; notable
+                    stretches and what was said where the curves separated, when
+                    the comparison is generated, so this pair either predates
+                    that report or its generation failed. The curve, the hooks
+                    and the stretch evidence below are derived on every open.
+                  </MissingReportCard>
+                )
+              }
+            />
           ) : (
             <MissingReportCard>
               The retention comparison could not be rebuilt for this pair. It is

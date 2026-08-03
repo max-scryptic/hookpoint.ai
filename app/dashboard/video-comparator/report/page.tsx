@@ -4,6 +4,7 @@ import { ArrowLeftIcon, LockIcon } from "lucide-react"
 
 import { PackagingComparison } from "@/components/packaging-comparison"
 import { ScriptComparison } from "@/components/script-comparison"
+import { RetentionHeadToHead } from "@/components/retention-head-to-head"
 import {
   RetentionComparisonDetail,
   RetentionComparisonVideos,
@@ -19,6 +20,7 @@ import {
   type PackagingComparison as PackagingComparisonData,
 } from "@/lib/packaging-comparison"
 import type { PackagingComparisonReport } from "@/lib/packaging-comparison-report"
+import type { RetentionComparisonReport } from "@/lib/retention-comparison-report"
 import type { ScriptComparisonReport } from "@/lib/script-comparison-report"
 import {
   getRetentionComparison,
@@ -70,6 +72,7 @@ type ActiveComparison = {
   packaging: PackagingComparisonData | null
   packagingReport: PackagingComparisonReport | null
   scriptReport: ScriptComparisonReport | null
+  retentionReport: RetentionComparisonReport | null
 }
 
 type ReportResult =
@@ -128,7 +131,7 @@ async function loadActiveComparison(
     analysedVideoIds: [sideA, sideB],
   })
 
-  // Every read here is a stored read: the two written head-to-heads come back
+  // Every read here is a stored read: the three written head-to-heads come back
   // as JSON from the comparison row, and the packaging and retention diffs are
   // derived from each video's stored analysis. The script tab is the written
   // report alone, so nothing is derived for it. Packaging is best-effort, since
@@ -141,7 +144,7 @@ async function loadActiveComparison(
     }),
     getComparisonReports(supabase, userId, saved.id).catch((error) => {
       console.error("Failed to load stored comparison reports", error)
-      return { script: null, packaging: null }
+      return { script: null, packaging: null, retention: null }
     }),
   ])
   if (data == null) return null
@@ -153,6 +156,7 @@ async function loadActiveComparison(
     packaging,
     packagingReport: reports.packaging,
     scriptReport: reports.script,
+    retentionReport: reports.retention,
   }
 }
 
@@ -191,6 +195,32 @@ function ScriptComparisonSection({
       videos&apos; transcripts when the comparison is generated, so re-open this
       pair from the Video Comparator to fill it in. Re-opening a pair you have
       already paid for is free.
+    </MissingReportCard>
+  )
+}
+
+// The written head-to-head that opens the Retention tab, rendered straight from
+// what is stored. Nothing is generated here. The deterministic curve, hook and
+// stretch cards render underneath it either way, so a pair with no stored read
+// still gets the whole tab, with a note where the writing would be.
+function RetentionHeadToHeadSection({
+  report,
+}: {
+  report: RetentionComparisonReport | null
+}) {
+  if (report) {
+    return <RetentionHeadToHead report={report} />
+  }
+
+  return (
+    <MissingReportCard>
+      No written retention read is stored for these two videos. It is written
+      from both curves, both videos&apos; notable stretches and what was said
+      where the curves separated, when the comparison is generated, so re-open
+      this pair from the Video Comparator to fill it in. Re-opening a pair you
+      have already paid for is free. The curve, the hooks and the stretch
+      evidence below are derived on every open, so they are up to date either
+      way.
     </MissingReportCard>
   )
 }
@@ -321,7 +351,14 @@ export default async function Page({
             <RetentionComparisonVideos data={result.active.data} />
             <VideoComparisonTabs
               retention={
-                <RetentionComparisonDetail data={result.active.data} />
+                <RetentionComparisonDetail
+                  data={result.active.data}
+                  writtenReport={
+                    <RetentionHeadToHeadSection
+                      report={result.active.retentionReport}
+                    />
+                  }
+                />
               }
               packaging={
                 <PackagingComparisonSection

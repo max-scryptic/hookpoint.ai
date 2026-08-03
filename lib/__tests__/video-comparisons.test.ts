@@ -2,12 +2,15 @@ import { describe, expect, it } from "vitest"
 
 import {
   PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION,
+  RETENTION_COMPARISON_REPORT_SCHEMA_VERSION,
   SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION,
 } from "@/lib/comparison-report-versions"
 import type { PackagingComparisonReport } from "@/lib/packaging-comparison-report"
+import type { RetentionComparisonReport } from "@/lib/retention-comparison-report"
 import type { ScriptComparisonReport } from "@/lib/script-comparison-report"
 import {
   isPackagingReportCurrent,
+  isRetentionReportCurrent,
   isSamePair,
   isScriptReportCurrent,
 } from "@/lib/video-comparisons"
@@ -33,6 +36,10 @@ function packagingReport(schemaVersion: number): PackagingComparisonReport {
 
 function scriptReport(schemaVersion: number): ScriptComparisonReport {
   return { schemaVersion } as ScriptComparisonReport
+}
+
+function retentionReport(schemaVersion: number): RetentionComparisonReport {
+  return { schemaVersion } as RetentionComparisonReport
 }
 
 describe("isPackagingReportCurrent", () => {
@@ -75,5 +82,29 @@ describe("isScriptReportCurrent", () => {
 
   it("is false when no report is stored", () => {
     expect(isScriptReportCurrent(null)).toBe(false)
+  })
+})
+
+describe("isRetentionReportCurrent", () => {
+  it("is true for a report at the current shape", () => {
+    expect(
+      isRetentionReportCurrent(
+        retentionReport(RETENTION_COMPARISON_REPORT_SCHEMA_VERSION),
+      ),
+    ).toBe(true)
+  })
+
+  it("is false when no report is stored", () => {
+    // Every pair generated before the written retention read existed lands
+    // here, so pressing the button on one of them writes it for free.
+    expect(isRetentionReportCurrent(null)).toBe(false)
+  })
+
+  it("leaves a report from a newer deploy alone", () => {
+    expect(
+      isRetentionReportCurrent(
+        retentionReport(RETENTION_COMPARISON_REPORT_SCHEMA_VERSION + 1),
+      ),
+    ).toBe(true)
   })
 })
