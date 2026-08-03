@@ -80,7 +80,7 @@ export const PACKAGING_REPORT_SURFACE_TAB_LABEL: Record<
   thumbnail: "Thumbnail",
   title: "Title",
   hook: "Hook",
-  alignment: "Summary",
+  alignment: "Alignment",
 }
 
 export type ReportSide = "a" | "b"
