@@ -149,7 +149,7 @@ function SurfaceEvidence({
 
   if (surface === "title") {
     return (
-      <p className="text-lg leading-snug font-semibold">
+      <p className="text-base leading-snug font-semibold">
         {video.title ? clean(video.title) : "Untitled video"}
       </p>
     )
@@ -184,7 +184,7 @@ function SurfaceEvidence({
     const text = transcript.length > 0 ? transcript : firstSentence
     if (text.length === 0) {
       return (
-        <p className="text-base text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           No opening captured for this video.
         </p>
       )
@@ -243,7 +243,7 @@ function SurfaceColumns({
           >
             <div className="flex flex-wrap items-center gap-2">
               <SideDot side={side} />
-              <span className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
+              <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                 Video {SIDE_META[side].name}
               </span>
               {isTop && (
@@ -315,7 +315,7 @@ function SurfacePanel({
         read={tab.read}
       />
       {tab.read?.whyItMatters && (
-        <p className="text-base leading-relaxed text-muted-foreground">
+        <p className="text-sm leading-relaxed text-muted-foreground">
           {clean(tab.read.whyItMatters)}
         </p>
       )}
