@@ -1,4 +1,4 @@
-// The stored shape versions of the two written head-to-heads a comparison row
+// The stored shape versions of the three written head-to-heads a comparison row
 // carries. They live here, apart from the modules that generate each report, so
 // the persistence layer (lib/video-comparisons.ts) can tell a current report
 // from one written against an older shape without importing a generator, which
@@ -23,3 +23,9 @@ export const SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION = 2
 // its own, so each tab of the report closes on advice even when no driver and
 // no recommendation landed on that surface.
 export const PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION = 5
+
+// Bumped whenever the stored retention report shape changes. Version 1 is the
+// first: a two sentence verdict plus 3 to 5 titled sections, each closing on
+// its own "Try:" line, written over both curves, both window sets with their
+// ranked events, and the transcript of the stretch where the curves separated.
+export const RETENTION_COMPARISON_REPORT_SCHEMA_VERSION = 1

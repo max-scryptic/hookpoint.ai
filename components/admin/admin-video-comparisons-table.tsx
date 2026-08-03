@@ -158,6 +158,10 @@ export function AdminVideoComparisonsTable({
                   <TableCell className="hidden px-4 py-3 align-middle sm:table-cell">
                     <div className="flex flex-wrap gap-1.5">
                       <ReportStatus
+                        ready={comparison.retentionReportReady}
+                        label="Retention"
+                      />
+                      <ReportStatus
                         ready={comparison.scriptReportReady}
                         label="Script"
                       />

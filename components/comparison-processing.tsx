@@ -11,11 +11,12 @@ import {
 import { Button } from "@/components/ui/button"
 
 // The full-screen popup the Video Comparator shows while a head-to-head is
-// being written. Generating a comparison runs two model passes (both full
-// transcripts for the script read, both thumbnails plus each opening for the
-// packaging read), so it can take a while: the creator waits on this rather
-// than on a button spinner, and only lands on the report once every part of it
-// is finished and stored.
+// being written. Generating a comparison runs three model passes (both curves
+// and their event evidence for the retention read, both full transcripts for
+// the script read, both thumbnails plus each opening for the packaging read),
+// so it can take a while: the creator waits on this rather than on a button
+// spinner, and only lands on the report once every part of it is finished and
+// stored.
 //
 // "generating" shows the spinner plus the rotating stages; "done" snaps the bar
 // to 100%, swaps in a checkmark and offers the button through to the finished
@@ -28,13 +29,14 @@ export type ComparisonStatus = "generating" | "done" | "error"
 
 // The messages we cycle through while the comparison is generated. They loosely
 // track the work the endpoint does (see app/api/video-comparisons/route.ts):
-// retention curves, then the packaging head-to-head over both thumbnails and
-// openings, then the script head-to-head over both transcripts. The wording is
-// reassuring rather than a literal progress feed, since we cannot observe the
-// server's exact stage from here.
+// the retention head-to-head over both curves, the packaging head-to-head over
+// both thumbnails and openings, then the script head-to-head over both
+// transcripts. The wording is reassuring rather than a literal progress feed,
+// since we cannot observe the server's exact stage from here.
 const STAGES = [
   "Lining up both retention curves...",
   "Marking where each video loses viewers...",
+  "Writing the retention head-to-head...",
   "Reading both thumbnails and titles...",
   "Comparing how each video opens...",
   "Working through both transcripts...",

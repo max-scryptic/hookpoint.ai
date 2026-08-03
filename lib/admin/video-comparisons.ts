@@ -1,5 +1,6 @@
 import {
   PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION,
+  RETENTION_COMPARISON_REPORT_SCHEMA_VERSION,
   SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION,
 } from "@/lib/comparison-report-versions"
 import { createAdminClient } from "@/lib/supabase/admin"
@@ -11,9 +12,9 @@ import { reportIsCurrent } from "@/lib/video-comparisons"
 // caller is an admin (see requireAdminUser). Every query is still scoped by
 // user_id, so an admin viewing one account can never pull in another's rows.
 //
-// The two written head-to-heads are reported separately here rather than as the
-// single "reportsReady" flag the creator's own history uses: when one of them is
-// missing, an admin wants to know which.
+// The three written head-to-heads are reported separately here rather than as
+// the single "reportsReady" flag the creator's own history uses: when one of
+// them is missing, an admin wants to know which.
 //
 // COPY GUARDRAIL: no em or en dashes anywhere in this file (comments
 // included). Hyphens are fine.
@@ -42,12 +43,13 @@ export type AdminVideoComparison = {
   // generation failed, or one stored against an older shape.
   scriptReportReady: boolean
   packagingReportReady: boolean
+  retentionReportReady: boolean
 }
 
-// Same probe the creator-facing list uses: presence and shape version of both
-// stored reports, without dragging the whole JSON blob back for every row.
+// Same probe the creator-facing list uses: presence and shape version of every
+// stored report, without dragging the whole JSON blob back for every row.
 const REPORT_READY_PROBE =
-  "script_ready:script_report->>schemaVersion, packaging_ready:packaging_report->>schemaVersion"
+  "script_ready:script_report->>schemaVersion, packaging_ready:packaging_report->>schemaVersion, retention_ready:retention_report->>schemaVersion"
 
 interface ComparisonRow {
   id: string
@@ -56,6 +58,7 @@ interface ComparisonRow {
   created_at: string
   script_ready: string | null
   packaging_ready: string | null
+  retention_ready: string | null
 }
 
 type ResolvedVideo = {
@@ -132,6 +135,10 @@ function toComparison(
     packagingReportReady: reportIsCurrent(
       row.packaging_ready,
       PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION,
+    ),
+    retentionReportReady: reportIsCurrent(
+      row.retention_ready,
+      RETENTION_COMPARISON_REPORT_SCHEMA_VERSION,
     ),
   }
 }

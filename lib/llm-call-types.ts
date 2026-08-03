@@ -28,6 +28,7 @@ export const LLM_CALL_TYPES = [
   "script_taxonomy",
   "script_comparison",
   "packaging_comparison",
+  "retention_comparison",
   "retention_attribution",
   "snapshot",
   "audio",
@@ -44,6 +45,7 @@ export const LLM_CALL_TYPE_LABELS: Record<LlmCallType, string> = {
   script_taxonomy: "Script analysis · taxonomy",
   script_comparison: "Video comparison · script report",
   packaging_comparison: "Video comparison · packaging report",
+  retention_comparison: "Video comparison · retention report",
   retention_attribution: "Light analysis · retention attribution",
   snapshot: "Deep video analysis · snapshot",
   audio: "Deep video analysis · audio",
@@ -69,6 +71,7 @@ export const LLM_CALL_GROUP_LABELS: Record<LlmCallGroup, string> = {
 const COMPARISON_LLM_CALL_TYPES = new Set<LlmCallType>([
   "script_comparison",
   "packaging_comparison",
+  "retention_comparison",
 ])
 
 // Classifies an LLM call into its group. A call with no type recorded counts as

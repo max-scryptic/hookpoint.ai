@@ -14,16 +14,19 @@ import {
   findSavedComparison,
   getComparisonReports,
   isPackagingReportCurrent,
+  isRetentionReportCurrent,
   isScriptReportCurrent,
 } from "@/lib/video-comparisons"
 import { buildAndStorePackagingComparisonReport } from "@/lib/packaging-comparison-report"
+import { buildAndStoreRetentionComparisonReport } from "@/lib/retention-comparison-report"
 import { buildAndStoreScriptComparisonReport } from "@/lib/script-comparison-report"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-// The script and packaging head-to-heads are both written by a model here (over
-// both full transcripts, and over both thumbnails plus each opening's
-// evidence), so give the request the same headroom the analysis paths use
-// rather than the default serverless timeout.
+// The retention, script and packaging head-to-heads are all written by a model
+// here (over both curves and their event evidence, over both full transcripts,
+// and over both thumbnails plus each opening's evidence), so give the request
+// the same headroom the analysis paths use rather than the default serverless
+// timeout.
 export const maxDuration = 300
 
 // POST /api/video-comparisons
@@ -31,13 +34,13 @@ export const maxDuration = 300
 // Generates (and pays for) one video-vs-video comparison report. A comparison
 // costs a flat VIDEO_COMPARISON_CREDIT_COST deep-dive credits, charged once per
 // unordered pair: re-generating a pair that already exists (in either order)
-// re-opens it for free. The request does not resolve until both written
+// re-opens it for free. The request does not resolve until all three written
 // head-to-heads have been generated and stored, so the client can keep its
 // "generating" popup up for the whole run and only offer the way through to the
 // report once there is a finished report to open. The response carries
 // reportsReady so the client knows whether anything is still outstanding.
 //
-// This is the ONLY place either written head-to-head is generated. Both are
+// This is the ONLY place any written head-to-head is generated. All three are
 // written here, once, and stored on the comparison row; the report page reads
 // them back and never generates anything itself, so no part of a report is ever
 // re-written just because someone opened the page. Pressing the button on a
@@ -46,18 +49,19 @@ export const maxDuration = 300
 // generation failed, or one written against an older shape than the code now
 // renders), so a stale pair is repaired by the same deliberate action.
 
-// Which of the two head-to-heads a comparison row is carrying.
+// Which of the three head-to-heads a comparison row is carrying.
 interface ReportReadiness {
+  retention: boolean
   script: boolean
   packaging: boolean
 }
 
-// Writes whichever of the two head-to-heads this comparison is missing or is
+// Writes whichever of the three head-to-heads this comparison is missing or is
 // carrying against an older stored shape (present says which are current), stores
 // it on the row, and reports what the row carries afterwards. Best-effort and
 // independent: the pair is already saved (and charged), so a generation failure
 // must not fail the request, and one report failing must not cost the creator
-// the other. A report counts as ready only when it was actually written and
+// the others. A report counts as ready only when it was actually written and
 // stored: a rejection, or a null result (nothing to compare, or a video that has
 // gone missing), leaves that section unwritten and the client says so.
 // Generation also heals each video's packaging and script taxonomies, which is
@@ -82,7 +86,22 @@ async function ensureComparisonReports(
     force: true,
   })
 
-  const [script, packaging] = await Promise.all([
+  const [retention, script, packaging] = await Promise.all([
+    present.retention
+      ? Promise.resolve(true)
+      : buildAndStoreRetentionComparisonReport(
+          supabase,
+          userId,
+          comparisonId,
+          videoAId,
+          videoBId,
+          logContext,
+        )
+          .then((report) => report != null)
+          .catch((error) => {
+            console.error("Failed to generate retention comparison report", error)
+            return false
+          }),
     present.script
       ? Promise.resolve(true)
       : buildAndStoreScriptComparisonReport(
@@ -118,7 +137,12 @@ async function ensureComparisonReports(
           }),
   ])
 
-  return { script, packaging }
+  return { retention, script, packaging }
+}
+
+// Whether a run left the row carrying every written head-to-head.
+function allReportsReady(ready: ReportReadiness): boolean {
+  return ready.retention && ready.script && ready.packaging
 }
 
 export async function POST(request: NextRequest) {
@@ -190,7 +214,7 @@ export async function POST(request: NextRequest) {
         existing.id,
       ).catch((error) => {
         console.error("Failed to read stored comparison reports", error)
-        return { script: null, packaging: null }
+        return { script: null, packaging: null, retention: null }
       })
       const ready = await ensureComparisonReports(
         supabase,
@@ -200,6 +224,7 @@ export async function POST(request: NextRequest) {
         existing.videoBId,
         logContext,
         {
+          retention: isRetentionReportCurrent(stored.retention),
           script: isScriptReportCurrent(stored.script),
           packaging: isPackagingReportCurrent(stored.packaging),
         },
@@ -207,7 +232,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         id: existing.id,
         charged: 0,
-        reportsReady: ready.script && ready.packaging,
+        reportsReady: allReportsReady(ready),
       })
     }
 
@@ -279,7 +304,7 @@ export async function POST(request: NextRequest) {
       console.error("Failed to charge for video comparison", error)
     }
 
-    // Write both head-to-heads now, before the response, so the report is
+    // Write all three head-to-heads now, before the response, so the report is
     // complete the moment the client opens it and the report page has nothing
     // left to generate.
     const ready = await ensureComparisonReports(
@@ -289,7 +314,7 @@ export async function POST(request: NextRequest) {
       videoAId,
       videoBId,
       logContext,
-      { script: false, packaging: false },
+      { retention: false, script: false, packaging: false },
     )
 
     // The client holds its "generating" popup until this response lands and
@@ -298,7 +323,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       id: saved.id,
       charged: VIDEO_COMPARISON_CREDIT_COST,
-      reportsReady: ready.script && ready.packaging,
+      reportsReady: allReportsReady(ready),
     })
   } catch (error) {
     console.error("Failed to generate video comparison", error)

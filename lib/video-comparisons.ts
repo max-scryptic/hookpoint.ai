@@ -3,12 +3,12 @@
 // video_comparisons migration): it powers the "previous comparisons" list and
 // lets an already-paid-for pair be re-opened for free.
 //
-// The two written head-to-heads (script and packaging) are each one model call,
-// so they are generated once, when the creator presses the button, and stored on
-// the row here. The report page only ever reads them back: it never generates,
-// so opening or re-opening a report costs nothing and shows no loading state.
-// The retention and packaging diffs below the written reports are pure
-// arithmetic over each video's stored analysis and are still derived on load
+// The three written head-to-heads (retention, script and packaging) are each one
+// model call, so they are generated once, when the creator presses the button,
+// and stored on the row here. The report page only ever reads them back: it
+// never generates, so opening or re-opening a report costs nothing and shows no
+// loading state. The retention and packaging diffs below the written reports are
+// pure arithmetic over each video's stored analysis and are still derived on load
 // (see lib/retention-comparison.ts), so a re-open reflects the freshest
 // analysis without any model call.
 //
@@ -19,9 +19,11 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import {
   PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION,
+  RETENTION_COMPARISON_REPORT_SCHEMA_VERSION,
   SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION,
 } from "@/lib/comparison-report-versions"
 import type { PackagingComparisonReport } from "@/lib/packaging-comparison-report"
+import type { RetentionComparisonReport } from "@/lib/retention-comparison-report"
 import type { ScriptComparisonReport } from "@/lib/script-comparison-report"
 
 // A row of the compare page's "previous comparisons" list: the saved pair plus
@@ -35,7 +37,7 @@ export interface SavedComparison {
   videoAThumbnailUrl: string | null
   videoBThumbnailUrl: string | null
   createdAt: string
-  // True when both written head-to-heads are stored at the current shape, so
+  // True when all three written head-to-heads are stored at the current shape, so
   // this pair opens into a complete report with nothing left to write. False for
   // a pair created before one of those reports existed, one whose generation
   // failed, or one whose report was written against an older shape: pressing the
@@ -50,13 +52,14 @@ interface ComparisonRow {
   created_at: string
   script_ready: string | null
   packaging_ready: string | null
+  retention_ready: string | null
 }
 
 // Whether a stored report is present and current, without dragging the whole
-// JSON blob back for every row. Both reports always carry a schemaVersion (see
+// JSON blob back for every row. Every report always carries a schemaVersion (see
 // each report module's normalizer), so that one key answers both questions.
 const REPORT_READY_PROBE =
-  "script_ready:script_report->>schemaVersion, packaging_ready:packaging_report->>schemaVersion"
+  "script_ready:script_report->>schemaVersion, packaging_ready:packaging_report->>schemaVersion, retention_ready:retention_report->>schemaVersion"
 
 // A report only counts as ready at the current shape version: an older one is
 // missing whatever the bump added (version 5 of the packaging report, for
@@ -82,12 +85,16 @@ function reportsReady(row: ComparisonRow): boolean {
     reportIsCurrent(
       row.packaging_ready,
       PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION,
+    ) &&
+    reportIsCurrent(
+      row.retention_ready,
+      RETENTION_COMPARISON_REPORT_SCHEMA_VERSION,
     )
   )
 }
 
 // The same test against a report already read back in full, for the generate
-// endpoint deciding which of the two it has to write on this press.
+// endpoint deciding which of the three it has to write on this press.
 export function isScriptReportCurrent(
   report: ScriptComparisonReport | null,
 ): boolean {
@@ -108,6 +115,18 @@ export function isPackagingReportCurrent(
     reportIsCurrent(
       String(report.schemaVersion),
       PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION,
+    )
+  )
+}
+
+export function isRetentionReportCurrent(
+  report: RetentionComparisonReport | null,
+): boolean {
+  return (
+    report != null &&
+    reportIsCurrent(
+      String(report.schemaVersion),
+      RETENTION_COMPARISON_REPORT_SCHEMA_VERSION,
     )
   )
 }
@@ -227,17 +246,18 @@ export async function findSavedComparison(
   }
 }
 
-// Both stored, model-authored head-to-heads for a saved comparison, read in a
-// single query. A null side means that report has not been generated yet: the
+// All three stored, model-authored head-to-heads for a saved comparison, read in
+// a single query. A null side means that report has not been generated yet: the
 // report page renders without it rather than writing one on the fly, and
 // re-opening the pair from the Video Comparator fills it in for free. A report
 // stored against an older shape comes back as it was stored, so the page can
-// render what it has; isScriptReportCurrent and isPackagingReportCurrent are
-// what the generate endpoint uses to decide it is worth rewriting. Scoped to
-// the owning user via RLS.
+// render what it has; isScriptReportCurrent, isPackagingReportCurrent and
+// isRetentionReportCurrent are what the generate endpoint uses to decide it is
+// worth rewriting. Scoped to the owning user via RLS.
 export interface StoredComparisonReports {
   script: ScriptComparisonReport | null
   packaging: PackagingComparisonReport | null
+  retention: RetentionComparisonReport | null
 }
 
 export async function getComparisonReports(
@@ -247,7 +267,7 @@ export async function getComparisonReports(
 ): Promise<StoredComparisonReports> {
   const { data, error } = await supabase
     .from("video_comparisons")
-    .select("script_report, packaging_report")
+    .select("script_report, packaging_report, retention_report")
     .eq("id", comparisonId)
     .eq("user_id", userId)
     .maybeSingle()
@@ -259,11 +279,13 @@ export async function getComparisonReports(
   const row = data as {
     script_report: ScriptComparisonReport | null
     packaging_report: PackagingComparisonReport | null
+    retention_report: RetentionComparisonReport | null
   } | null
 
   return {
     script: row?.script_report ?? null,
     packaging: row?.packaging_report ?? null,
+    retention: row?.retention_report ?? null,
   }
 }
 
@@ -307,6 +329,27 @@ export async function savePackagingComparisonReport(
   }
 }
 
+// Stores the generated retention head-to-head on the comparison row. Scoped to
+// the owning user via RLS so a comparison can only be written by its creator.
+export async function saveRetentionComparisonReport(
+  supabase: SupabaseClient,
+  userId: string,
+  comparisonId: string,
+  report: RetentionComparisonReport,
+): Promise<void> {
+  const { error } = await supabase
+    .from("video_comparisons")
+    .update({ retention_report: report })
+    .eq("id", comparisonId)
+    .eq("user_id", userId)
+
+  if (error) {
+    throw new Error(
+      `Failed to save retention comparison report: ${error.message}`,
+    )
+  }
+}
+
 // Records a newly generated comparison for the pair, in the order the creator
 // picked them. The caller charges credits before inserting; the unique index on
 // the unordered pair is the backstop against a duplicate slipping through a
@@ -331,7 +374,10 @@ export async function createSavedComparison(
     throw new Error(`Failed to save comparison: ${error.message}`)
   }
 
-  const row = data as Omit<ComparisonRow, "script_ready" | "packaging_ready">
+  const row = data as Omit<
+    ComparisonRow,
+    "script_ready" | "packaging_ready" | "retention_ready"
+  >
   return {
     id: row.id,
     videoAId: row.video_a_id,
@@ -341,8 +387,8 @@ export async function createSavedComparison(
     videoAThumbnailUrl: null,
     videoBThumbnailUrl: null,
     createdAt: row.created_at,
-    // The row is one insert old, so neither head-to-head can be on it yet. The
-    // caller writes both before it responds.
+    // The row is one insert old, so no head-to-head can be on it yet. The
+    // caller writes all three before it responds.
     reportsReady: false,
   }
 }
