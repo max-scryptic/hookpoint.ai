@@ -131,6 +131,7 @@ function modelOutput() {
     recommendations: [
       {
         surface: "title",
+        addsBeyondTip: "The tip is about the thumbnail, this one is the title.",
         action: "  Name the number the title is hiding.  ",
         rationale: "Video A's concrete figure is what makes its promise legible.",
         effort: "quick",
@@ -257,6 +258,24 @@ describe("isPackagingComparisonReportOutput", () => {
     expect(isPackagingComparisonReportOutput(output)).toBe(true)
   })
 
+  // The model has to name what a recommendation adds to the tip above it
+  // before it writes the action, which is what keeps the two from being the
+  // same advice twice. Nothing stored carries the field, so a report fed back
+  // through here without one still validates.
+  it("accepts a recommendation with or without the addsBeyondTip guardrail", () => {
+    const output = modelOutput()
+    expect(isPackagingComparisonReportOutput(output)).toBe(true)
+    delete (output.recommendations[0] as { addsBeyondTip?: string })
+      .addsBeyondTip
+    expect(isPackagingComparisonReportOutput(output)).toBe(true)
+  })
+
+  it("rejects a recommendation whose addsBeyondTip is not text", () => {
+    const output = modelOutput()
+    ;(output.recommendations[0] as { addsBeyondTip?: unknown }).addsBeyondTip = 3
+    expect(isPackagingComparisonReportOutput(output)).toBe(false)
+  })
+
   it("rejects a recommendation whose target is neither a side nor 'both'", () => {
     const output = modelOutput()
     ;(output.recommendations[0] as { target?: string }).target = "neither"
@@ -308,6 +327,9 @@ describe("normalizePackagingComparisonReport", () => {
     // A stored recommendation carries no side any more: it is advice for the
     // next video, not a change to either published one.
     expect(report.recommendations[0]).not.toHaveProperty("target")
+    // addsBeyondTip is the model checking its own work, not copy, so it is
+    // dropped rather than stored.
+    expect(report.recommendations[0]).not.toHaveProperty("addsBeyondTip")
     // The report no longer carries a caveats list: the tabs render the reads,
     // drivers and recommendations only.
     expect(report).not.toHaveProperty("caveats")

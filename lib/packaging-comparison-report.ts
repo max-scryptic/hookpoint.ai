@@ -256,9 +256,14 @@ const REPORT_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["surface", "action", "rationale", "effort"],
+        required: ["surface", "addsBeyondTip", "action", "rationale", "effort"],
         properties: {
           surface: { type: "string", enum: surfaceEnum },
+          // Written before the action, since the model fills these keys in the
+          // order they are declared: having to name what this adds to the tip
+          // for the same surface is what stops the action being that tip
+          // reworded. Never stored, so it costs the reader nothing.
+          addsBeyondTip: { type: "string" },
           action: { type: "string" },
           rationale: { type: "string" },
           effort: { type: "string", enum: ["quick", "rework"] },
@@ -283,7 +288,7 @@ const INSTRUCTIONS = [
   "Both of these videos are already published, so nothing you suggest can be applied to them. Every tip and every recommendation is forward-looking advice for the videos the uploader makes next. Never tell them to change, re-title, re-cut, reshoot, re-upload or otherwise fix Video A or Video B, never name Video A or Video B inside a tip or a recommendation, and never phrase advice as something one of these two videos should have done. Say what to do on the next video instead, so the advice stands on its own without either video in front of the reader (for example 'Show the payoff itself in the first three seconds, not only in the title and thumbnail'). Your reads, drivers and evidence are the opposite: those describe what these two videos already did, so they name Video A and Video B freely.",
   "tip: every driver is a comparison you have evidence for, so every driver carries one. It is the single change that driver's evidence argues for, written as a one-sentence instruction for the uploader's next video (for example 'Cut the thumbnail to one subject and one line of text, sized to read at phone width'). Name the change rather than restating detail, and keep it specific to what this comparison actually showed rather than generic packaging advice, while phrasing it as a rule to apply next time. The interface prefixes it with 'Try:', so do not begin it with 'Try' yourself; do not begin it with 'Next time', 'In future videos', 'Going forward' or any similar lead-in either, since the forward-looking framing belongs in how the advice is worded and a lead-in only delays the point.",
   "Every entry in surfaces carries a tip of its own as well, written under exactly those same rules: the single change that surface's comparison argues for, in one sentence, for the uploader's next video. Write one for every surface you cover, including the surfaces your drivers already speak to. The interface shows it only when no driver landed on that surface, so it has to stand on its own rather than continue a driver, and it must not repeat a driver tip for the same surface, in the same words or in different ones.",
-  "recommendations: one to six further things to try on the next upload, ordered by expected payoff. action is the concrete change, phrased as a one-sentence instruction for the next video under exactly the same rules as tip. rationale ties it back to what this comparison showed and may name the videos, since it is not shown as advice. effort is 'quick' for something settled while writing a title or building a thumbnail and 'rework' for anything needing a different shoot or edit. The interface renders each action as an 'Or:' line directly under that surface's driver tips, as the next thing to try after them, so file each one under the surface it changes, write it to stand on its own, and do not begin it with 'Try' or 'Or'. Every action must be a change that the tips for that surface did not already ask for: not the same change in different words, and not the same change at a different level of detail. 'State the payoff in the first sentence, then move into the proof' and 'Put the exact promised result in the first sentence, then spend the next line proving it' are one recommendation written twice, and the second is a wasted slot, because the interface stacks the actions for a surface directly under that surface's tip where a reader sees them side by side. Write an action only where you have something further to say: a change the tips did not cover, a different surface, or the bigger rework a single tip does not carry. Returning fewer actions is better than returning a reworded one.",
+  "recommendations: up to six further things to try on the next upload, ordered by expected payoff. Each is filed under the surface it changes, and the interface renders it as an 'Or:' line directly beneath that surface's tip, where the reader sees the two lines one under the other. addsBeyondTip is written first for that reason: before you write the action, say in a few words what this change adds that the tip for its surface, and any recommendation you have already written for that surface, did not already ask for. The same change in other words does not count, and neither does the same change at a different level of detail: 'State the payoff in the first sentence, then move into the proof' and 'Put the exact promised result in the first sentence, then spend the next line proving it' are one recommendation written twice, and a reader sees a page repeating itself. If you cannot name what a recommendation adds, you do not have one: leave it out. One recommendation that says something new beats six that circle the tips, so returning a single recommendation, or one for only some of the surfaces, is the right answer more often than not. addsBeyondTip is a check on your own writing and is never shown to anyone, so keep it blunt and do not write advice in it. action is the concrete change, phrased as a one-sentence instruction for the next video under exactly the same rules as tip, written to stand on its own and not beginning with 'Try' or 'Or'. rationale ties it back to what this comparison showed and may name the videos, since it is not shown as advice. effort is 'quick' for something settled while writing a title or building a thumbnail and 'rework' for anything needing a different shoot or edit.",
   "Write in plain, direct prose with no marketing filler. Never output an em dash character (U+2014) or en dash (U+2013) anywhere in your response; if you would use one, rewrite with a comma, colon, parentheses or two sentences instead.",
 ].join(" ")
 
@@ -291,7 +296,12 @@ interface ModelReportOutput {
   verdict: PackagingReportVerdict
   surfaces: PackagingReportSurfaceRead[]
   drivers: PackagingReportDriver[]
-  recommendations: PackagingReportRecommendation[]
+  // The model writes one more field per recommendation than the stored shape
+  // keeps: addsBeyondTip is a guardrail against the same advice being written
+  // twice, and normalisation drops it.
+  recommendations: (PackagingReportRecommendation & {
+    addsBeyondTip?: string
+  })[]
 }
 
 function isSide(value: unknown): value is ReportSide {
@@ -387,6 +397,9 @@ export function isPackagingComparisonReportOutput(
         // recommendation still named the video it was for, still validates if
         // it is ever fed back through here.
         (r.target === undefined || isSide(r.target) || r.target === "both") &&
+        // Optional so a stored report, which never carries the guardrail
+        // field, still validates if it is ever fed back through here.
+        (r.addsBeyondTip === undefined || typeof r.addsBeyondTip === "string") &&
         typeof r.action === "string" &&
         typeof r.rationale === "string" &&
         (r.effort === "quick" || r.effort === "rework")
