@@ -3,7 +3,7 @@ import { join } from "node:path"
 
 import { describe, expect, it } from "vitest"
 
-import { cleanCopy, stripEmDashes } from "@/lib/copy-guardrails"
+import { cleanCopy, nameVideoSides, stripEmDashes } from "@/lib/copy-guardrails"
 
 // GUARDRAIL: the Channel Trends page must never render an em dash (U+2014)
 // or an en dash (U+2013), in hard-coded copy or comments alike. Hyphens are
@@ -27,7 +27,9 @@ const CHANNEL_TRENDS_SOURCE_FILES = [
   "components/retention-comparison-chart.tsx",
   "components/retention-compare-picker.tsx",
   "components/script-comparison.tsx",
+  "components/try-callout.tsx",
   "components/video-comparison-tabs.tsx",
+  "lib/advice-similarity.ts",
   "lib/comparison-report-versions.ts",
   "lib/packaging-comparison.ts",
   "lib/packaging-comparison-evidence.ts",
@@ -136,6 +138,68 @@ describe("cleanCopy", () => {
     ).toBe("Keep an explanation like this shorter in future videos.")
     expect(cleanCopy("Next time you open cold, name the payoff.")).toBe(
       "Next time you open cold, name the payoff.",
+    )
+  })
+})
+
+// A head-to-head calls its two videos "Video A" and "Video B" everywhere the
+// interface writes them itself, so the model's prose has to read the same way.
+describe("nameVideoSides", () => {
+  it("expands a bare side label into the name the interface uses", () => {
+    expect(
+      nameVideoSides(
+        "B makes the promise instantly legible. A has more emotion and a face.",
+      ),
+    ).toBe(
+      "Video B makes the promise instantly legible. Video A has more emotion and a face.",
+    )
+  })
+
+  it("expands a label mid-sentence, possessive or paired", () => {
+    expect(nameVideoSides("The payoff is clearer in B.")).toBe(
+      "The payoff is clearer in Video B.",
+    )
+    expect(nameVideoSides("A's thumbnail carries three subjects.")).toBe(
+      "Video A's thumbnail carries three subjects.",
+    )
+    expect(nameVideoSides("A and B both open on a face.")).toBe(
+      "Video A and Video B both open on a face.",
+    )
+    expect(nameVideoSides("B, not A, states the number up front.")).toBe(
+      "Video B, not Video A, states the number up front.",
+    )
+  })
+
+  it("leaves a label that is already named alone", () => {
+    expect(nameVideoSides("Video A opens on a face, Video B on a map.")).toBe(
+      "Video A opens on a face, Video B on a map.",
+    )
+    expect(nameVideoSides("Video A and B both open on a face.")).toBe(
+      "Video A and Video B both open on a face.",
+    )
+  })
+
+  it("leaves an article, a quoted title and ordinary words alone", () => {
+    expect(nameVideoSides("A wide shot with no face reads flat.")).toBe(
+      "A wide shot with no face reads flat.",
+    )
+    expect(nameVideoSides("A series of quick cuts opens it.")).toBe(
+      "A series of quick cuts opens it.",
+    )
+    expect(nameVideoSides('The title reads "A Day in the Life".')).toBe(
+      'The title reads "A Day in the Life".',
+    )
+    expect(nameVideoSides("Plan B was to cut the intro.")).toBe(
+      "Plan B was to cut the intro.",
+    )
+    expect(nameVideoSides("Cut to a b-roll insert, not a B-roll montage.")).toBe(
+      "Cut to a b-roll insert, not a B-roll montage.",
+    )
+    expect(nameVideoSides("Arena 16 and the A1 preset stay put.")).toBe(
+      "Arena 16 and the A1 preset stay put.",
+    )
+    expect(nameVideoSides("Run an A/B test on the next thumbnail.")).toBe(
+      "Run an A/B test on the next thumbnail.",
     )
   })
 })

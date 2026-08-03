@@ -1,7 +1,7 @@
 import { QuoteIcon } from "lucide-react"
 
 import { TryCallout } from "@/components/try-callout"
-import { stripEmDashes } from "@/lib/copy-guardrails"
+import { nameVideoSides, stripEmDashes } from "@/lib/copy-guardrails"
 import type {
   ScriptComparisonReport,
   ScriptComparisonReportSection,
@@ -30,14 +30,23 @@ function clean(text: string): string {
   return stripEmDashes(text)
 }
 
+// For the model's own prose about the pair, where a bare "A" or "B" is the
+// video rather than a word. Kept apart from clean(), which also runs over the
+// section headings, where a lone letter is not a side label.
+function cleanProse(text: string): string {
+  return nameVideoSides(clean(text))
+}
+
 // The overall verdict on the two scripts, in the summary box that heads the
 // section, matching the box the packaging head-to-head opens on.
 function ReportSummary({ summary }: { summary: string }) {
   if (!summary) return null
   return (
     <div className="rounded-xl border bg-card p-4">
-      <h3 className="text-sm font-medium">Head-to-head Summary</h3>
-      <p className="mt-2 text-sm text-muted-foreground">{clean(summary)}</p>
+      <h3 className="text-sm font-medium">Summary</h3>
+      <p className="mt-2 text-sm text-muted-foreground">
+        {cleanProse(summary)}
+      </p>
     </div>
   )
 }
@@ -52,7 +61,7 @@ function ReportSection({ section }: { section: ScriptComparisonReportSection }) 
     <div className="flex w-full flex-col gap-3 rounded-xl border bg-card p-4">
       <h3 className="text-sm font-medium">{clean(section.heading)}</h3>
       <p className="text-sm leading-relaxed text-muted-foreground">
-        {clean(section.body)}
+        {cleanProse(section.body)}
       </p>
       {tip.length > 0 && <TryCallout>{tip}</TryCallout>}
     </div>

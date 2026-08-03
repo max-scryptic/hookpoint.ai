@@ -12,7 +12,7 @@ import {
 import { HookIcon } from "@/components/hook-icon"
 import { PackagingReportTabs } from "@/components/packaging-report-tabs"
 import { TryCallout } from "@/components/try-callout"
-import { stripEmDashes } from "@/lib/copy-guardrails"
+import { nameVideoSides, stripEmDashes } from "@/lib/copy-guardrails"
 import { cn } from "@/lib/utils"
 import {
   PACKAGING_REPORT_SURFACE_TAB_LABEL,
@@ -30,14 +30,15 @@ import {
 // The packaging head-to-head body: which of two uploads the packaging favours
 // and why, read straight from the stored per-video taxonomies with no model
 // call at view time. The written report tells the whole story: a summary box,
-// then one tab per surface (title, thumbnail, hook, and a fourth Summary tab
+// then one tab per surface (title, thumbnail, hook, and a fourth Alignment tab
 // for how the three fit together). Each panel is a card kept deliberately
 // short: the two videos' own material side by side, one paragraph comparing
 // them, then a single "Try:" line. The per-side reads, the ranked drivers and
 // the field-by-field taxonomy diff are all held back, because the material and
 // the comparison paragraph already carry the argument. The comparison is still
-// read for the verbatim spans the surface tabs quote. Purely presentational;
-// all the maths live in lib/packaging-comparison.ts.
+// read for the verbatim spans the surface tabs quote, and for the alignment
+// scores the fourth tab shows in place of a surface of its own. Purely
+// presentational; all the maths live in lib/packaging-comparison.ts.
 //
 // COPY GUARDRAIL: no em or en dashes (U+2014 / U+2013), ever, in any text in
 // this file. Hyphens are fine. Enforced by lib/__tests__/copy-guardrails.
@@ -48,8 +49,8 @@ const SIDE_META = {
 } as const
 
 // The report's four surfaces, in the order their tabs read: the three things a
-// viewer meets (title, thumbnail, opening) and then the summary of how those
-// three fit together.
+// viewer meets (title, thumbnail, opening) and then how tightly those three
+// fit together.
 const SURFACE_TAB_ORDER: PackagingReportSurface[] = [
   "title",
   "thumbnail",
@@ -59,7 +60,7 @@ const SURFACE_TAB_ORDER: PackagingReportSurface[] = [
 
 // The verbatim span each surface tab quotes above the model's read of it. The
 // title comes off the video itself, the thumbnail is shown as the image alone
-// because its on-screen text is already legible in it, and the summary tab is
+// because its on-screen text is already legible in it, and the alignment tab is
 // about the other three rather than about a surface of its own, so none of
 // them appear here. The hook entry is only a fallback: that tab quotes the
 // whole spoken first ten seconds when the comparison carries it, and drops
@@ -70,8 +71,7 @@ const SURFACE_SPAN_KEY: Partial<Record<PackagingReportSurface, string>> = {
 
 // The glyph on each surface tab. The first three match the Title / Thumbnail /
 // Hook strip on a single video's report; the fourth is the alignment mark, the
-// same one that heads the Title, Thumbnail & Hook tab there, because that tab
-// is about how the three sit together.
+// same one that heads the Title, Thumbnail & Hook tab there.
 const SURFACE_TAB_ICON: Record<PackagingReportSurface, ReactNode> = {
   title: <TypeIcon className="text-muted-foreground" />,
   thumbnail: <ImageIcon className="text-muted-foreground" />,
@@ -83,6 +83,13 @@ const SURFACE_TAB_ICON: Record<PackagingReportSurface, ReactNode> = {
 
 function clean(text: string): string {
   return stripEmDashes(text)
+}
+
+// For the model's own prose about the pair, where a bare "A" or "B" is the
+// video rather than a word. Kept apart from clean(), which also runs over
+// verbatim titles and transcript quotes that must not be touched.
+function cleanProse(text: string): string {
+  return nameVideoSides(clean(text))
 }
 
 function SideDot({ side }: { side: Side }) {
@@ -112,9 +119,9 @@ function ReportVerdict({
   if (!verdict.summary) return null
   return (
     <div className="rounded-xl border bg-card p-4">
-      <h3 className="text-sm font-medium">Head-to-head Summary</h3>
+      <h3 className="text-sm font-medium">Summary</h3>
       <p className="mt-2 text-sm text-muted-foreground">
-        {clean(verdict.summary)}
+        {cleanProse(verdict.summary)}
       </p>
     </div>
   )
@@ -133,9 +140,121 @@ function spanText(
   return (side === "a" ? row.a : row.b).trim()
 }
 
+// One video's read on a 0-10 axis of the deterministic diff, or null when that
+// video never captured the axis. Read off the comparison rather than the report
+// so the alignment tab shows the same stored numbers the taxonomy was scored
+// on, not a model's impression of them.
+function ordinalValue(
+  comparison: PackagingComparison,
+  key: string,
+  side: Side,
+): number | null {
+  const row = comparison.ordinals.find((candidate) => candidate.key === key)
+  if (!row) return null
+  return side === "a" ? row.a : row.b
+}
+
+// The headline number on the alignment tab: how tightly one video's title,
+// thumbnail and opening promise the same thing, scored on that video alone at
+// analysis time and scaled to 0-10 by the diff.
+const ALIGNMENT_SCORE_KEY = "overall.alignment"
+
+// The two links the headline score is made of, shown under it so the number is
+// legible rather than bare. Both come off the enriched taxonomy, so a video
+// analysed before that existed simply shows the headline score alone.
+const ALIGNMENT_PART_AXES: Array<{ key: string; label: string }> = [
+  { key: "cross.titleThumbnailMatch", label: "Title and thumbnail match" },
+  { key: "cross.hookDeliversPromise", label: "Opening delivers the promise" },
+]
+
+// A 0-10 read drawn as a bar, tinted to the side it belongs to so each column
+// carries its own video's colour.
+function ScoreBar({
+  value,
+  side,
+  className,
+}: {
+  value: number
+  side: Side
+  className?: string
+}) {
+  return (
+    <div className={cn("h-1.5 overflow-hidden rounded-full bg-muted", className)}>
+      <div
+        className="h-full rounded-full"
+        style={{
+          width: `${Math.min(100, Math.max(0, value * 10))}%`,
+          backgroundColor: SIDE_META[side].dot,
+        }}
+      />
+    </div>
+  )
+}
+
+// One video's alignment score, in place of the surface material the other three
+// tabs quote: there is no single artefact to show for alignment, so the tab
+// shows how well that video's three artefacts agree instead.
+function AlignmentScore({
+  side,
+  comparison,
+}: {
+  side: Side
+  comparison: PackagingComparison
+}) {
+  const score = ordinalValue(comparison, ALIGNMENT_SCORE_KEY, side)
+  if (score == null) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        No packaging read is stored for this video, so it has no alignment
+        score.
+      </p>
+    )
+  }
+
+  const parts = ALIGNMENT_PART_AXES.map((axis) => ({
+    label: axis.label,
+    value: ordinalValue(comparison, axis.key, side),
+  })).filter((part): part is { label: string; value: number } =>
+    part.value != null,
+  )
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-3xl leading-none font-semibold tabular-nums">
+            {score}
+          </span>
+          <span className="text-sm text-muted-foreground">/ 10</span>
+        </div>
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          How tightly the title, thumbnail and opening promise one thing.
+        </p>
+      </div>
+      <ScoreBar value={score} side={side} />
+      {parts.length > 0 && (
+        <div className="flex flex-col gap-2">
+          {parts.map((part) => (
+            <div key={part.label} className="flex items-center gap-3">
+              <span className="flex-1 text-xs text-muted-foreground">
+                {part.label}
+              </span>
+              <ScoreBar value={part.value} side={side} className="w-16" />
+              <span className="w-8 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                {part.value}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // The actual thing being argued about, for one video: its real title, its real
-// thumbnail, everything it says in its real first ten seconds. It sits above
-// the model's read of that side so the read always has its subject next to it.
+// thumbnail, everything it says in its real first ten seconds, or, on the
+// alignment tab, how well those three agree. It sits above the model's read of
+// that side so the read always has its subject next to it.
 function SurfaceEvidence({
   surface,
   side,
@@ -202,6 +321,10 @@ function SurfaceEvidence({
     )
   }
 
+  if (surface === "alignment") {
+    return <AlignmentScore side={side} comparison={comparison} />
+  }
+
   return null
 }
 
@@ -212,9 +335,9 @@ function SurfaceEvidence({
 // already see; the paragraph below the columns is where the two are actually
 // weighed against each other. No cards here; the two sides are separated by a
 // single dotted rule down the middle, which stops where the columns do, so that
-// paragraph sits below both of them unenclosed. The summary tab is about how
-// the other three fit together rather than about a surface of its own, so it
-// shows the headers alone.
+// paragraph sits below both of them unenclosed. The alignment tab has no
+// surface of its own to show, so each column carries that video's alignment
+// score instead.
 function SurfaceColumns({
   surface,
   comparison,
@@ -225,7 +348,6 @@ function SurfaceColumns({
   read: PackagingReportSurfaceRead | null
 }) {
   const sides: Side[] = ["a", "b"]
-  const hasEvidence = surface !== "alignment"
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2">
       {sides.map((side, index) => {
@@ -241,30 +363,34 @@ function SurfaceColumns({
                 : "border-t border-dotted pt-5 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-6",
             )}
           >
-            <div className="flex flex-wrap items-center gap-2">
+            {/* The header row is height-locked so the two columns' evidence
+                starts on the same line whatever badges a side happens to
+                carry: the badges sit inside that fixed height rather than
+                growing the row, so a side with both of them reads level with a
+                side with none. */}
+            <div className="flex h-6 items-center gap-2">
               <SideDot side={side} />
               <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                 Video {SIDE_META[side].name}
               </span>
               {isTop && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-500">
+                <span className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full bg-emerald-500/10 px-2 text-xs leading-none font-medium text-emerald-600 dark:text-emerald-500">
                   <TrophyIcon className="size-3.5" />
                   most views
                 </span>
               )}
               {isStronger && (
-                <span className="ml-auto rounded-full border bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                <span className="ml-auto inline-flex h-5 shrink-0 items-center rounded-full border bg-muted px-2 text-xs leading-none text-muted-foreground">
                   stronger here
                 </span>
               )}
             </div>
-            {hasEvidence && (
-              <SurfaceEvidence
-                surface={surface}
-                side={side}
-                comparison={comparison}
-              />
-            )}
+            <SurfaceEvidence
+              surface={surface}
+              side={side}
+              comparison={comparison}
+            />
+
           </div>
         )
       })}
@@ -316,7 +442,7 @@ function SurfacePanel({
       />
       {tab.read?.whyItMatters && (
         <p className="text-sm leading-relaxed text-muted-foreground">
-          {clean(tab.read.whyItMatters)}
+          {cleanProse(tab.read.whyItMatters)}
         </p>
       )}
       {tip != null && (
