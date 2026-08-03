@@ -251,6 +251,20 @@ function AlignmentScore({
   )
 }
 
+// The frame every verbatim extract sits in: the video's own words, tinted and
+// ruled off so they read as quoted material rather than as more of the report.
+// The written read below the columns is plain foreground text now, matching the
+// detail line on a single video's packaging card, so the extracts need something
+// other than colour to set them apart; this panel does that without dimming the
+// words themselves.
+function EvidenceQuote({ children }: { children: ReactNode }) {
+  return (
+    <div className="rounded-md border-l-2 border-muted-foreground/30 bg-muted/40 py-2 pr-3 pl-3">
+      {children}
+    </div>
+  )
+}
+
 // The actual thing being argued about, for one video: its real title, its real
 // thumbnail, everything it says in its real first ten seconds, or, on the
 // alignment tab, how well those three agree. It sits above the model's read of
@@ -268,9 +282,11 @@ function SurfaceEvidence({
 
   if (surface === "title") {
     return (
-      <p className="text-base leading-snug font-semibold">
-        {video.title ? clean(video.title) : "Untitled video"}
-      </p>
+      <EvidenceQuote>
+        <p className="text-base leading-snug font-semibold">
+          {video.title ? clean(video.title) : "Untitled video"}
+        </p>
+      </EvidenceQuote>
     )
   }
 
@@ -310,7 +326,9 @@ function SurfaceEvidence({
     }
     return (
       <div className="flex flex-col gap-1">
-        <p className="text-base leading-relaxed">{`"${clean(text)}"`}</p>
+        <EvidenceQuote>
+          <p className="text-base leading-relaxed">{`"${clean(text)}"`}</p>
+        </EvidenceQuote>
         {transcript.length === 0 && (
           <p className="text-xs text-muted-foreground">
             Opening line only; no transcript is stored for this video&apos;s
@@ -335,9 +353,11 @@ function SurfaceEvidence({
 // already see; the paragraph below the columns is where the two are actually
 // weighed against each other. No cards here; the two sides are separated by a
 // single dotted rule down the middle, which stops where the columns do, so that
-// paragraph sits below both of them unenclosed. The alignment tab has no
-// surface of its own to show, so each column carries that video's alignment
-// score instead.
+// paragraph sits below both of them unenclosed. The columns carry no container
+// of their own; only the verbatim extract inside each one is boxed, so a video's
+// own words stay distinct from the report's prose about them. The alignment tab
+// has no surface of its own to show, so each column carries that video's
+// alignment score instead.
 function SurfaceColumns({
   surface,
   comparison,
@@ -441,7 +461,7 @@ function SurfacePanel({
         read={tab.read}
       />
       {tab.read?.whyItMatters && (
-        <p className="text-sm leading-relaxed text-muted-foreground">
+        <p className="text-sm leading-relaxed">
           {cleanProse(tab.read.whyItMatters)}
         </p>
       )}

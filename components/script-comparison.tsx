@@ -62,9 +62,7 @@ function ReportSection({ section }: { section: ScriptComparisonReportSection }) 
   const tip = section.tip?.trim() ?? ""
   return (
     <div className="flex w-full flex-col gap-4 rounded-xl border bg-card p-4">
-      <p className="text-sm leading-relaxed text-muted-foreground">
-        {cleanProse(section.body)}
-      </p>
+      <p className="text-sm leading-relaxed">{cleanProse(section.body)}</p>
       {tip.length > 0 && <TryCallout>{tip}</TryCallout>}
     </div>
   )
