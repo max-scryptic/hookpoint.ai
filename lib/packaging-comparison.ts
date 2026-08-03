@@ -678,7 +678,9 @@ function buildHighlights(
       label: row.label,
       surface: row.surface,
       kind: "flag",
-      detail: `${row.label}: only ${row.favours === "a" ? "B" : "A"} has it`,
+      detail: `${row.label}: only ${
+        row.favours === "a" ? "Video B" : "Video A"
+      } has it`,
       magnitude: FLAG_HIGHLIGHT_WEIGHT_BY_KEY.get(row.key) ?? FLAG_HIGHLIGHT_WEIGHT,
       favours: row.favours,
     })
