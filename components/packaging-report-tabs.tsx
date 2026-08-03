@@ -15,6 +15,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 export interface PackagingReportTab {
   value: string
   label: string
+  // The glyph beside the label, matching the Title / Thumbnail / Hook strip on
+  // a single video's report. An already-rendered element rather than a
+  // component type, because this is a client component and the report page
+  // renders on the server.
+  icon?: ReactNode
   content: ReactNode
 }
 
@@ -25,6 +30,7 @@ export function PackagingReportTabs({ tabs }: { tabs: PackagingReportTab[] }) {
       <TabsList>
         {tabs.map((tab) => (
           <TabsTrigger key={tab.value} value={tab.value}>
+            {tab.icon}
             {tab.label}
           </TabsTrigger>
         ))}
