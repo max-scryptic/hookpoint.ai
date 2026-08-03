@@ -6,7 +6,7 @@ import {
 } from "lucide-react"
 
 import { Card } from "@/components/ui/card"
-import { stripEmDashes } from "@/lib/copy-guardrails"
+import { nameVideoSides, stripEmDashes } from "@/lib/copy-guardrails"
 import type { ScriptComparisonReport } from "@/lib/script-comparison-report"
 import {
   SCRIPT_SURFACE_LABEL,
@@ -62,6 +62,13 @@ function formatTimestamp(totalSeconds: number): string {
 
 function clean(text: string): string {
   return stripEmDashes(text)
+}
+
+// For the model's own prose about the pair, where a bare "A" or "B" is the
+// video rather than a word. Kept apart from clean(), which also runs over
+// verbatim titles and taxonomy spans that must not be touched.
+function cleanProse(text: string): string {
+  return nameVideoSides(clean(text))
 }
 
 function SideDot({ side }: { side: Side }) {
@@ -142,7 +149,7 @@ function Highlights({
               {highlight.favours !== "neither" && (
                 <span className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground">
                   <SideDot side={highlight.favours} />
-                  favours {SIDE_META[highlight.favours].name}
+                  favours Video {SIDE_META[highlight.favours].name}
                   {leansTop && (
                     <span className="text-emerald-600 dark:text-emerald-500">
                       {" "}
@@ -453,7 +460,9 @@ function SurfaceSection({
 function ReportNarrative({ report }: { report: ScriptComparisonReport }) {
   return (
     <div className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4">
-      {report.summary && <p className="text-sm">{clean(report.summary)}</p>}
+      {report.summary && (
+        <p className="text-sm">{cleanProse(report.summary)}</p>
+      )}
       {report.sections.length > 0 && (
         <div className="flex flex-col gap-3">
           {report.sections.map((section, index) => (
@@ -462,7 +471,7 @@ function ReportNarrative({ report }: { report: ScriptComparisonReport }) {
                 {clean(section.heading)}
               </h4>
               <p className="text-sm text-muted-foreground">
-                {clean(section.body)}
+                {cleanProse(section.body)}
               </p>
             </div>
           ))}

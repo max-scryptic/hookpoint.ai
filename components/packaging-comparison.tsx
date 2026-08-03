@@ -12,7 +12,7 @@ import {
 import { HookIcon } from "@/components/hook-icon"
 import { PackagingReportTabs } from "@/components/packaging-report-tabs"
 import { TryCallout } from "@/components/try-callout"
-import { stripEmDashes } from "@/lib/copy-guardrails"
+import { nameVideoSides, stripEmDashes } from "@/lib/copy-guardrails"
 import { cn } from "@/lib/utils"
 import {
   PACKAGING_REPORT_SURFACE_TAB_LABEL,
@@ -85,6 +85,13 @@ function clean(text: string): string {
   return stripEmDashes(text)
 }
 
+// For the model's own prose about the pair, where a bare "A" or "B" is the
+// video rather than a word. Kept apart from clean(), which also runs over
+// verbatim titles and transcript quotes that must not be touched.
+function cleanProse(text: string): string {
+  return nameVideoSides(clean(text))
+}
+
 function SideDot({ side }: { side: Side }) {
   return (
     <span
@@ -114,7 +121,7 @@ function ReportVerdict({
     <div className="rounded-xl border bg-card p-4">
       <h3 className="text-sm font-medium">Summary</h3>
       <p className="mt-2 text-sm text-muted-foreground">
-        {clean(verdict.summary)}
+        {cleanProse(verdict.summary)}
       </p>
     </div>
   )
@@ -435,7 +442,7 @@ function SurfacePanel({
       />
       {tab.read?.whyItMatters && (
         <p className="text-sm leading-relaxed text-muted-foreground">
-          {clean(tab.read.whyItMatters)}
+          {cleanProse(tab.read.whyItMatters)}
         </p>
       )}
       {tip != null && (

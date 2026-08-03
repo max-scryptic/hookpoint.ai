@@ -27,6 +27,159 @@ export function stripEmDashes(text: string): string {
   return text.replace(/\s*\u2014\s*/g, " - ").replace(/\u2013/g, "-")
 }
 
+// =============================================================================
+// SIDE LABELS IN COMPARISON COPY
+//
+// A head-to-head names its two videos "Video A" and "Video B" everywhere the
+// interface writes them itself (the column headers, the badges, the picker), so
+// model-written prose has to match. It is asked to, but it still shortens to a
+// bare letter often enough ("B makes the promise legible, A has more emotion")
+// that a reader lands on a lone capital with nothing to attach it to.
+// nameVideoSides() expands those back at render time, so prose stored before
+// this existed reads the same way as prose written after it.
+// =============================================================================
+
+// A bare side label: a standalone capital A or B, optionally possessive. The
+// leading group is a captured character rather than a lookbehind so the pattern
+// runs anywhere the app does. The trailing lookahead is what keeps "B-roll" and
+// "A1" out of it: a label is the whole token or it is not a label.
+const SIDE_LABEL = /(^|[^\p{L}\p{N}'’-])([AB])((?:'|’)s)?(?![\p{L}\p{N}-])/gu
+
+// Words that can follow the article "a" at the start of a sentence and end in
+// "s", which is otherwise the mark of a third-person verb ("A opens on a face")
+// and so the signal that the letter is a video. Without these, "A series of
+// quick cuts" would read as a video called Series.
+const SINGULAR_NOUNS_ENDING_IN_S = new Set([
+  "address",
+  "analysis",
+  "axis",
+  "basis",
+  "bias",
+  "bonus",
+  "bus",
+  "business",
+  "campus",
+  "canvas",
+  "chorus",
+  "class",
+  "crisis",
+  "cross",
+  "dress",
+  "focus",
+  "genus",
+  "glass",
+  "gloss",
+  "illness",
+  "lens",
+  "mess",
+  "press",
+  "process",
+  "series",
+  "status",
+  "success",
+  "surplus",
+  "thesis",
+  "virus",
+  "witness",
+])
+
+// The other words a sentence-opening side label runs into: auxiliaries, the
+// conjunctions that pair the two videos up, and the adverbs that sit between
+// the label and its verb. None of them can follow the article "a".
+const SIDE_LABEL_FOLLOWERS = new Set([
+  "already",
+  "also",
+  "and",
+  "at",
+  "both",
+  "by",
+  "can",
+  "could",
+  "did",
+  "in",
+  "may",
+  "might",
+  "must",
+  "never",
+  "on",
+  "only",
+  "or",
+  "should",
+  "still",
+  "then",
+  "versus",
+  "vs",
+  "will",
+  "would",
+])
+
+// True when nothing precedes the label in its own sentence, which is the only
+// position where a capital A can be the article rather than a video.
+function opensSentence(before: string): boolean {
+  const trimmed = before.trimEnd()
+  return trimmed.length === 0 || /[.!?:;]["'’)\]]?$/.test(trimmed)
+}
+
+// Whether one matched letter is naming a video rather than doing some other job
+// in the sentence.
+function isSideLabel(
+  letter: string,
+  isPossessive: boolean,
+  before: string,
+  after: string,
+): boolean {
+  // Already named, so leave "Video A" alone rather than growing it.
+  if (/\bvideos?\s+$/i.test(before)) return false
+  // "A/B test" is one phrase about testing, not two videos.
+  if (before.endsWith("/") || after.startsWith("/")) return false
+  // "Plan B" is the only common phrase where a bare B is not a video.
+  if (letter === "B" && /\bplan\s+$/i.test(before)) return false
+  // "A's thumbnail" can only be possessive, never the article.
+  if (isPossessive) return true
+
+  const spacing = after.match(/^\s+/)
+  // Followed by punctuation or nothing ("stronger in B."), so not an article.
+  if (!spacing) return true
+
+  const nextWord =
+    after.slice(spacing[0].length).match(/^[\p{L}\p{N}'’-]+/u)?.[0] ?? ""
+  if (nextWord.length === 0) return true
+  // A capitalised word after the letter reads as a quoted title or a name
+  // ("A Day in the Life"), which a side label never is.
+  if (/^\p{Lu}/u.test(nextWord)) return false
+  // Mid-sentence, a standalone capital letter is never the article.
+  if (!opensSentence(before)) return true
+
+  if (SIDE_LABEL_FOLLOWERS.has(nextWord)) return true
+  return nextWord.endsWith("s") && !SINGULAR_NOUNS_ENDING_IN_S.has(nextWord)
+}
+
+/**
+ * Expands a bare side label in model-written comparison copy into the name the
+ * rest of the interface uses, so "B makes the promise legible, A has more
+ * emotion" reads "Video B makes the promise legible, Video A has more emotion".
+ * Only for prose about a pair of videos: it must not be applied to a verbatim
+ * title, a transcript quote, or copy about a single video, where a capital A is
+ * ordinary English.
+ */
+export function nameVideoSides(text: string): string {
+  return text.replace(
+    SIDE_LABEL,
+    (
+      match: string,
+      prefix: string,
+      letter: string,
+      possessive: string | undefined,
+      offset: number,
+    ) => {
+      const before = text.slice(0, offset + prefix.length)
+      const after = text.slice(offset + match.length)
+      if (!isSideLabel(letter, possessive != null, before, after)) return match
+      return `${prefix}Video ${letter}${possessive ?? ""}`
+    },
+  )
+}
+
 // Model-written copy occasionally leaks the JSON structure it was generated
 // inside back into the text itself, so a tip can arrive reading
 // `...Reaching Arena 16."]},` with a stray `]},` clinging to the end. These
