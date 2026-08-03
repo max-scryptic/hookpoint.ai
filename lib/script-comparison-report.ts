@@ -33,7 +33,9 @@ import {
 export { SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION }
 
 // One titled paragraph of the written comparison, plus the one change that
-// paragraph argues for.
+// paragraph argues for. The paragraph is deliberately short (one to two
+// sentences): the tab stacks these cards, so a long body pushes the later
+// sections off screen.
 export interface ScriptComparisonReportSection {
   heading: string
   body: string
@@ -47,7 +49,7 @@ export interface ScriptComparisonReportSection {
 }
 
 export interface ScriptComparisonReport {
-  // A two to three sentence overall verdict on how the two scripts compare.
+  // A two sentence overall verdict on how the two scripts compare.
   summary: string
   // The per-theme body: structure, substance, hook, emotion, likely driver.
   sections: ScriptComparisonReportSection[]
@@ -209,10 +211,11 @@ export async function generateScriptComparisonReport(
                 "Whoever is heard speaking may be the uploader, a co-host, a guest or a voiceover, so never pin what is said on a specific or gendered person (he, she, the creator); refer to the uploader's own video, or simply Video A and Video B.",
                 "Write the name in full every time: Video A and Video B, never a bare A or B on its own, in the summary and in every section. 'Video B front-loads the payoff, Video A holds it back' is right; 'B front-loads the payoff, A holds it back' is not. The same holds for the possessive, so write Video A's opening rather than A's opening.",
                 "Views and averageViewPercentage are provided for orientation. Treat any link between a script trait and performance as correlation worth noting, never as proof; hedge accordingly.",
-                "summary: two to three sentences giving the overall verdict on how the two scripts compare and which reads as the stronger retention play, if either.",
-                "sections: 3 to 6 titled paragraphs. Give each a short heading (e.g. Structure, Substance and payoff, Hook and opening, Emotion and energy, Likely retention driver) and a body of two to four sentences comparing the two videos on that theme, naming Video A and Video B explicitly.",
+                "Keep every field short. This report is read on one screen, so say each difference once, in the fewest words that still carry the evidence, and stop. Cut wind-up clauses, restatement of the heading, hedging padding and any sentence that only says a difference matters without naming what it is. A body that names the concrete difference in two sentences beats a longer one that circles it.",
+                "summary: two sentences, about 45 words at most, giving the overall verdict on how the two scripts compare and which reads as the stronger retention play, if either.",
+                "sections: 3 to 6 titled paragraphs. Give each a short heading (e.g. Structure, Substance and payoff, Hook and opening, Emotion and energy, Likely retention driver) and a body of one to two sentences, about 50 words at most, comparing the two videos on that theme, naming Video A and Video B explicitly.",
                 "Both of these videos are already published, so nothing you suggest can be applied to them. Every tip is forward-looking advice for the scripts the uploader writes next. Never tell them to change, re-cut, rewrite, reshoot or re-upload Video A or Video B, never name Video A or Video B inside a tip, and never phrase a tip as something one of these two videos should have done. The section bodies are the opposite: those describe what these two scripts already did, so they name Video A and Video B freely.",
-                "tip: every section carries one. It is the single change that section's comparison argues for, written as a one-sentence instruction for the uploader's next script (for example 'State the payoff you are building to within the first fifteen seconds, then keep every aside under one sentence'). Name the change rather than restating the paragraph, and keep it specific to what this comparison actually showed rather than generic scripting advice, while phrasing it as a rule to apply next time. The interface prefixes it with 'Try:', so do not begin it with 'Try' yourself; do not begin it with 'Next time', 'In future videos', 'Going forward' or any similar lead-in either, since the forward-looking framing belongs in how the advice is worded and a lead-in only delays the point. Do not repeat another section's tip word for word.",
+                "tip: every section carries one. It is the single change that section's comparison argues for, written as a one-sentence instruction of about 25 words at most for the uploader's next script (for example 'State the payoff you are building to within the first fifteen seconds, then keep every aside under one sentence'). Name the change rather than restating the paragraph, and keep it specific to what this comparison actually showed rather than generic scripting advice, while phrasing it as a rule to apply next time. The interface prefixes it with 'Try:', so do not begin it with 'Try' yourself; do not begin it with 'Next time', 'In future videos', 'Going forward' or any similar lead-in either, since the forward-looking framing belongs in how the advice is worded and a lead-in only delays the point. Do not repeat another section's tip word for word.",
                 "Write in plain, direct prose. Never output an em dash character (U+2014) or en dash (U+2013) anywhere in your response; if you would use one, rewrite with a comma, colon, parentheses or two sentences instead.",
               ].join(" "),
             },
