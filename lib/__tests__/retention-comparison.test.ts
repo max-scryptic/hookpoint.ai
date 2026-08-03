@@ -29,6 +29,7 @@ function summary(
 ): ComparisonVideoSummary {
   return {
     id: "video-a",
+    videoId: "yt-video-a",
     title: "Video A",
     thumbnailUrl: null,
     publishedAt: null,
