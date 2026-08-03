@@ -19,10 +19,6 @@ import {
   type PackagingComparison as PackagingComparisonData,
 } from "@/lib/packaging-comparison"
 import type { PackagingComparisonReport } from "@/lib/packaging-comparison-report"
-import {
-  getScriptComparison,
-  type ScriptComparison as ScriptComparisonData,
-} from "@/lib/script-comparison"
 import type { ScriptComparisonReport } from "@/lib/script-comparison-report"
 import {
   getRetentionComparison,
@@ -73,7 +69,6 @@ type ActiveComparison = {
   data: RetentionComparisonData
   packaging: PackagingComparisonData | null
   packagingReport: PackagingComparisonReport | null
-  script: ScriptComparisonData | null
   scriptReport: ScriptComparisonReport | null
 }
 
@@ -134,18 +129,14 @@ async function loadActiveComparison(
   })
 
   // Every read here is a stored read: the two written head-to-heads come back
-  // as JSON from the comparison row, and the packaging, script and retention
-  // diffs are derived from each video's stored analysis. Packaging and script
-  // are best-effort, since a failure or gap in either must never cost the user
-  // the retention comparison.
-  const [data, packaging, script, reports] = await Promise.all([
+  // as JSON from the comparison row, and the packaging and retention diffs are
+  // derived from each video's stored analysis. The script tab is the written
+  // report alone, so nothing is derived for it. Packaging is best-effort, since
+  // a failure or gap in it must never cost the user the retention comparison.
+  const [data, packaging, reports] = await Promise.all([
     getRetentionComparison(supabase, userId, sideA, sideB),
     getPackagingComparison(supabase, userId, sideA, sideB).catch((error) => {
       console.error("Failed to load packaging comparison", error)
-      return null
-    }),
-    getScriptComparison(supabase, userId, sideA, sideB).catch((error) => {
-      console.error("Failed to load script comparison", error)
       return null
     }),
     getComparisonReports(supabase, userId, saved.id).catch((error) => {
@@ -161,7 +152,6 @@ async function loadActiveComparison(
     data,
     packaging,
     packagingReport: reports.packaging,
-    script,
     scriptReport: reports.script,
   }
 }
@@ -187,14 +177,12 @@ function MissingReportCard({ children }: { children: ReactNode }) {
 // The Script tab body, rendered straight from what is stored. Nothing is
 // generated here.
 function ScriptComparisonSection({
-  script,
   report,
 }: {
-  script: ScriptComparisonData | null
   report: ScriptComparisonReport | null
 }) {
-  if (script || report) {
-    return <ScriptComparison data={script} report={report} />
+  if (report) {
+    return <ScriptComparison report={report} />
   }
 
   return (
@@ -343,7 +331,6 @@ export default async function Page({
               }
               script={
                 <ScriptComparisonSection
-                  script={result.active.script}
                   report={result.active.scriptReport}
                 />
               }
