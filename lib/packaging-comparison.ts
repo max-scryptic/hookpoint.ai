@@ -21,7 +21,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import type { PackagingTaxonomy } from "@/lib/packaging-taxonomy"
-import { transcriptForSegment, type TranscriptCue } from "@/lib/youtube/youtube"
+import {
+  preferredViewCount,
+  transcriptForSegment,
+  type TranscriptCue,
+} from "@/lib/youtube/youtube"
 
 // The opening window the head-to-head argues about, in seconds. Same bounds as
 // HOOK_EVIDENCE_FROM_SECONDS / HOOK_EVIDENCE_TO_SECONDS in
@@ -774,6 +778,7 @@ interface PackagingRow {
   id: string
   video_title: string | null
   thumbnail_url: string | null
+  view_count: number | null
   analytics_summary: { views?: number | null } | null
   transcript: TranscriptCue[] | null
   packaging_taxonomy: PackagingTaxonomy | null
@@ -794,7 +799,7 @@ export async function getPackagingComparison(
   const { data, error } = await supabase
     .from("analysed_videos")
     .select(
-      "id, video_title, thumbnail_url:video_details->>thumbnailUrl, analytics_summary, transcript, packaging_taxonomy:packaging_alignment->taxonomy",
+      "id, video_title, thumbnail_url:video_details->>thumbnailUrl, view_count:video_details->viewCount, analytics_summary, transcript, packaging_taxonomy:packaging_alignment->taxonomy",
     )
     .eq("user_id", userId)
     .in("id", [videoIdA, videoIdB])
@@ -812,7 +817,10 @@ export async function getPackagingComparison(
     id: row.id,
     title: row.video_title,
     thumbnailUrl: row.thumbnail_url,
-    views: row.analytics_summary?.views ?? null,
+    views: preferredViewCount(
+      { viewCount: row.view_count },
+      row.analytics_summary,
+    ),
     transcript: row.transcript ?? [],
     taxonomy: row.packaging_taxonomy,
   })

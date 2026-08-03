@@ -60,6 +60,7 @@ import { computeMetadataHygiene } from "@/lib/metadata-hygiene"
 import type { RetentionWindow } from "@/lib/retention-windows"
 import {
   netSubscribersGained,
+  preferredViewCount,
   transcriptForSegment,
   transcriptSegmentEdges,
   type RetentionPoint,
@@ -1479,7 +1480,9 @@ export function AnalysedVideoDetail({
               <div className="mt-4 flex flex-wrap items-start gap-x-8 gap-y-3 sm:mt-auto sm:pt-4">
                 <Metric
                   label="Views"
-                  value={formatCompactNumber(analyticsSummary.views)}
+                  value={formatCompactNumber(
+                    preferredViewCount(video, analyticsSummary),
+                  )}
                 />
                 <Metric
                   label="Subscribers gained"

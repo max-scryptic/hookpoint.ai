@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 
+import { refreshAnalysedVideoStats } from "@/lib/analysed-video-stats"
 import { createClient } from "@/lib/supabase/server"
 import {
   getEntitlement,
@@ -70,6 +71,17 @@ async function ensureComparisonReports(
   logContext: LlmLogContext,
   present: ReportReadiness,
 ): Promise<ReportReadiness> {
+  // A written head-to-head is generated once and read for months, so the view
+  // counts it reasons about — which side won, and by how much — must not be
+  // whatever the two videos had on the day they were analysed. Force a refresh
+  // of both sides' stored numbers first, ignoring the usual throttle: this runs
+  // once per deliberate press of the button, and a stale figure baked into the
+  // prose is not something re-opening the report can fix.
+  await refreshAnalysedVideoStats(supabase, userId, {
+    analysedVideoIds: [videoAId, videoBId],
+    force: true,
+  })
+
   const [script, packaging] = await Promise.all([
     present.script
       ? Promise.resolve(true)

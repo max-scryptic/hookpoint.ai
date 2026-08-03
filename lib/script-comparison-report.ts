@@ -20,10 +20,11 @@ import { responsesCallCost, type ResponsesUsage } from "@/lib/llm-cost"
 import type { PackagingTaxonomy } from "@/lib/packaging-taxonomy"
 import { getOrGenerateScriptTaxonomy } from "@/lib/script-taxonomies"
 import { saveScriptComparisonReport } from "@/lib/video-comparisons"
-import type {
-  TranscriptCue,
-  VideoAnalyticsSummary,
-  VideoDetails,
+import {
+  preferredViewCount,
+  type TranscriptCue,
+  type VideoAnalyticsSummary,
+  type VideoDetails,
 } from "@/lib/youtube/youtube"
 
 // The stored shape version lives in lib/comparison-report-versions.ts;
@@ -269,7 +270,10 @@ export async function generateScriptComparisonReport(
 interface ComparisonVideoRow {
   id: string
   video_title: string | null
-  video_details: Pick<VideoDetails, "title" | "durationSeconds"> | null
+  video_details: Pick<
+    VideoDetails,
+    "title" | "durationSeconds" | "viewCount"
+  > | null
   transcript: TranscriptCue[] | null
   analytics_summary: VideoAnalyticsSummary | null
   packaging_taxonomy: PackagingTaxonomy | null
@@ -335,7 +339,7 @@ export async function buildAndStoreScriptComparisonReport(
 
   const toSide = (row: ComparisonVideoRow): ScriptComparisonReportSide => ({
     title: row.video_title ?? row.video_details?.title ?? null,
-    views: row.analytics_summary?.views ?? null,
+    views: preferredViewCount(row.video_details, row.analytics_summary),
     averageViewPercentage: row.analytics_summary?.averageViewPercentage ?? null,
     packagingTaxonomy: row.packaging_taxonomy,
     transcript: row.transcript ?? [],

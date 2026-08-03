@@ -1,12 +1,19 @@
 // Read/write helpers for the deterministic analytics_summary column on
 // analysed_videos. The summary (headline KPIs, engagement, traffic-source mix)
-// is fetched once at analyse time and replayed from the column thereafter, so
-// we don't re-spend YouTube Analytics quota on every page view. Rows analysed
-// before this column existed are backfilled opportunistically the next time
-// their detail page is opened. Thumbnail reach (impressions + CTR) is handled
-// separately: it comes from the channel-granular Reporting API, so one fetch is
-// fanned out across every one of the user's videos (see
-// backfillChannelThumbnailReach).
+// is cached on the row and replayed from there, so we don't re-spend YouTube
+// Analytics quota on every page view — but a cached KPI is only useful while it
+// is still true, so each part carries the time it was fetched and is refreshed
+// once it goes stale:
+//
+//   - KPI totals (views, watch time, subscribers, …) go stale quickly: they are
+//     the numbers every surface prints. Refreshed on METRICS_REFRESH_INTERVAL_MS
+//     either per-video here or, for a whole library at once, by
+//     lib/analysed-video-stats.ts.
+//   - The traffic-source mix needs its own per-video report and is not surfaced
+//     as a headline number, so it refreshes on a much longer interval.
+//   - Thumbnail reach (impressions + CTR) comes from the channel-granular
+//     Reporting API, so one fetch is fanned out across every one of the user's
+//     videos (see backfillChannelThumbnailReach).
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
@@ -19,6 +26,7 @@ import {
   getVideoAnalyticsSummary,
   type VideoAnalyticsSummary,
   type VideoDetails,
+  type VideoLifetimeMetrics,
 } from "@/lib/youtube/youtube"
 
 // Persists a freshly fetched analytics summary onto the video row. Best-effort:
@@ -62,6 +70,55 @@ export async function getStoredVideoAnalyticsSummary(
     (data as { analytics_summary: VideoAnalyticsSummary | null } | null)
       ?.analytics_summary ?? null
   )
+}
+
+// How long fetched KPI totals stay trusted before any surface that needs them
+// refreshes them. YouTube's Analytics figures themselves only move a few times a
+// day, so this is about bounding how stale a printed number can be, not about
+// chasing every increment: a refresh costs 1-2 quota units against a 10,000/day
+// allowance, and the whole library refreshes in one batched pass.
+export const METRICS_REFRESH_INTERVAL_MS = 15 * 60 * 1000
+
+// The traffic-source breakdown needs a per-video report and is not printed as a
+// headline figure anywhere, so it refreshes daily rather than on the KPI
+// interval — it rides along whenever a per-video summary fetch happens.
+const TRAFFIC_SOURCES_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000
+
+// Whether an ISO timestamp is within `maxAgeMs` of now. Missing or unparseable
+// timestamps read as "not fresh", so anything written before a field existed is
+// treated as due for a refresh.
+export function isFresh(
+  timestamp: string | null | undefined,
+  maxAgeMs: number,
+): boolean {
+  if (!timestamp) return false
+  const fetched = new Date(timestamp).getTime()
+  if (!Number.isFinite(fetched)) return false
+  return Date.now() - fetched < maxAgeMs
+}
+
+// Whether a stored summary's KPI totals are recent enough to print as-is.
+export function metricsAreCurrent(summary: VideoAnalyticsSummary): boolean {
+  return isFresh(summary.fetchedAt, METRICS_REFRESH_INTERVAL_MS)
+}
+
+// Whether a stored summary's traffic-source breakdown is recent enough to keep.
+function trafficSourcesAreCurrent(summary: VideoAnalyticsSummary): boolean {
+  return isFresh(
+    summary.trafficSourcesFetchedAt,
+    TRAFFIC_SOURCES_REFRESH_INTERVAL_MS,
+  )
+}
+
+// Writes a freshly fetched set of KPI totals onto a summary, leaving everything
+// that did not come from that fetch — the traffic-source mix and thumbnail
+// reach, which have their own fetch cadences — exactly as it was.
+export function applyLifetimeMetrics(
+  summary: VideoAnalyticsSummary,
+  metrics: VideoLifetimeMetrics,
+  fetchedAt: string,
+): VideoAnalyticsSummary {
+  return { ...summary, ...metrics, fetchedAt }
 }
 
 // How long a null thumbnail-reach reading stays trusted before we retry it.
@@ -167,33 +224,62 @@ export async function backfillChannelThumbnailReach(
   return reachByVideo
 }
 
-// Returns the stored summary if present and current, otherwise fetches what's
-// missing and persists it. KPI totals are fetched once at analyse time; reach is
-// then populated channel-wide (backfilling every video at once) and patched onto
-// this video's summary, so a lagging Reporting API report heals in without
-// re-spending Analytics quota on the totals. Entirely best-effort: any failure
-// resolves to null so a missing summary never breaks the analysis page.
+// Returns the stored summary when every part of it is still current, otherwise
+// refreshes what has gone stale and persists it. KPI totals are refetched once
+// they age past METRICS_REFRESH_INTERVAL_MS, so the numbers this page prints
+// track the channel rather than freezing at whatever they were the first time
+// the video was opened. Reach is populated channel-wide (backfilling every video
+// at once) and patched onto this video's summary, so a lagging Reporting API
+// report heals in without re-spending Analytics quota on the totals. Entirely
+// best-effort: any failure resolves to the stored summary (or null) so a YouTube
+// outage never breaks the analysis page.
 export async function getOrBackfillVideoAnalyticsSummary(
   supabase: SupabaseClient,
   userId: string,
   analysedVideoId: string,
   video: VideoDetails,
 ): Promise<VideoAnalyticsSummary | null> {
+  let stored: VideoAnalyticsSummary | null = null
   try {
     const existing = await getStoredVideoAnalyticsSummary(
       supabase,
       userId,
       analysedVideoId,
     )
-    if (existing && reachIsCurrent(existing)) return existing
+    stored = existing
+    if (
+      existing &&
+      metricsAreCurrent(existing) &&
+      trafficSourcesAreCurrent(existing) &&
+      reachIsCurrent(existing)
+    ) {
+      return existing
+    }
 
     const accessToken = await getGoogleAccessToken(userId)
 
-    // Ensure this video has its base summary (KPI totals + traffic sources),
-    // fetched once and cached thereafter.
+    // Refetch the base summary (KPI totals + traffic sources) when this video
+    // has none or the stored one has aged out. The fetch does not cover reach,
+    // so carry the stored reading across rather than resetting it to null; a
+    // failed traffic-source report likewise keeps the stored breakdown.
     let base = existing
-    if (!base) {
-      base = await getVideoAnalyticsSummary(accessToken, video)
+    if (
+      !base ||
+      !metricsAreCurrent(base) ||
+      !trafficSourcesAreCurrent(base)
+    ) {
+      const fetched = await getVideoAnalyticsSummary(accessToken, video)
+      base = {
+        ...fetched,
+        trafficSources: fetched.trafficSourcesFetchedAt
+          ? fetched.trafficSources
+          : (existing?.trafficSources ?? []),
+        trafficSourcesFetchedAt:
+          fetched.trafficSourcesFetchedAt ?? existing?.trafficSourcesFetchedAt,
+        impressions: existing?.impressions ?? null,
+        impressionClickThroughRate: existing?.impressionClickThroughRate ?? null,
+        reachAttemptedAt: existing?.reachAttemptedAt,
+      }
       await saveVideoAnalyticsSummary(supabase, userId, analysedVideoId, base)
     }
 
@@ -211,7 +297,9 @@ export async function getOrBackfillVideoAnalyticsSummary(
       new Date().toISOString(),
     )
   } catch (error) {
-    console.error("Failed to backfill analytics summary", error)
-    return null
+    console.error("Failed to refresh analytics summary", error)
+    // A refresh that could not reach YouTube is not a reason to drop numbers we
+    // already have — serve the stored summary and try again on the next view.
+    return stored
   }
 }

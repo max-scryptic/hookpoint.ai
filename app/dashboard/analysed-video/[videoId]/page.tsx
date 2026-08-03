@@ -9,6 +9,7 @@ import {
   healCachedTranscript,
   saveAnalysedVideo,
 } from "@/lib/analysed-videos"
+import { refreshAnalysedVideoStats } from "@/lib/analysed-video-stats"
 import { getOrGeneratePacingAnalysis } from "@/lib/pacing-analyses"
 import type { RetentionAttribution } from "@/lib/retention-attribution"
 import type { PackagingAlignment } from "@/lib/packaging-alignment"
@@ -105,6 +106,12 @@ async function analyse(
 ): Promise<AnalysisResult> {
   try {
     const supabase = await createClient()
+
+    // Refresh this video's stored counters and KPI totals before reading the
+    // row, so the header prints current numbers instead of the ones it had when
+    // it was first opened. Throttled and best-effort; a no-op on a video that
+    // hasn't been analysed yet, which the fetch below then handles.
+    await refreshAnalysedVideoStats(supabase, userId, { videoIds: [videoId] })
 
     // Serve a previously-saved analysis when we have one, so we don't re-spend
     // YouTube API quota on a video we've already looked at.

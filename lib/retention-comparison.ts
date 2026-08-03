@@ -22,7 +22,10 @@ import type {
   RetentionWindowEventType,
 } from "@/lib/retention-window-events"
 import type { RetentionWindowKind } from "@/lib/retention-windows"
-import type { RetentionPoint } from "@/lib/youtube/youtube"
+import {
+  preferredViewCount,
+  type RetentionPoint,
+} from "@/lib/youtube/youtube"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -366,6 +369,7 @@ interface AnalysedVideoRow {
   published_at: string | null
   thumbnail_url: string | null
   duration_seconds: number | null
+  view_count: number | null
   analytics_summary: {
     views?: number | null
     averageViewDurationSeconds?: number | null
@@ -419,7 +423,10 @@ function summaryFromRow(row: AnalysedVideoRow): ComparisonVideoSummary {
     // last sample is a serviceable stand-in for positioning windows.
     durationSeconds:
       row.duration_seconds ?? Math.round(lastPoint?.timestampSeconds ?? 0),
-    views: row.analytics_summary?.views ?? null,
+    views: preferredViewCount(
+      { viewCount: row.view_count },
+      row.analytics_summary,
+    ),
     averageViewDurationSeconds:
       row.analytics_summary?.averageViewDurationSeconds ?? null,
     averageViewPercentage:
@@ -505,7 +512,7 @@ export async function getRetentionComparison(
       supabase
         .from("analysed_videos")
         .select(
-          "id, video_id, video_title, retention, analytics_summary, published_at:video_details->>publishedAt, thumbnail_url:video_details->>thumbnailUrl, duration_seconds:video_details->durationSeconds",
+          "id, video_id, video_title, retention, analytics_summary, published_at:video_details->>publishedAt, thumbnail_url:video_details->>thumbnailUrl, duration_seconds:video_details->durationSeconds, view_count:video_details->viewCount",
         )
         .eq("user_id", userId)
         .in("id", videoIds),
