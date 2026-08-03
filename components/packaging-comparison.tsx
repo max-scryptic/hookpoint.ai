@@ -356,19 +356,24 @@ function SurfaceColumns({
                 : "border-t border-dotted pt-5 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-6",
             )}
           >
-            <div className="flex flex-wrap items-center gap-2">
+            {/* The header row is height-locked so the two columns' evidence
+                starts on the same line whatever badges a side happens to
+                carry: the badges sit inside that fixed height rather than
+                growing the row, so a side with both of them reads level with a
+                side with none. */}
+            <div className="flex h-6 items-center gap-2">
               <SideDot side={side} />
               <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                 Video {SIDE_META[side].name}
               </span>
               {isTop && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-500">
+                <span className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full bg-emerald-500/10 px-2 text-xs leading-none font-medium text-emerald-600 dark:text-emerald-500">
                   <TrophyIcon className="size-3.5" />
                   most views
                 </span>
               )}
               {isStronger && (
-                <span className="ml-auto rounded-full border bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                <span className="ml-auto inline-flex h-5 shrink-0 items-center rounded-full border bg-muted px-2 text-xs leading-none text-muted-foreground">
                   stronger here
                 </span>
               )}
