@@ -58,13 +58,13 @@ const SURFACE_TAB_ORDER: PackagingReportSurface[] = [
 ]
 
 // The verbatim span each surface tab quotes above the model's read of it. The
-// title comes off the video itself, and the summary tab is about the other
-// three rather than about a surface of its own, so neither appears here. The
-// hook entry is only a fallback: that tab quotes the whole spoken first ten
-// seconds when the comparison carries it, and drops back to the taxonomy's
-// opening line when it does not.
+// title comes off the video itself, the thumbnail is shown as the image alone
+// because its on-screen text is already legible in it, and the summary tab is
+// about the other three rather than about a surface of its own, so none of
+// them appear here. The hook entry is only a fallback: that tab quotes the
+// whole spoken first ten seconds when the comparison carries it, and drops
+// back to the taxonomy's opening line when it does not.
 const SURFACE_SPAN_KEY: Partial<Record<PackagingReportSurface, string>> = {
-  thumbnail: "thumbnail.textVerbatim",
   hook: "hook.firstSentence",
 }
 
@@ -156,28 +156,20 @@ function SurfaceEvidence({
   }
 
   if (surface === "thumbnail") {
-    const text = spanText(comparison, SURFACE_SPAN_KEY.thumbnail ?? "", side)
     return (
-      <div className="flex flex-col gap-2">
-        <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-background">
-          {video.thumbnailUrl ? (
-            <Image
-              src={video.thumbnailUrl}
-              alt=""
-              fill
-              sizes="(min-width: 640px) 50vw, 100vw"
-              className="object-cover"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-              <PlayIcon className="size-6" />
-            </div>
-          )}
-        </div>
-        {text.length > 0 && (
-          <p className="text-sm text-muted-foreground">
-            Thumbnail text: {clean(text)}
-          </p>
+      <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-background">
+        {video.thumbnailUrl ? (
+          <Image
+            src={video.thumbnailUrl}
+            alt=""
+            fill
+            sizes="(min-width: 640px) 50vw, 100vw"
+            className="object-cover"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+            <PlayIcon className="size-6" />
+          </div>
         )}
       </div>
     )
