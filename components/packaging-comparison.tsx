@@ -1,10 +1,17 @@
 import Image from "next/image"
 import type { ReactNode } from "react"
-import { LayersIcon, PlayIcon, TrophyIcon } from "lucide-react"
+import {
+  AlignHorizontalJustifyCenterIcon,
+  ImageIcon,
+  LayersIcon,
+  PlayIcon,
+  TrophyIcon,
+  TypeIcon,
+} from "lucide-react"
 
+import { HookIcon } from "@/components/hook-icon"
 import { PackagingReportTabs } from "@/components/packaging-report-tabs"
 import { TryCallout } from "@/components/try-callout"
-import { Card } from "@/components/ui/card"
 import { stripEmDashes } from "@/lib/copy-guardrails"
 import { cn } from "@/lib/utils"
 import {
@@ -23,9 +30,12 @@ import {
 
 // The packaging head-to-head body: which of two uploads the packaging favours
 // and why, read straight from the stored per-video taxonomies with no model
-// call at view time. The written report tells the whole story: a verdict, then
-// one tab per surface (title, thumbnail, hook, cross-surface) carrying the two
-// videos' own material, the read of each and the drivers behind it. The
+// call at view time. The written report tells the whole story, laid out exactly
+// like the Packaging section of a single video's report
+// (components/analysed-video-detail.tsx): a summary box, then one tab per
+// surface (title, thumbnail, hook, and a fourth Summary tab for how the three
+// fit together), each panel a card led by its purple surface badge, carrying
+// the two videos' own material, the read of each and the drivers behind it. The
 // field-by-field taxonomy diff is deliberately not shown; the comparison is
 // still read for the verbatim spans the surface tabs quote. Purely
 // presentational; all the maths live in lib/packaging-comparison.ts.
@@ -59,6 +69,19 @@ const SURFACE_SPAN_KEY: Partial<Record<PackagingReportSurface, string>> = {
   hook: "hook.firstSentence",
 }
 
+// The glyph on each surface tab. The first three match the Title / Thumbnail /
+// Hook strip on a single video's report; the fourth is the alignment mark, the
+// same one that heads the Title, Thumbnail & Hook tab there, because that tab
+// is about how the three sit together.
+const SURFACE_TAB_ICON: Record<PackagingReportSurface, ReactNode> = {
+  title: <TypeIcon className="text-muted-foreground" />,
+  thumbnail: <ImageIcon className="text-muted-foreground" />,
+  hook: <HookIcon className="text-muted-foreground" />,
+  alignment: (
+    <AlignHorizontalJustifyCenterIcon className="text-muted-foreground" />
+  ),
+}
+
 function clean(text: string): string {
   return stripEmDashes(text)
 }
@@ -78,9 +101,9 @@ function SideDot({ side }: { side: Side }) {
 // other. Generated once when the pair is created and stored on the comparison,
 // so this renders from JSON with no call at view time.
 
-// The one-paragraph read of which video packaged itself better, sitting bare
-// above the tabs rather than in a card of its own: the surrounding section is
-// already a card, and the badges and confidence label it used to carry are
+// The one-paragraph read of which video packaged itself better, in the summary
+// box that heads the section, the same box the Alignment Summary sits in on a
+// single video's report. The badges and confidence label it used to carry are
 // restated by the per-surface panels below.
 function ReportVerdict({
   verdict,
@@ -88,7 +111,14 @@ function ReportVerdict({
   verdict: PackagingComparisonReport["verdict"]
 }) {
   if (!verdict.summary) return null
-  return <p className="text-sm">{clean(verdict.summary)}</p>
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <h3 className="text-sm font-medium">Head-to-head Summary</h3>
+      <p className="mt-2 text-sm text-muted-foreground">
+        {clean(verdict.summary)}
+      </p>
+    </div>
+  )
 }
 
 // The verbatim span behind one surface on one side, read off the deterministic
@@ -235,7 +265,7 @@ function SurfaceColumns({
                 </span>
               )}
               {isStronger && (
-                <span className="ml-auto rounded-full border bg-card px-2 py-0.5 text-xs text-muted-foreground">
+                <span className="ml-auto rounded-full border bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                   stronger here
                 </span>
               )}
@@ -330,9 +360,10 @@ interface SurfaceTab {
   recommendations: PackagingReportRecommendation[]
 }
 
-// Everything the report has to say about one surface, in one panel: the two
-// videos' own material, the read of each, why the difference matters, then the
-// drivers, whose tips carry the rest of this surface's advice with them. A
+// Everything the report has to say about one surface, in one card led by the
+// purple surface badge, exactly as a single video's packaging cards are: the
+// two videos' own material, the read of each, why the difference matters, then
+// the drivers, whose tips carry the rest of this surface's advice with them. A
 // surface no driver tipped closes on its own tip instead, so every tab ends on
 // a "Try:" line.
 function SurfacePanel({
@@ -364,12 +395,15 @@ function SurfacePanel({
   const standaloneAlternatives =
     surfaceTip.length > 0 ? alternatives : alternatives.slice(1)
   return (
-    <div className="flex flex-col gap-4">
-      {showCaption && (
-        <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-          {caption}
-        </p>
-      )}
+    <div className="flex w-full flex-col gap-4 rounded-xl border bg-card p-4">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="rounded-md border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-sm font-semibold text-purple-700 dark:text-purple-300">
+          {PACKAGING_REPORT_SURFACE_TAB_LABEL[tab.surface]}
+        </span>
+        {showCaption && (
+          <span className="text-sm text-muted-foreground">{caption}</span>
+        )}
+      </div>
       <SurfaceColumns
         surface={tab.surface}
         comparison={comparison}
@@ -427,6 +461,7 @@ function ReportNarrative({
           tabs={tabs.map((tab) => ({
             value: tab.surface,
             label: PACKAGING_REPORT_SURFACE_TAB_LABEL[tab.surface],
+            icon: SURFACE_TAB_ICON[tab.surface],
             content: <SurfacePanel tab={tab} comparison={comparison} />,
           }))}
         />
@@ -442,12 +477,16 @@ export function PackagingComparison({
   data: PackagingComparison
   report?: PackagingComparisonReport | null
 }) {
+  // A section rather than a card, so the summary box and the per-surface panels
+  // are the cards here, the same way the Packaging section of a single video's
+  // report is laid out. The retention tab beside this one already stacks bare
+  // cards on the page, so nothing here is nested in a card of its own.
   return (
-    <Card className="flex flex-col gap-4 p-5">
+    <section className="flex flex-col gap-3">
       <div>
         <div className="flex items-center gap-1.5">
           <LayersIcon className="size-4 text-muted-foreground" />
-          <h3 className="text-sm font-semibold">Packaging head-to-head</h3>
+          <h2 className="text-sm font-medium">Packaging head-to-head</h2>
         </div>
         <p className="mt-0.5 text-xs text-muted-foreground">
           Why one of these earned the click and the other did not: a written
@@ -459,7 +498,7 @@ export function PackagingComparison({
       {report ? (
         <ReportNarrative report={report} comparison={data} />
       ) : (
-        <p className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+        <p className="rounded-xl border bg-card px-4 py-3 text-sm text-muted-foreground">
           {data.a.hasTaxonomy && data.b.hasTaxonomy
             ? "Both videos have a packaging read, but the written head-to-head has not been generated for this pair yet."
             : data.a.hasTaxonomy || data.b.hasTaxonomy
@@ -467,6 +506,6 @@ export function PackagingComparison({
               : "Neither video has a packaging read yet."}
         </p>
       )}
-    </Card>
+    </section>
   )
 }
