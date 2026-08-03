@@ -191,9 +191,25 @@ function ScoreBar({
   )
 }
 
+// The frame every piece of per-side material sits in: the video's own words, or
+// its alignment numbers, tinted and ruled off so they read as that video's own
+// material rather than as more of the report. The written read below the columns
+// is plain foreground text now, matching the detail line on a single video's
+// packaging card, so this panel is what sets the material apart without dimming
+// the words themselves.
+function EvidenceQuote({ children }: { children: ReactNode }) {
+  return (
+    <div className="rounded-md border-l-2 border-muted-foreground/30 bg-muted/40 py-2 pr-3 pl-3">
+      {children}
+    </div>
+  )
+}
+
 // One video's alignment score, in place of the surface material the other three
 // tabs quote: there is no single artefact to show for alignment, so the tab
-// shows how well that video's three artefacts agree instead.
+// shows how well that video's three artefacts agree instead. It sits in the same
+// panel the other tabs quote their extracts in, so the fourth tab reads as one
+// more pair of columns rather than as a different kind of thing.
 function AlignmentScore({
   side,
   comparison,
@@ -219,49 +235,37 @@ function AlignmentScore({
   )
 
   return (
-    <div className="flex flex-col gap-3">
-      <div>
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-3xl leading-none font-semibold tabular-nums">
-            {score}
-          </span>
-          <span className="text-sm text-muted-foreground">/ 10</span>
+    <EvidenceQuote>
+      <div className="flex flex-col gap-3">
+        <div>
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-3xl leading-none font-semibold tabular-nums">
+              {score}
+            </span>
+            <span className="text-sm text-muted-foreground">/ 10</span>
+          </div>
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            How tightly the title, thumbnail and opening promise one thing.
+          </p>
         </div>
-        <p className="mt-1.5 text-xs text-muted-foreground">
-          How tightly the title, thumbnail and opening promise one thing.
-        </p>
+        <ScoreBar value={score} side={side} />
+        {parts.length > 0 && (
+          <div className="flex flex-col gap-2">
+            {parts.map((part) => (
+              <div key={part.label} className="flex items-center gap-3">
+                <span className="flex-1 text-xs text-muted-foreground">
+                  {part.label}
+                </span>
+                <ScoreBar value={part.value} side={side} className="w-16" />
+                <span className="w-8 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                  {part.value}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-      <ScoreBar value={score} side={side} />
-      {parts.length > 0 && (
-        <div className="flex flex-col gap-2">
-          {parts.map((part) => (
-            <div key={part.label} className="flex items-center gap-3">
-              <span className="flex-1 text-xs text-muted-foreground">
-                {part.label}
-              </span>
-              <ScoreBar value={part.value} side={side} className="w-16" />
-              <span className="w-8 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
-                {part.value}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// The frame every verbatim extract sits in: the video's own words, tinted and
-// ruled off so they read as quoted material rather than as more of the report.
-// The written read below the columns is plain foreground text now, matching the
-// detail line on a single video's packaging card, so the extracts need something
-// other than colour to set them apart; this panel does that without dimming the
-// words themselves.
-function EvidenceQuote({ children }: { children: ReactNode }) {
-  return (
-    <div className="rounded-md border-l-2 border-muted-foreground/30 bg-muted/40 py-2 pr-3 pl-3">
-      {children}
-    </div>
+    </EvidenceQuote>
   )
 }
 
@@ -354,10 +358,10 @@ function SurfaceEvidence({
 // weighed against each other. No cards here; the two sides are separated by a
 // single dotted rule down the middle, which stops where the columns do, so that
 // paragraph sits below both of them unenclosed. The columns carry no container
-// of their own; only the verbatim extract inside each one is boxed, so a video's
-// own words stay distinct from the report's prose about them. The alignment tab
-// has no surface of its own to show, so each column carries that video's
-// alignment score instead.
+// of their own; only the material inside each one is boxed, so a video's own
+// words stay distinct from the report's prose about them. The alignment tab has
+// no surface of its own to show, so each column carries that video's alignment
+// score instead, in the same box the extracts use.
 function SurfaceColumns({
   surface,
   comparison,
