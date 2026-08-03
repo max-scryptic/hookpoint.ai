@@ -20,6 +20,7 @@ const CHANNEL_TRENDS_SOURCE_FILES = [
   "components/channel-trends-copy.ts",
   "components/channel-trends-tabs.tsx",
   "components/comparison-processing.tsx",
+  "components/comparison-report-tabs.tsx",
   "components/event-type-badge.tsx",
   "components/packaging-comparison.tsx",
   "components/previous-comparisons.tsx",
