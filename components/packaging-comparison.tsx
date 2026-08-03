@@ -15,7 +15,6 @@ import { TryCallout } from "@/components/try-callout"
 import { stripEmDashes } from "@/lib/copy-guardrails"
 import { cn } from "@/lib/utils"
 import {
-  PACKAGING_REPORT_SURFACE_LABEL,
   PACKAGING_REPORT_SURFACE_TAB_LABEL,
   type PackagingComparisonReport,
   type PackagingReportDriver,
@@ -30,15 +29,15 @@ import {
 
 // The packaging head-to-head body: which of two uploads the packaging favours
 // and why, read straight from the stored per-video taxonomies with no model
-// call at view time. The written report tells the whole story, laid out exactly
-// like the Packaging section of a single video's report
-// (components/analysed-video-detail.tsx): a summary box, then one tab per
-// surface (title, thumbnail, hook, and a fourth Summary tab for how the three
-// fit together), each panel a card led by its purple surface badge, carrying
-// the two videos' own material, the read of each and the drivers behind it. The
-// field-by-field taxonomy diff is deliberately not shown; the comparison is
-// still read for the verbatim spans the surface tabs quote. Purely
-// presentational; all the maths live in lib/packaging-comparison.ts.
+// call at view time. The written report tells the whole story: a summary box,
+// then one tab per surface (title, thumbnail, hook, and a fourth Summary tab
+// for how the three fit together). Each panel is a card kept deliberately
+// short: the two videos' own material side by side, one paragraph comparing
+// them, then a single "Try:" line. The per-side reads, the ranked drivers and
+// the field-by-field taxonomy diff are all held back, because the material and
+// the comparison paragraph already carry the argument. The comparison is still
+// read for the verbatim spans the surface tabs quote. Purely presentational;
+// all the maths live in lib/packaging-comparison.ts.
 //
 // COPY GUARDRAIL: no em or en dashes (U+2014 / U+2013), ever, in any text in
 // this file. Hyphens are fine. Enforced by lib/__tests__/copy-guardrails.
@@ -215,12 +214,15 @@ function SurfaceEvidence({
 }
 
 // Both videos side by side for one surface: A on the left, B on the right, each
-// column carrying that video's own material and then what the report makes of
-// it. No cards here; the two sides are separated by a single dotted rule down
-// the middle, which stops where the columns do, so whatever the panel says
-// about the pair as a whole sits below both of them unenclosed. The summary tab
-// is about how the other three fit together rather than about a surface of its
-// own, so it shows the reads alone.
+// column carrying that video's own material and nothing else. The read of each
+// side on its own is not shown, because a title or a thumbnail argues for
+// itself and a written account of one column only restates what the reader can
+// already see; the paragraph below the columns is where the two are actually
+// weighed against each other. No cards here; the two sides are separated by a
+// single dotted rule down the middle, which stops where the columns do, so that
+// paragraph sits below both of them unenclosed. The summary tab is about how
+// the other three fit together rather than about a surface of its own, so it
+// shows the headers alone.
 function SurfaceColumns({
   surface,
   comparison,
@@ -232,15 +234,9 @@ function SurfaceColumns({
 }) {
   const sides: Side[] = ["a", "b"]
   const hasEvidence = surface !== "alignment"
-  // A thumbnail argues for itself: the image is right there, so a written
-  // account of what it depicts only restates what the reader already sees.
-  const showRead = surface !== "thumbnail"
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2">
       {sides.map((side, index) => {
-        const readText = (
-          read == null ? "" : side === "a" ? read.aRead : read.bRead
-        ).trim()
         const isTop = comparison.higherViewsSide === side
         const isStronger = read != null && read.strongerSide === side
         return (
@@ -277,78 +273,9 @@ function SurfaceColumns({
                 comparison={comparison}
               />
             )}
-            {showRead && readText.length > 0 && (
-              <p className="text-sm text-muted-foreground">
-                {clean(readText)}
-              </p>
-            )}
           </div>
         )
       })}
-    </div>
-  )
-}
-
-// The ranked reasons this surface moved the result, each closing on the one
-// change its evidence argues for. Anything else this surface is worth trying
-// (the report's recommendations) hangs off the last tip as "Or:" lines, so a
-// surface closes on one block of advice rather than two.
-function SurfaceDrivers({
-  drivers,
-  higherViewsSide,
-  alternatives,
-}: {
-  drivers: PackagingReportDriver[]
-  higherViewsSide: Side | null
-  alternatives: ReactNode[]
-}) {
-  const lastTipIndex = drivers.reduce(
-    (last, driver, index) => (driver.tip ? index : last),
-    -1,
-  )
-  return (
-    <div className="flex flex-col divide-y rounded-lg border">
-      {drivers.map((driver, index) => (
-        <div
-          key={`${driver.surface}:${driver.label}:${index}`}
-          className="flex flex-col gap-1.5 px-3 py-2.5"
-        >
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium">{clean(driver.label)}</span>
-            <span className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground">
-              <SideDot side={driver.favours} />
-              favours {SIDE_META[driver.favours].name}
-              {higherViewsSide === driver.favours && (
-                <span className="text-emerald-600 dark:text-emerald-500">
-                  (the higher-viewed one)
-                </span>
-              )}
-            </span>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {clean(driver.detail)}
-          </p>
-          {driver.evidence.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {driver.evidence.map((item, evidenceIndex) => (
-                <span
-                  key={`${item}:${evidenceIndex}`}
-                  className="rounded-full border bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
-                >
-                  {clean(item)}
-                </span>
-              ))}
-            </div>
-          )}
-          {driver.tip && (
-            <TryCallout
-              alternatives={index === lastTipIndex ? alternatives : []}
-            >
-              {driver.tip}
-            </TryCallout>
-          )}
-        </div>
-      ))}
     </div>
   )
 }
@@ -360,12 +287,10 @@ interface SurfaceTab {
   recommendations: PackagingReportRecommendation[]
 }
 
-// Everything the report has to say about one surface, in one card led by the
-// purple surface badge, exactly as a single video's packaging cards are: the
-// two videos' own material, the read of each, why the difference matters, then
-// the drivers, whose tips carry the rest of this surface's advice with them. A
-// surface no driver tipped closes on its own tip instead, so every tab ends on
-// a "Try:" line.
+// Everything a surface tab shows, in one card and in three beats: the two
+// videos' own material side by side, one paragraph weighing them against each
+// other, then the one change worth trying. The tab strip above already names
+// the surface, so the card carries no heading of its own.
 function SurfacePanel({
   tab,
   comparison,
@@ -373,37 +298,25 @@ function SurfacePanel({
   tab: SurfaceTab
   comparison: PackagingComparison
 }) {
-  const caption = PACKAGING_REPORT_SURFACE_LABEL[tab.surface]
-  const showCaption = caption !== PACKAGING_REPORT_SURFACE_TAB_LABEL[tab.surface]
-  // The recommendations ride along with the driver tips as bare "Or:" lines:
-  // like the tips, each one is advice for the uploader's next video rather than
-  // a change to either published video, so none of them names a side.
+  // The recommendations follow the tip as bare "Or:" lines: like the tip, each
+  // one is advice for the uploader's next video rather than a change to either
+  // published video, so none of them names a side.
   const alternatives = tab.recommendations.map(
     (recommendation) => recommendation.action,
   )
-  const hasDriverTip = tab.drivers.some((driver) => driver.tip)
-  // Every tab has to close on something to try, and a surface the drivers
-  // passed over has no tip inside the drivers list to hang one off. So when no
-  // driver here carried a tip, this surface's own tip leads a callout of its
-  // own and the recommendations follow it as "Or:" lines. Reports stored before
-  // schema version 5 carry no surface tip, and ones before version 2 no driver
-  // tips either, so the first recommendation leads for those; a surface with
-  // none of the three is the one case that still closes without advice.
+  // Every tab closes on something to try. This surface's own tip leads where
+  // there is one; reports stored before schema version 5 carry no surface tip,
+  // so the first tip the drivers left behind stands in, and before version 2
+  // there were no driver tips either, so the first recommendation leads for
+  // those. A surface with none of the three is the one case that still closes
+  // without advice.
   const surfaceTip = tab.read?.tip?.trim() ?? ""
-  const standaloneTip =
-    surfaceTip.length > 0 ? surfaceTip : (alternatives[0] ?? null)
-  const standaloneAlternatives =
-    surfaceTip.length > 0 ? alternatives : alternatives.slice(1)
+  const driverTip =
+    tab.drivers.find((driver) => driver.tip)?.tip?.trim() ?? ""
+  const leadIsRecommendation = surfaceTip.length === 0 && driverTip.length === 0
+  const tip = surfaceTip || driverTip || (alternatives[0] ?? null)
   return (
     <div className="flex w-full flex-col gap-4 rounded-xl border bg-card p-4">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span className="rounded-md border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-sm font-semibold text-purple-700 dark:text-purple-300">
-          {PACKAGING_REPORT_SURFACE_TAB_LABEL[tab.surface]}
-        </span>
-        {showCaption && (
-          <span className="text-sm text-muted-foreground">{caption}</span>
-        )}
-      </div>
       <SurfaceColumns
         surface={tab.surface}
         comparison={comparison}
@@ -414,16 +327,13 @@ function SurfacePanel({
           {clean(tab.read.whyItMatters)}
         </p>
       )}
-      {tab.drivers.length > 0 && (
-        <SurfaceDrivers
-          drivers={tab.drivers}
-          higherViewsSide={comparison.higherViewsSide}
-          alternatives={hasDriverTip ? alternatives : []}
-        />
-      )}
-      {!hasDriverTip && standaloneTip != null && (
-        <TryCallout alternatives={standaloneAlternatives}>
-          {standaloneTip}
+      {tip != null && (
+        <TryCallout
+          alternatives={
+            leadIsRecommendation ? alternatives.slice(1) : alternatives
+          }
+        >
+          {tip}
         </TryCallout>
       )}
     </div>
