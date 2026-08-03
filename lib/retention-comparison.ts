@@ -28,7 +28,12 @@ import type { RetentionPoint } from "@/lib/youtube/youtube"
 // Types
 
 export interface ComparisonVideoSummary {
+  // The analysed_videos row's UUID - what retention_windows are keyed on and
+  // what the comparator selects videos by.
   id: string
+  // The YouTube video id, which is what the analysed-video detail route keys
+  // on. Distinct from `id` - linking to the detail page needs this one.
+  videoId: string
   title: string | null
   thumbnailUrl: string | null
   publishedAt: string | null
@@ -355,6 +360,7 @@ export function buildRetentionComparison(
 
 interface AnalysedVideoRow {
   id: string
+  video_id: string
   video_title: string | null
   retention: RetentionPoint[] | null
   published_at: string | null
@@ -405,6 +411,7 @@ function summaryFromRow(row: AnalysedVideoRow): ComparisonVideoSummary {
   const lastPoint = curve[curve.length - 1]
   return {
     id: row.id,
+    videoId: row.video_id,
     title: row.video_title,
     thumbnailUrl: row.thumbnail_url,
     publishedAt: row.published_at,
@@ -498,7 +505,7 @@ export async function getRetentionComparison(
       supabase
         .from("analysed_videos")
         .select(
-          "id, video_title, retention, analytics_summary, published_at:video_details->>publishedAt, thumbnail_url:video_details->>thumbnailUrl, duration_seconds:video_details->durationSeconds",
+          "id, video_id, video_title, retention, analytics_summary, published_at:video_details->>publishedAt, thumbnail_url:video_details->>thumbnailUrl, duration_seconds:video_details->durationSeconds",
         )
         .eq("user_id", userId)
         .in("id", videoIds),
