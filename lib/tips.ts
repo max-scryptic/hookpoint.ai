@@ -43,6 +43,57 @@ export function isTipFeedbackReason(value: unknown): value is TipFeedbackReason 
   return TIP_FEEDBACK_REASONS.includes(value as TipFeedbackReason)
 }
 
+// Which product surface a tip was read on. The section a tip carries names the
+// part of a report it came from ("Packaging: Title", "Retention: Drop-off"),
+// but not which report that was, and the same section names appear on more than
+// one. The surface is the level above it, so the admin can ask "how is the
+// comparison report doing" before drilling into a section.
+export const TIP_SURFACES = [
+  "video_analysis",
+  "comparison_report",
+  "unknown",
+] as const
+
+export type TipSurface = (typeof TIP_SURFACES)[number]
+
+export const TIP_SURFACE_LABELS: Record<TipSurface, string> = {
+  video_analysis: "Video analysis",
+  comparison_report: "Comparison report",
+  unknown: "Unknown",
+}
+
+// The surface is recovered from the path the tip was read on, which is the only
+// thing recorded that actually identifies the report. Prefixes, not exact
+// matches, since both surfaces carry an id or a query in the rest of the path.
+const TIP_SURFACE_PATH_PREFIXES: { prefix: string; surface: TipSurface }[] = [
+  { prefix: "/dashboard/analysed-video/", surface: "video_analysis" },
+  {
+    prefix: "/dashboard/video-comparator/report",
+    surface: "comparison_report",
+  },
+]
+
+/**
+ * Where a flagged or saved tip was read: the surface, with the section as the
+ * drill-down beneath it.
+ *
+ * The path decides it wherever there is one. A tip stored without a usable path
+ * falls back to its section, which still settles the comparison report because
+ * only a head-to-head names its sections that way; anything else is reported as
+ * unknown rather than guessed at.
+ */
+export function tipSurface(
+  sourcePath: string | null | undefined,
+  section: string | null | undefined,
+): TipSurface {
+  const path = (sourcePath ?? "").split("?")[0]
+  for (const { prefix, surface } of TIP_SURFACE_PATH_PREFIXES) {
+    if (path.startsWith(prefix)) return surface
+  }
+  if (/head-to-head/i.test(section ?? "")) return "comparison_report"
+  return "unknown"
+}
+
 /**
  * The comparison key for one tip: lower case, with every run of punctuation and
  * whitespace collapsed to a single space. Two tips that differ only in casing
