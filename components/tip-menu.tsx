@@ -20,6 +20,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import {
   tipCategoryForSection,
   tipFingerprint,
   TIP_CATEGORY_LABELS,
@@ -46,6 +51,41 @@ import { cn } from "@/lib/utils"
 function currentPath(): string | null {
   if (typeof window === "undefined") return null
   return `${window.location.pathname}${window.location.search}`
+}
+
+// The small marker that trails a tip once something has been done with it. It
+// sits outside the clickable advice, so what a creator can press is words only,
+// and it says what it means on hover: an icon on its own leaves the creator to
+// guess whether it stands for kept, done, or dismissed.
+function TipStateMarker({
+  icon: Icon,
+  label,
+}: {
+  icon: typeof BookmarkCheckIcon
+  label: string
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            // Named for assistive tech, and reachable by keyboard so the
+            // meaning is not hover-only.
+            role="img"
+            aria-label={label}
+            tabIndex={0}
+            className={cn(
+              "ml-1 inline-flex cursor-help rounded-sm align-[-0.2em]",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+            )}
+          />
+        }
+      >
+        <Icon aria-hidden="true" className="size-3.5 shrink-0" />
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  )
 }
 
 export function TipMenu({ tip, section }: { tip: string; section: string }) {
@@ -126,15 +166,23 @@ export function TipMenu({ tip, section }: { tip: string; section: string }) {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger
+          // A span rather than a button, because a button is an atomic inline
+          // level box: a wrapped one is shrink-to-fit at the full width of the
+          // line, so the underline and hover fill ran to the right edge of
+          // every line, including a last line holding two words. A span with
+          // display:inline lays the tip out as text, so the target ends where
+          // the words do on each line. nativeButton={false} tells Base UI to
+          // supply the semantics the element no longer has for itself: the
+          // button role, tab stop, and Enter/Space activation.
+          nativeButton={false}
           render={
-            <button
-              type="button"
+            <span
               // The advice is the label; the menu is what opening it offers.
               aria-label={`${tip} (tip options)`}
               className={cn(
-                // Inline, so a tip still wraps and reads as one sentence
-                // running on from "Try:" rather than as a block of its own.
-                "-mx-1 -my-0.5 cursor-pointer rounded-md px-1 py-0.5 text-left align-baseline select-text",
+                // box-decoration-clone rounds and pads every wrapped fragment
+                // rather than only the first and last.
+                "-mx-1 inline box-decoration-clone cursor-pointer rounded-md px-1 py-0.5 text-left select-text",
                 "underline decoration-blue-500/30 decoration-dotted underline-offset-4 transition-colors",
                 "hover:bg-blue-500/10 hover:decoration-blue-500/70",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
@@ -145,20 +193,6 @@ export function TipMenu({ tip, section }: { tip: string; section: string }) {
           }
         >
           {tip}
-          {/* What has already been done with this tip, kept inside the trigger
-              so the state travels with the words when the line wraps. */}
-          {saved && (
-            <BookmarkCheckIcon
-              aria-hidden="true"
-              className="ml-1 inline size-3.5 shrink-0 align-[-0.15em]"
-            />
-          )}
-          {flagged && (
-            <ThumbsDownIcon
-              aria-hidden="true"
-              className="ml-1 inline size-3.5 shrink-0 align-[-0.15em]"
-            />
-          )}
         </DropdownMenuTrigger>
 
         <DropdownMenuContent align="start" className="w-auto min-w-52">
@@ -195,6 +229,22 @@ export function TipMenu({ tip, section }: { tip: string; section: string }) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      {/* What has already been done with this tip, sitting just outside the
+          clickable advice. Nothing separates it from the trigger, so it stays
+          on the same line as the tip's last word instead of wrapping off on
+          its own. */}
+      {saved && (
+        <TipStateMarker
+          icon={BookmarkCheckIcon}
+          label="Tip added to your checklist"
+        />
+      )}
+      {flagged && (
+        <TipStateMarker
+          icon={ThumbsDownIcon}
+          label="Tip flagged as not useful"
+        />
+      )}
 
       {saveError && (
         <span className="ml-1 text-xs text-destructive">{saveError}</span>
