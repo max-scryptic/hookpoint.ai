@@ -43,6 +43,86 @@ export function isTipFeedbackReason(value: unknown): value is TipFeedbackReason 
   return TIP_FEEDBACK_REASONS.includes(value as TipFeedbackReason)
 }
 
+// What a tip is actually about, as opposed to the surface it was read on. A
+// creator working through their checklist thinks in these terms ("what am I
+// fixing about the hook?"), not in report sections, so the checklist groups by
+// this and the admin can see which kind of advice keeps missing.
+//
+// Listed in the order they are worked through when planning a video, which is
+// also the order the checklist renders its groups in.
+export const TIP_CATEGORIES = [
+  "hook",
+  "retention",
+  "attention",
+  "script",
+  "packaging",
+  "delivery",
+  "other",
+] as const
+
+export type TipCategory = (typeof TIP_CATEGORIES)[number]
+
+// Written so two neighbouring groups can never be confused for each other:
+// "Retention" and "Attention" side by side say nothing, "Drop-offs" and
+// "Keeping attention" say exactly what belongs under each.
+export const TIP_CATEGORY_LABELS: Record<TipCategory, string> = {
+  hook: "Hook",
+  retention: "Drop-offs",
+  attention: "Keeping attention",
+  script: "Script",
+  packaging: "Packaging",
+  delivery: "Delivery",
+  other: "Other",
+}
+
+export function isTipCategory(value: unknown): value is TipCategory {
+  return TIP_CATEGORIES.includes(value as TipCategory)
+}
+
+// Ordered rules read against the section a tip was rendered in, first match
+// wins. Order carries the meaning here, so the list is worth reading top down:
+//
+//  - The tab a tip sits on is the strongest signal there is, so a "... : Script"
+//    or "... : Deep analysis" suffix decides the category before anything in the
+//    rest of the section can. A script rewrite for the hook is a script tip.
+//  - "Drop-off" is separated from the other retention moments on purpose: a gain
+//    or a hold is about keeping the viewers already watching, a drop-off is
+//    about losing them, and the two want different work.
+//  - A bare "Retention: ..." that matched nothing more specific lands on
+//    retention last, so the generic word never steals a gain or a hold.
+//
+// Sections are part model-written (comparison report headings), so anything
+// unrecognised falls through to "other" rather than being forced into a group.
+const TIP_CATEGORY_RULES: { pattern: RegExp; category: TipCategory }[] = [
+  { pattern: /\bscripts?\b/, category: "script" },
+  {
+    pattern: /deep analysis|non-?verbal|delivery|editing|visuals?\b/,
+    category: "delivery",
+  },
+  { pattern: /\bhooks?\b|\bopening?s?\b|first (few )?seconds/, category: "hook" },
+  { pattern: /packaging|thumbnails?|\btitles?\b/, category: "packaging" },
+  { pattern: /drop-?offs?|\bdrops?\b/, category: "retention" },
+  { pattern: /\bgains?\b|\bholds?\b|pacing|attention/, category: "attention" },
+  { pattern: /retention/, category: "retention" },
+]
+
+/**
+ * The category a tip read in this section belongs to.
+ *
+ * Derived rather than stored per call site: every "Try:" tip already names the
+ * section it was read in, and asking each of the dozen call sites to also name a
+ * category would leave them to drift apart. The category is worked out here,
+ * server side, when the tip is saved or flagged, and written to the row so a
+ * later change to these rules cannot silently reshuffle a creator's checklist.
+ */
+export function tipCategoryForSection(section: string): TipCategory {
+  const haystack = section.toLowerCase()
+  return (
+    TIP_CATEGORY_RULES.find((rule) => rule.pattern.test(haystack))?.category ??
+    "other"
+  )
+}
+
 /**
  * The comparison key for one tip: lower case, with every run of punctuation and
  * whitespace collapsed to a single space. Two tips that differ only in casing
@@ -84,6 +164,7 @@ export interface SavedTip {
   id: string
   tip: string
   section: string
+  category: TipCategory
   sourcePath: string | null
   completedAt: string | null
   createdAt: string
@@ -93,6 +174,7 @@ interface SavedTipRow {
   id: string
   tip: string
   section: string
+  category: string | null
   source_path: string | null
   completed_at: string | null
   created_at: string
@@ -108,7 +190,7 @@ export async function listSavedTips(
 ): Promise<SavedTip[]> {
   const { data, error } = await supabase
     .from("saved_tips")
-    .select("id, tip, section, source_path, completed_at, created_at")
+    .select("id, tip, section, category, source_path, completed_at, created_at")
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
 
@@ -120,6 +202,12 @@ export async function listSavedTips(
     id: row.id,
     tip: row.tip,
     section: row.section,
+    // Stored per row, but derived again for anything the column cannot
+    // account for, so a row written before the column existed still lands in
+    // the right group rather than in "Other".
+    category: isTipCategory(row.category)
+      ? row.category
+      : tipCategoryForSection(row.section),
     sourcePath: row.source_path,
     completedAt: row.completed_at,
     createdAt: row.created_at,

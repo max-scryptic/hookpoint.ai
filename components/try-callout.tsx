@@ -1,7 +1,7 @@
 import { SparklesIcon } from "lucide-react"
 import type { ReactNode } from "react"
 
-import { TipActions } from "@/components/tip-actions"
+import { TipMenu } from "@/components/tip-menu"
 import { isNearDuplicateAdvice } from "@/lib/advice-similarity"
 import { cleanCopy } from "@/lib/copy-guardrails"
 
@@ -17,9 +17,9 @@ export function TryCallout({
   // what part of a report it came from long after that report is closed, and so
   // a flag tells us which surface keeps producing advice that misses.
   section: string
-  // Whether the keep and flag controls are offered. They belong to the creator
-  // reading their own report, so surfaces that show someone else's tips (the
-  // admin evidence view) turn them off and render the advice alone.
+  // Whether the tip itself is clickable. The menu behind it belongs to the
+  // creator reading their own report, so surfaces that show someone else's tips
+  // (the admin evidence view) turn it off and render the advice as plain text.
   actions?: boolean
   // The other things worth trying at this point, rendered as "Or:" lines under
   // the tip. Callers that only have one suggestion leave this out.
@@ -54,26 +54,22 @@ export function TryCallout({
       <span className="flex flex-col gap-1">
         <span>
           <span className="font-medium">Try:{" "}</span>
-          {tip}
-          {/* Keep and flag, on the tip itself. Only advice this component
-              scrubbed is offered: a richer node is someone else's copy, and
-              there is no plain text of it to put on a checklist. */}
-          {actions && typeof tip === "string" && (
-            <>
-              {" "}
-              <TipActions tip={tip} section={section} />
-            </>
+          {/* Keep and flag live behind the tip itself. Only advice this
+              component scrubbed is clickable: a richer node is someone else's
+              copy, and there is no plain text of it to put on a checklist. */}
+          {actions && typeof tip === "string" ? (
+            <TipMenu tip={tip} section={section} />
+          ) : (
+            tip
           )}
         </span>
         {distinctAlternatives.map((alternative, index) => (
           <span key={index}>
             <span className="font-medium">Or:{" "}</span>
-            {alternative}
-            {actions && typeof alternative === "string" && (
-              <>
-                {" "}
-                <TipActions tip={alternative} section={section} />
-              </>
+            {actions && typeof alternative === "string" ? (
+              <TipMenu tip={alternative} section={section} />
+            ) : (
+              alternative
             )}
           </span>
         ))}

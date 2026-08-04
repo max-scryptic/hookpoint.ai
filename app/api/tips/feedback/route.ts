@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import {
   isTipFeedbackReason,
   normaliseTipSourcePath,
+  tipCategoryForSection,
   TIP_MAX_LENGTH,
   TIP_NOTES_MAX_LENGTH,
   TIP_SECTION_MAX_LENGTH,
@@ -62,6 +63,9 @@ export async function POST(request: Request) {
     user_id: user.id,
     tip,
     section,
+    // Same rule the checklist saves by, so a flagged tip and a kept one from
+    // the same surface are counted under the same heading in the admin.
+    category: tipCategoryForSection(section),
     source_path: normaliseTipSourcePath(body.sourcePath),
     reason: body.reason,
     notes: notes || null,

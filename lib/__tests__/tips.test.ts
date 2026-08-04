@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  isTipCategory,
   isTipFeedbackReason,
   normaliseTipSourcePath,
+  TIP_CATEGORIES,
+  TIP_CATEGORY_LABELS,
   TIP_FEEDBACK_REASONS,
   TIP_FEEDBACK_REASON_LABELS,
   TIP_FINGERPRINT_MAX_LENGTH,
+  tipCategoryForSection,
   tipFingerprint,
 } from "@/lib/tips"
 
@@ -62,6 +66,64 @@ describe("normaliseTipSourcePath", () => {
     expect(normaliseTipSourcePath(`/${"a".repeat(600)}`)).toBeNull()
     expect(normaliseTipSourcePath(undefined)).toBeNull()
     expect(normaliseTipSourcePath(42)).toBeNull()
+  })
+})
+
+describe("tipCategoryForSection", () => {
+  // Every section string the interface actually passes to a "Try:" callout,
+  // with the group it must land in on the checklist. If a call site starts
+  // naming its section differently, add it here.
+  it.each([
+    ["Retention: Hook", "hook"],
+    ["Retention: Drop-off", "retention"],
+    ["Retention: Gain", "attention"],
+    ["Retention: Hold", "attention"],
+    ["Pacing", "attention"],
+    ["Packaging: Title", "packaging"],
+    ["Packaging: Thumbnail", "packaging"],
+    ["Packaging head-to-head: Thumbnail", "packaging"],
+    ["Retention head-to-head: Hook and opening", "hook"],
+    ["Retention head-to-head: Emotion and energy", "retention"],
+    ["Script head-to-head: Structure", "script"],
+    ["Deep analysis: Non-verbal takeaway", "delivery"],
+  ])("files %s under %s", (section, category) => {
+    expect(tipCategoryForSection(section)).toBe(category)
+  })
+
+  it("files a tip by the tab it sits on before the moment it came from", () => {
+    // A script rewrite for a drop-off is script work, and a note about what the
+    // video looked like there is delivery work, whatever the moment was.
+    expect(tipCategoryForSection("Retention: Drop-off: Script")).toBe("script")
+    expect(tipCategoryForSection("Retention: Hook: Script")).toBe("script")
+    expect(tipCategoryForSection("Retention: Drop-off: Deep analysis")).toBe(
+      "delivery",
+    )
+  })
+
+  it("keeps losing viewers apart from holding them", () => {
+    expect(tipCategoryForSection("Retention: Drop-off")).not.toBe(
+      tipCategoryForSection("Retention: Hold"),
+    )
+  })
+
+  it("ignores casing", () => {
+    expect(tipCategoryForSection("RETENTION: HOOK")).toBe("hook")
+  })
+
+  it("leaves a section it does not recognise uncategorised", () => {
+    expect(tipCategoryForSection("Channel trends: Uploads per week")).toBe(
+      "other",
+    )
+    expect(tipCategoryForSection("")).toBe("other")
+  })
+
+  it("only ever returns a category the interface can label", () => {
+    for (const category of TIP_CATEGORIES) {
+      expect(isTipCategory(category)).toBe(true)
+      expect(TIP_CATEGORY_LABELS[category]).toBeTruthy()
+    }
+    expect(isTipCategory("titles")).toBe(false)
+    expect(isTipCategory(null)).toBe(false)
   })
 })
 
