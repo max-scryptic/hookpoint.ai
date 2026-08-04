@@ -23,6 +23,7 @@ const ADMIN_HOME = { title: "Dashboard", url: "/admin" }
 const ADMIN_PAGES: Record<string, string> = {
   "/admin/users": "Users",
   "/admin/cost-logs": "Cost Logs",
+  "/admin/tip-feedback": "Tip Feedback",
   "/admin/settings": "Settings",
 }
 

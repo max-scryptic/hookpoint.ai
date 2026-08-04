@@ -16,6 +16,7 @@ import {
 import {
   ArrowLeftRightIcon,
   ClapperboardIcon,
+  ListChecksIcon,
   ListVideoIcon,
   TerminalSquareIcon,
   TrendingUpIcon,
@@ -55,6 +56,11 @@ const navMain = [
     title: "Video Planner",
     url: "/dashboard/video-planner",
     icon: <ClapperboardIcon />,
+  },
+  {
+    title: "Tip Checklist",
+    url: "/dashboard/tip-checklist",
+    icon: <ListChecksIcon />,
   },
 ]
 

@@ -1055,7 +1055,16 @@ function CardInsightDraft({ item }: { item: WindowEvidence }) {
                 <p className="text-sm">{takeaway.observation}</p>
                 {takeaway.tip && (
                   <div className="mt-1">
-                    <TryCallout>{takeaway.tip}</TryCallout>
+                    {/* This surface is the admin's read of someone else's
+                        analysis, so the tip is shown without the keep and flag
+                        controls: those belong to the creator whose video it
+                        is. */}
+                    <TryCallout
+                      section="Deep analysis: Non-verbal takeaway"
+                      actions={false}
+                    >
+                      {takeaway.tip}
+                    </TryCallout>
                   </div>
                 )}
               </>

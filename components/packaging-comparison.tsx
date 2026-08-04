@@ -436,9 +436,11 @@ interface SurfaceTab {
 function SurfacePanel({
   tab,
   comparison,
+  tipActions,
 }: {
   tab: SurfaceTab
   comparison: PackagingComparison
+  tipActions: boolean
 }) {
   // The recommendations follow the tip as bare "Or:" lines: like the tip, each
   // one is advice for the uploader's next video rather than a change to either
@@ -471,6 +473,10 @@ function SurfacePanel({
       )}
       {tip != null && (
         <TryCallout
+          section={`Packaging head-to-head: ${
+            PACKAGING_REPORT_SURFACE_TAB_LABEL[tab.surface]
+          }`}
+          actions={tipActions}
           alternatives={
             leadIsRecommendation ? alternatives.slice(1) : alternatives
           }
@@ -485,9 +491,11 @@ function SurfacePanel({
 function ReportNarrative({
   report,
   comparison,
+  tipActions,
 }: {
   report: PackagingComparisonReport
   comparison: PackagingComparison
+  tipActions: boolean
 }) {
   // One tab per surface, in reading order, skipping any the report had nothing
   // to say about.
@@ -514,7 +522,13 @@ function ReportNarrative({
             value: tab.surface,
             label: PACKAGING_REPORT_SURFACE_TAB_LABEL[tab.surface],
             icon: SURFACE_TAB_ICON[tab.surface],
-            content: <SurfacePanel tab={tab} comparison={comparison} />,
+            content: (
+              <SurfacePanel
+                tab={tab}
+                comparison={comparison}
+                tipActions={tipActions}
+              />
+            ),
           }))}
         />
       )}
@@ -525,9 +539,14 @@ function ReportNarrative({
 export function PackagingComparison({
   data,
   report = null,
+  // Whether each surface's tip offers the keep and flag controls. They belong
+  // to the creator reading their own comparison, so the admin view of someone
+  // else's pair turns them off.
+  tipActions = true,
 }: {
   data: PackagingComparison
   report?: PackagingComparisonReport | null
+  tipActions?: boolean
 }) {
   // A section rather than a card, so the summary box and the per-surface panels
   // are the cards here, the same way the Packaging section of a single video's
@@ -548,7 +567,11 @@ export function PackagingComparison({
       </div>
 
       {report ? (
-        <ReportNarrative report={report} comparison={data} />
+        <ReportNarrative
+          report={report}
+          comparison={data}
+          tipActions={tipActions}
+        />
       ) : (
         <p className="rounded-xl border bg-card px-4 py-3 text-sm text-muted-foreground">
           {data.a.hasTaxonomy && data.b.hasTaxonomy

@@ -263,6 +263,7 @@ function RetentionWindows({
               </>
             ) : (
               <WindowFeedback
+                section="Retention: Hook"
                 attribution={attribution.get(window.windowIndex)}
                 deepFeedback={deepFeedback.get(window.windowIndex) ?? []}
                 header={(tabs) => (
@@ -373,7 +374,7 @@ function PacingAnalysisSection({
               <p className="pl-10 text-sm">{stretch.reason}</p>
               {stretch.suggestion && (
                 <div className="pl-10">
-                  <RecommendationCallout>
+                  <RecommendationCallout section="Pacing">
                     {stretch.suggestion}
                   </RecommendationCallout>
                 </div>
@@ -396,13 +397,15 @@ function PacingAnalysisSection({
 // that window.
 function AttributionNote({
   attribution,
+  section,
 }: {
   attribution: RetentionMomentAttribution | undefined
+  section: string
 }) {
   if (!attribution || attribution.explanation === "") return null
   return (
     <div className="pl-10">
-      <ScriptFeedbackBody attribution={attribution} />
+      <ScriptFeedbackBody attribution={attribution} section={section} />
     </div>
   )
 }
@@ -411,15 +414,19 @@ function AttributionNote({
 // can be reused both flat (AttributionNote) and inside the tabbed layout below.
 function ScriptFeedbackBody({
   attribution,
+  section,
 }: {
   attribution: RetentionMomentAttribution
+  section: string
 }) {
   return (
     <>
       <p className="text-sm">{cleanCopy(attribution.explanation)}</p>
       {attribution.tip && (
         <div className="mt-2">
-          <TryCallout>{attribution.tip}</TryCallout>
+          <TryCallout section={`${section}: Script`}>
+            {attribution.tip}
+          </TryCallout>
         </div>
       )}
     </>
@@ -459,25 +466,34 @@ function MultimodalInsightBody({
 
 function ActionableRecommendation({
   recommendation,
+  section,
 }: {
   recommendation: DeepAnalysisRecommendation | undefined
+  section: string
 }) {
   if (!recommendation) return null
   return (
     <div className="ml-10">
-      <ActionableRecommendationBody recommendation={recommendation} />
+      <ActionableRecommendationBody
+        recommendation={recommendation}
+        section={section}
+      />
     </div>
   )
 }
 
 function ActionableRecommendationBody({
   recommendation,
+  section,
 }: {
   recommendation: DeepAnalysisRecommendation
+  section: string
 }) {
   return (
     <>
-      <TryCallout>{recommendation.action}</TryCallout>
+      <TryCallout section={`${section}: Deep analysis`}>
+        {recommendation.action}
+      </TryCallout>
       <p className="mt-1 text-xs text-muted-foreground">
         {cleanCopy(recommendation.expectedPurpose)}
       </p>
@@ -493,16 +509,20 @@ function ActionableRecommendationBody({
 function DeepFeedbackBody({
   insight,
   recommendation,
+  section,
 }: {
   insight: RankedRetentionWindowEvent
   recommendation: DeepAnalysisRecommendation | undefined
+  section: string
 }) {
   return (
     <>
       <p className="text-sm">{cleanCopy(insight.narrative)}</p>
       {recommendation && (
         <div className="mt-2">
-          <TryCallout>{recommendation.action}</TryCallout>
+          <TryCallout section={`${section}: Deep analysis`}>
+            {recommendation.action}
+          </TryCallout>
         </div>
       )}
     </>
@@ -598,10 +618,14 @@ function WindowFeedback({
   header,
   attribution,
   deepFeedback,
+  section,
 }: {
   header: (tabs: React.ReactNode) => React.ReactNode
   attribution: RetentionMomentAttribution | undefined
   deepFeedback: DeepWindowFeedback[]
+  // Which retention list this window belongs to ("Hook", "Drop-off", "Gain",
+  // "Hold"), so a tip kept from it says where it was read.
+  section: string
 }) {
   const hasScript = attribution != null && attribution.explanation !== ""
   const uniqueDeep = dedupeDeepFeedback(
@@ -624,7 +648,7 @@ function WindowFeedback({
           </TabsList>
         )}
         <TabsContent value="script" className="pl-10">
-          <ScriptFeedbackBody attribution={attribution} />
+          <ScriptFeedbackBody attribution={attribution} section={section} />
         </TabsContent>
         {uniqueDeep.map(({ insight, recommendation }) => (
           <TabsContent
@@ -635,6 +659,7 @@ function WindowFeedback({
             <DeepFeedbackBody
               insight={insight}
               recommendation={recommendation}
+              section={section}
             />
           </TabsContent>
         ))}
@@ -664,6 +689,7 @@ function WindowFeedback({
             <DeepFeedbackBody
               insight={insight}
               recommendation={recommendation}
+              section={section}
             />
           </TabsContent>
         ))}
@@ -674,9 +700,12 @@ function WindowFeedback({
   return (
     <>
       {header(null)}
-      <AttributionNote attribution={attribution} />
+      <AttributionNote attribution={attribution} section={section} />
       <MultimodalInsight insight={uniqueDeep[0]?.insight} />
-      <ActionableRecommendation recommendation={uniqueDeep[0]?.recommendation} />
+      <ActionableRecommendation
+        recommendation={uniqueDeep[0]?.recommendation}
+        section={section}
+      />
     </>
   )
 }
@@ -724,6 +753,7 @@ function DropList({
             )}
           >
             <WindowFeedback
+              section="Retention: Drop-off"
               attribution={attribution.get(drop.windowIndex)}
               deepFeedback={deepFeedback.get(drop.windowIndex) ?? []}
               header={(tabs) => (
@@ -835,6 +865,7 @@ function GainList({
             )}
           >
             <WindowFeedback
+              section="Retention: Gain"
               attribution={attribution.get(gain.windowIndex)}
               deepFeedback={deepFeedback.get(gain.windowIndex) ?? []}
               header={(tabs) => (
@@ -905,6 +936,7 @@ function HoldList({
             )}
           >
             <WindowFeedback
+              section="Retention: Hold"
               attribution={attribution.get(hold.windowIndex)}
               deepFeedback={deepFeedback.get(hold.windowIndex) ?? []}
               header={(tabs) => (
@@ -1122,7 +1154,9 @@ function PackagingComponentCard({
             </p>
           ))}
           {feedback.whatCouldBeBetter.slice(0, 1).map((point, index) => (
-            <TryCallout key={index}>{point}</TryCallout>
+            <TryCallout key={index} section={`Packaging: ${label}`}>
+              {point}
+            </TryCallout>
           ))}
         </div>
       )}
