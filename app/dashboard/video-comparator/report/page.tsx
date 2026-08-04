@@ -6,7 +6,7 @@ import { PackagingComparison } from "@/components/packaging-comparison"
 import { ScriptComparison } from "@/components/script-comparison"
 import { RetentionHeadToHead } from "@/components/retention-head-to-head"
 import {
-  RetentionComparisonDetail,
+  RetentionCurvesCard,
   RetentionComparisonVideos,
 } from "@/components/retention-comparison"
 import { VideoComparisonTabs } from "@/components/video-comparison-tabs"
@@ -199,29 +199,35 @@ function ScriptComparisonSection({
   )
 }
 
-// The written head-to-head that opens the Retention tab, rendered straight from
-// what is stored. Nothing is generated here. The deterministic curve, hook and
-// stretch cards render underneath it either way, so a pair with no stored read
-// still gets the whole tab, with a note where the writing would be.
-function RetentionHeadToHeadSection({
+// The Retention tab body: the written head-to-head, rendered straight from what
+// is stored, with the overlaid curves stacked between its summary and its tabs.
+// Nothing is generated here. The curve card is derived on every open, so a pair
+// with no stored read still gets the chart, under a note where the writing would
+// be.
+function RetentionSection({
+  data,
   report,
 }: {
+  data: RetentionComparisonData
   report: RetentionComparisonReport | null
 }) {
+  const chart = <RetentionCurvesCard data={data} />
   if (report) {
-    return <RetentionHeadToHead report={report} />
+    return <RetentionHeadToHead report={report} chart={chart} />
   }
 
   return (
-    <MissingReportCard>
-      No written retention read is stored for these two videos. It is written
-      from both curves, both videos&apos; notable stretches and what was said
-      where the curves separated, when the comparison is generated, so re-open
-      this pair from the Video Comparator to fill it in. Re-opening a pair you
-      have already paid for is free. The curve, the hooks and the stretch
-      evidence below are derived on every open, so they are up to date either
-      way.
-    </MissingReportCard>
+    <div className="flex flex-col gap-4">
+      <MissingReportCard>
+        No written retention read is stored for these two videos. It is written
+        from both curves, both videos&apos; notable stretches and what was said
+        where the curves separated, when the comparison is generated, so re-open
+        this pair from the Video Comparator to fill it in. Re-opening a pair you
+        have already paid for is free. The curve below is derived on every open,
+        so it is up to date either way.
+      </MissingReportCard>
+      {chart}
+    </div>
   )
 }
 
@@ -351,13 +357,9 @@ export default async function Page({
             <RetentionComparisonVideos data={result.active.data} />
             <VideoComparisonTabs
               retention={
-                <RetentionComparisonDetail
+                <RetentionSection
                   data={result.active.data}
-                  writtenReport={
-                    <RetentionHeadToHeadSection
-                      report={result.active.retentionReport}
-                    />
-                  }
+                  report={result.active.retentionReport}
                 />
               }
               packaging={

@@ -7,7 +7,7 @@ import { ArrowLeftIcon } from "lucide-react"
 import { AdminBreadcrumbLabel } from "@/components/admin/admin-breadcrumb-label"
 import { PackagingComparison } from "@/components/packaging-comparison"
 import {
-  RetentionComparisonDetail,
+  RetentionCurvesCard,
   RetentionComparisonVideos,
 } from "@/components/retention-comparison"
 import { RetentionHeadToHead } from "@/components/retention-head-to-head"
@@ -138,23 +138,24 @@ export default async function AdminUserComparisonDetailPage({
       <VideoComparisonTabs
         retention={
           data != null ? (
-            <RetentionComparisonDetail
-              data={data}
-              writtenReport={
-                reports.retention != null ? (
-                  <RetentionHeadToHead report={reports.retention} />
-                ) : (
-                  <MissingReportCard>
-                    No written retention read is stored for these two videos. It
-                    is written from both curves, both videos&apos; notable
-                    stretches and what was said where the curves separated, when
-                    the comparison is generated, so this pair either predates
-                    that report or its generation failed. The curve, the hooks
-                    and the stretch evidence below are derived on every open.
-                  </MissingReportCard>
-                )
-              }
-            />
+            reports.retention != null ? (
+              <RetentionHeadToHead
+                report={reports.retention}
+                chart={<RetentionCurvesCard data={data} />}
+              />
+            ) : (
+              <div className="flex flex-col gap-4">
+                <MissingReportCard>
+                  No written retention read is stored for these two videos. It
+                  is written from both curves, both videos&apos; notable
+                  stretches and what was said where the curves separated, when
+                  the comparison is generated, so this pair either predates that
+                  report or its generation failed. The curve below is derived on
+                  every open.
+                </MissingReportCard>
+                <RetentionCurvesCard data={data} />
+              </div>
+            )
           ) : (
             <MissingReportCard>
               The retention comparison could not be rebuilt for this pair. It is
