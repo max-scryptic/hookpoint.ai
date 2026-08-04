@@ -18,6 +18,7 @@ import { createContext, useCallback, useContext, useMemo, useState } from "react
 interface SavedTipsValue {
   savedFingerprints: Set<string>
   markSaved: (fingerprint: string) => void
+  markRemoved: (fingerprint: string) => void
 }
 
 const SavedTipsContext = createContext<SavedTipsValue | null>(null)
@@ -42,9 +43,18 @@ export function SavedTipsProvider({
     })
   }, [])
 
+  const markRemoved = useCallback((fingerprint: string) => {
+    setFingerprints((previous) => {
+      if (!previous.has(fingerprint)) return previous
+      const next = new Set(previous)
+      next.delete(fingerprint)
+      return next
+    })
+  }, [])
+
   const value = useMemo(
-    () => ({ savedFingerprints: fingerprints, markSaved }),
-    [fingerprints, markSaved],
+    () => ({ savedFingerprints: fingerprints, markSaved, markRemoved }),
+    [fingerprints, markSaved, markRemoved],
   )
 
   return (
@@ -72,9 +82,22 @@ export function useSavedTips(): SavedTipsValue {
     })
   }, [])
 
+  const markRemovedLocally = useCallback((fingerprint: string) => {
+    setLocal((previous) => {
+      if (!previous.has(fingerprint)) return previous
+      const next = new Set(previous)
+      next.delete(fingerprint)
+      return next
+    })
+  }, [])
+
   const fallback = useMemo(
-    () => ({ savedFingerprints: local, markSaved: markSavedLocally }),
-    [local, markSavedLocally],
+    () => ({
+      savedFingerprints: local,
+      markSaved: markSavedLocally,
+      markRemoved: markRemovedLocally,
+    }),
+    [local, markSavedLocally, markRemovedLocally],
   )
 
   return shared ?? fallback
