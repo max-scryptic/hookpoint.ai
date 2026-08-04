@@ -139,9 +139,12 @@ export default async function AdminUserComparisonDetailPage({
         retention={
           data != null ? (
             reports.retention != null ? (
+              // Tips here belong to the creator whose comparison this is, so
+              // the keep and flag controls are left off the admin's read of it.
               <RetentionHeadToHead
                 report={reports.retention}
                 chart={<RetentionCurvesCard data={data} />}
+                tipActions={false}
               />
             ) : (
               <div className="flex flex-col gap-4">
@@ -167,7 +170,11 @@ export default async function AdminUserComparisonDetailPage({
         }
         packaging={
           packaging != null ? (
-            <PackagingComparison data={packaging} report={reports.packaging} />
+            <PackagingComparison
+              data={packaging}
+              report={reports.packaging}
+              tipActions={false}
+            />
           ) : (
             <MissingReportCard>
               No packaging read is stored for these two videos. It is written
@@ -179,7 +186,7 @@ export default async function AdminUserComparisonDetailPage({
         }
         script={
           reports.script != null ? (
-            <ScriptComparison report={reports.script} />
+            <ScriptComparison report={reports.script} tipActions={false} />
           ) : (
             <MissingReportCard>
               No script read is stored for these two videos. It is written from

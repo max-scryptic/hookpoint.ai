@@ -58,14 +58,23 @@ function ReportSummary({ summary }: { summary: string }) {
 // next.
 function ReportSection({
   section,
+  tipActions,
 }: {
   section: RetentionComparisonReportSection
+  tipActions: boolean
 }) {
   const tip = section.tip?.trim() ?? ""
   return (
     <div className="flex w-full flex-col gap-4 rounded-xl border bg-card p-4">
       <p className="text-sm leading-relaxed">{cleanProse(section.body)}</p>
-      {tip.length > 0 && <TryCallout>{tip}</TryCallout>}
+      {tip.length > 0 && (
+        <TryCallout
+          section={`Retention head-to-head: ${clean(section.heading)}`}
+          actions={tipActions}
+        >
+          {tip}
+        </TryCallout>
+      )}
     </div>
   )
 }
@@ -73,12 +82,17 @@ function ReportSection({
 export function RetentionHeadToHead({
   report,
   chart,
+  // Whether each section's tip offers the keep and flag controls. They belong
+  // to the creator reading their own comparison, so the admin view of someone
+  // else's pair turns them off.
+  tipActions = true,
 }: {
   report: RetentionComparisonReport
   // The overlaid curves card, stacked between the summary and the tab strip.
   // Passed in by the page because it is derived from the stored analysis rather
   // than read off the report.
   chart?: ReactNode
+  tipActions?: boolean
 }) {
   // One tab per section, in the order the report wrote them. The heading is the
   // label, so the value has the index folded in: two sections could be given the
@@ -86,7 +100,7 @@ export function RetentionHeadToHead({
   const tabs = report.sections.map((section, index) => ({
     value: `section-${index}`,
     label: clean(section.heading),
-    content: <ReportSection section={section} />,
+    content: <ReportSection section={section} tipActions={tipActions} />,
   }))
 
   return (

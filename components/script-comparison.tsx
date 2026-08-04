@@ -58,20 +58,38 @@ function ReportSummary({ summary }: { summary: string }) {
 // weighing the two scripts against each other, then the one change worth trying
 // next. Reports stored before schema version 2 carry no section tip, so those
 // sections simply close on the paragraph.
-function ReportSection({ section }: { section: ScriptComparisonReportSection }) {
+function ReportSection({
+  section,
+  tipActions,
+}: {
+  section: ScriptComparisonReportSection
+  tipActions: boolean
+}) {
   const tip = section.tip?.trim() ?? ""
   return (
     <div className="flex w-full flex-col gap-4 rounded-xl border bg-card p-4">
       <p className="text-sm leading-relaxed">{cleanProse(section.body)}</p>
-      {tip.length > 0 && <TryCallout>{tip}</TryCallout>}
+      {tip.length > 0 && (
+        <TryCallout
+          section={`Script head-to-head: ${clean(section.heading)}`}
+          actions={tipActions}
+        >
+          {tip}
+        </TryCallout>
+      )}
     </div>
   )
 }
 
 export function ScriptComparison({
   report,
+  // Whether each section's tip offers the keep and flag controls. They belong
+  // to the creator reading their own comparison, so the admin view of someone
+  // else's pair turns them off.
+  tipActions = true,
 }: {
   report: ScriptComparisonReport
+  tipActions?: boolean
 }) {
   // One tab per section, in the order the report wrote them. The heading is the
   // label, so the value has the index folded in: two sections could be given
@@ -79,7 +97,7 @@ export function ScriptComparison({
   const tabs = report.sections.map((section, index) => ({
     value: `section-${index}`,
     label: clean(section.heading),
-    content: <ReportSection section={section} />,
+    content: <ReportSection section={section} tipActions={tipActions} />,
   }))
 
   // A section rather than a card, so the summary box and the per-theme panels

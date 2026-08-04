@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/sidebar"
 import {
   LayoutDashboardIcon,
+  MessageSquareWarningIcon,
   ReceiptTextIcon,
   UsersIcon,
 } from "lucide-react"
@@ -40,6 +41,11 @@ const navMain = [
     title: "Cost Logs",
     url: "/admin/cost-logs",
     icon: <ReceiptTextIcon />,
+  },
+  {
+    title: "Tip Feedback",
+    url: "/admin/tip-feedback",
+    icon: <MessageSquareWarningIcon />,
   },
 ]
 

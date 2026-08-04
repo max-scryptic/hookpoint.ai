@@ -28,7 +28,11 @@ const CHANNEL_TRENDS_SOURCE_FILES = [
   "components/retention-comparison-chart.tsx",
   "components/retention-compare-picker.tsx",
   "components/retention-head-to-head.tsx",
+  "components/saved-tips-provider.tsx",
   "components/script-comparison.tsx",
+  "components/tip-actions.tsx",
+  "components/tip-checklist.tsx",
+  "components/tip-feedback-dialog.tsx",
   "components/try-callout.tsx",
   "components/video-comparison-tabs.tsx",
   "lib/advice-similarity.ts",
@@ -39,6 +43,7 @@ const CHANNEL_TRENDS_SOURCE_FILES = [
   "lib/retention-comparison.ts",
   "lib/retention-comparison-report.ts",
   "lib/script-comparison-report.ts",
+  "lib/tips.ts",
   "lib/video-comparisons.ts",
 ]
 

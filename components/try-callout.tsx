@@ -1,14 +1,26 @@
 import { SparklesIcon } from "lucide-react"
 import type { ReactNode } from "react"
 
+import { TipActions } from "@/components/tip-actions"
 import { isNearDuplicateAdvice } from "@/lib/advice-similarity"
 import { cleanCopy } from "@/lib/copy-guardrails"
 
 export function TryCallout({
   children,
+  section,
+  actions = true,
   alternatives = [],
 }: {
   children: ReactNode
+  // Where this tip is being read, e.g. "Retention: Drop-off" or
+  // "Packaging: Title". Saved alongside the tip, so a checklist line still says
+  // what part of a report it came from long after that report is closed, and so
+  // a flag tells us which surface keeps producing advice that misses.
+  section: string
+  // Whether the keep and flag controls are offered. They belong to the creator
+  // reading their own report, so surfaces that show someone else's tips (the
+  // admin evidence view) turn them off and render the advice alone.
+  actions?: boolean
   // The other things worth trying at this point, rendered as "Or:" lines under
   // the tip. Callers that only have one suggestion leave this out.
   alternatives?: ReactNode[]
@@ -43,11 +55,26 @@ export function TryCallout({
         <span>
           <span className="font-medium">Try:{" "}</span>
           {tip}
+          {/* Keep and flag, on the tip itself. Only advice this component
+              scrubbed is offered: a richer node is someone else's copy, and
+              there is no plain text of it to put on a checklist. */}
+          {actions && typeof tip === "string" && (
+            <>
+              {" "}
+              <TipActions tip={tip} section={section} />
+            </>
+          )}
         </span>
         {distinctAlternatives.map((alternative, index) => (
           <span key={index}>
             <span className="font-medium">Or:{" "}</span>
             {alternative}
+            {actions && typeof alternative === "string" && (
+              <>
+                {" "}
+                <TipActions tip={alternative} section={section} />
+              </>
+            )}
           </span>
         ))}
       </span>
