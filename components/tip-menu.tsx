@@ -13,6 +13,7 @@ import { TipFeedbackDialog } from "@/components/tip-feedback-dialog"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -161,19 +162,25 @@ export function TipMenu({ tip, section }: { tip: string; section: string }) {
         </DropdownMenuTrigger>
 
         <DropdownMenuContent align="start" className="w-auto min-w-52">
-          <DropdownMenuLabel>
-            {TIP_CATEGORY_LABELS[category]} tip
-          </DropdownMenuLabel>
-          <DropdownMenuItem disabled={saved || isSaving} onClick={save}>
-            {saved ? <BookmarkCheckIcon /> : <BookmarkPlusIcon />}
-            {saved ? "On your checklist" : "Add to checklist"}
-          </DropdownMenuItem>
-          {saved && (
-            <DropdownMenuItem render={<a href="/dashboard/checklist" />}>
-              <ListChecksIcon />
-              Open your checklist
+          {/* The heading names the whole menu, so everything in it sits in one
+              group. The group is not decoration: the label reads its id from
+              the group above it and throws without one, which took the whole
+              page down the moment a tip was clicked. */}
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>
+              {TIP_CATEGORY_LABELS[category]} tip
+            </DropdownMenuLabel>
+            <DropdownMenuItem disabled={saved || isSaving} onClick={save}>
+              {saved ? <BookmarkCheckIcon /> : <BookmarkPlusIcon />}
+              {saved ? "On your checklist" : "Add to checklist"}
             </DropdownMenuItem>
-          )}
+            {saved && (
+              <DropdownMenuItem render={<a href="/dashboard/checklist" />}>
+                <ListChecksIcon />
+                Open your checklist
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuItem
             variant="destructive"
