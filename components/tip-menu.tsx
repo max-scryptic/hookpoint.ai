@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react"
 import {
   BookmarkCheckIcon,
   BookmarkPlusIcon,
+  BookmarkXIcon,
   ListChecksIcon,
   ThumbsDownIcon,
 } from "lucide-react"
@@ -49,7 +50,7 @@ function currentPath(): string | null {
 }
 
 export function TipMenu({ tip, section }: { tip: string; section: string }) {
-  const { savedFingerprints, markSaved } = useSavedTips()
+  const { savedFingerprints, markSaved, markRemoved } = useSavedTips()
   const fingerprint = useMemo(() => tipFingerprint(tip), [tip])
   const saved = savedFingerprints.has(fingerprint)
   // Shown as the menu's heading, so the creator can see which group of their
@@ -57,6 +58,8 @@ export function TipMenu({ tip, section }: { tip: string; section: string }) {
   const category = useMemo(() => tipCategoryForSection(section), [section])
 
   const [saveError, setSaveError] = useState<string | null>(null)
+  // One flag for both directions: keeping and removing are the same button, and
+  // it should be inert while either is in flight.
   const [isSaving, startSaving] = useTransition()
 
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -84,6 +87,34 @@ export function TipMenu({ tip, section }: { tip: string; section: string }) {
       } catch (error) {
         setSaveError(
           error instanceof Error ? error.message : "Could not save this tip.",
+        )
+      }
+    })
+  }
+
+  // Keeping a tip can be undone from where it was kept, so the creator does not
+  // have to open their checklist to take back a click. The tip is removed by its
+  // words rather than by a row id, which is all a report knows about it.
+  function remove() {
+    if (!saved || isSaving) return
+    setSaveError(null)
+    startSaving(async () => {
+      try {
+        const response = await fetch("/api/tips/checklist", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tip }),
+        })
+        if (!response.ok) {
+          const result = (await response.json().catch(() => ({}))) as {
+            error?: string
+          }
+          throw new Error(result.error ?? "Could not remove this tip.")
+        }
+        markRemoved(fingerprint)
+      } catch (error) {
+        setSaveError(
+          error instanceof Error ? error.message : "Could not remove this tip.",
         )
       }
     })
@@ -139,24 +170,27 @@ export function TipMenu({ tip, section }: { tip: string; section: string }) {
                 "hover:bg-blue-500/10 hover:decoration-blue-500/70",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
                 "data-popup-open:bg-blue-500/10 data-popup-open:decoration-blue-500/70",
-                flagged && "text-blue-600/60 dark:text-blue-400/60",
               )}
             />
           }
         >
           {tip}
           {/* What has already been done with this tip, kept inside the trigger
-              so the state travels with the words when the line wraps. */}
+              so the state travels with the words when the line wraps. Flagging a
+              tip does not fade the advice: the tip still says what it says, and
+              the mark beside it carries the state on its own. Colour is what
+              separates the two marks at this size, green for kept and red for
+              flagged, so a glance down a report reads without opening menus. */}
           {saved && (
             <BookmarkCheckIcon
               aria-hidden="true"
-              className="ml-1 inline size-3.5 shrink-0 align-[-0.15em]"
+              className="ml-1 inline size-3.5 shrink-0 align-[-0.15em] text-emerald-600 dark:text-emerald-400"
             />
           )}
           {flagged && (
             <ThumbsDownIcon
               aria-hidden="true"
-              className="ml-1 inline size-3.5 shrink-0 align-[-0.15em]"
+              className="ml-1 inline size-3.5 shrink-0 align-[-0.15em] text-red-600 dark:text-red-400"
             />
           )}
         </DropdownMenuTrigger>
@@ -170,9 +204,15 @@ export function TipMenu({ tip, section }: { tip: string; section: string }) {
             <DropdownMenuLabel>
               {TIP_CATEGORY_LABELS[category]} tip
             </DropdownMenuLabel>
-            <DropdownMenuItem disabled={saved || isSaving} onClick={save}>
-              {saved ? <BookmarkCheckIcon /> : <BookmarkPlusIcon />}
-              {saved ? "On your checklist" : "Add to checklist"}
+            {/* A kept tip offers the way back out rather than restating that it
+                is kept: the mark on the tip already says that, so the menu is
+                left with something to do. */}
+            <DropdownMenuItem
+              disabled={isSaving}
+              onClick={saved ? remove : save}
+            >
+              {saved ? <BookmarkXIcon /> : <BookmarkPlusIcon />}
+              {saved ? "Remove from checklist" : "Add to checklist"}
             </DropdownMenuItem>
             {saved && (
               <DropdownMenuItem render={<a href="/dashboard/checklist" />}>
@@ -181,18 +221,24 @@ export function TipMenu({ tip, section }: { tip: string; section: string }) {
               </DropdownMenuItem>
             )}
           </DropdownMenuGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            variant="destructive"
-            disabled={flagged}
-            onClick={() => {
-              setFeedbackError(null)
-              setDialogOpen(true)
-            }}
-          >
-            <ThumbsDownIcon />
-            {flagged ? "Flagged as not useful" : "Not useful"}
-          </DropdownMenuItem>
+          {/* Flagging is a one-way, one-time thing, so once it is done the item
+              goes rather than sitting there dead. The menu is then the checklist
+              alone, and the red mark on the tip is what says it was flagged. */}
+          {!flagged && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => {
+                  setFeedbackError(null)
+                  setDialogOpen(true)
+                }}
+              >
+                <ThumbsDownIcon />
+                Not useful
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 
