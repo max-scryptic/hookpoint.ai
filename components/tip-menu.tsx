@@ -49,7 +49,19 @@ function currentPath(): string | null {
   return `${window.location.pathname}${window.location.search}`
 }
 
-export function TipMenu({ tip, section }: { tip: string; section: string }) {
+export function TipMenu({
+  tip,
+  section,
+  label,
+}: {
+  tip: string
+  section: string
+  // The word that introduces the tip, "Try:" or "Or:". It lives inside the
+  // trigger rather than beside it so the label and the advice are one run of
+  // inline text: a long tip wraps mid sentence instead of being pushed whole
+  // onto the line below its own label.
+  label?: string
+}) {
   const { savedFingerprints, markSaved, markRemoved } = useSavedTips()
   const fingerprint = useMemo(() => tipFingerprint(tip), [tip])
   const saved = savedFingerprints.has(fingerprint)
@@ -163,9 +175,18 @@ export function TipMenu({ tip, section }: { tip: string; section: string }) {
               // The advice is the label; the menu is what opening it offers.
               aria-label={`${tip} (tip options)`}
               className={cn(
-                // Inline, so a tip still wraps and reads as one sentence
-                // running on from "Try:" rather than as a block of its own.
-                "-mx-1 -my-0.5 cursor-pointer rounded-md px-1 py-0.5 text-left align-baseline select-text",
+                // Truly inline, not inline-block: a button is an atomic box by
+                // default, so a long tip could not break across lines and got
+                // bumped whole onto the next one, leaving "Try:" stranded above
+                // it. As inline text it wraps word by word like the sentence it
+                // is, and box-decoration-clone keeps the rounded hover
+                // background intact on every wrapped fragment.
+                "inline box-decoration-clone",
+                // No horizontal padding or inset: an inline box only pads its
+                // first and last fragment, so any would step the first line in
+                // or out from the ones it wraps onto. The background is given
+                // room vertically instead, which the line box absorbs.
+                "-my-0.5 cursor-pointer rounded-md py-0.5 text-left select-text",
                 "underline decoration-blue-500/30 decoration-dotted underline-offset-4 transition-colors",
                 "hover:bg-blue-500/10 hover:decoration-blue-500/70",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
@@ -174,6 +195,7 @@ export function TipMenu({ tip, section }: { tip: string; section: string }) {
             />
           }
         >
+          {label && <span className="font-medium">{label} </span>}
           {tip}
           {/* What has already been done with this tip, kept inside the trigger
               so the state travels with the words when the line wraps. Flagging a
