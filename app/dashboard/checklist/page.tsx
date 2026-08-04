@@ -49,7 +49,7 @@ export default async function Page() {
               </BreadcrumbItem>
               <BreadcrumbSeparator className="hidden md:block" />
               <BreadcrumbItem>
-                <BreadcrumbPage>Tip Checklist</BreadcrumbPage>
+                <BreadcrumbPage>Checklist</BreadcrumbPage>
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
@@ -58,11 +58,12 @@ export default async function Page() {
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <div>
           <h1 className="text-2xl font-semibold tracking-normal">
-            Tip Checklist
+            Checklist
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            The tips you kept from your reports. Tick them off as you work
-            through them, and remove the ones you are done with.
+            The tips you kept from your reports, grouped by what they are about.
+            Tick them off as you work through them, and remove the ones you are
+            done with.
           </p>
         </div>
 

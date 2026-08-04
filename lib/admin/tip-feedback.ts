@@ -1,5 +1,10 @@
 import { createAdminClient } from "@/lib/supabase/admin"
-import type { TipFeedbackReason } from "@/lib/tips"
+import {
+  isTipCategory,
+  tipCategoryForSection,
+  type TipCategory,
+  type TipFeedbackReason,
+} from "@/lib/tips"
 
 // Reads the tips creators flagged as not useful, for the admin Tip Feedback
 // table. Uses the service-role client, so it bypasses Row Level Security and
@@ -12,9 +17,12 @@ export type AdminTipFeedbackRow = {
   userId: string
   username: string | null
   email: string | null
-  // The tip as it was read, and the part of the report it was read in.
+  // The tip as it was read, the part of the report it was read in, and what it
+  // was about (the hook, drop-offs, the script). The category is what makes a
+  // run of complaints about one kind of advice visible across surfaces.
   tip: string
   section: string
+  category: TipCategory
   sourcePath: string | null
   reason: TipFeedbackReason
   notes: string | null
@@ -30,7 +38,9 @@ export async function listTipFeedback(): Promise<AdminTipFeedbackRow[]> {
 
   const { data, error } = await supabase
     .from("tip_feedback")
-    .select("id, user_id, tip, section, source_path, reason, notes, created_at")
+    .select(
+      "id, user_id, tip, section, category, source_path, reason, notes, created_at",
+    )
     .order("created_at", { ascending: false })
     .limit(MAX_ROWS)
 
@@ -43,6 +53,7 @@ export async function listTipFeedback(): Promise<AdminTipFeedbackRow[]> {
     user_id: string
     tip: string
     section: string
+    category: string | null
     source_path: string | null
     reason: TipFeedbackReason
     notes: string | null
@@ -83,6 +94,11 @@ export async function listTipFeedback(): Promise<AdminTipFeedbackRow[]> {
       email: profile?.email ?? null,
       tip: row.tip,
       section: row.section,
+      // Derived again for anything the column cannot account for, so a flag
+      // recorded before the column existed is still filed under a category.
+      category: isTipCategory(row.category)
+        ? row.category
+        : tipCategoryForSection(row.section),
       sourcePath: row.source_path,
       reason: row.reason,
       notes: row.notes,

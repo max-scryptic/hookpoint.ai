@@ -58,8 +58,8 @@ const navMain = [
     icon: <ClapperboardIcon />,
   },
   {
-    title: "Tip Checklist",
-    url: "/dashboard/tip-checklist",
+    title: "Checklist",
+    url: "/dashboard/checklist",
     icon: <ListChecksIcon />,
   },
 ]

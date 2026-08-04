@@ -14,8 +14,11 @@ import { cleanCopy, nameVideoSides, stripEmDashes } from "@/lib/copy-guardrails"
 
 const CHANNEL_TRENDS_SOURCE_FILES = [
   "app/dashboard/channel-trends/page.tsx",
+  "app/dashboard/checklist/loading.tsx",
+  "app/dashboard/checklist/page.tsx",
   "app/dashboard/video-comparator/page.tsx",
   "app/dashboard/video-comparator/report/page.tsx",
+  "components/admin/admin-tip-feedback-table.tsx",
   "components/channel-trends.tsx",
   "components/channel-trends-copy.ts",
   "components/channel-trends-tabs.tsx",
@@ -30,8 +33,8 @@ const CHANNEL_TRENDS_SOURCE_FILES = [
   "components/retention-head-to-head.tsx",
   "components/saved-tips-provider.tsx",
   "components/script-comparison.tsx",
-  "components/tip-actions.tsx",
   "components/tip-checklist.tsx",
+  "components/tip-menu.tsx",
   "components/tip-feedback-dialog.tsx",
   "components/try-callout.tsx",
   "components/video-comparison-tabs.tsx",

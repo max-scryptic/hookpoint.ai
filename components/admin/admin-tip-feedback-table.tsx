@@ -7,8 +7,11 @@ import Link from "next/link"
 
 import type { AdminTipFeedbackRow } from "@/lib/admin/tip-feedback"
 import {
+  TIP_CATEGORIES,
+  TIP_CATEGORY_LABELS,
   TIP_FEEDBACK_REASON_LABELS,
   TIP_FEEDBACK_REASONS,
+  type TipCategory,
   type TipFeedbackReason,
 } from "@/lib/tips"
 import { Button } from "@/components/ui/button"
@@ -34,19 +37,34 @@ import {
 } from "@/components/ui/table-pagination"
 
 // Every tip a creator flagged as not useful: which section it was read in, what
-// it suggested, why it missed and whatever they wrote about it. Read-only, and
-// filterable by reason and free text so a run of complaints about one surface
-// is easy to pull out.
+// it was about, what it suggested, why it missed and whatever they wrote about
+// it. Read-only, and filterable by category, by reason and by free text, so a
+// run of complaints about one surface or one kind of advice is easy to pull
+// out.
 //
 // COPY GUARDRAIL: no em or en dashes (U+2014 / U+2013), ever, in any text in
 // this file. Hyphens are fine. Enforced by lib/__tests__/copy-guardrails.
 
 type ReasonFilter = TipFeedbackReason | "all"
+type CategoryFilter = TipCategory | "all"
 
 function matchesSearch(row: AdminTipFeedbackRow, query: string): boolean {
   if (query.length === 0) return true
-  return [row.username, row.email, row.section, row.tip, row.notes].some(
-    (field) => field != null && field.toLowerCase().includes(query),
+  return [
+    row.username,
+    row.email,
+    row.section,
+    TIP_CATEGORY_LABELS[row.category],
+    row.tip,
+    row.notes,
+  ].some((field) => field != null && field.toLowerCase().includes(query))
+}
+
+function CategoryBadge({ category }: { category: TipCategory }) {
+  return (
+    <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium whitespace-nowrap text-muted-foreground">
+      {TIP_CATEGORY_LABELS[category]}
+    </span>
   )
 }
 
@@ -65,19 +83,24 @@ export function AdminTipFeedbackTable({
 }) {
   const [search, setSearch] = useState("")
   const [reason, setReason] = useState<ReasonFilter>("all")
+  const [category, setCategory] = useState<CategoryFilter>("all")
 
   const rows = useMemo(() => {
     const query = search.trim().toLowerCase()
     return allRows.filter(
       (row) =>
-        (reason === "all" || row.reason === reason) && matchesSearch(row, query),
+        (reason === "all" || row.reason === reason) &&
+        (category === "all" || row.category === category) &&
+        matchesSearch(row, query),
     )
-  }, [allRows, reason, search])
+  }, [allRows, category, reason, search])
 
   const { pageRows, currentPage, pageCount, setPageNumber } = usePagination(rows)
 
   const reasonLabel =
     reason === "all" ? "All reasons" : TIP_FEEDBACK_REASON_LABELS[reason]
+  const categoryLabel =
+    category === "all" ? "All categories" : TIP_CATEGORY_LABELS[category]
 
   const countLabel = `${rows.length.toLocaleString()} flagged tip${
     rows.length === 1 ? "" : "s"
@@ -104,6 +127,40 @@ export function AdminTipFeedbackTable({
               className="h-9 w-full pl-8 sm:w-72"
             />
           </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button variant="outline" size="sm" className="h-9 gap-2" />
+              }
+            >
+              <span className="truncate">{categoryLabel}</span>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="w-auto min-w-(--anchor-width) max-w-[min(28rem,var(--available-width))]"
+            >
+              <DropdownMenuRadioGroup
+                value={category}
+                onValueChange={(value) => {
+                  setCategory(value as CategoryFilter)
+                  setPageNumber(1)
+                }}
+              >
+                <DropdownMenuRadioItem value="all" className="whitespace-nowrap">
+                  All categories
+                </DropdownMenuRadioItem>
+                {TIP_CATEGORIES.map((option) => (
+                  <DropdownMenuRadioItem
+                    key={option}
+                    value={option}
+                    className="whitespace-nowrap"
+                  >
+                    {TIP_CATEGORY_LABELS[option]}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
@@ -191,6 +248,9 @@ export function AdminTipFeedbackTable({
                     </TableCell>
                     <TableCell className="px-4 py-3 text-sm whitespace-nowrap">
                       {row.section}
+                      <div className="mt-1">
+                        <CategoryBadge category={row.category} />
+                      </div>
                     </TableCell>
                     <TableCell className="max-w-md px-4 py-3 text-sm">
                       {row.tip}
