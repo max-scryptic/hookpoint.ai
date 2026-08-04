@@ -1,6 +1,17 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // The tip checklist is now just "Checklist" and lives at /dashboard/checklist.
+  // Anyone holding the old link (a bookmark, an open tab) still lands on it.
+  async redirects() {
+    return [
+      {
+        source: "/dashboard/tip-checklist",
+        destination: "/dashboard/checklist",
+        permanent: true,
+      },
+    ]
+  },
   images: {
     // YouTube thumbnail hosts, served by next/image on the dashboard.
     remotePatterns: [

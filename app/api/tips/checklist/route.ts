@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import {
   normaliseTipSourcePath,
+  tipCategoryForSection,
   tipFingerprint,
   TIP_MAX_LENGTH,
   TIP_SECTION_MAX_LENGTH,
@@ -51,6 +52,10 @@ export async function POST(request: Request) {
     user_id: user.id,
     tip,
     section,
+    // Worked out here rather than taken from the request: the category is what
+    // the checklist groups by, so it is derived from the section by one rule on
+    // the server instead of being anything a client can claim.
+    category: tipCategoryForSection(section),
     source_path: normaliseTipSourcePath(body.sourcePath),
     tip_fingerprint: fingerprint,
   })

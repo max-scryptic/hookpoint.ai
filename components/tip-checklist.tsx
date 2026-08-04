@@ -11,12 +11,23 @@ import {
 import Link from "next/link"
 
 import { Button } from "@/components/ui/button"
-import type { SavedTip } from "@/lib/tips"
+import {
+  TIP_CATEGORIES,
+  TIP_CATEGORY_LABELS,
+  type SavedTip,
+  type TipCategory,
+} from "@/lib/tips"
 import { cn } from "@/lib/utils"
 
 // The creator's kept tips, to work through while making the next video. Open
 // ones lead; ticked ones fall to a done list underneath rather than vanishing,
 // so a tip can be un-ticked when the next video comes around.
+//
+// The open list is broken down by what each tip is about (the hook, drop-offs,
+// keeping attention, the script) rather than left as one run of advice: a
+// checklist is worked through a subject at a time, and a dozen unsorted lines
+// from four different reports is not a plan. Ticked-off tips stay in one flat
+// list underneath, where the grouping would only be noise.
 //
 // State is held here and each change is written straight through to the API, so
 // ticking and removing feel immediate. A failed write is rolled back and said
@@ -93,15 +104,57 @@ function TipRow({
   )
 }
 
+function TipCard({
+  tips,
+  onToggle,
+  onRemove,
+  pendingId,
+}: {
+  tips: SavedTip[]
+  onToggle: (tip: SavedTip) => void
+  onRemove: (tip: SavedTip) => void
+  pendingId: string | null
+}) {
+  return (
+    <ul className="divide-y overflow-hidden rounded-xl border bg-card">
+      {tips.map((tip) => (
+        <TipRow
+          key={tip.id}
+          tip={tip}
+          busy={pendingId === tip.id}
+          onToggle={() => onToggle(tip)}
+          onRemove={() => onRemove(tip)}
+        />
+      ))}
+    </ul>
+  )
+}
+
+// The tips in each category that has any, in the order a video is planned in
+// (hook first, packaging and delivery last), so the checklist reads top down
+// the way the work is done.
+function byCategory(
+  tips: SavedTip[],
+): { category: TipCategory; tips: SavedTip[] }[] {
+  return TIP_CATEGORIES.map((category) => ({
+    category,
+    tips: tips.filter((tip) => tip.category === category),
+  })).filter((group) => group.tips.length > 0)
+}
+
 function TipList({
   title,
   tips,
+  grouped = false,
   onToggle,
   onRemove,
   pendingId,
 }: {
   title: string
   tips: SavedTip[]
+  // Whether the list is broken down by category. The open list is; the done
+  // list is short-lived and reads better as one run.
+  grouped?: boolean
   onToggle: (tip: SavedTip) => void
   onRemove: (tip: SavedTip) => void
   pendingId: string | null
@@ -112,17 +165,30 @@ function TipList({
       <h2 className="text-sm font-medium text-muted-foreground">
         {title} ({tips.length})
       </h2>
-      <ul className="divide-y overflow-hidden rounded-xl border bg-card">
-        {tips.map((tip) => (
-          <TipRow
-            key={tip.id}
-            tip={tip}
-            busy={pendingId === tip.id}
-            onToggle={() => onToggle(tip)}
-            onRemove={() => onRemove(tip)}
-          />
-        ))}
-      </ul>
+      {grouped ? (
+        <div className="flex flex-col gap-4">
+          {byCategory(tips).map((group) => (
+            <div key={group.category} className="flex flex-col gap-1.5">
+              <h3 className="text-xs font-medium tracking-wide text-foreground/70 uppercase">
+                {TIP_CATEGORY_LABELS[group.category]} ({group.tips.length})
+              </h3>
+              <TipCard
+                tips={group.tips}
+                onToggle={onToggle}
+                onRemove={onRemove}
+                pendingId={pendingId}
+              />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <TipCard
+          tips={tips}
+          onToggle={onToggle}
+          onRemove={onRemove}
+          pendingId={pendingId}
+        />
+      )}
     </section>
   )
 }
@@ -212,9 +278,9 @@ export function TipChecklist({ tips: initialTips }: { tips: SavedTip[] }) {
         <ListChecksIcon className="size-6 text-muted-foreground" />
         <p className="text-sm font-medium">Your checklist is empty</p>
         <p className="max-w-md text-sm text-muted-foreground">
-          Every report ends its sections on a blue &quot;Try:&quot; tip. Use the
-          bookmark beside one to keep it here, and it will be waiting the next
-          time you plan a video.
+          Every report ends its sections on a blue &quot;Try:&quot; tip. Click
+          one and add it to your checklist, and it will be waiting here, under
+          what it is about, the next time you plan a video.
         </p>
       </div>
     )
@@ -230,6 +296,7 @@ export function TipChecklist({ tips: initialTips }: { tips: SavedTip[] }) {
       <TipList
         title="To try"
         tips={open}
+        grouped
         onToggle={toggle}
         onRemove={remove}
         pendingId={pendingId}

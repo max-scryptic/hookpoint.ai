@@ -7,6 +7,7 @@ import {
   ListFilterIcon,
   MessageSquareIcon,
   SearchIcon,
+  TagIcon,
   UsersIcon,
   XIcon,
 } from "lucide-react"
@@ -15,10 +16,13 @@ import { type DateRange } from "react-day-picker"
 
 import type { AdminTipFeedbackRow } from "@/lib/admin/tip-feedback"
 import {
+  TIP_CATEGORIES,
+  TIP_CATEGORY_LABELS,
   TIP_FEEDBACK_REASON_LABELS,
   TIP_FEEDBACK_REASONS,
   TIP_SURFACE_LABELS,
   TIP_SURFACES,
+  type TipCategory,
   type TipFeedbackReason,
   type TipSurface,
 } from "@/lib/tips"
@@ -47,10 +51,10 @@ import {
 } from "@/components/ui/table-pagination"
 
 // Every tip a creator flagged as not useful: who flagged it, the surface and
-// section it was read in, what it suggested, why it missed and whatever they
-// wrote about it. Read-only, and filterable on every column that holds a value
-// worth grouping by, so a run of complaints about one surface, one section or
-// one creator is easy to pull out.
+// section it was read in, what it was about, what it suggested, why it missed
+// and whatever they wrote about it. Read-only, and filterable on every column
+// that holds a value worth grouping by, so a run of complaints about one
+// surface, one section, one kind of advice or one creator is easy to pull out.
 //
 // COPY GUARDRAIL: no em or en dashes (U+2014 / U+2013), ever, in any text in
 // this file. Hyphens are fine. Enforced by lib/__tests__/copy-guardrails.
@@ -87,8 +91,20 @@ function matchesSearch(row: AdminTipFeedbackRow, query: string): boolean {
     row.notes,
     row.sourcePath,
     TIP_SURFACE_LABELS[row.surface],
+    TIP_CATEGORY_LABELS[row.category],
     TIP_FEEDBACK_REASON_LABELS[row.reason],
   ].some((field) => field != null && field.toLowerCase().includes(query))
+}
+
+// What the tip was about, which cuts across surfaces: the same advice about the
+// hook can miss on a report and on a head-to-head alike. Kept quieter than the
+// surface pill, since it sits under the section it was read in.
+function CategoryBadge({ category }: { category: TipCategory }) {
+  return (
+    <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs leading-tight font-medium text-muted-foreground">
+      {TIP_CATEGORY_LABELS[category]}
+    </span>
+  )
 }
 
 function SurfaceBadge({ surface }: { surface: TipSurface }) {
@@ -170,6 +186,7 @@ export function AdminTipFeedbackTable({
   const [userId, setUserId] = useState<string>(ANY)
   const [surface, setSurface] = useState<TipSurface | typeof ANY>(ANY)
   const [section, setSection] = useState<string>(ANY)
+  const [category, setCategory] = useState<TipCategory | typeof ANY>(ANY)
   const [reason, setReason] = useState<TipFeedbackReason | typeof ANY>(ANY)
   const [notes, setNotes] = useState<NotesFilter>(ANY)
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
@@ -217,6 +234,7 @@ export function AdminTipFeedbackTable({
       if (userId !== ANY && row.userId !== userId) return false
       if (surface !== ANY && row.surface !== surface) return false
       if (section !== ANY && row.section !== section) return false
+      if (category !== ANY && row.category !== category) return false
       if (reason !== ANY && row.reason !== reason) return false
       if (notes === "with" && row.notes == null) return false
       if (notes === "without" && row.notes != null) return false
@@ -227,7 +245,17 @@ export function AdminTipFeedbackTable({
       }
       return matchesSearch(row, query)
     })
-  }, [allRows, dateRange, notes, reason, search, section, surface, userId])
+  }, [
+    allRows,
+    category,
+    dateRange,
+    notes,
+    reason,
+    search,
+    section,
+    surface,
+    userId,
+  ])
 
   const { pageRows, currentPage, pageCount, setPageNumber } = usePagination(rows)
 
@@ -257,6 +285,7 @@ export function AdminTipFeedbackTable({
     setUserId(ANY)
     setSurface(ANY)
     setSection(ANY)
+    setCategory(ANY)
     setReason(ANY)
     setNotes(ANY)
     setDateRange(undefined)
@@ -265,6 +294,8 @@ export function AdminTipFeedbackTable({
 
   const surfaceLabel =
     surface === ANY ? "All surfaces" : TIP_SURFACE_LABELS[surface]
+  const categoryLabel =
+    category === ANY ? "All categories" : TIP_CATEGORY_LABELS[category]
   const reasonLabel =
     reason === ANY ? "All reasons" : TIP_FEEDBACK_REASON_LABELS[reason]
   const userLabel =
@@ -275,6 +306,7 @@ export function AdminTipFeedbackTable({
     userId !== ANY ||
     surface !== ANY ||
     section !== ANY ||
+    category !== ANY ||
     reason !== ANY ||
     notes !== ANY ||
     dateRange?.from != null ||
@@ -331,6 +363,22 @@ export function AdminTipFeedbackTable({
             onChange={(value) => apply(() => setSection(value))}
             disabled={sectionOptions.length === 0}
             options={[{ value: ANY, label: "All sections" }, ...sectionOptions]}
+          />
+          <FilterMenu
+            icon={TagIcon}
+            srLabel="Filter by what the tip was about"
+            label={categoryLabel}
+            value={category}
+            onChange={(value) =>
+              apply(() => setCategory(value as TipCategory | typeof ANY))
+            }
+            options={[
+              { value: ANY, label: "All categories" },
+              ...TIP_CATEGORIES.map((value) => ({
+                value,
+                label: TIP_CATEGORY_LABELS[value],
+              })),
+            ]}
           />
           <FilterMenu
             icon={ListFilterIcon}
@@ -443,6 +491,9 @@ export function AdminTipFeedbackTable({
                     </TableCell>
                     <TableCell className="px-4 py-3 text-sm break-words whitespace-normal">
                       {row.section}
+                      <div className="mt-1">
+                        <CategoryBadge category={row.category} />
+                      </div>
                     </TableCell>
                     <TableCell className="px-4 py-3 text-sm break-words whitespace-normal">
                       <p className="line-clamp-4" title={row.tip}>
