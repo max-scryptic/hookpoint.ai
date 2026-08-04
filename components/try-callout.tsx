@@ -52,24 +52,31 @@ export function TryCallout({
     <p className="inline-flex w-fit max-w-full items-start gap-2 text-sm text-blue-600 dark:text-blue-400">
       <SparklesIcon className="mt-0.5 size-4 shrink-0" />
       <span className="flex flex-col gap-1">
+        {/* Keep and flag live behind the tip itself. Only advice this
+            component scrubbed is clickable: a richer node is someone else's
+            copy, and there is no plain text of it to put on a checklist.
+            When it is clickable the "Try:" goes inside the tip, so the label
+            and the advice wrap as one sentence rather than sitting on
+            separate lines. */}
         <span>
-          <span className="font-medium">Try:{" "}</span>
-          {/* Keep and flag live behind the tip itself. Only advice this
-              component scrubbed is clickable: a richer node is someone else's
-              copy, and there is no plain text of it to put on a checklist. */}
           {actions && typeof tip === "string" ? (
-            <TipMenu tip={tip} section={section} />
+            <TipMenu tip={tip} section={section} label="Try:" />
           ) : (
-            tip
+            <>
+              <span className="font-medium">Try: </span>
+              {tip}
+            </>
           )}
         </span>
         {distinctAlternatives.map((alternative, index) => (
           <span key={index}>
-            <span className="font-medium">Or:{" "}</span>
             {actions && typeof alternative === "string" ? (
-              <TipMenu tip={alternative} section={section} />
+              <TipMenu tip={alternative} section={section} label="Or:" />
             ) : (
-              alternative
+              <>
+                <span className="font-medium">Or: </span>
+                {alternative}
+              </>
             )}
           </span>
         ))}
