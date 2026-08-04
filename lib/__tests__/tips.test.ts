@@ -9,8 +9,11 @@ import {
   TIP_FEEDBACK_REASONS,
   TIP_FEEDBACK_REASON_LABELS,
   TIP_FINGERPRINT_MAX_LENGTH,
+  TIP_SURFACES,
+  TIP_SURFACE_LABELS,
   tipCategoryForSection,
   tipFingerprint,
+  tipSurface,
 } from "@/lib/tips"
 
 describe("tipFingerprint", () => {
@@ -66,6 +69,47 @@ describe("normaliseTipSourcePath", () => {
     expect(normaliseTipSourcePath(`/${"a".repeat(600)}`)).toBeNull()
     expect(normaliseTipSourcePath(undefined)).toBeNull()
     expect(normaliseTipSourcePath(42)).toBeNull()
+  })
+})
+
+describe("tipSurface", () => {
+  it("reads the surface off the path the tip was flagged on", () => {
+    expect(tipSurface("/dashboard/analysed-video/Rk9YJK1sKek", "Packaging: Title")).toBe(
+      "video_analysis",
+    )
+    expect(
+      tipSurface(
+        "/dashboard/video-comparator/report?a=1&b=2",
+        "Packaging head-to-head: Title",
+      ),
+    ).toBe("comparison_report")
+  })
+
+  it("does not read the analysed video list as a report", () => {
+    expect(tipSurface("/dashboard/analysed-videos", "Packaging: Title")).toBe(
+      "unknown",
+    )
+  })
+
+  it("falls back to the section when there is no usable path", () => {
+    expect(tipSurface(null, "Retention head-to-head: Hook")).toBe(
+      "comparison_report",
+    )
+    expect(tipSurface(undefined, "Script head-to-head: Opening")).toBe(
+      "comparison_report",
+    )
+  })
+
+  it("says unknown rather than guessing at a pathless section", () => {
+    expect(tipSurface(null, "Packaging: Title")).toBe("unknown")
+    expect(tipSurface("/dashboard/checklist", "Pacing")).toBe("unknown")
+    expect(tipSurface(null, null)).toBe("unknown")
+  })
+
+  it("labels every surface it can return", () => {
+    for (const surface of TIP_SURFACES) {
+      expect(TIP_SURFACE_LABELS[surface]).toBeTruthy()
+    }
   })
 })
 

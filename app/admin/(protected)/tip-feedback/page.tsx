@@ -6,18 +6,19 @@ import { listTipFeedback } from "@/lib/admin/tip-feedback"
 export const dynamic = "force-dynamic"
 
 // Admin tip feedback: every "Try:" tip a creator flagged as not useful, with
-// the section it was read in, what it suggested, why it missed and their notes.
-// Data is fetched server-side via the service-role client.
+// the surface and section it was read in, what it suggested, why it missed and
+// their notes. Data is fetched server-side via the service-role client.
 export default async function AdminTipFeedbackPage() {
   const [, rows] = await Promise.all([requireAdminUser(), listTipFeedback()])
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-normal">Tip Feedback</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Tips creators told us were not useful, and why. Read these as the
-          record of which advice keeps missing and on which surface.
+          record of which advice keeps missing, on which surface and in which
+          section of it.
         </p>
       </div>
 

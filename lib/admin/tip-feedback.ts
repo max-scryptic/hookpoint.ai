@@ -2,8 +2,10 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import {
   isTipCategory,
   tipCategoryForSection,
+  tipSurface,
   type TipCategory,
   type TipFeedbackReason,
+  type TipSurface,
 } from "@/lib/tips"
 
 // Reads the tips creators flagged as not useful, for the admin Tip Feedback
@@ -24,6 +26,10 @@ export type AdminTipFeedbackRow = {
   section: string
   category: TipCategory
   sourcePath: string | null
+  // Which report the section belongs to, derived from the path above. Stored
+  // nowhere: it is a reading of the path, so it stays correct for rows written
+  // before the admin table asked the question.
+  surface: TipSurface
   reason: TipFeedbackReason
   notes: string | null
   createdAt: string
@@ -100,6 +106,7 @@ export async function listTipFeedback(): Promise<AdminTipFeedbackRow[]> {
         ? row.category
         : tipCategoryForSection(row.section),
       sourcePath: row.source_path,
+      surface: tipSurface(row.source_path, row.section),
       reason: row.reason,
       notes: row.notes,
       createdAt: row.created_at,
