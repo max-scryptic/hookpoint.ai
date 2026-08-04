@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import { AreaChartIcon } from "lucide-react"
 
 import { ComparisonReportTabs } from "@/components/comparison-report-tabs"
@@ -8,20 +9,21 @@ import type {
   RetentionComparisonReportSection,
 } from "@/lib/retention-comparison-report"
 
-// The written retention head-to-head, which opens the Retention tab above the
-// curve, the hook columns and the stretch-by-stretch evidence: what each video
-// held, where the two curves separated, and why the stronger one held. Read
-// straight from the report stored on the comparison, with no model call at view
-// time. Laid out exactly like the packaging and script head-to-heads: a summary
-// card, then one tab per section of the report, each panel one paragraph and a
-// single "Try:" line. The tab strip already names the section, so the panel
-// carries no heading of its own. As on the script tab the headings are written
-// by the model rather than drawn from a fixed set, so the tabs are labelled with
-// whatever the report called its sections and carry no glyph.
+// The written retention head-to-head, which is the whole Retention tab: what
+// each video held, where the two curves separated, and why the stronger one
+// held. Read straight from the report stored on the comparison, with no model
+// call at view time. Laid out like the packaging and script head-to-heads, with
+// the overlaid curves folded in: a summary card, then the chart, then one tab
+// per section of the report, each panel one paragraph and a single "Try:" line.
+// The tab strip already names the section, so the panel carries no heading of
+// its own. As on the script tab the headings are written by the model rather
+// than drawn from a fixed set, so the tabs are labelled with whatever the report
+// called its sections and carry no glyph.
 //
-// This is the one part of the Retention tab that can say why a curve held: the
-// deterministic cards below it can only show where the two separated. Purely
-// presentational.
+// The chart arrives as a slot rather than being rendered here, because it is
+// derived from the stored analysis on every open while everything around it is
+// read back as stored JSON, and because a pair with no written report still
+// shows the chart under the note that stands in for one. Purely presentational.
 //
 // COPY GUARDRAIL: no em or en dashes (U+2014 / U+2013), ever, in any text in
 // this file. Hyphens are fine. Enforced by lib/__tests__/copy-guardrails.
@@ -70,8 +72,13 @@ function ReportSection({
 
 export function RetentionHeadToHead({
   report,
+  chart,
 }: {
   report: RetentionComparisonReport
+  // The overlaid curves card, stacked between the summary and the tab strip.
+  // Passed in by the page because it is derived from the stored analysis rather
+  // than read off the report.
+  chart?: ReactNode
 }) {
   // One tab per section, in the order the report wrote them. The heading is the
   // label, so the value has the index folded in: two sections could be given the
@@ -99,6 +106,7 @@ export function RetentionHeadToHead({
 
       <div className="flex flex-col gap-4">
         <ReportSummary summary={report.summary} />
+        {chart}
         <ComparisonReportTabs tabs={tabs} />
       </div>
     </section>
