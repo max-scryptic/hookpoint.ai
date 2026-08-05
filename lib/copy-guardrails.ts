@@ -202,6 +202,9 @@ function stripStructuralArtifacts(text: string): string {
 // The forward-looking framing itself is NOT dropped: it lives in how the rest
 // of the sentence is written ("plan", "a stretch like this"), which is what
 // keeps a tip from reading as an instruction to re-edit the published video.
+// lib/tip-voice.ts states that rule in full and is what every tip-writing
+// prompt is given; this function is its render-time half, for the one part of
+// the rule that can be enforced mechanically after the fact.
 const ADVICE_PREAMBLE =
   /(?:next time(?: around)?|next video|in (?:your |the )?next videos?|in (?:the )?future(?: videos?)?|for (?:your |the )?next videos?|for future videos?|going forward|from now on|moving forward)\s*[,:]\s*/i
 

@@ -743,12 +743,14 @@ function editPhrase(
 
 // A concrete, direction-aware pacing tip: too few cuts wants more, too many
 // wants room to breathe, and an unknown direction falls back to smoothing.
-// Every tip below is guidance for the uploader's next videos, never an
-// instruction to re-edit this one: it is already published, so "trim this" or
-// "compare a shorter cut against the current edit" is not an action they have.
-// That framing lives in how the advice is written ("plan ...", "a section like
-// this"), not in a "next time, ..." lead-in, which only delays the advice and
-// reads as a tic once every tip on the page opens the same way.
+// Every tip below is written under the site-wide tip voice (lib/tip-voice.ts),
+// which is where the rule is stated in full: a tip is advice for a video the
+// uploader has not made yet, so it never points back at the one analysed and
+// never asks for a re-edit of it. The framing lives in how the advice is
+// written ("plan ...", "a section like this"), not in a "next time, ..."
+// lead-in, which only delays the advice and reads as a tic once every tip on
+// the page opens the same way. The observation beside a tip is the opposite:
+// that describes this video, so it says "here" freely.
 // `at` names the moment that taught the lesson, not frames to go and change.
 function editTip(
   editing: WindowEvidence["editing"],
@@ -826,7 +828,7 @@ function takeawayFor({
           observation: phrase
             ? `The sound is what shifts here: ${phrase}.`
             : "Energy and sound are what shift here.",
-          tip: `Where the sound drops off${at}: keep the delivery lifted and cut dead air like this out in the edit.`,
+          tip: `Where the sound drops off${at}: keep the delivery lifted and cut dead air like this while you edit.`,
         }
       }
       case "combined": {
@@ -844,10 +846,14 @@ function takeawayFor({
         }
       }
       default:
+        // No modality claimed the moment, so there is no habit to name for the
+        // next video. A tip here could only tell the reader to go and look at
+        // the evidence beside it, which is a note about this analysis rather
+        // than advice, and every tip on the site has to be advice.
         return {
           observation:
-            "This moment stands out against the surrounding evidence.",
-          tip: "Review the frames, audio and pacing above to see which one is carrying it.",
+            "This moment stands out against the surrounding evidence, without one modality carrying it.",
+          tip: null,
         }
     }
   }

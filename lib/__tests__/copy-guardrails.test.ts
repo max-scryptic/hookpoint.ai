@@ -53,6 +53,7 @@ const CHANNEL_TRENDS_SOURCE_FILES = [
   "lib/retention-comparison.ts",
   "lib/retention-comparison-report.ts",
   "lib/script-comparison-report.ts",
+  "lib/tip-voice.ts",
   "lib/tips.ts",
   "lib/video-comparisons.ts",
 ]

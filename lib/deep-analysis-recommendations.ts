@@ -1,6 +1,9 @@
 // Turns each ranked retention-window event into one concrete recommendation.
 //
-// COPY CONSTRAINT: the video being analysed is already published on YouTube.
+// COPY CONSTRAINT: these are written here rather than by a model, but they are
+// rendered as "Try:" tips like every other, so they follow the same rule, which
+// lib/tip-voice.ts states in full for the prompts. In short: the video being
+// analysed is already published on YouTube.
 // Its edit cannot be changed, and there is no way to put an alternate cut up
 // against the live one, so a recommendation phrased as "re-cut this and compare
 // it against the current edit" asks for something impossible. Every action here
@@ -94,7 +97,7 @@ function recommendationForEvent(params: {
     return {
       actionType: "trim_silence",
       action:
-        "Cut dead air like this out in the edit, keeping only the short pause a sentence genuinely needs.",
+        "Cut dead air like this while you edit, keeping only the short pause a sentence genuinely needs.",
       rationale: event.narrative,
       expectedPurpose: "A tighter audio transition sustains momentum through the point.",
     }

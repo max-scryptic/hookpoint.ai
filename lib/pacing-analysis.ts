@@ -1,5 +1,6 @@
 import { recordLlmCallCost, type LlmLogContext } from "@/lib/llm-calls"
 import { responsesCallCost, type ResponsesUsage } from "@/lib/llm-cost"
+import { TIP_VOICE_PROMPT } from "@/lib/tip-voice"
 import type { TranscriptCue, VideoDetails } from "@/lib/youtube/youtube"
 
 export type PacingRate =
@@ -310,8 +311,11 @@ export async function generatePacingAnalysis(
                 "Keep evidence specific and concise. Set possibleIssue to null when there is no meaningful issue.",
                 "For slowOrRepetitiveStretches, pick the 3 to 5 areas most worth reviewing: where pacing drags or runs much slower than this video's own rhythm, wording or ideas repeat, or a stretch is low in novelty and risks feeling boring.",
                 "Each stretch needs a concise reason describing the specific problem and a suggestion giving one concrete, actionable way to handle a stretch like it better. Both must reference what is actually said in that window.",
-                "This video is already published, so its edit cannot be changed. Write every suggestion as forward-looking guidance for the uploader's next videos, describing what to do instead of what they did here. Never tell them to re-edit, re-cut, trim, reshoot or re-upload this video, and never suggest comparing an alternate version against the current one.",
-                "Carry that forward-looking framing in the wording of the suggestion itself (for example 'plan a stretch like this to introduce a new idea before restating the last one'), and never in a lead-in. Do not begin a suggestion with 'Next time', 'In future videos', 'In your next video', 'Going forward' or any similar opener: start with the action to take.",
+                // Every stretch's suggestion is shown to the uploader as a
+                // "Try:" tip, so it is written under the same voice as every
+                // other tip on the site. The reason beside it is not: that
+                // describes the stretch as it was.
+                TIP_VOICE_PROMPT,
                 "Order stretches from most to least worth reviewing. Return fewer than 3 only when the video genuinely has no such areas, and never more than 5.",
                 'Never output an em dash character (U+2014) anywhere in your response; if you would use one, rewrite the phrase with a comma, colon, parentheses, or two separate sentences instead.',
               ].join(" "),
