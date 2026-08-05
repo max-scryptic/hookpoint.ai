@@ -4,7 +4,7 @@ import * as React from "react"
 import { usePathname } from "next/navigation"
 
 import { BrandLogo } from "@/components/brand-logo"
-import { NavMain } from "@/components/nav-main"
+import { NavMain, type NavSection } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
 import {
   Sidebar,
@@ -23,44 +23,59 @@ import {
   VideoIcon,
 } from "lucide-react"
 
-const navMain = [
+const navSections = [
   {
-    title: "Dashboard",
-    url: "/dashboard",
-    icon: <TerminalSquareIcon />,
+    label: "Platform",
+    items: [
+      {
+        title: "Dashboard",
+        url: "/dashboard",
+        icon: <TerminalSquareIcon />,
+      },
+    ],
   },
   {
-    title: "Analyse Video",
-    url: "/dashboard/analyse-video",
-    icon: <VideoIcon />,
+    label: "Analysis",
+    items: [
+      {
+        title: "Analyse Video",
+        url: "/dashboard/analyse-video",
+        icon: <VideoIcon />,
+      },
+      {
+        title: "Analysed Videos",
+        url: "/dashboard/analysed-videos",
+        // Also light up while viewing a single analysed video at
+        // /dashboard/analysed-video/[videoId].
+        match: "/dashboard/analysed-video",
+        icon: <ListVideoIcon />,
+      },
+      {
+        title: "Channel Trends",
+        url: "/dashboard/channel-trends",
+        icon: <TrendingUpIcon />,
+      },
+      {
+        title: "Video Comparator",
+        url: "/dashboard/video-comparator",
+        icon: <ArrowLeftRightIcon />,
+      },
+    ],
   },
   {
-    title: "Analysed Videos",
-    url: "/dashboard/analysed-videos",
-    // Also light up while viewing a single analysed video at
-    // /dashboard/analysed-video/[videoId].
-    match: "/dashboard/analysed-video",
-    icon: <ListVideoIcon />,
-  },
-  {
-    title: "Channel Trends",
-    url: "/dashboard/channel-trends",
-    icon: <TrendingUpIcon />,
-  },
-  {
-    title: "Video Comparator",
-    url: "/dashboard/video-comparator",
-    icon: <ArrowLeftRightIcon />,
-  },
-  {
-    title: "Video Planner",
-    url: "/dashboard/video-planner",
-    icon: <ClapperboardIcon />,
-  },
-  {
-    title: "Checklist",
-    url: "/dashboard/checklist",
-    icon: <ListChecksIcon />,
+    label: "Planning",
+    items: [
+      {
+        title: "Video Planner",
+        url: "/dashboard/video-planner",
+        icon: <ClapperboardIcon />,
+      },
+      {
+        title: "Checklist",
+        url: "/dashboard/checklist",
+        icon: <ListChecksIcon />,
+      },
+    ],
   },
 ]
 
@@ -93,18 +108,21 @@ export function AppSidebar({
   const pathname = usePathname()
   const userEmail = user?.email ?? ""
 
-  const items = navMain.map((item) => {
-    const matchPrefix = "match" in item ? item.match : undefined
-    return {
-      ...item,
-      isActive:
-        item.url === "/dashboard"
-          ? pathname === "/dashboard"
-          : pathname === item.url ||
-            pathname.startsWith(`${item.url}/`) ||
-            (matchPrefix !== undefined && pathname.startsWith(matchPrefix)),
-    }
-  })
+  const sections: NavSection[] = navSections.map((section) => ({
+    label: section.label,
+    items: section.items.map((item) => {
+      const matchPrefix = "match" in item ? item.match : undefined
+      return {
+        ...item,
+        isActive:
+          item.url === "/dashboard"
+            ? pathname === "/dashboard"
+            : pathname === item.url ||
+              pathname.startsWith(`${item.url}/`) ||
+              (matchPrefix !== undefined && pathname.startsWith(matchPrefix)),
+      }
+    }),
+  }))
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -112,7 +130,7 @@ export function AppSidebar({
         <SidebarBrand />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={items} />
+        <NavMain sections={sections} />
       </SidebarContent>
       <SidebarFooter>
         <NavUser
