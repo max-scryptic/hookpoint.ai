@@ -66,14 +66,14 @@ const navSections = [
     label: "Planning",
     items: [
       {
-        title: "Video Planner",
-        url: "/dashboard/video-planner",
-        icon: <ClapperboardIcon />,
-      },
-      {
         title: "Checklist",
         url: "/dashboard/checklist",
         icon: <ListChecksIcon />,
+      },
+      {
+        title: "Video Planner",
+        url: "/dashboard/video-planner",
+        icon: <ClapperboardIcon />,
       },
     ],
   },
