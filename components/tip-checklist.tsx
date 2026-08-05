@@ -64,31 +64,27 @@ function sameOrder(a: SavedTip[], b: SavedTip[]): boolean {
 }
 
 // The filter above the list. Every choice is a category the creator has
-// actually kept something under, counted, so opening it doubles as a read on
-// what their checklist is made of before they narrow it to anything.
+// actually kept something under, so opening it doubles as a read on what their
+// checklist is made of before they narrow it to anything.
 //
 // The same single-select dropdown the video and comparison lists filter with,
 // so a filter looks and behaves the same wherever the creator meets one.
 function CategoryFilter({
   counts,
-  total,
   active,
   onChange,
 }: {
   counts: { category: TipCategory; count: number }[]
-  total: number
   active: TipCategory | "all"
   onChange: (category: TipCategory | "all") => void
 }) {
-  const choices: { value: TipCategory | "all"; label: string; count: number }[] =
-    [
-      { value: "all", label: "All categories", count: total },
-      ...counts.map(({ category, count }) => ({
-        value: category,
-        label: TIP_CATEGORY_LABELS[category],
-        count,
-      })),
-    ]
+  const choices: { value: TipCategory | "all"; label: string }[] = [
+    { value: "all", label: "All categories" },
+    ...counts.map(({ category }) => ({
+      value: category,
+      label: TIP_CATEGORY_LABELS[category],
+    })),
+  ]
 
   const activeLabel =
     choices.find((choice) => choice.value === active)?.label ?? "All categories"
@@ -114,9 +110,6 @@ function CategoryFilter({
             {choices.map((choice) => (
               <DropdownMenuRadioItem key={choice.value} value={choice.value}>
                 {choice.label}
-                <span className="ml-auto pl-3 tabular-nums text-muted-foreground">
-                  {choice.count}
-                </span>
               </DropdownMenuRadioItem>
             ))}
           </DropdownMenuRadioGroup>
@@ -408,12 +401,7 @@ export function TipChecklist({ tips: initialTips }: { tips: SavedTip[] }) {
       {/* Nothing to narrow when every tip is about the same thing, so the
           filter only appears once there is a choice to make. */}
       {counts.length > 1 && (
-        <CategoryFilter
-          counts={counts}
-          total={tips.length}
-          active={active}
-          onChange={setCategory}
-        />
+        <CategoryFilter counts={counts} active={active} onChange={setCategory} />
       )}
       <ul
         className={cn(
