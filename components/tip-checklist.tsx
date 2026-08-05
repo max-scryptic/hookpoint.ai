@@ -13,6 +13,13 @@ import Link from "next/link"
 
 import { Button } from "@/components/ui/button"
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
   TIP_CATEGORY_LABELS,
   tipCategoryCounts,
   type SavedTip,
@@ -32,7 +39,7 @@ import { cn } from "@/lib/utils"
 //
 // The filter above the list is how a creator working on one thing gets to just
 // that: it narrows what is shown without touching the order underneath, so
-// clearing it puts the whole list back exactly as they left it.
+// putting it back on All puts the whole list back exactly as they left it.
 //
 // Reordering is driven by pointer events rather than HTML5 drag and drop, so
 // dragging works the same with a finger as with a mouse, and the handle is a
@@ -57,11 +64,11 @@ function sameOrder(a: SavedTip[], b: SavedTip[]): boolean {
 }
 
 // The filter above the list. Every choice is a category the creator has
-// actually kept something under, counted, so the bar doubles as a read on what
-// their checklist is made of before they narrow it to anything.
+// actually kept something under, counted, so opening it doubles as a read on
+// what their checklist is made of before they narrow it to anything.
 //
-// Tinted the same purple as the category badge on a line when it is the one
-// being shown, so the chip and the rows below it read as the same label.
+// The same single-select dropdown the video and comparison lists filter with,
+// so a filter looks and behaves the same wherever the creator meets one.
 function CategoryFilter({
   counts,
   total,
@@ -75,7 +82,7 @@ function CategoryFilter({
 }) {
   const choices: { value: TipCategory | "all"; label: string; count: number }[] =
     [
-      { value: "all", label: "All", count: total },
+      { value: "all", label: "All categories", count: total },
       ...counts.map(({ category, count }) => ({
         value: category,
         label: TIP_CATEGORY_LABELS[category],
@@ -83,39 +90,38 @@ function CategoryFilter({
       })),
     ]
 
+  const activeLabel =
+    choices.find((choice) => choice.value === active)?.label ?? "All categories"
+
   return (
-    <div
-      role="group"
-      aria-label="Filter the checklist by category"
-      className="flex flex-wrap items-center gap-2"
-    >
-      <ListFilterIcon
-        aria-hidden
-        className="size-4 shrink-0 text-muted-foreground"
-      />
-      {choices.map((choice) => {
-        const selected = choice.value === active
-        return (
-          <button
-            key={choice.value}
-            type="button"
-            aria-pressed={selected}
-            onClick={() => onChange(choice.value)}
-            className={cn(
-              "rounded-md border px-2 py-0.5 text-xs font-medium transition-colors",
-              "focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-              selected
-                ? "border-purple-500/40 bg-purple-500/10 text-purple-700 dark:text-purple-300"
-                : "border-transparent bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
-            )}
+    <div className="flex flex-wrap items-center gap-2">
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={<Button variant="outline" size="sm" className="h-9 gap-2" />}
+          aria-label={`Filter the checklist by category. Showing ${activeLabel}.`}
+        >
+          <ListFilterIcon className="size-4" />
+          {activeLabel}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          className="w-auto min-w-(--anchor-width)"
+        >
+          <DropdownMenuRadioGroup
+            value={active}
+            onValueChange={(value) => onChange(value as TipCategory | "all")}
           >
-            {choice.label}
-            <span className="ml-1.5 tabular-nums opacity-60">
-              {choice.count}
-            </span>
-          </button>
-        )
-      })}
+            {choices.map((choice) => (
+              <DropdownMenuRadioItem key={choice.value} value={choice.value}>
+                {choice.label}
+                <span className="ml-auto pl-3 tabular-nums text-muted-foreground">
+                  {choice.count}
+                </span>
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }
@@ -399,8 +405,8 @@ export function TipChecklist({ tips: initialTips }: { tips: SavedTip[] }) {
           {error}
         </p>
       )}
-      {/* Nothing to narrow when every tip is about the same thing, so the bar
-          only appears once there is a choice to make. */}
+      {/* Nothing to narrow when every tip is about the same thing, so the
+          filter only appears once there is a choice to make. */}
       {counts.length > 1 && (
         <CategoryFilter
           counts={counts}
