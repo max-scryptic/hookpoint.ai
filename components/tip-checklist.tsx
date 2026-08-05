@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState, useTransition } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
 import { format } from "date-fns"
 import {
   ArrowUpRightIcon,
@@ -52,8 +52,6 @@ function TipRow({
   total,
   dragging,
   onDragStart,
-  onDragMove,
-  onDragEnd,
   onMoveByKey,
   onRemove,
   busy,
@@ -63,8 +61,6 @@ function TipRow({
   total: number
   dragging: boolean
   onDragStart: (event: React.PointerEvent<HTMLButtonElement>) => void
-  onDragMove: (event: React.PointerEvent<HTMLButtonElement>) => void
-  onDragEnd: () => void
   onMoveByKey: (direction: -1 | 1) => void
   onRemove: () => void
   busy: boolean
@@ -81,9 +77,6 @@ function TipRow({
         type="button"
         aria-label={`Reorder this tip. Currently ${index + 1} of ${total}. Use the up and down arrow keys to move it.`}
         onPointerDown={onDragStart}
-        onPointerMove={onDragMove}
-        onPointerUp={onDragEnd}
-        onPointerCancel={onDragEnd}
         onKeyDown={(event) => {
           if (event.key === "ArrowUp") {
             event.preventDefault()
@@ -107,7 +100,10 @@ function TipRow({
       <div className="min-w-0 flex-1">
         <p className="text-sm">{tip.tip}</p>
         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-          <span className="rounded-md bg-muted px-1.5 py-0.5 font-medium">
+          {/* Tinted the same purple as the Title / Thumbnail / Hook badges on
+              a video's packaging cards, so a category reads as a label at a
+              glance rather than as another grey line of metadata. */}
+          <span className="rounded-md border border-purple-500/40 bg-purple-500/10 px-1.5 py-0.5 font-medium text-purple-700 dark:text-purple-300">
             {TIP_CATEGORY_LABELS[tip.category]}
           </span>
           <span>{tip.section}</span>
@@ -189,14 +185,14 @@ export function TipChecklist({ tips: initialTips }: { tips: SavedTip[] }) {
     event.currentTarget.setPointerCapture(event.pointerId)
   }
 
-  // The pointer is captured by the handle, so the row being dragged over is
-  // found by hit testing rather than by an event on that row.
+  // The row being dragged over is found by hit testing the pointer rather than
+  // by an event on that row.
   //
   // The dragged tip only takes the other one's place once it is past that row's
   // halfway line. Tips are several lines long and no two are the same height, so
   // swapping the moment the rows overlap would put the cursor back over the tip
   // it just displaced and swap it straight back, over and over.
-  function dragOver(event: React.PointerEvent<HTMLButtonElement>) {
+  function dragOver(event: PointerEvent) {
     if (draggingId === null) return
     const over = document
       .elementFromPoint(event.clientX, event.clientY)
@@ -224,6 +220,29 @@ export function TipChecklist({ tips: initialTips }: { tips: SavedTip[] }) {
       saveOrder(tips, previous)
     }
   }
+
+  // The rest of the drag is followed on the window rather than on the handle.
+  // The handle captures the pointer when the drag starts, but the first reorder
+  // moves that handle's row in the DOM and the browser drops the capture along
+  // with it, so the release would land somewhere else entirely: the drag would
+  // never be told it had ended, and the row that was moved would sit
+  // highlighted long after the pointer was let go.
+  //
+  // No dependency list, so every render re-binds handlers that close over the
+  // order as it stands now.
+  useEffect(() => {
+    if (draggingId === null) return
+    const onMove = (event: PointerEvent) => dragOver(event)
+    const onEnd = () => endDrag()
+    window.addEventListener("pointermove", onMove)
+    window.addEventListener("pointerup", onEnd)
+    window.addEventListener("pointercancel", onEnd)
+    return () => {
+      window.removeEventListener("pointermove", onMove)
+      window.removeEventListener("pointerup", onEnd)
+      window.removeEventListener("pointercancel", onEnd)
+    }
+  })
 
   function moveByKey(tip: SavedTip, direction: -1 | 1) {
     const from = tips.findIndex((candidate) => candidate.id === tip.id)
@@ -300,8 +319,6 @@ export function TipChecklist({ tips: initialTips }: { tips: SavedTip[] }) {
             dragging={draggingId === tip.id}
             busy={pendingId === tip.id}
             onDragStart={(event) => startDrag(event, tip)}
-            onDragMove={dragOver}
-            onDragEnd={endDrag}
             onMoveByKey={(direction) => moveByKey(tip, direction)}
             onRemove={() => remove(tip)}
           />
