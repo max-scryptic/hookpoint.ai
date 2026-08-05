@@ -21,6 +21,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import {
   tipCategoryForSection,
   tipFingerprint,
   TIP_CATEGORY_LABELS,
@@ -47,6 +52,44 @@ import { cn } from "@/lib/utils"
 function currentPath(): string | null {
   if (typeof window === "undefined") return null
   return `${window.location.pathname}${window.location.search}`
+}
+
+// The small marker that trails a tip once something has been done with it. It
+// sits outside the clickable advice, so what a creator can press is words only,
+// and it says what it means on hover: an icon on its own leaves the creator to
+// guess whether it stands for kept, done, or dismissed.
+function TipStateMarker({
+  icon: Icon,
+  label,
+  className,
+}: {
+  icon: typeof BookmarkCheckIcon
+  label: string
+  className?: string
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            // Named for assistive tech, and reachable by keyboard so the
+            // meaning is not hover-only.
+            role="img"
+            aria-label={label}
+            tabIndex={0}
+            className={cn(
+              "ml-1 inline-flex cursor-help rounded-sm align-[-0.2em]",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+              className,
+            )}
+          />
+        }
+      >
+        <Icon aria-hidden="true" className="size-3.5 shrink-0" />
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  )
 }
 
 export function TipMenu({
@@ -169,9 +212,13 @@ export function TipMenu({
     <>
       <DropdownMenu>
         <DropdownMenuTrigger
+          // A span rather than a button, so the tip can be laid out as inline
+          // text (see the class list below). nativeButton={false} tells Base UI
+          // to supply the semantics the element no longer has for itself: the
+          // button role, tab stop, and Enter/Space activation.
+          nativeButton={false}
           render={
-            <button
-              type="button"
+            <span
               // The advice is the label; the menu is what opening it offers.
               aria-label={`${tip} (tip options)`}
               className={cn(
@@ -197,24 +244,6 @@ export function TipMenu({
         >
           {label && <span className="font-medium">{label} </span>}
           {tip}
-          {/* What has already been done with this tip, kept inside the trigger
-              so the state travels with the words when the line wraps. Flagging a
-              tip does not fade the advice: the tip still says what it says, and
-              the mark beside it carries the state on its own. Colour is what
-              separates the two marks at this size, green for kept and red for
-              flagged, so a glance down a report reads without opening menus. */}
-          {saved && (
-            <BookmarkCheckIcon
-              aria-hidden="true"
-              className="ml-1 inline size-3.5 shrink-0 align-[-0.15em] text-emerald-600 dark:text-emerald-400"
-            />
-          )}
-          {flagged && (
-            <ThumbsDownIcon
-              aria-hidden="true"
-              className="ml-1 inline size-3.5 shrink-0 align-[-0.15em] text-red-600 dark:text-red-400"
-            />
-          )}
         </DropdownMenuTrigger>
 
         <DropdownMenuContent align="start" className="w-auto min-w-52">
@@ -263,6 +292,27 @@ export function TipMenu({
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+      {/* What has already been done with this tip, sitting just outside the
+          clickable advice. Nothing separates it from the trigger, so a mark
+          stays on the same line as the tip's last word instead of wrapping off
+          on its own. Colour is what separates the two marks at this size, green
+          for kept and red for flagged, so a glance down a report reads without
+          opening menus. Flagging a tip does not fade the advice: the tip still
+          says what it says, and the mark beside it carries the state. */}
+      {saved && (
+        <TipStateMarker
+          icon={BookmarkCheckIcon}
+          label="Tip added to your checklist"
+          className="text-emerald-600 dark:text-emerald-400"
+        />
+      )}
+      {flagged && (
+        <TipStateMarker
+          icon={ThumbsDownIcon}
+          label="Tip flagged as not useful"
+          className="text-red-600 dark:text-red-400"
+        />
+      )}
 
       {saveError && (
         <span className="ml-1 text-xs text-destructive">{saveError}</span>
