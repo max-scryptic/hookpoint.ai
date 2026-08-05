@@ -230,6 +230,26 @@ interface SavedTipRow {
 }
 
 /**
+ * How many tips on this checklist belong to each category, for the categories
+ * that actually appear on it.
+ *
+ * Empty categories are left out rather than listed at zero: the filter above
+ * the checklist is built from this, and offering a creator a category they have
+ * kept nothing under is offering them an empty list. The order is the order the
+ * categories are worked through when planning a video, not the order they
+ * happen to fall in this creator's list, so the filter reads the same way every
+ * time they open the page.
+ */
+export function tipCategoryCounts(
+  tips: SavedTip[],
+): { category: TipCategory; count: number }[] {
+  return TIP_CATEGORIES.map((category) => ({
+    category,
+    count: tips.filter((tip) => tip.category === category).length,
+  })).filter(({ count }) => count > 0)
+}
+
+/**
  * The creator's whole checklist, in the order they put it in. Read with the
  * signed-in user's client, so row level security scopes it to them on top of
  * the explicit filter.

@@ -6,12 +6,18 @@ import {
   ArrowUpRightIcon,
   GripVerticalIcon,
   ListChecksIcon,
+  ListFilterIcon,
   Trash2Icon,
 } from "lucide-react"
 import Link from "next/link"
 
 import { Button } from "@/components/ui/button"
-import { TIP_CATEGORY_LABELS, type SavedTip } from "@/lib/tips"
+import {
+  TIP_CATEGORY_LABELS,
+  tipCategoryCounts,
+  type SavedTip,
+  type TipCategory,
+} from "@/lib/tips"
 import { cn } from "@/lib/utils"
 
 // The creator's kept tips: a reference list to keep beside them while planning
@@ -23,6 +29,10 @@ import { cn } from "@/lib/utils"
 // creator's own priority order, and grouping would cut it into runs that cannot
 // be compared. Each line still says which category it belongs to, so the
 // grouping is readable off the list without being imposed on it.
+//
+// The filter above the list is how a creator working on one thing gets to just
+// that: it narrows what is shown without touching the order underneath, so
+// clearing it puts the whole list back exactly as they left it.
 //
 // Reordering is driven by pointer events rather than HTML5 drag and drop, so
 // dragging works the same with a finger as with a mouse, and the handle is a
@@ -44,6 +54,70 @@ function move<T>(items: T[], from: number, to: number): T[] {
 
 function sameOrder(a: SavedTip[], b: SavedTip[]): boolean {
   return a.length === b.length && a.every((tip, index) => tip.id === b[index].id)
+}
+
+// The filter above the list. Every choice is a category the creator has
+// actually kept something under, counted, so the bar doubles as a read on what
+// their checklist is made of before they narrow it to anything.
+//
+// Tinted the same purple as the category badge on a line when it is the one
+// being shown, so the chip and the rows below it read as the same label.
+function CategoryFilter({
+  counts,
+  total,
+  active,
+  onChange,
+}: {
+  counts: { category: TipCategory; count: number }[]
+  total: number
+  active: TipCategory | "all"
+  onChange: (category: TipCategory | "all") => void
+}) {
+  const choices: { value: TipCategory | "all"; label: string; count: number }[] =
+    [
+      { value: "all", label: "All", count: total },
+      ...counts.map(({ category, count }) => ({
+        value: category,
+        label: TIP_CATEGORY_LABELS[category],
+        count,
+      })),
+    ]
+
+  return (
+    <div
+      role="group"
+      aria-label="Filter the checklist by category"
+      className="flex flex-wrap items-center gap-2"
+    >
+      <ListFilterIcon
+        aria-hidden
+        className="size-4 shrink-0 text-muted-foreground"
+      />
+      {choices.map((choice) => {
+        const selected = choice.value === active
+        return (
+          <button
+            key={choice.value}
+            type="button"
+            aria-pressed={selected}
+            onClick={() => onChange(choice.value)}
+            className={cn(
+              "rounded-md border px-2 py-0.5 text-xs font-medium transition-colors",
+              "focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+              selected
+                ? "border-purple-500/40 bg-purple-500/10 text-purple-700 dark:text-purple-300"
+                : "border-transparent bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+          >
+            {choice.label}
+            <span className="ml-1.5 tabular-nums opacity-60">
+              {choice.count}
+            </span>
+          </button>
+        )
+      })}
+    </div>
+  )
 }
 
 function TipRow({
@@ -139,7 +213,18 @@ export function TipChecklist({ tips: initialTips }: { tips: SavedTip[] }) {
   const [error, setError] = useState<string | null>(null)
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [category, setCategory] = useState<TipCategory | "all">("all")
   const [, startTransition] = useTransition()
+
+  const counts = tipCategoryCounts(tips)
+  // Removing the last tip of the category being shown would otherwise leave the
+  // creator looking at an empty list filtered to something they no longer have
+  // anything under, so the filter falls back to the whole list instead.
+  const active = counts.some((count) => count.category === category)
+    ? category
+    : "all"
+  const visible =
+    active === "all" ? tips : tips.filter((tip) => tip.category === active)
 
   // The list as it stood when the drag began, so one failed write puts back the
   // order the creator started from rather than an intermediate frame of the
@@ -186,7 +271,9 @@ export function TipChecklist({ tips: initialTips }: { tips: SavedTip[] }) {
   }
 
   // The row being dragged over is found by hit testing the pointer rather than
-  // by an event on that row.
+  // by an event on that row. Under a filter that only ever finds a row the
+  // filter kept, and the tip is moved to where that row sits in the whole list,
+  // so a drag the creator can see is applied to the order they cannot.
   //
   // The dragged tip only takes the other one's place once it is past that row's
   // halfway line. Tips are several lines long and no two are the same height, so
@@ -244,10 +331,18 @@ export function TipChecklist({ tips: initialTips }: { tips: SavedTip[] }) {
     }
   })
 
+  // The arrow keys step past the neighbour the creator can see, which under a
+  // filter is not the neighbour in the whole list. The tip takes that visible
+  // neighbour's place in the full order, matching what a drag onto it would do.
   function moveByKey(tip: SavedTip, direction: -1 | 1) {
+    const shown = visible.findIndex((candidate) => candidate.id === tip.id)
+    const neighbour = visible[shown + direction]
+    if (shown === -1 || !neighbour) return
+
     const from = tips.findIndex((candidate) => candidate.id === tip.id)
-    const to = from + direction
-    if (from === -1 || to < 0 || to >= tips.length) return
+    const to = tips.findIndex((candidate) => candidate.id === neighbour.id)
+    if (from === -1 || to === -1) return
+
     const previous = tips
     const next = move(tips, from, to)
     setTips(next)
@@ -304,18 +399,28 @@ export function TipChecklist({ tips: initialTips }: { tips: SavedTip[] }) {
           {error}
         </p>
       )}
+      {/* Nothing to narrow when every tip is about the same thing, so the bar
+          only appears once there is a choice to make. */}
+      {counts.length > 1 && (
+        <CategoryFilter
+          counts={counts}
+          total={tips.length}
+          active={active}
+          onChange={setCategory}
+        />
+      )}
       <ul
         className={cn(
           "divide-y overflow-hidden rounded-xl border bg-card",
           draggingId !== null && "select-none",
         )}
       >
-        {tips.map((tip, index) => (
+        {visible.map((tip, index) => (
           <TipRow
             key={tip.id}
             tip={tip}
             index={index}
-            total={tips.length}
+            total={visible.length}
             dragging={draggingId === tip.id}
             busy={pendingId === tip.id}
             onDragStart={(event) => startDrag(event, tip)}
