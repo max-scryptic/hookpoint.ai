@@ -108,8 +108,8 @@ export function TipMenu({
   const { savedFingerprints, markSaved, markRemoved } = useSavedTips()
   const fingerprint = useMemo(() => tipFingerprint(tip), [tip])
   const saved = savedFingerprints.has(fingerprint)
-  // Shown as the menu's heading, so the creator can see which group of their
-  // checklist a tip will land in before they keep it.
+  // Shown as the menu's heading, so the creator can see what kind of tip they
+  // are looking at before they keep it.
   const category = useMemo(() => tipCategoryForSection(section), [section])
 
   const [saveError, setSaveError] = useState<string | null>(null)

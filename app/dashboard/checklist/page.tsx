@@ -27,8 +27,8 @@ async function loadSavedTips(userId: string): Promise<ChecklistResult> {
   }
 }
 
-// The tips this creator kept from their reports, in one place: what to try on
-// the next video, what has already been done, and what to drop.
+// The tips this creator kept from their reports, in one place and in the order
+// they put them in, to keep beside them while planning the next video.
 export default async function Page() {
   const user = await requireAuthenticatedUser()
   const result = await loadSavedTips(user.id)
@@ -61,9 +61,9 @@ export default async function Page() {
             Checklist
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            The tips you kept from your reports, grouped by what they are about.
-            Tick them off as you work through them, and remove the ones you are
-            done with.
+            The tips you kept from your reports. Drag them into the order you
+            want to work through them on your next video, and remove the ones
+            you no longer need.
           </p>
         </div>
 
