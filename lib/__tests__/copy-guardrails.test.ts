@@ -13,6 +13,7 @@ import { cleanCopy, nameVideoSides, stripEmDashes } from "@/lib/copy-guardrails"
 // period or colon. Do NOT delete or weaken this test.
 
 const CHANNEL_TRENDS_SOURCE_FILES = [
+  "app/dashboard/channel-trends/loading.tsx",
   "app/dashboard/channel-trends/page.tsx",
   "app/dashboard/checklist/loading.tsx",
   "app/dashboard/checklist/page.tsx",
@@ -20,8 +21,13 @@ const CHANNEL_TRENDS_SOURCE_FILES = [
   "app/dashboard/video-comparator/report/page.tsx",
   "components/admin/admin-tip-feedback-table.tsx",
   "components/channel-trends.tsx",
+  "components/channel-trends-content.tsx",
   "components/channel-trends-copy.ts",
+  "components/channel-trends-packaging.tsx",
+  "components/channel-trends-retention.tsx",
+  "components/channel-trends-shared.tsx",
   "components/channel-trends-tabs.tsx",
+  "components/channel-trends-taxonomy.tsx",
   "components/comparison-processing.tsx",
   "components/comparison-report-tabs.tsx",
   "components/event-type-badge.tsx",
@@ -39,6 +45,7 @@ const CHANNEL_TRENDS_SOURCE_FILES = [
   "components/try-callout.tsx",
   "components/video-comparison-tabs.tsx",
   "lib/advice-similarity.ts",
+  "lib/channel-taxonomy-trends.ts",
   "lib/comparison-report-versions.ts",
   "lib/packaging-comparison.ts",
   "lib/packaging-comparison-evidence.ts",

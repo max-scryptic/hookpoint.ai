@@ -13,10 +13,12 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 
 // Loading boundary for /dashboard/channel-trends. Without this file, navigating
 // here would fall back to the parent dashboard skeleton
-// (app/dashboard/loading.tsx) — so the user would briefly see the "Dashboard"
+// (app/dashboard/loading.tsx), so the user would briefly see the "Dashboard"
 // page flash before Channel Trends streams in. Mirroring this page's own chrome
 // (header, breadcrumb, title, description) keeps the transition on this page;
 // only the data region below swaps from skeleton to the real trends.
+//
+// COPY GUARDRAIL: no em or en dashes anywhere in this file. Hyphens are fine.
 export default function Loading() {
   return (
     <>
@@ -46,10 +48,21 @@ export default function Loading() {
             Channel Trends
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Your evidence-backed playbook for keeping attention, repairing
-            drop-offs and recovering viewers. Every deep analysis makes it
-            sharper.
+            What repeats across your channel: where you lose viewers, what your
+            packaging earns, and what your best videos say. Every analysis makes
+            it sharper.
           </p>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {Array.from({ length: 5 }, (_, index) => (
+            <Card key={index} size="sm">
+              <CardHeader>
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-7 w-16" />
+              </CardHeader>
+            </Card>
+          ))}
         </div>
 
         <Card>

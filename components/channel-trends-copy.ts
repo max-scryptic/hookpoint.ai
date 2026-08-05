@@ -267,3 +267,299 @@ export function packagingFeatureLabel(feature: PackagingFeature): string {
   if (prefix === "hook") return HOOK_DELIVERY_LABELS[value as HookDelivery]
   return feature
 }
+
+// --- Taxonomy axis labels ---------------------------------------------------
+// Human names for the 0-10 axes the packaging and script taxonomies score every
+// video on. `name` heads the row; `meaning` says what a 10 would mean, so a bar
+// is never a bare number the reader has to interpret.
+
+export interface AxisCopy {
+  name: string
+  meaning: string
+}
+
+const AXIS_COPY: Record<string, AxisCopy> = {
+  "title.specificity": {
+    name: "Specificity",
+    meaning: "names concrete numbers, people or stakes",
+  },
+  "title.curiosityGap": {
+    name: "Curiosity gap",
+    meaning: "withholds the payoff and opens a loop",
+  },
+  "title.emotionalCharge": {
+    name: "Emotional charge",
+    meaning: "pulls hard on a feeling",
+  },
+  "title.stakes": { name: "Stakes", meaning: "puts something on the line" },
+  "title.relatability": {
+    name: "Relatability",
+    meaning: "a target viewer sees themselves in it",
+  },
+  "title.novelty": {
+    name: "Novelty",
+    meaning: "contrarian or pattern-breaking rather than well-worn",
+  },
+  "title.clarity": {
+    name: "Clarity",
+    meaning: "the payoff is unmistakable",
+  },
+  "thumbnail.faceProminence": {
+    name: "Face prominence",
+    meaning: "a face fills the frame",
+  },
+  "thumbnail.emotionIntensity": {
+    name: "Expression intensity",
+    meaning: "an extreme expression rather than a neutral one",
+  },
+  "thumbnail.colorContrast": {
+    name: "Colour contrast",
+    meaning: "high-contrast and thumbstopping",
+  },
+  "thumbnail.visualComplexity": {
+    name: "Visual complexity",
+    meaning: "busy and crowded rather than clean and single-subject",
+  },
+  "hook.payoffSpeed": {
+    name: "Payoff speed",
+    meaning: "the opening delivers the title's promise in the first breath",
+  },
+  "hook.restatesPromise": {
+    name: "Restates the promise",
+    meaning: "the opening says the title's promise back, head-on",
+  },
+  "hook.stakesEstablished": {
+    name: "Stakes established",
+    meaning: "vivid tension is set up immediately",
+  },
+  "hook.specificity": {
+    name: "Opening specificity",
+    meaning: "concrete detail up front rather than a vague setup",
+  },
+  "hook.personalDisclosure": {
+    name: "Personal disclosure",
+    meaning: "candid first-person opening rather than an impersonal one",
+  },
+  "cross.titleThumbnailMatch": {
+    name: "Title and thumbnail match",
+    meaning: "both promise the same one thing",
+  },
+  "cross.hookDeliversPromise": {
+    name: "Opening delivers the promise",
+    meaning: "the first words cash what the packaging sold",
+  },
+  "substance.substanceDensity": {
+    name: "Substance density",
+    meaning: "dense with ideas rather than thin",
+  },
+  "substance.concreteness": {
+    name: "Concreteness",
+    meaning: "full of examples, numbers and names",
+  },
+  "substance.noveltyOfIdeas": {
+    name: "Novelty of ideas",
+    meaning: "fresh or surprising rather than familiar",
+  },
+  "substance.educationalValue": {
+    name: "Educational value",
+    meaning: "highly instructive",
+  },
+  "substance.entertainmentValue": {
+    name: "Entertainment value",
+    meaning: "highly entertaining",
+  },
+  "substance.fillerLevel": {
+    name: "Filler",
+    meaning: "heavy padding, throat-clearing and repeated points",
+  },
+  "structure.topicCohesion": {
+    name: "Topic cohesion",
+    meaning: "tightly single-threaded rather than scattered",
+  },
+  "structure.openLoops": {
+    name: "Open loops",
+    meaning: "leans on unresolved questions to pull viewers forward",
+  },
+  "structure.payoffPlacement": {
+    name: "Payoff placement",
+    meaning: "the value is held to the end rather than front-loaded",
+  },
+  "emotion.energy": {
+    name: "Energy",
+    meaning: "high intensity throughout",
+  },
+  "emotion.emotionalRange": {
+    name: "Emotional range",
+    meaning: "a wide dynamic range rather than one register",
+  },
+  "emotion.vulnerability": {
+    name: "Vulnerability",
+    meaning: "candid, personal disclosure across the script",
+  },
+  "humor.humorDensity": {
+    name: "Humour",
+    meaning: "levity running through the whole script",
+  },
+  "rhetoric.directAddress": {
+    name: "Direct address",
+    meaning: "constantly talking to \"you\"",
+  },
+  "rhetoric.stakes": {
+    name: "Stakes",
+    meaning: "high, vivid tension in the content itself",
+  },
+  "rhetoric.relatability": {
+    name: "Relatability",
+    meaning: "a target viewer clearly sees themselves in it",
+  },
+}
+
+export function taxonomyAxisCopy(key: string): AxisCopy {
+  return AXIS_COPY[key] ?? { name: key, meaning: "" }
+}
+
+const AXIS_GROUP_LABELS: Record<string, string> = {
+  title: "Title",
+  thumbnail: "Thumbnail",
+  opening: "Opening",
+  alignment: "Alignment",
+  substance: "Substance",
+  structure: "Structure",
+  emotion: "Emotion",
+  rhetoric: "Rhetoric",
+}
+
+export function taxonomyAxisGroupLabel(group: string): string {
+  return AXIS_GROUP_LABELS[group] ?? group
+}
+
+// --- Taxonomy category labels -----------------------------------------------
+// Human names for the closed vocabularies the style profile counts over. Keyed
+// by dimension so the same raw value can read differently in two places.
+
+const DIMENSION_LABELS: Record<string, string> = {
+  "packaging.archetype": "Packaging archetype",
+  "packaging.primaryDriver": "What earns the click",
+  "packaging.titleStyle": "Title style",
+  "packaging.openingType": "How you open",
+  "packaging.thumbnailMood": "Thumbnail mood",
+  "script.format": "Content format",
+  "script.archetype": "Script archetype",
+  "script.dominantEmotion": "Dominant emotion",
+  "script.arcShape": "Emotional arc",
+  "script.engagementDriver": "What holds attention",
+}
+
+export function taxonomyDimensionLabel(key: string): string {
+  return DIMENSION_LABELS[key] ?? key
+}
+
+const CATEGORY_LABELS: Record<string, Record<string, string>> = {
+  "packaging.archetype": {
+    personal_stakes_confession: "Personal confession",
+    warning: "Warning",
+    tutorial: "Tutorial",
+    listicle: "Listicle",
+    hype: "Hype",
+    story: "Story",
+    opinion: "Opinion",
+    other: "Other",
+  },
+  "packaging.primaryDriver": {
+    curiosity: "Curiosity",
+    specificity: "Specificity",
+    emotion: "Emotion",
+    identity: "Identity",
+    authority: "Authority",
+    novelty: "Novelty",
+    controversy: "Controversy",
+  },
+  "packaging.titleStyle": {
+    curiosity_gap: "Curiosity gap",
+    how_to: "How-to",
+    number_list: "Numbered list",
+    question: "Question",
+    negative_warning: "Warning or mistake",
+    result_claim: "Result claim",
+    challenge: "Challenge",
+    personal_story: "Personal story",
+    direct_label: "Plain descriptive",
+  },
+  "packaging.openingType": {
+    cold_open_story: "Cold open story",
+    bold_claim: "Bold claim",
+    question: "Question",
+    context_setup: "Context setup",
+    meta_intro: "Meta intro",
+  },
+  "packaging.thumbnailMood": {
+    serious: "Serious",
+    celebratory: "Celebratory",
+    alarming: "Alarming",
+    casual: "Casual",
+    mysterious: "Mysterious",
+    other: "Other",
+  },
+  "script.format": {
+    story: "Story",
+    tutorial: "Tutorial",
+    listicle: "Listicle",
+    essay_opinion: "Opinion essay",
+    review: "Review",
+    vlog: "Vlog",
+    interview: "Interview",
+    explainer: "Explainer",
+    other: "Other",
+  },
+  "script.archetype": {
+    educational_deep_dive: "Educational deep dive",
+    entertainment_story: "Entertainment story",
+    hype: "Hype",
+    calm_essay: "Calm essay",
+    personal_vlog: "Personal vlog",
+    listicle_roundup: "Listicle roundup",
+    opinion_take: "Opinion take",
+    other: "Other",
+  },
+  "script.dominantEmotion": {
+    excitement: "Excitement",
+    curiosity: "Curiosity",
+    humor: "Humour",
+    awe: "Awe",
+    concern: "Concern",
+    outrage: "Outrage",
+    warmth: "Warmth",
+    calm: "Calm",
+    neutral: "Neutral",
+  },
+  "script.arcShape": {
+    flat: "Flat",
+    rising: "Rising",
+    falling: "Falling",
+    roller_coaster: "Roller coaster",
+    u_shaped: "U-shaped",
+  },
+  "script.engagementDriver": {
+    information: "Information",
+    story: "Story",
+    humor: "Humour",
+    personality: "Personality",
+    emotion: "Emotion",
+    controversy: "Controversy",
+    utility: "Utility",
+  },
+}
+
+// Falls back to a title-cased version of the raw enum value, so a vocabulary
+// that grows without this map still reads as words rather than snake_case.
+export function taxonomyCategoryLabel(
+  dimensionKey: string,
+  value: string,
+): string {
+  const mapped = CATEGORY_LABELS[dimensionKey]?.[value]
+  if (mapped) return mapped
+  return value
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ")
+}

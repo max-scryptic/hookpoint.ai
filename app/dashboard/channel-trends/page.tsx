@@ -79,9 +79,9 @@ export default async function Page() {
             Channel Trends
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Your evidence-backed playbook for keeping attention, repairing
-            drop-offs and recovering viewers. Every deep analysis makes it
-            sharper.
+            What repeats across your channel: where you lose viewers, what your
+            packaging earns, and what your best videos say. Every analysis makes
+            it sharper.
           </p>
         </div>
 
