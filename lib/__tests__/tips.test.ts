@@ -11,9 +11,12 @@ import {
   TIP_FINGERPRINT_MAX_LENGTH,
   TIP_SURFACES,
   TIP_SURFACE_LABELS,
+  tipCategoryCounts,
   tipCategoryForSection,
   tipFingerprint,
   tipSurface,
+  type SavedTip,
+  type TipCategory,
 } from "@/lib/tips"
 
 describe("tipFingerprint", () => {
@@ -168,6 +171,55 @@ describe("tipCategoryForSection", () => {
     }
     expect(isTipCategory("titles")).toBe(false)
     expect(isTipCategory(null)).toBe(false)
+  })
+})
+
+describe("tipCategoryCounts", () => {
+  const tip = (id: string, category: TipCategory): SavedTip => ({
+    id,
+    tip: `Tip ${id}`,
+    section: "Retention: Hook",
+    category,
+    sourcePath: null,
+    createdAt: "2026-08-01T00:00:00.000Z",
+  })
+
+  it("counts each category the checklist actually has tips under", () => {
+    expect(
+      tipCategoryCounts([
+        tip("1", "packaging"),
+        tip("2", "hook"),
+        tip("3", "hook"),
+      ]),
+    ).toEqual([
+      { category: "hook", count: 2 },
+      { category: "packaging", count: 1 },
+    ])
+  })
+
+  it("leaves out a category with nothing kept under it", () => {
+    const counted = tipCategoryCounts([tip("1", "hook")])
+    expect(counted).toEqual([{ category: "hook", count: 1 }])
+    expect(counted.every(({ count }) => count > 0)).toBe(true)
+  })
+
+  // The filter is built off this, so the order has to be the fixed one a
+  // creator sees every time, not the order their own list happens to fall in.
+  it("lists the categories in the order a video is planned in", () => {
+    const counted = tipCategoryCounts([
+      tip("1", "other"),
+      tip("2", "packaging"),
+      tip("3", "hook"),
+    ])
+    expect(counted.map(({ category }) => category)).toEqual([
+      "hook",
+      "packaging",
+      "other",
+    ])
+  })
+
+  it("has nothing to offer for an empty checklist", () => {
+    expect(tipCategoryCounts([])).toEqual([])
   })
 })
 
