@@ -95,12 +95,11 @@ export function tipSurface(
 }
 
 // What a tip is actually about, as opposed to the surface it was read on. A
-// creator working through their checklist thinks in these terms ("what am I
-// fixing about the hook?"), not in report sections, so the checklist groups by
-// this and the admin can see which kind of advice keeps missing.
+// creator reading their checklist thinks in these terms ("what am I fixing
+// about the hook?"), not in report sections, so each line is labelled with it
+// and the admin can see which kind of advice keeps missing.
 //
-// Listed in the order they are worked through when planning a video, which is
-// also the order the checklist renders its groups in.
+// Listed in the order they are worked through when planning a video.
 export const TIP_CATEGORIES = [
   "hook",
   "retention",
@@ -164,7 +163,8 @@ const TIP_CATEGORY_RULES: { pattern: RegExp; category: TipCategory }[] = [
  * section it was read in, and asking each of the dozen call sites to also name a
  * category would leave them to drift apart. The category is worked out here,
  * server side, when the tip is saved or flagged, and written to the row so a
- * later change to these rules cannot silently reshuffle a creator's checklist.
+ * later change to these rules cannot silently relabel a checklist a creator has
+ * already been working from.
  */
 export function tipCategoryForSection(section: string): TipCategory {
   const haystack = section.toLowerCase()
@@ -217,7 +217,6 @@ export interface SavedTip {
   section: string
   category: TipCategory
   sourcePath: string | null
-  completedAt: string | null
   createdAt: string
 }
 
@@ -227,13 +226,17 @@ interface SavedTipRow {
   section: string
   category: string | null
   source_path: string | null
-  completed_at: string | null
   created_at: string
 }
 
 /**
- * The creator's whole checklist, newest first. Read with the signed-in user's
- * client, so row level security scopes it to them on top of the explicit filter.
+ * The creator's whole checklist, in the order they put it in. Read with the
+ * signed-in user's client, so row level security scopes it to them on top of
+ * the explicit filter.
+ *
+ * A tip saved since the last reorder carries position 0, so the second sort
+ * settles those ties in favour of the newest: a tip kept a minute ago is at the
+ * top waiting to be placed, not buried at the bottom.
  */
 export async function listSavedTips(
   supabase: SupabaseClient,
@@ -241,8 +244,9 @@ export async function listSavedTips(
 ): Promise<SavedTip[]> {
   const { data, error } = await supabase
     .from("saved_tips")
-    .select("id, tip, section, category, source_path, completed_at, created_at")
+    .select("id, tip, section, category, source_path, created_at")
     .eq("user_id", userId)
+    .order("position", { ascending: true })
     .order("created_at", { ascending: false })
 
   if (error) {
@@ -254,13 +258,12 @@ export async function listSavedTips(
     tip: row.tip,
     section: row.section,
     // Stored per row, but derived again for anything the column cannot
-    // account for, so a row written before the column existed still lands in
-    // the right group rather than in "Other".
+    // account for, so a row written before the column existed still reports
+    // what it is about rather than "Other".
     category: isTipCategory(row.category)
       ? row.category
       : tipCategoryForSection(row.section),
     sourcePath: row.source_path,
-    completedAt: row.completed_at,
     createdAt: row.created_at,
   }))
 }

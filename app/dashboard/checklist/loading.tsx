@@ -43,25 +43,22 @@ export default function Loading() {
             Checklist
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            The tips you kept from your reports, grouped by what they are about.
-            Tick them off as you work through them, and remove the ones you are
-            done with.
+            The tips you kept from your reports. Drag them into the order you
+            want to work through them on your next video, and remove the ones
+            you no longer need.
           </p>
         </div>
 
-        <div className="flex flex-col gap-2">
-          <Skeleton className="h-4 w-24" />
-          <div className="divide-y overflow-hidden rounded-xl border bg-card">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <div key={index} className="flex items-start gap-3 p-4">
-                <Skeleton className="mt-0.5 size-5 shrink-0 rounded-md" />
-                <div className="min-w-0 flex-1 space-y-2">
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-3 w-1/3" />
-                </div>
+        <div className="divide-y overflow-hidden rounded-xl border bg-card">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="flex items-start gap-3 p-4">
+              <Skeleton className="mt-0.5 size-6 shrink-0 rounded-md" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-3 w-1/3" />
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </div>
       </div>
     </>

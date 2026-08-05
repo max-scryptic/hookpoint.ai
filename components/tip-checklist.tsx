@@ -1,82 +1,116 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { format } from "date-fns"
 import {
   ArrowUpRightIcon,
-  CheckIcon,
+  GripVerticalIcon,
   ListChecksIcon,
   Trash2Icon,
 } from "lucide-react"
 import Link from "next/link"
 
 import { Button } from "@/components/ui/button"
-import {
-  TIP_CATEGORIES,
-  TIP_CATEGORY_LABELS,
-  type SavedTip,
-  type TipCategory,
-} from "@/lib/tips"
+import { TIP_CATEGORY_LABELS, type SavedTip } from "@/lib/tips"
 import { cn } from "@/lib/utils"
 
-// The creator's kept tips, to work through while making the next video. Open
-// ones lead; ticked ones fall to a done list underneath rather than vanishing,
-// so a tip can be un-ticked when the next video comes around.
+// The creator's kept tips: a reference list to keep beside them while planning
+// the next video, in the order they mean to work through it. Nothing is ticked
+// off here. A tip is either worth keeping, in which case it stays and can be
+// dragged to where it belongs, or it is not, in which case it goes.
 //
-// The open list is broken down by what each tip is about (the hook, drop-offs,
-// keeping attention, the script) rather than left as one run of advice: a
-// checklist is worked through a subject at a time, and a dozen unsorted lines
-// from four different reports is not a plan. Ticked-off tips stay in one flat
-// list underneath, where the grouping would only be noise.
+// One flat list, not grouped by what each tip is about: the order is now the
+// creator's own priority order, and grouping would cut it into runs that cannot
+// be compared. Each line still says which category it belongs to, so the
+// grouping is readable off the list without being imposed on it.
+//
+// Reordering is driven by pointer events rather than HTML5 drag and drop, so
+// dragging works the same with a finger as with a mouse, and the handle is a
+// button that takes the arrow keys for anyone not using either.
 //
 // State is held here and each change is written straight through to the API, so
-// ticking and removing feel immediate. A failed write is rolled back and said
+// dragging and removing feel immediate. A failed write is rolled back and said
 // out loud rather than left looking as though it landed.
 //
 // COPY GUARDRAIL: no em or en dashes (U+2014 / U+2013), ever, in any text in
 // this file. Hyphens are fine. Enforced by lib/__tests__/copy-guardrails.
 
+function move<T>(items: T[], from: number, to: number): T[] {
+  const next = items.slice()
+  const [moved] = next.splice(from, 1)
+  next.splice(to, 0, moved)
+  return next
+}
+
+function sameOrder(a: SavedTip[], b: SavedTip[]): boolean {
+  return a.length === b.length && a.every((tip, index) => tip.id === b[index].id)
+}
+
 function TipRow({
   tip,
-  onToggle,
+  index,
+  total,
+  dragging,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
+  onMoveByKey,
   onRemove,
   busy,
 }: {
   tip: SavedTip
-  onToggle: () => void
+  index: number
+  total: number
+  dragging: boolean
+  onDragStart: (event: React.PointerEvent<HTMLButtonElement>) => void
+  onDragMove: (event: React.PointerEvent<HTMLButtonElement>) => void
+  onDragEnd: () => void
+  onMoveByKey: (direction: -1 | 1) => void
   onRemove: () => void
   busy: boolean
 }) {
-  const done = tip.completedAt !== null
   return (
-    <li className="flex items-start gap-3 p-4">
+    <li
+      data-tip-id={tip.id}
+      className={cn(
+        "flex items-start gap-3 bg-card p-4 transition-colors",
+        dragging && "bg-muted",
+      )}
+    >
       <button
         type="button"
-        role="checkbox"
-        aria-checked={done}
-        aria-label={done ? "Mark as still to do" : "Mark as done"}
-        disabled={busy}
-        onClick={onToggle}
+        aria-label={`Reorder this tip. Currently ${index + 1} of ${total}. Use the up and down arrow keys to move it.`}
+        onPointerDown={onDragStart}
+        onPointerMove={onDragMove}
+        onPointerUp={onDragEnd}
+        onPointerCancel={onDragEnd}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowUp") {
+            event.preventDefault()
+            onMoveByKey(-1)
+          }
+          if (event.key === "ArrowDown") {
+            event.preventDefault()
+            onMoveByKey(1)
+          }
+        }}
         className={cn(
-          "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md border transition-colors",
+          "mt-0.5 flex size-6 shrink-0 touch-none items-center justify-center rounded-md text-muted-foreground",
+          "hover:bg-muted hover:text-foreground",
           "focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-          "disabled:pointer-events-none disabled:opacity-50",
-          done
-            ? "border-primary bg-primary text-primary-foreground"
-            : "border-input hover:border-primary/60 hover:bg-muted",
+          dragging ? "cursor-grabbing" : "cursor-grab",
         )}
       >
-        {done && <CheckIcon className="size-3.5" />}
+        <GripVerticalIcon className="size-4" />
       </button>
 
       <div className="min-w-0 flex-1">
-        <p className={cn("text-sm", done && "text-muted-foreground line-through")}>
-          {tip.tip}
-        </p>
+        <p className="text-sm">{tip.tip}</p>
         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
           <span className="rounded-md bg-muted px-1.5 py-0.5 font-medium">
-            {tip.section}
+            {TIP_CATEGORY_LABELS[tip.category]}
           </span>
+          <span>{tip.section}</span>
           <span>Saved {format(new Date(tip.createdAt), "d MMM yyyy")}</span>
           {tip.sourcePath && (
             <Link
@@ -104,143 +138,101 @@ function TipRow({
   )
 }
 
-function TipCard({
-  tips,
-  onToggle,
-  onRemove,
-  pendingId,
-}: {
-  tips: SavedTip[]
-  onToggle: (tip: SavedTip) => void
-  onRemove: (tip: SavedTip) => void
-  pendingId: string | null
-}) {
-  return (
-    <ul className="divide-y overflow-hidden rounded-xl border bg-card">
-      {tips.map((tip) => (
-        <TipRow
-          key={tip.id}
-          tip={tip}
-          busy={pendingId === tip.id}
-          onToggle={() => onToggle(tip)}
-          onRemove={() => onRemove(tip)}
-        />
-      ))}
-    </ul>
-  )
-}
-
-// The tips in each category that has any, in the order a video is planned in
-// (hook first, packaging and delivery last), so the checklist reads top down
-// the way the work is done.
-function byCategory(
-  tips: SavedTip[],
-): { category: TipCategory; tips: SavedTip[] }[] {
-  return TIP_CATEGORIES.map((category) => ({
-    category,
-    tips: tips.filter((tip) => tip.category === category),
-  })).filter((group) => group.tips.length > 0)
-}
-
-function TipList({
-  title,
-  tips,
-  grouped = false,
-  onToggle,
-  onRemove,
-  pendingId,
-}: {
-  title: string
-  tips: SavedTip[]
-  // Whether the list is broken down by category. The open list is; the done
-  // list is short-lived and reads better as one run.
-  grouped?: boolean
-  onToggle: (tip: SavedTip) => void
-  onRemove: (tip: SavedTip) => void
-  pendingId: string | null
-}) {
-  if (tips.length === 0) return null
-  return (
-    <section className="flex flex-col gap-2">
-      <h2 className="text-sm font-medium text-muted-foreground">
-        {title} ({tips.length})
-      </h2>
-      {grouped ? (
-        <div className="flex flex-col gap-4">
-          {byCategory(tips).map((group) => (
-            <div key={group.category} className="flex flex-col gap-1.5">
-              <h3 className="text-xs font-medium tracking-wide text-foreground/70 uppercase">
-                {TIP_CATEGORY_LABELS[group.category]} ({group.tips.length})
-              </h3>
-              <TipCard
-                tips={group.tips}
-                onToggle={onToggle}
-                onRemove={onRemove}
-                pendingId={pendingId}
-              />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <TipCard
-          tips={tips}
-          onToggle={onToggle}
-          onRemove={onRemove}
-          pendingId={pendingId}
-        />
-      )}
-    </section>
-  )
-}
-
 export function TipChecklist({ tips: initialTips }: { tips: SavedTip[] }) {
   const [tips, setTips] = useState(initialTips)
   const [error, setError] = useState<string | null>(null)
   const [pendingId, setPendingId] = useState<string | null>(null)
+  const [draggingId, setDraggingId] = useState<string | null>(null)
   const [, startTransition] = useTransition()
 
-  const open = tips.filter((tip) => tip.completedAt === null)
-  const done = tips.filter((tip) => tip.completedAt !== null)
+  // The list as it stood when the drag began, so one failed write puts back the
+  // order the creator started from rather than an intermediate frame of the
+  // drag.
+  const orderBeforeDrag = useRef<SavedTip[] | null>(null)
 
-  function toggle(tip: SavedTip) {
-    const completed = tip.completedAt === null
-    const previous = tips
+  function saveOrder(next: SavedTip[], previous: SavedTip[]) {
     setError(null)
-    setPendingId(tip.id)
-    setTips((current) =>
-      current.map((candidate) =>
-        candidate.id === tip.id
-          ? {
-              ...candidate,
-              completedAt: completed ? new Date().toISOString() : null,
-            }
-          : candidate,
-      ),
-    )
     startTransition(async () => {
       try {
-        const response = await fetch(`/api/tips/checklist/${tip.id}`, {
+        const response = await fetch("/api/tips/checklist", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ completed }),
+          body: JSON.stringify({ ids: next.map((tip) => tip.id) }),
         })
         if (!response.ok) {
           const result = (await response.json().catch(() => ({}))) as {
             error?: string
           }
-          throw new Error(result.error ?? "Could not update this tip.")
+          throw new Error(result.error ?? "Could not save the new order.")
         }
-      } catch (updateError) {
+      } catch (orderError) {
         setTips(previous)
         setError(
-          updateError instanceof Error
-            ? updateError.message
-            : "Could not update this tip.",
+          orderError instanceof Error
+            ? orderError.message
+            : "Could not save the new order.",
         )
-      } finally {
-        setPendingId(null)
       }
     })
+  }
+
+  function startDrag(
+    event: React.PointerEvent<HTMLButtonElement>,
+    tip: SavedTip,
+  ) {
+    if (event.pointerType === "mouse" && event.button !== 0) return
+    // Stops a touch drag from scrolling the page and a mouse drag from
+    // selecting the tip text under the cursor.
+    event.preventDefault()
+    orderBeforeDrag.current = tips
+    setDraggingId(tip.id)
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }
+
+  // The pointer is captured by the handle, so the row being dragged over is
+  // found by hit testing rather than by an event on that row.
+  //
+  // The dragged tip only takes the other one's place once it is past that row's
+  // halfway line. Tips are several lines long and no two are the same height, so
+  // swapping the moment the rows overlap would put the cursor back over the tip
+  // it just displaced and swap it straight back, over and over.
+  function dragOver(event: React.PointerEvent<HTMLButtonElement>) {
+    if (draggingId === null) return
+    const over = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest<HTMLElement>("[data-tip-id]")
+    const overId = over?.dataset.tipId
+    if (!over || !overId || overId === draggingId) return
+
+    const from = tips.findIndex((tip) => tip.id === draggingId)
+    const to = tips.findIndex((tip) => tip.id === overId)
+    if (from === -1 || to === -1) return
+
+    const bounds = over.getBoundingClientRect()
+    const middle = bounds.top + bounds.height / 2
+    if (to > from ? event.clientY < middle : event.clientY > middle) return
+
+    setTips(move(tips, from, to))
+  }
+
+  function endDrag() {
+    if (draggingId === null) return
+    const previous = orderBeforeDrag.current
+    orderBeforeDrag.current = null
+    setDraggingId(null)
+    if (previous && !sameOrder(previous, tips)) {
+      saveOrder(tips, previous)
+    }
+  }
+
+  function moveByKey(tip: SavedTip, direction: -1 | 1) {
+    const from = tips.findIndex((candidate) => candidate.id === tip.id)
+    const to = from + direction
+    if (from === -1 || to < 0 || to >= tips.length) return
+    const previous = tips
+    const next = move(tips, from, to)
+    setTips(next)
+    saveOrder(next, previous)
   }
 
   function remove(tip: SavedTip) {
@@ -279,35 +271,42 @@ export function TipChecklist({ tips: initialTips }: { tips: SavedTip[] }) {
         <p className="text-sm font-medium">Your checklist is empty</p>
         <p className="max-w-md text-sm text-muted-foreground">
           Every report ends its sections on a blue &quot;Try:&quot; tip. Click
-          one and add it to your checklist, and it will be waiting here, under
-          what it is about, the next time you plan a video.
+          one and add it to your checklist, and it will be waiting here the next
+          time you plan a video.
         </p>
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-3">
       {error && (
         <p className="text-sm text-destructive" role="alert">
           {error}
         </p>
       )}
-      <TipList
-        title="To try"
-        tips={open}
-        grouped
-        onToggle={toggle}
-        onRemove={remove}
-        pendingId={pendingId}
-      />
-      <TipList
-        title="Done"
-        tips={done}
-        onToggle={toggle}
-        onRemove={remove}
-        pendingId={pendingId}
-      />
+      <ul
+        className={cn(
+          "divide-y overflow-hidden rounded-xl border bg-card",
+          draggingId !== null && "select-none",
+        )}
+      >
+        {tips.map((tip, index) => (
+          <TipRow
+            key={tip.id}
+            tip={tip}
+            index={index}
+            total={tips.length}
+            dragging={draggingId === tip.id}
+            busy={pendingId === tip.id}
+            onDragStart={(event) => startDrag(event, tip)}
+            onDragMove={dragOver}
+            onDragEnd={endDrag}
+            onMoveByKey={(direction) => moveByKey(tip, direction)}
+            onRemove={() => remove(tip)}
+          />
+        ))}
+      </ul>
     </div>
   )
 }
