@@ -151,6 +151,108 @@ describe("cleanCopy", () => {
       "Next time you open cold, name the payoff.",
     )
   })
+
+  // The interface prints "Try:" in front of every tip, so a tip that opens on
+  // "Try" reads the word twice on the page. The video analysis tips are plain
+  // commands, and these have to read the same way.
+  it("turns a tip that opens on Try back into the command it should have been", () => {
+    expect(
+      cleanCopy(
+        "Try opening with a visually dynamic split-screen combined with a precise reason to watch.",
+      ),
+    ).toBe(
+      "Open with a visually dynamic split-screen combined with a precise reason to watch.",
+    )
+    expect(
+      cleanCopy(
+        "Try maintaining focus on the main game content during mid-video stretches.",
+      ),
+    ).toBe("Maintain focus on the main game content during mid-video stretches.")
+    expect(
+      cleanCopy("Try including a split-screen layout during the late segments."),
+    ).toBe("Include a split-screen layout during the late segments.")
+    expect(cleanCopy("Try pacing narration steadily through the middle.")).toBe(
+      "Pace narration steadily through the middle.",
+    )
+    expect(
+      cleanCopy("Try incorporating a visual change early in the video."),
+    ).toBe("Incorporate a visual change early in the video.")
+    expect(cleanCopy("Try using one line of text on the thumbnail.")).toBe(
+      "Use one line of text on the thumbnail.",
+    )
+  })
+
+  it("drops the opener where the command is already written", () => {
+    expect(cleanCopy("Try to open on the claim itself.")).toBe(
+      "Open on the claim itself.",
+    )
+    expect(cleanCopy("Try and keep the picture moving.")).toBe(
+      "Keep the picture moving.",
+    )
+    expect(cleanCopy("Try: cut the intro to one sentence.")).toBe(
+      "Cut the intro to one sentence.",
+    )
+  })
+
+  it("drops both openers when a tip carries them at once", () => {
+    expect(cleanCopy("Next time, try opening on the claim itself.")).toBe(
+      "Open on the claim itself.",
+    )
+  })
+
+  it("leaves a Try it cannot rewrite into a command alone", () => {
+    // No gerund to work from, so stripping the opener would leave a fragment.
+    expect(cleanCopy("Try a colder open with no setup.")).toBe(
+      "Try a colder open with no setup.",
+    )
+  })
+
+  it("leaves the word alone anywhere but the opener", () => {
+    expect(cleanCopy("Keep the setup short and try the payoff first.")).toBe(
+      "Keep the setup short and try the payoff first.",
+    )
+    expect(cleanCopy("Trying a colder open is worth it.")).toBe(
+      "Trying a colder open is worth it.",
+    )
+  })
+
+  // The gerund has to come back as the verb itself, so the spellings that are
+  // not a plain "drop the ending" are worth pinning down: a wrong word on the
+  // page would be worse than the duplicated label this replaces.
+  it("spells the command form of an awkward gerund correctly", () => {
+    const command = (gerund: string) =>
+      cleanCopy(`Try ${gerund} the hook.`).replace(/ the hook\.$/, "")
+
+    expect(command("cutting")).toBe("Cut")
+    expect(command("trimming")).toBe("Trim")
+    expect(command("planning")).toBe("Plan")
+    expect(command("adding")).toBe("Add")
+    expect(command("calling")).toBe("Call")
+    expect(command("making")).toBe("Make")
+    expect(command("framing")).toBe("Frame")
+    expect(command("naming")).toBe("Name")
+    expect(command("breaking")).toBe("Break")
+    expect(command("checking")).toBe("Check")
+    expect(command("closing")).toBe("Close")
+    expect(command("raising")).toBe("Raise")
+    expect(command("focusing")).toBe("Focus")
+    expect(command("comparing")).toBe("Compare")
+    expect(command("measuring")).toBe("Measure")
+    expect(command("handling")).toBe("Handle")
+    expect(command("packaging")).toBe("Package")
+    expect(command("bringing")).toBe("Bring")
+    expect(command("stating")).toBe("State")
+    expect(command("repeating")).toBe("Repeat")
+    expect(command("editing")).toBe("Edit")
+    expect(command("tightening")).toBe("Tighten")
+    expect(command("front-loading")).toBe("Front-load")
+    expect(command("holding")).toBe("Hold")
+    expect(command("writing")).toBe("Write")
+    expect(command("including")).toBe("Include")
+    expect(command("continuing")).toBe("Continue")
+    expect(command("moving")).toBe("Move")
+    expect(command("signposting")).toBe("Signpost")
+  })
 })
 
 // A head-to-head calls its two videos "Video A" and "Video B" everywhere the
