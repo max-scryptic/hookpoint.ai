@@ -73,3 +73,46 @@ export async function POST(request: Request) {
     alreadySaved: error?.code === UNIQUE_VIOLATION,
   })
 }
+
+// Takes one tip back off the checklist from where it was read, by the tip's own
+// words rather than by row id: a report renders the advice, not the checklist
+// row it became, so the fingerprint is the only handle a tip callout has. The
+// delete is scoped to the signed-in creator, so a fingerprint someone else's
+// checklist shares matches nothing of theirs.
+export async function DELETE(request: Request) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+  }
+
+  const body = (await request.json().catch(() => ({}))) as { tip?: unknown }
+  const tip = typeof body.tip === "string" ? body.tip.trim() : ""
+  if (tip.length === 0 || tip.length > TIP_MAX_LENGTH) {
+    return NextResponse.json({ error: "Invalid tip." }, { status: 400 })
+  }
+
+  const fingerprint = tipFingerprint(tip)
+  if (fingerprint.length === 0) {
+    return NextResponse.json({ error: "Invalid tip." }, { status: 400 })
+  }
+
+  const { error } = await supabase
+    .from("saved_tips")
+    .delete()
+    .eq("user_id", user.id)
+    .eq("tip_fingerprint", fingerprint)
+
+  if (error) {
+    console.error("Failed to remove tip", error)
+    return NextResponse.json(
+      { error: "Could not remove this tip." },
+      { status: 500 },
+    )
+  }
+
+  return NextResponse.json({ fingerprint })
+}

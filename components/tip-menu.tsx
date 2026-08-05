@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react"
 import {
   BookmarkCheckIcon,
   BookmarkPlusIcon,
+  BookmarkXIcon,
   ListChecksIcon,
   ThumbsDownIcon,
 } from "lucide-react"
@@ -60,9 +61,11 @@ function currentPath(): string | null {
 function TipStateMarker({
   icon: Icon,
   label,
+  className,
 }: {
   icon: typeof BookmarkCheckIcon
   label: string
+  className?: string
 }) {
   return (
     <Tooltip>
@@ -77,6 +80,7 @@ function TipStateMarker({
             className={cn(
               "ml-1 inline-flex cursor-help rounded-sm align-[-0.2em]",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+              className,
             )}
           />
         }
@@ -88,8 +92,20 @@ function TipStateMarker({
   )
 }
 
-export function TipMenu({ tip, section }: { tip: string; section: string }) {
-  const { savedFingerprints, markSaved } = useSavedTips()
+export function TipMenu({
+  tip,
+  section,
+  label,
+}: {
+  tip: string
+  section: string
+  // The word that introduces the tip, "Try:" or "Or:". It lives inside the
+  // trigger rather than beside it so the label and the advice are one run of
+  // inline text: a long tip wraps mid sentence instead of being pushed whole
+  // onto the line below its own label.
+  label?: string
+}) {
+  const { savedFingerprints, markSaved, markRemoved } = useSavedTips()
   const fingerprint = useMemo(() => tipFingerprint(tip), [tip])
   const saved = savedFingerprints.has(fingerprint)
   // Shown as the menu's heading, so the creator can see which group of their
@@ -97,6 +113,8 @@ export function TipMenu({ tip, section }: { tip: string; section: string }) {
   const category = useMemo(() => tipCategoryForSection(section), [section])
 
   const [saveError, setSaveError] = useState<string | null>(null)
+  // One flag for both directions: keeping and removing are the same button, and
+  // it should be inert while either is in flight.
   const [isSaving, startSaving] = useTransition()
 
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -124,6 +142,34 @@ export function TipMenu({ tip, section }: { tip: string; section: string }) {
       } catch (error) {
         setSaveError(
           error instanceof Error ? error.message : "Could not save this tip.",
+        )
+      }
+    })
+  }
+
+  // Keeping a tip can be undone from where it was kept, so the creator does not
+  // have to open their checklist to take back a click. The tip is removed by its
+  // words rather than by a row id, which is all a report knows about it.
+  function remove() {
+    if (!saved || isSaving) return
+    setSaveError(null)
+    startSaving(async () => {
+      try {
+        const response = await fetch("/api/tips/checklist", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tip }),
+        })
+        if (!response.ok) {
+          const result = (await response.json().catch(() => ({}))) as {
+            error?: string
+          }
+          throw new Error(result.error ?? "Could not remove this tip.")
+        }
+        markRemoved(fingerprint)
+      } catch (error) {
+        setSaveError(
+          error instanceof Error ? error.message : "Could not remove this tip.",
         )
       }
     })
@@ -166,13 +212,9 @@ export function TipMenu({ tip, section }: { tip: string; section: string }) {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger
-          // A span rather than a button, because a button is an atomic inline
-          // level box: a wrapped one is shrink-to-fit at the full width of the
-          // line, so the underline and hover fill ran to the right edge of
-          // every line, including a last line holding two words. A span with
-          // display:inline lays the tip out as text, so the target ends where
-          // the words do on each line. nativeButton={false} tells Base UI to
-          // supply the semantics the element no longer has for itself: the
+          // A span rather than a button, so the tip can be laid out as inline
+          // text (see the class list below). nativeButton={false} tells Base UI
+          // to supply the semantics the element no longer has for itself: the
           // button role, tab stop, and Enter/Space activation.
           nativeButton={false}
           render={
@@ -180,18 +222,27 @@ export function TipMenu({ tip, section }: { tip: string; section: string }) {
               // The advice is the label; the menu is what opening it offers.
               aria-label={`${tip} (tip options)`}
               className={cn(
-                // box-decoration-clone rounds and pads every wrapped fragment
-                // rather than only the first and last.
-                "-mx-1 inline box-decoration-clone cursor-pointer rounded-md px-1 py-0.5 text-left select-text",
+                // Truly inline, not inline-block: a button is an atomic box by
+                // default, so a long tip could not break across lines and got
+                // bumped whole onto the next one, leaving "Try:" stranded above
+                // it. As inline text it wraps word by word like the sentence it
+                // is, and box-decoration-clone keeps the rounded hover
+                // background intact on every wrapped fragment.
+                "inline box-decoration-clone",
+                // No horizontal padding or inset: an inline box only pads its
+                // first and last fragment, so any would step the first line in
+                // or out from the ones it wraps onto. The background is given
+                // room vertically instead, which the line box absorbs.
+                "-my-0.5 cursor-pointer rounded-md py-0.5 text-left select-text",
                 "underline decoration-blue-500/30 decoration-dotted underline-offset-4 transition-colors",
                 "hover:bg-blue-500/10 hover:decoration-blue-500/70",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
                 "data-popup-open:bg-blue-500/10 data-popup-open:decoration-blue-500/70",
-                flagged && "text-blue-600/60 dark:text-blue-400/60",
               )}
             />
           }
         >
+          {label && <span className="font-medium">{label} </span>}
           {tip}
         </DropdownMenuTrigger>
 
@@ -204,9 +255,15 @@ export function TipMenu({ tip, section }: { tip: string; section: string }) {
             <DropdownMenuLabel>
               {TIP_CATEGORY_LABELS[category]} tip
             </DropdownMenuLabel>
-            <DropdownMenuItem disabled={saved || isSaving} onClick={save}>
-              {saved ? <BookmarkCheckIcon /> : <BookmarkPlusIcon />}
-              {saved ? "On your checklist" : "Add to checklist"}
+            {/* A kept tip offers the way back out rather than restating that it
+                is kept: the mark on the tip already says that, so the menu is
+                left with something to do. */}
+            <DropdownMenuItem
+              disabled={isSaving}
+              onClick={saved ? remove : save}
+            >
+              {saved ? <BookmarkXIcon /> : <BookmarkPlusIcon />}
+              {saved ? "Remove from checklist" : "Add to checklist"}
             </DropdownMenuItem>
             {saved && (
               <DropdownMenuItem render={<a href="/dashboard/checklist" />}>
@@ -215,34 +272,45 @@ export function TipMenu({ tip, section }: { tip: string; section: string }) {
               </DropdownMenuItem>
             )}
           </DropdownMenuGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            variant="destructive"
-            disabled={flagged}
-            onClick={() => {
-              setFeedbackError(null)
-              setDialogOpen(true)
-            }}
-          >
-            <ThumbsDownIcon />
-            {flagged ? "Flagged as not useful" : "Not useful"}
-          </DropdownMenuItem>
+          {/* Flagging is a one-way, one-time thing, so once it is done the item
+              goes rather than sitting there dead. The menu is then the checklist
+              alone, and the red mark on the tip is what says it was flagged. */}
+          {!flagged && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => {
+                  setFeedbackError(null)
+                  setDialogOpen(true)
+                }}
+              >
+                <ThumbsDownIcon />
+                Not useful
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
       {/* What has already been done with this tip, sitting just outside the
-          clickable advice. Nothing separates it from the trigger, so it stays
-          on the same line as the tip's last word instead of wrapping off on
-          its own. */}
+          clickable advice. Nothing separates it from the trigger, so a mark
+          stays on the same line as the tip's last word instead of wrapping off
+          on its own. Colour is what separates the two marks at this size, green
+          for kept and red for flagged, so a glance down a report reads without
+          opening menus. Flagging a tip does not fade the advice: the tip still
+          says what it says, and the mark beside it carries the state. */}
       {saved && (
         <TipStateMarker
           icon={BookmarkCheckIcon}
           label="Tip added to your checklist"
+          className="text-emerald-600 dark:text-emerald-400"
         />
       )}
       {flagged && (
         <TipStateMarker
           icon={ThumbsDownIcon}
           label="Tip flagged as not useful"
+          className="text-red-600 dark:text-red-400"
         />
       )}
 
