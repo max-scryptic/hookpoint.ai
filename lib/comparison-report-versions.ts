@@ -11,7 +11,10 @@
 // Bumped whenever the stored script report shape changes. Version 2 gave every
 // section its own "Try:" line, so each section of the head-to-head closes on
 // something to do next; reports stored at version 1 simply render without one.
-export const SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION = 2
+// Version 3 put every tip under the shared tip voice (lib/tip-voice.ts), which
+// bans a tip pointing back at the videos it came from; tips stored at version 2
+// can still read as notes on those two videos rather than as advice.
+export const SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION = 3
 
 // Bumped whenever the stored packaging report shape changes. Version 2 added
 // the per driver "Try:" tip; reports stored at version 1 simply render without
@@ -21,11 +24,15 @@ export const SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION = 2
 // Version 4 dropped the caveats list; reports stored at version 3 and earlier
 // still carry one, which nothing reads. Version 5 gave every surface a tip of
 // its own, so each tab of the report closes on advice even when no driver and
-// no recommendation landed on that surface.
-export const PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION = 5
+// no recommendation landed on that surface. Version 6 put every tip and
+// recommendation under the shared tip voice (lib/tip-voice.ts), which bans
+// advice pointing back at the videos it came from.
+export const PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION = 6
 
 // Bumped whenever the stored retention report shape changes. Version 1 is the
 // first: a two sentence verdict plus 3 to 5 titled sections, each closing on
 // its own "Try:" line, written over both curves, both window sets with their
 // ranked events, and the transcript of the stretch where the curves separated.
-export const RETENTION_COMPARISON_REPORT_SCHEMA_VERSION = 1
+// Version 2 put every tip under the shared tip voice (lib/tip-voice.ts), which
+// bans a tip pointing back at the videos it came from.
+export const RETENTION_COMPARISON_REPORT_SCHEMA_VERSION = 2
