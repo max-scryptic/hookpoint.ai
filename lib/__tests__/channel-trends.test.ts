@@ -6,11 +6,14 @@ import {
   buildChannelPlaybook,
   buildChannelRecurrence,
   buildChannelSignature,
+  buildChannelSnapshot,
   buildChannelTrends,
   buildPackagingPatterns,
+  buildRetentionRanking,
   buildSubscriberConversion,
   channelTrendsStage,
   packagingFeatures,
+  videoReachPerDay,
   type ChannelVideo,
 } from "@/lib/channel-trends"
 import type { PackagingTaxonomy } from "@/lib/packaging-taxonomy"
@@ -44,7 +47,10 @@ function video(
     publishedAt: null,
     analyticsFetchedAt: null,
     browseSuggestedShare: null,
+    averageViewPercentage: null,
+    impressionClickThroughRate: null,
     packaging: null,
+    script: null,
     ...extras,
   }
 }
@@ -962,6 +968,160 @@ describe("buildPackagingPatterns", () => {
           }),
         ],
         4,
+      ),
+    ).toBeNull()
+  })
+})
+
+describe("buildRetentionRanking", () => {
+  const retentionVideos = [
+    video("t-1", "Best held", null, {
+      averageViewPercentage: 62,
+      views: 4000,
+      script: null,
+    }),
+    video("t-2", "Middling", null, { averageViewPercentage: 41, views: 2000 }),
+    video("t-3", "Weakest", null, { averageViewPercentage: 18, views: 900 }),
+    video("t-4", "Also weak", null, { averageViewPercentage: 12, views: 500 }),
+  ]
+
+  it("ranks covered videos best first and bands the two halves", () => {
+    const ranking = buildRetentionRanking(retentionVideos, 6)
+
+    expect(ranking?.rows.map((row) => row.id)).toEqual([
+      "t-1",
+      "t-2",
+      "t-3",
+      "t-4",
+    ])
+    expect(ranking?.rows.map((row) => row.band)).toEqual([
+      "high",
+      "high",
+      "low",
+      "low",
+    ])
+    expect(ranking?.medianRetentionPercent).toBe(29.5)
+    expect(ranking?.coveredVideoCount).toBe(4)
+    expect(ranking?.libraryVideoCount).toBe(6)
+  })
+
+  it("leaves an odd middle video unbanded", () => {
+    const ranking = buildRetentionRanking(retentionVideos.slice(0, 3), 3)
+    expect(ranking?.rows.map((row) => row.band)).toEqual([
+      "high",
+      "middle",
+      "low",
+    ])
+  })
+
+  it("counts how many ranked videos still have no script read", () => {
+    const ranking = buildRetentionRanking(retentionVideos, 4)
+    expect(ranking?.scriptVideoCount).toBe(0)
+  })
+
+  it("needs three videos with a retention figure", () => {
+    expect(
+      buildRetentionRanking(
+        [
+          ...retentionVideos.slice(0, 2),
+          video("t-9", "No analytics", null, { views: 100 }),
+        ],
+        3,
+      ),
+    ).toBeNull()
+  })
+})
+
+describe("buildChannelSnapshot", () => {
+  const snapshotVideos = [
+    video("s-1", null, null, {
+      views: 1000,
+      publishedAt: "2026-01-01T00:00:00Z",
+      analyticsFetchedAt: "2026-01-11T00:00:00Z",
+      averageViewPercentage: 50,
+      subscribersGained: 10,
+      impressionClickThroughRate: 0.05,
+    }),
+    video("s-2", null, null, {
+      views: 400,
+      publishedAt: "2026-01-01T00:00:00Z",
+      analyticsFetchedAt: "2026-01-11T00:00:00Z",
+      averageViewPercentage: 40,
+      subscribersGained: 4,
+      impressionClickThroughRate: 0.03,
+    }),
+    video("s-3", null, null, {
+      views: 200,
+      publishedAt: "2026-01-01T00:00:00Z",
+      analyticsFetchedAt: "2026-01-11T00:00:00Z",
+      averageViewPercentage: 30,
+      subscribersGained: 2,
+      impressionClickThroughRate: 0.01,
+    }),
+  ]
+
+  it("reports a median for every metric enough videos carry", () => {
+    const snapshot = buildChannelSnapshot(snapshotVideos, 5)
+
+    expect(snapshot.libraryVideoCount).toBe(5)
+    expect(snapshot.medianViewsPerDay).toBe(40)
+    expect(snapshot.medianRetentionPercent).toBe(40)
+    expect(snapshot.medianSubsPer1k).toBe(10)
+    expect(snapshot.medianClickThroughRate).toBe(0.03)
+  })
+
+  it("leaves a metric null rather than speaking for one or two videos", () => {
+    const snapshot = buildChannelSnapshot(
+      [
+        snapshotVideos[0],
+        video("s-4", null, null, { views: 100 }),
+        video("s-5", null, null, { views: 100 }),
+      ],
+      3,
+    )
+
+    expect(snapshot.medianViewsPerDay).toBeNull()
+    expect(snapshot.medianRetentionPercent).toBeNull()
+    expect(snapshot.medianClickThroughRate).toBeNull()
+    expect(snapshot.medianBrowseSuggestedShare).toBeNull()
+  })
+})
+
+describe("videoReachPerDay", () => {
+  it("divides views by the days between publish and the snapshot", () => {
+    expect(
+      videoReachPerDay(
+        video("v-1", null, null, {
+          views: 900,
+          publishedAt: "2026-01-01T00:00:00Z",
+          analyticsFetchedAt: "2026-01-10T00:00:00Z",
+        }),
+      ),
+    ).toBe(100)
+  })
+
+  it("floors the age at a day so an upload analysed on day zero still ranks", () => {
+    expect(
+      videoReachPerDay(
+        video("v-2", null, null, {
+          views: 50,
+          publishedAt: "2026-01-01T00:00:00Z",
+          analyticsFetchedAt: "2026-01-01T04:00:00Z",
+        }),
+      ),
+    ).toBe(50)
+  })
+
+  it("returns null when either end of the measurement is missing", () => {
+    expect(
+      videoReachPerDay(video("v-3", null, null, { views: 900 })),
+    ).toBeNull()
+    expect(
+      videoReachPerDay(
+        video("v-4", null, null, {
+          publishedAt: "2026-01-01T00:00:00Z",
+          analyticsFetchedAt: "2026-01-10T00:00:00Z",
+        }),
       ),
     ).toBeNull()
   })

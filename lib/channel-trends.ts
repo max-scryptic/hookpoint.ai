@@ -24,6 +24,13 @@ import {
   loadChannelEventRecords,
   type ChannelEventRecord,
 } from "@/lib/channel-event-history"
+import {
+  buildChannelAxisProfile,
+  buildChannelStyleProfile,
+  videoTopics,
+  type ChannelAxisProfile,
+  type ChannelStyleProfile,
+} from "@/lib/channel-taxonomy-trends"
 import type {
   HookDelivery,
   PackagingTaxonomy,
@@ -32,6 +39,7 @@ import type {
 } from "@/lib/packaging-taxonomy"
 import type { RetentionWindowEventType } from "@/lib/retention-window-events"
 import type { RetentionWindowKind } from "@/lib/retention-windows"
+import type { ScriptTaxonomy } from "@/lib/script-taxonomy"
 
 // Trend confidence grows with library size: below EARLY the page only shows
 // the library filling up; from EARLY trends appear labelled as early signals;
@@ -105,9 +113,34 @@ export interface ChannelVideo {
   // Share (0..1) of snapshot views from Browse features + Suggested videos —
   // the packaging-earned surfaces; null when no traffic breakdown exists.
   browseSuggestedShare: number | null
+  // 0..100 — the average share of the video watched, from the same snapshot.
+  // The retention outcome the script taxonomy is contrasted against.
+  averageViewPercentage: number | null
+  // 0..1 impression-weighted thumbnail click-through, when YouTube's reporting
+  // job has served it for this video; null far more often than not.
+  impressionClickThroughRate: number | null
   // The categorical packaging read; null until generated or backfilled.
   packaging: PackagingTaxonomy | null
+  // The categorical read of the whole spoken script; null until generated.
+  script: ScriptTaxonomy | null
 }
+
+// Reach for one video: views per day between publish and the analytics
+// snapshot, floored at a day. Raw views cannot be compared across a library
+// where one upload is two years old and another is two weeks old, so every
+// reach comparison on this page runs over this rate. Null when the video is
+// missing either end of the measurement.
+export function videoReachPerDay(video: ChannelVideo): number | null {
+  if (video.views == null || video.views <= 0) return null
+  const published = video.publishedAt ? Date.parse(video.publishedAt) : NaN
+  const fetched = video.analyticsFetchedAt
+    ? Date.parse(video.analyticsFetchedAt)
+    : NaN
+  if (!Number.isFinite(published) || !Number.isFinite(fetched)) return null
+  return video.views / Math.max(1, Math.round((fetched - published) / DAY_MS))
+}
+
+const DAY_MS = 86_400_000
 
 // Events with no confidence (rows written before the column existed) weigh in
 // as a neutral 0.5 rather than being dropped or counted as certain.
@@ -414,6 +447,142 @@ export interface ChannelPackagingPatterns {
   libraryVideoCount: number
 }
 
+// --- Retention ranking: which uploads hold viewers --------------------------
+
+// The Content tab's anchor, and the outcome its script contrast is split on.
+// Average view percentage is already normalised (a share of the video watched),
+// so unlike views it can be ranked across a library directly. It still favours
+// short uploads, which the UI says out loud by printing each video's length
+// alongside it where it has one.
+export const RETENTION_RANKING_MIN_VIDEOS = 3
+
+export interface RetentionRankingRow {
+  id: string
+  title: string | null
+  // 0..100.
+  retentionPercent: number
+  views: number | null
+  band: ReachBand
+  hasScript: boolean
+}
+
+export interface ChannelRetentionRanking {
+  // Best-retaining first.
+  rows: RetentionRankingRow[]
+  medianRetentionPercent: number
+  coveredVideoCount: number
+  scriptVideoCount: number
+  libraryVideoCount: number
+}
+
+export function buildRetentionRanking(
+  videos: ChannelVideo[],
+  libraryVideoCount: number,
+): ChannelRetentionRanking | null {
+  const covered = videos.filter(
+    (video) =>
+      video.averageViewPercentage != null && video.averageViewPercentage > 0,
+  )
+  if (covered.length < RETENTION_RANKING_MIN_VIDEOS) return null
+
+  const sorted = [...covered].sort(
+    (a, b) =>
+      (b.averageViewPercentage ?? 0) - (a.averageViewPercentage ?? 0) ||
+      a.id.localeCompare(b.id),
+  )
+  const bandSize = Math.floor(sorted.length / 2)
+  const bandFor = (index: number): ReachBand =>
+    index < bandSize
+      ? "high"
+      : index >= sorted.length - bandSize
+        ? "low"
+        : "middle"
+
+  return {
+    rows: sorted.map((video, index) => ({
+      id: video.id,
+      title: video.title,
+      retentionPercent: video.averageViewPercentage!,
+      views: video.views,
+      band: bandFor(index),
+      hasScript: video.script != null,
+    })),
+    medianRetentionPercent: median(
+      covered.map((video) => video.averageViewPercentage!),
+    ),
+    coveredVideoCount: covered.length,
+    scriptVideoCount: covered.filter((video) => video.script != null).length,
+    libraryVideoCount,
+  }
+}
+
+// --- Channel snapshot: the library's headline numbers ----------------------
+
+// Medians rather than averages, because a single breakout upload would drag
+// every average on a small library. Each figure is null until enough videos
+// carry the metric it is measured from, and the page simply omits the tile.
+export const SNAPSHOT_MIN_COVERED_VIDEOS = 3
+
+export interface ChannelSnapshot {
+  libraryVideoCount: number
+  // Views per day since publish, at snapshot time.
+  medianViewsPerDay: number | null
+  // 0..100, the average share of a video watched.
+  medianRetentionPercent: number | null
+  // Subscribers gained per 1,000 views.
+  medianSubsPer1k: number | null
+  // 0..1 impression-weighted thumbnail click-through.
+  medianClickThroughRate: number | null
+  // Share (0..1) of views arriving from Browse and Suggested, the surfaces
+  // packaging has to win.
+  medianBrowseSuggestedShare: number | null
+}
+
+function medianOrNull(values: number[]): number | null {
+  return values.length >= SNAPSHOT_MIN_COVERED_VIDEOS ? median(values) : null
+}
+
+export function buildChannelSnapshot(
+  videos: ChannelVideo[],
+  libraryVideoCount: number,
+): ChannelSnapshot {
+  return {
+    libraryVideoCount,
+    medianViewsPerDay: medianOrNull(
+      videos.flatMap((video) => {
+        const reach = videoReachPerDay(video)
+        return reach == null ? [] : [reach]
+      }),
+    ),
+    medianRetentionPercent: medianOrNull(
+      videos.flatMap((video) =>
+        video.averageViewPercentage == null ? [] : [video.averageViewPercentage],
+      ),
+    ),
+    medianSubsPer1k: medianOrNull(
+      videos.flatMap((video) =>
+        video.views == null ||
+        video.views <= 0 ||
+        video.subscribersGained == null
+          ? []
+          : [(video.subscribersGained / video.views) * 1000],
+      ),
+    ),
+    medianClickThroughRate: medianOrNull(
+      videos.flatMap((video) =>
+        video.impressionClickThroughRate == null
+          ? []
+          : [video.impressionClickThroughRate],
+      ),
+    ),
+    medianBrowseSuggestedShare: medianOrNull(
+      videos.flatMap((video) =>
+        video.browseSuggestedShare == null ? [] : [video.browseSuggestedShare],
+      ),
+    ),
+  }
+}
+
 export interface ChannelTrendsData {
   stage: ChannelTrendsStage
   // Distinct videos with a completed event synthesis — the library the
@@ -440,6 +609,21 @@ export interface ChannelTrendsData {
   subscribers: ChannelSubscriberConversion | null
   // Null until enough library videos carry views and a publish date.
   packaging: ChannelPackagingPatterns | null
+  // The library's headline medians, for the tiles above the tabs.
+  snapshot: ChannelSnapshot
+  // The 0-10 packaging axes: the channel's own profile, and where its
+  // high-reach half separates from its low-reach half. Null until enough
+  // videos carry an enriched (v2) packaging read.
+  packagingAxes: ChannelAxisProfile | null
+  // What the channel's packaging repeats, and which of its choices reach
+  // furthest.
+  packagingStyle: ChannelStyleProfile | null
+  // The same two views over the script taxonomy, contrasted against retention
+  // rather than reach: what is said, not what got clicked.
+  scriptAxes: ChannelAxisProfile | null
+  scriptStyle: ChannelStyleProfile | null
+  // Uploads ranked by the share of them that gets watched.
+  retentionRanking: ChannelRetentionRanking | null
 }
 
 function kindTrends(
@@ -1156,15 +1340,14 @@ function packagingFeatureContrasts(
 // Topics whose median reach sits pronouncedly above or below the channel's
 // typical reach.
 function packagingTopicReach(
-  videos: { viewsPerDay: number; taxonomy: PackagingTaxonomy | null }[],
+  videos: { viewsPerDay: number; topics: string[] }[],
   medianViewsPerDay: number,
 ): PackagingTopicReach[] {
   if (medianViewsPerDay <= 0) return []
 
   const byTopic = new Map<string, number[]>()
   for (const video of videos) {
-    if (video.taxonomy == null) continue
-    for (const topic of new Set(video.taxonomy.topics)) {
+    for (const topic of new Set(video.topics)) {
       const rates = byTopic.get(topic)
       if (rates) rates.push(video.viewsPerDay)
       else byTopic.set(topic, [video.viewsPerDay])
@@ -1189,8 +1372,6 @@ function packagingTopicReach(
     .sort((a, b) => b.ratio - a.ratio || a.topic.localeCompare(b.topic))
     .slice(0, MAX_TOPIC_ROWS)
 }
-
-const DAY_MS = 86_400_000
 
 // The packaging patterns view: per-video reach (views/day at snapshot time),
 // a high/low band split, and the packaging features and topics that separate
@@ -1257,7 +1438,7 @@ export function buildPackagingPatterns(
     topics: packagingTopicReach(
       covered.map((entry) => ({
         viewsPerDay: entry.viewsPerDay,
-        taxonomy: entry.video.packaging,
+        topics: videoTopics(entry.video),
       })),
       medianViewsPerDay,
     ),
@@ -1303,6 +1484,32 @@ export function buildChannelTrends(params: {
     recurrence: buildChannelRecurrence(records, videos, signature),
     subscribers: buildSubscriberConversion(records, videos, libraryVideoCount),
     packaging: buildPackagingPatterns(videos, libraryVideoCount),
+    snapshot: buildChannelSnapshot(videos, libraryVideoCount),
+    packagingAxes: buildChannelAxisProfile({
+      videos,
+      source: "packaging",
+      outcome: "reach",
+      outcomeOf: videoReachPerDay,
+    }),
+    packagingStyle: buildChannelStyleProfile({
+      videos,
+      source: "packaging",
+      outcome: "reach",
+      outcomeOf: videoReachPerDay,
+    }),
+    scriptAxes: buildChannelAxisProfile({
+      videos,
+      source: "script",
+      outcome: "retention",
+      outcomeOf: (video) => video.averageViewPercentage,
+    }),
+    scriptStyle: buildChannelStyleProfile({
+      videos,
+      source: "script",
+      outcome: "retention",
+      outcomeOf: (video) => video.averageViewPercentage,
+    }),
+    retentionRanking: buildRetentionRanking(videos, libraryVideoCount),
   }
 }
 
@@ -1392,7 +1599,7 @@ async function loadVideos(
   const { data, error } = await supabase
     .from("analysed_videos")
     .select(
-      "id, video_title, date_analysed, analytics_summary, published_at:video_details->>publishedAt, packaging_taxonomy:packaging_alignment->taxonomy",
+      "id, video_title, date_analysed, analytics_summary, published_at:video_details->>publishedAt, packaging_taxonomy:packaging_alignment->taxonomy, script_taxonomy",
     )
     .eq("user_id", userId)
     .in("id", videoIds)
@@ -1410,11 +1617,14 @@ async function loadVideos(
         views?: number | null
         subscribersGained?: number | null
         subscribersLost?: number | null
+        averageViewPercentage?: number | null
+        impressionClickThroughRate?: number | null
         trafficSources?: { source?: string; views?: number }[]
         fetchedAt?: string | null
       } | null
       published_at: string | null
       packaging_taxonomy: PackagingTaxonomy | null
+      script_taxonomy: ScriptTaxonomy | null
     }[]
   ).map((row) => ({
     id: row.id,
@@ -1428,7 +1638,11 @@ async function loadVideos(
     browseSuggestedShare: browseSuggestedShare(
       row.analytics_summary?.trafficSources,
     ),
+    averageViewPercentage: row.analytics_summary?.averageViewPercentage ?? null,
+    impressionClickThroughRate:
+      row.analytics_summary?.impressionClickThroughRate ?? null,
     packaging: row.packaging_taxonomy,
+    script: row.script_taxonomy,
   }))
 }
 
