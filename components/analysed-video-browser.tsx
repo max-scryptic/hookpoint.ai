@@ -77,11 +77,10 @@ const PRIVACY_OPTIONS: Array<{
 const RAW_FILE_OPTIONS: Array<{
   value: RawFileFilter
   label: string
-  icon: typeof CircleCheckIcon | null
 }> = [
-  { value: "all", label: "All raw files", icon: null },
-  { value: "uploaded", label: "Raw file uploaded", icon: CircleCheckIcon },
-  { value: "not-uploaded", label: "No raw file", icon: null },
+  { value: "all", label: "All raw files" },
+  { value: "uploaded", label: "Raw file uploaded" },
+  { value: "not-uploaded", label: "No raw file" },
 ]
 
 // Every analysed video is already in memory, so unlike the uploads list this
@@ -459,9 +458,8 @@ export function AnalysedVideoBrowser({
               value={rawFile}
               onValueChange={(value) => changeRawFile(value as RawFileFilter)}
             >
-              {RAW_FILE_OPTIONS.map(({ value, label, icon: Icon }) => (
+              {RAW_FILE_OPTIONS.map(({ value, label }) => (
                 <DropdownMenuRadioItem key={value} value={value}>
-                  {Icon && <Icon className="size-4" />}
                   {label}
                 </DropdownMenuRadioItem>
               ))}
@@ -487,7 +485,7 @@ export function AnalysedVideoBrowser({
             <ArrowUpDownIcon className="size-4" />
             {sortLabel}
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
+          <DropdownMenuContent align="start" className="w-auto">
             <DropdownMenuRadioGroup
               value={sort}
               onValueChange={(value) => changeSort(value as SortOption)}
