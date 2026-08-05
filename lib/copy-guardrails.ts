@@ -229,18 +229,176 @@ function capitalizeFirstLetter(text: string): string {
   return text.replace(/^\p{Ll}/u, (letter) => letter.toUpperCase())
 }
 
+// =============================================================================
+// THE "TRY:" LABEL IN A TIP
+//
+// Every tip is rendered behind a "Try:" label, so a tip that opens with "Try"
+// puts the word on the page twice: "Try: Try opening with a split-screen".
+// The video analysis tips never do it, because they are written as plain
+// commands ("Keep the picture moving through a stretch like this"), and the
+// comparison reports are asked for the same thing. Models write it anyway,
+// often enough to read as a tic across a page of tips, so the opener is unwound
+// here at render time. That also settles the reports already stored, which no
+// prompt can reach.
+//
+// "Try to open with X" and "Try: open with X" only lose the opener, since the
+// command is already written. "Try opening with X" has to have its gerund put
+// back into the command form the rest of the tips are written in, which is what
+// gerundImperative() does. Anything it cannot convert with confidence is left
+// exactly as the model wrote it: a tip that says "Try" twice is a blemish,
+// while "Openning with X" would be a bug.
+// =============================================================================
+
+// The gerunds the rules below cannot reach: irregular verbs, and the endings
+// where both spellings are common enough that no rule settles them ("adding"
+// keeps its double d while "embedding" drops one; "using" wants its silent e
+// back while "focusing" does not).
+const GERUND_IMPERATIVES: Record<string, string> = {
+  acquiring: "acquire",
+  arranging: "arrange",
+  being: "be",
+  challenging: "challenge",
+  changing: "change",
+  citing: "cite",
+  combining: "combine",
+  competing: "compete",
+  completing: "complete",
+  concluding: "conclude",
+  controlling: "control",
+  creating: "create",
+  deciding: "decide",
+  declining: "decline",
+  defining: "define",
+  deleting: "delete",
+  determining: "determine",
+  dividing: "divide",
+  dying: "die",
+  embedding: "embed",
+  escaping: "escape",
+  examining: "examine",
+  excluding: "exclude",
+  exchanging: "exchange",
+  exciting: "excite",
+  exploring: "explore",
+  guiding: "guide",
+  hiding: "hide",
+  ignoring: "ignore",
+  imagining: "imagine",
+  including: "include",
+  inviting: "invite",
+  labelling: "label",
+  lying: "lie",
+  modelling: "model",
+  noting: "note",
+  outlining: "outline",
+  promoting: "promote",
+  providing: "provide",
+  quoting: "quote",
+  rearranging: "rearrange",
+  redefining: "redefine",
+  refining: "refine",
+  requiring: "require",
+  restoring: "restore",
+  rewriting: "rewrite",
+  scoring: "score",
+  shaping: "shape",
+  shining: "shine",
+  signalling: "signal",
+  sliding: "slide",
+  storing: "store",
+  streamlining: "streamline",
+  travelling: "travel",
+  tuning: "tune",
+  typing: "type",
+  underlining: "underline",
+  uniting: "unite",
+  voting: "vote",
+  writing: "write",
+}
+
+// Stems that are already the whole verb, where a rule below would otherwise
+// hand them a silent e they never had.
+const COMPLETE_STEMS = new Set(["bias", "canvas", "focus", "refocus"])
+
+/**
+ * The command form of one gerund ("opening" to "open", "pacing" to "pace"), or
+ * null when no rule here settles it confidently.
+ *
+ * The rules run in order and each one is written to be safe on its own, so the
+ * fall-through at the end can simply drop the ending: by then the stem is
+ * something that already ends a word ("open", "maintain", "hold", "call").
+ */
+function gerundImperative(gerund: string): string | null {
+  const word = gerund.toLowerCase()
+  const known = GERUND_IMPERATIVES[word]
+  if (known) return known
+  if (!/^[a-z][a-z-]*ing$/.test(word)) return null
+
+  const stem = word.slice(0, -3)
+  if (stem.length < 2) return null
+  if (COMPLETE_STEMS.has(stem)) return stem
+  // A consonant doubled only to carry the ending: "cutting" to "cut". The
+  // letters left out of the set are the ones that double in the verb itself,
+  // so "calling", "passing", "adding", "staffing" and "buzzing" keep both.
+  if (/([bgkmnprt])\1$/.test(stem)) return stem.slice(0, -1)
+  // "seeing" to "see", "agreeing" to "agree".
+  if (/(?:ee|oe)$/.test(stem)) return stem
+  // The rest put back the silent e the ending replaced, wherever the stem
+  // cannot end a word without it. "eat" is carved out of the -ate verbs so
+  // "repeating" does not come back as "repeate".
+  if (/[^e]at$/.test(stem)) return `${stem}e` // narrating, incorporating
+  if (/[cvzu]$/.test(stem)) return `${stem}e` // pacing, moving, continuing
+  if (/[^s]s$/.test(stem)) return `${stem}e` // using, closing, condensing
+  if (/(?:[aeiou]|[dlr])g$/.test(stem)) return `${stem}e` // packaging, judging
+  if (/[^aeiou][aeiou][km]$/.test(stem)) return `${stem}e` // making, framing
+  if (/[^aeiou](?:ar|ir|ur)$/.test(stem)) return `${stem}e` // comparing, measuring
+  if (/[^aeioul]l$/.test(stem)) return `${stem}e` // handling, sampling
+  return stem
+}
+
+// Drops the "Try" a tip opens with, so the label in front of it is not read
+// twice. Whatever is left has to stand as a command on its own, so the opener
+// goes only in the shapes where it can: leave the tip as written otherwise.
+function stripTryOpener(text: string): string {
+  const opener = text.match(/^try\b([\s:,]*)(?:(to|and)\s+)?/i)
+  if (opener == null || opener[0].length === text.length) return text
+  const [matched, punctuation, bridge] = opener
+  const rest = text.slice(matched.length)
+
+  // "Try to open with the claim", "Try: open with the claim". The command is
+  // already there, so the opener is all that goes.
+  if (bridge != null || /[:,]/.test(punctuation)) {
+    return capitalizeFirstLetter(rest)
+  }
+
+  // "Try opening with the claim". Only a gerund can be turned back into the
+  // command the tip should have been, so anything else ("Try a colder open")
+  // keeps its opener rather than being left as a fragment.
+  const nextWord = rest.match(/^[a-z-]+ing\b/i)?.[0]
+  if (nextWord == null) return text
+  const imperative = gerundImperative(nextWord)
+  if (imperative == null) return text
+  return capitalizeFirstLetter(imperative + rest.slice(nextWord.length))
+}
+
 /**
  * Scrubs one piece of model-written copy before it is shown to a user, so every
  * tip and every described piece of evidence reads as plain, well-formed
  * English. It removes em and en dashes, strips leaked JSON structural artifacts
  * (stray braces and brackets and the punctuation clinging to them), drops a
  * "next time" / "in future videos" lead-in so the tip opens on the advice
- * itself, and collapses runaway whitespace into single spaces. Apply it at the
+ * itself, drops a "Try" the interface already prints as the label in front of
+ * the tip, and collapses runaway whitespace into single spaces. Apply it at the
  * point copy is rendered, so text already stored before this guardrail existed
  * is cleaned too.
  */
 export function cleanCopy(text: string): string {
-  return stripAdvicePreamble(
-    stripStructuralArtifacts(stripEmDashes(text)).replace(/\s+/g, " ").trim(),
+  // The "Try" strip runs last: a tip can carry both openers at once ("Next
+  // time, try opening on the claim"), and the "Try" is only visible as one
+  // once the lead-in in front of it has gone.
+  return stripTryOpener(
+    stripAdvicePreamble(
+      stripStructuralArtifacts(stripEmDashes(text)).replace(/\s+/g, " ").trim(),
+    ),
   )
 }

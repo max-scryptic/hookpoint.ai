@@ -26,9 +26,10 @@ export function TryCallout({
   alternatives?: ReactNode[]
 }) {
   // Every "Try:" tip funnels through here, so this is the one place to scrub
-  // model-written copy of leaked JSON artifacts, em dashes and stray whitespace
-  // before a user reads it. String children are the model-written tips; any
-  // richer node is passed through untouched.
+  // model-written copy of leaked JSON artifacts, em dashes, stray whitespace
+  // and the openers the label in front of it already says ("Try ...", "Next
+  // time, ...") before a user reads it. String children are the model-written
+  // tips; any richer node is passed through untouched.
   const scrub = (node: ReactNode) =>
     typeof node === "string" ? cleanCopy(node) : node
   const tip = scrub(children)
