@@ -2,12 +2,12 @@ import Link from "next/link"
 import {
   EyeIcon,
   GaugeIcon,
-  LibraryIcon,
   LockIcon,
   MousePointerClickIcon,
   RefreshCwIcon,
   ShieldCheckIcon,
   SparklesIcon,
+  TrendingUpIcon,
   UserPlusIcon,
   VideoIcon,
   WrenchIcon,
@@ -277,7 +277,7 @@ function BuildingCard() {
   return (
     <Card>
       <CardContent className="flex flex-col items-start gap-3">
-        <LibraryIcon className="size-5 text-muted-foreground" />
+        <TrendingUpIcon className="size-5 text-muted-foreground" />
         <div className="w-full">
           <p className="text-sm text-muted-foreground">
             Every deep analysis adds its retention events to a private{" "}
