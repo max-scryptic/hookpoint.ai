@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { LibraryIcon, LockIcon } from "lucide-react"
+import { ArrowLeftRightIcon, LockIcon } from "lucide-react"
 
 import { PreviousComparisons } from "@/components/previous-comparisons"
 import { RetentionComparePicker } from "@/components/retention-compare-picker"
@@ -127,17 +127,34 @@ export default async function Page() {
         )}
         {result.status === "empty" && (
           <Card className="flex flex-col items-start gap-3 p-6">
-            <LibraryIcon className="size-5 text-muted-foreground" />
+            <ArrowLeftRightIcon className="size-5 text-muted-foreground" />
             <div className="w-full">
-              <p className="max-w-prose text-sm text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 A head-to-head reads from the stored deep analysis of both
-                videos, so you need two deeply analysed uploads before this
-                page can compare anything.
+                videos, so you need{" "}
+                <span className="font-semibold text-foreground">
+                  two deeply analysed uploads
+                </span>{" "}
+                before this page can compare anything.
               </p>
-              <p className="mt-3 max-w-prose text-sm text-muted-foreground">
-                {result.videoCount === 1
-                  ? "One of your videos is deeply analysed so far. Deeply analyse one more and this page lights up."
-                  : "None of your videos are deeply analysed yet. Deeply analyse two and this page lights up."}
+              <p className="mt-3 text-sm text-muted-foreground">
+                {result.videoCount === 1 ? (
+                  <>
+                    <span className="font-semibold text-foreground">
+                      One of your videos
+                    </span>{" "}
+                    is deeply analysed so far. Deeply analyse one more and this
+                    page lights up.
+                  </>
+                ) : (
+                  <>
+                    <span className="font-semibold text-foreground">
+                      None of your videos
+                    </span>{" "}
+                    are deeply analysed yet. Deeply analyse two and this page
+                    lights up.
+                  </>
+                )}
               </p>
             </div>
             <Link href="/dashboard/analyse-video" className={buttonVariants()}>
