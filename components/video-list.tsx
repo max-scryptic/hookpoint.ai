@@ -1,6 +1,5 @@
 "use client"
 
-import Image from "next/image"
 import Link from "next/link"
 import {
   BarChart3Icon,
@@ -10,10 +9,10 @@ import {
   LinkIcon,
   LockIcon,
   MoreVerticalIcon,
-  PlayIcon,
 } from "lucide-react"
 
 import { useAnalysisLauncher } from "@/components/analysis-launcher"
+import { VideoThumbnail } from "@/components/video-thumbnail"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -85,19 +84,15 @@ export function Thumbnail({ video }: { video: RecentVideo }) {
       rel="noopener noreferrer"
       className="group relative block aspect-video w-32 shrink-0 overflow-hidden rounded-lg bg-muted sm:w-40"
     >
-      {video.thumbnailUrl ? (
-        <Image
-          src={video.thumbnailUrl}
-          alt={video.title}
-          fill
-          sizes="160px"
-          className="object-cover transition-transform group-hover:scale-105"
-        />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-          <PlayIcon className="size-6" />
-        </div>
-      )}
+      {/* Private and scheduled uploads carry a thumbnail URL that YouTube's CDN
+          refuses to serve, so this falls back to a placeholder on a failed load
+          as well as a missing URL (see components/video-thumbnail.tsx). */}
+      <VideoThumbnail
+        src={video.thumbnailUrl}
+        alt={video.title}
+        sizes="160px"
+        className="object-cover transition-transform group-hover:scale-105"
+      />
       {duration && (
         <span className="absolute bottom-1 right-1 rounded bg-black/80 px-1 py-0.5 text-xs font-medium text-white">
           {duration}

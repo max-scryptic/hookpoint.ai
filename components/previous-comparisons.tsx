@@ -1,19 +1,18 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { format } from "date-fns"
 import {
   ArrowUpDownIcon,
   HistoryIcon,
-  PlayIcon,
   SearchIcon,
   XIcon,
 } from "lucide-react"
 import { type DateRange } from "react-day-picker"
 
 import { Button } from "@/components/ui/button"
+import { VideoThumbnail } from "@/components/video-thumbnail"
 import { DatePickerWithRange } from "@/components/date-range-picker"
 import {
   DropdownMenu,
@@ -78,19 +77,12 @@ function VideoCell({
   return (
     <div className="flex items-start gap-3">
       <div className="relative aspect-video w-24 shrink-0 overflow-hidden rounded-md bg-muted sm:w-28">
-        {thumbnailUrl ? (
-          <Image
-            src={thumbnailUrl}
-            alt=""
-            fill
-            sizes="112px"
-            className="object-cover"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-            <PlayIcon className="size-5" />
-          </div>
-        )}
+        <VideoThumbnail
+          src={thumbnailUrl}
+          alt=""
+          sizes="112px"
+          iconClassName="size-5"
+        />
       </div>
       <p className="line-clamp-2 min-w-0 text-sm font-medium">{label}</p>
     </div>

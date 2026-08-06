@@ -1494,14 +1494,15 @@ export function AnalysedVideoDetail({
     <div className="flex flex-col gap-6">
       <div ref={insightAreaRef} className="flex flex-col gap-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-stretch">
-          {video.thumbnailUrl && (
-            <div className="shrink-0 sm:self-start">
-              <SourceVideoThumbnail
-                thumbnailUrl={video.thumbnailUrl}
-                title={video.title}
-              />
-            </div>
-          )}
+          {/* Rendered even without a usable thumbnail (private and scheduled
+              uploads have one YouTube won't serve), so the header keeps its
+              shape and shows the placeholder rather than collapsing. */}
+          <div className="shrink-0 sm:self-start">
+            <SourceVideoThumbnail
+              thumbnailUrl={video.thumbnailUrl}
+              title={video.title}
+            />
+          </div>
           <div className="flex flex-1 flex-col">
             <h1 className="text-2xl font-semibold tracking-normal">
               {video.title}

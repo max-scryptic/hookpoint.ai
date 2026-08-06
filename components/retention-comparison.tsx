@@ -1,8 +1,8 @@
-import Image from "next/image"
 import Link from "next/link"
-import { ArrowUpRightIcon, ImageOffIcon } from "lucide-react"
+import { ArrowUpRightIcon } from "lucide-react"
 
 import { RetentionComparisonChart } from "@/components/retention-comparison-chart"
+import { VideoThumbnail } from "@/components/video-thumbnail"
 import { buttonVariants } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import type {
@@ -95,19 +95,12 @@ function VideoHeaderCard({
     <Card className="flex flex-col gap-3 p-4">
       <div className="flex items-start gap-3">
         <div className="relative aspect-video w-32 shrink-0 overflow-hidden rounded-lg bg-muted sm:w-40">
-          {summary.thumbnailUrl ? (
-            <Image
-              src={summary.thumbnailUrl}
-              alt={summary.title ?? "Video thumbnail"}
-              fill
-              sizes="160px"
-              className="object-cover"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-              <ImageOffIcon className="size-5" />
-            </div>
-          )}
+          <VideoThumbnail
+            src={summary.thumbnailUrl}
+            alt={summary.title ?? "Video thumbnail"}
+            sizes="160px"
+            iconClassName="size-5"
+          />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase text-muted-foreground">

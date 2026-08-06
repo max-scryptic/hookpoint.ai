@@ -1,8 +1,9 @@
 "use client"
 
-import Image from "next/image"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Loader2Icon, XIcon } from "lucide-react"
+
+import { VideoThumbnail } from "@/components/video-thumbnail"
 
 interface SourceFileResponse {
   playbackUrl?: string | null
@@ -69,18 +70,12 @@ export function SourceVideoThumbnail({
   thumbnailUrl,
   title,
 }: {
-  thumbnailUrl: string
+  thumbnailUrl: string | null
   title: string
 }) {
   return (
     <div className="relative aspect-video w-full shrink-0 overflow-hidden rounded-xl bg-muted sm:w-64">
-      <Image
-        src={thumbnailUrl}
-        alt={title}
-        fill
-        sizes="256px"
-        className="object-cover"
-      />
+      <VideoThumbnail src={thumbnailUrl} alt={title} sizes="256px" />
     </div>
   )
 }
