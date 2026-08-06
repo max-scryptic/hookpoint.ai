@@ -1,15 +1,14 @@
-import Image from "next/image"
 import type { ReactNode } from "react"
 import {
   AlignHorizontalJustifyCenterIcon,
   ImageIcon,
   LayersIcon,
-  PlayIcon,
   TrophyIcon,
   TypeIcon,
 } from "lucide-react"
 
 import { HookIcon } from "@/components/hook-icon"
+import { VideoThumbnail } from "@/components/video-thumbnail"
 import { ComparisonReportTabs } from "@/components/comparison-report-tabs"
 import { TryCallout } from "@/components/try-callout"
 import { nameVideoSides, stripEmDashes } from "@/lib/copy-guardrails"
@@ -297,19 +296,11 @@ function SurfaceEvidence({
   if (surface === "thumbnail") {
     return (
       <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-background">
-        {video.thumbnailUrl ? (
-          <Image
-            src={video.thumbnailUrl}
-            alt=""
-            fill
-            sizes="(min-width: 640px) 50vw, 100vw"
-            className="object-cover"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-            <PlayIcon className="size-6" />
-          </div>
-        )}
+        <VideoThumbnail
+          src={video.thumbnailUrl}
+          alt=""
+          sizes="(min-width: 640px) 50vw, 100vw"
+        />
       </div>
     )
   }

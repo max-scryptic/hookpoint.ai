@@ -1,11 +1,10 @@
 "use client"
 
 import { format } from "date-fns"
-import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { PlayIcon } from "lucide-react"
 
+import { VideoThumbnail } from "@/components/video-thumbnail"
 import type {
   AdminComparisonVideo,
   AdminVideoComparison,
@@ -46,19 +45,12 @@ function VideoCell({ video }: { video: AdminComparisonVideo }) {
   return (
     <div className="flex items-start gap-3">
       <div className="relative aspect-video w-24 shrink-0 overflow-hidden rounded-md bg-muted sm:w-28">
-        {video.thumbnailUrl ? (
-          <Image
-            src={video.thumbnailUrl}
-            alt=""
-            fill
-            sizes="112px"
-            className="object-cover"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-            <PlayIcon className="size-5" />
-          </div>
-        )}
+        <VideoThumbnail
+          src={video.thumbnailUrl}
+          alt=""
+          sizes="112px"
+          iconClassName="size-5"
+        />
       </div>
       <p className="line-clamp-2 min-w-0 text-sm font-medium">
         {video.title ?? "Untitled video"}
