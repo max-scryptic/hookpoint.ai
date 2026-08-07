@@ -17,6 +17,11 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import {
+  assessComparisonReliability,
+  gapChangeMarginOfError,
+  type ComparisonReliability,
+} from "@/lib/retention-sample-size"
 import type {
   RetentionWindowEventPrimaryEvidence,
   RetentionWindowEventType,
@@ -42,6 +47,12 @@ export interface ComparisonVideoSummary {
   publishedAt: string | null
   durationSeconds: number
   views: number | null
+  // The Analytics API's lifetime view count, which is the audience the stored
+  // retention curve was actually computed over and therefore the only sound
+  // denominator for its sampling error. Distinct from `views`, which prefers
+  // the public near-real-time counter (see preferredViewCount) and so covers a
+  // slightly different period.
+  analyticsViews: number | null
   averageViewDurationSeconds: number | null
   // 0..100 as YouTube reports it.
   averageViewPercentage: number | null
@@ -96,6 +107,10 @@ export interface CurveDivergence {
   widenedFor: "a" | "b"
   // How much the gap grew across the stretch, in watch-ratio points.
   gapChange: number
+  // The 95% margin of error on that gap change, given how many viewers each
+  // curve was estimated from. Null when either view count is unknown, in which
+  // case only the fixed practical floor was applied.
+  gapChangeMargin: number | null
   aFromRatio: number
   aToRatio: number
   bFromRatio: number
@@ -112,6 +127,11 @@ export interface RetentionComparisonData {
   a: ComparisonVideo
   b: ComparisonVideo
   divergence: CurveDivergence | null
+  // What these two curves can honestly be compared on, given how many viewers
+  // each was estimated from. Everything the tab says about the pair is bound by
+  // this: a pair reading "shape_only" may be compared on where each video lost
+  // people but not on how much of its audience each one kept.
+  reliability: ComparisonReliability
   // How many feedback ratings informed the event calibration; 0 means the
   // ordering is raw model confidence.
   feedbackCount: number
@@ -134,7 +154,11 @@ const CONFIDENCE_FALLBACK = 0.6
 // and one phantom unhelpful, so a single rating never drags a source to 0 or 1.
 const CALIBRATION_PRIOR_HELPFUL = 1
 const CALIBRATION_PRIOR_TOTAL = 2
-// Gaps smaller than this (in watch-ratio points) are noise, not divergence.
+// The practical floor: a gap change smaller than this is too small to be worth
+// a creator's attention even when the audiences are large enough to measure it
+// confidently. The statistical floor (the 95% margin on the gap change, from
+// both view counts) is applied on top of this, and the larger of the two wins,
+// so a divergence has to be both real and worth acting on.
 const MIN_DIVERGENCE = 0.05
 const DIVERGENCE_SAMPLES = 60
 const HOOK_FALLBACK_SECONDS = 30
@@ -216,11 +240,27 @@ export function watchRatioAt(
 
 // Finds the stretch where one curve gained the most ground on the other:
 // the largest rise of (a - b) for a, of (b - a) for b, whichever is bigger.
-// Null when either curve is missing or the biggest rise is below the noise
-// floor.
+// Null when either curve is missing, or when the biggest rise does not clear
+// the noise floor.
+//
+// The noise floor is the larger of the fixed practical minimum and the 95%
+// margin of error on the gap change, which is derived from how many viewers
+// each curve was estimated from. Passing the view counts is what stops a
+// handful of viewers on one side from manufacturing a divergence: at 80 views
+// the margin on a mid-curve gap change is around 9 watch-ratio points, so a
+// gap has to be much wider than that before it means anything. With no view
+// counts the fixed floor is all that applies, which is the pre-existing
+// behaviour for videos whose analytics have not landed.
+//
+// Significance is tested on the stretch with the largest raw rise rather than
+// searched for jointly. The margin grows slowly with the size of the gap
+// change, so the widest stretch is all but always the most significant one
+// too, and testing it keeps the shaded band and the sentence describing it in
+// agreement.
 export function findLargestDivergence(
   curveA: RetentionPoint[],
   curveB: RetentionPoint[],
+  sampleSizes?: { a: number | null; b: number | null },
 ): CurveDivergence | null {
   if (curveA.length === 0 || curveB.length === 0) return null
 
@@ -254,15 +294,26 @@ export function findLargestDivergence(
   const forB = bestRise((sample) => sample.b - sample.a)
   const widenedFor = forA.rise >= forB.rise ? "a" : "b"
   const best = widenedFor === "a" ? forA : forB
-  if (best.rise < MIN_DIVERGENCE) return null
 
   const from = samples[best.from]
   const to = samples[best.to]
+  // Each side's own loss across the stretch. The gap change is the difference
+  // between these two, which is what carries the sampling error.
+  const gapChangeMargin = gapChangeMarginOfError(
+    from.a - to.a,
+    sampleSizes?.a ?? null,
+    from.b - to.b,
+    sampleSizes?.b ?? null,
+  )
+  const floor = Math.max(MIN_DIVERGENCE, gapChangeMargin ?? 0)
+  if (best.rise < floor) return null
+
   return {
     fromRatio: from.ratio,
     toRatio: to.ratio,
     widenedFor,
     gapChange: best.rise,
+    gapChangeMargin,
     aFromRatio: from.a,
     aToRatio: to.a,
     bFromRatio: from.b,
@@ -345,15 +396,35 @@ export function buildComparisonVideo(input: {
   }
 }
 
+// The audience a stored retention curve was estimated from, which is the n
+// behind every interval on it. Prefers the Analytics view count, because that
+// is the figure reported over the same lifetime window as the curve itself;
+// falls back to the public counter for rows analysed before analytics landed.
+export function comparisonSampleSize(
+  summary: ComparisonVideoSummary,
+): number | null {
+  return summary.analyticsViews ?? summary.views
+}
+
 export function buildRetentionComparison(
   a: ComparisonVideo,
   b: ComparisonVideo,
   calibration: EvidenceCalibration,
 ): RetentionComparisonData {
+  const sampleSizes = {
+    a: comparisonSampleSize(a.summary),
+    b: comparisonSampleSize(b.summary),
+  }
   return {
     a,
     b,
-    divergence: findLargestDivergence(a.curve, b.curve),
+    divergence: findLargestDivergence(a.curve, b.curve, sampleSizes),
+    reliability: assessComparisonReliability({
+      sampleSizeA: sampleSizes.a,
+      sampleSizeB: sampleSizes.b,
+      endingRatioA: watchRatioAt(a.curve, 1),
+      endingRatioB: watchRatioAt(b.curve, 1),
+    }),
     feedbackCount: calibration.feedbackCount,
   }
 }
@@ -427,6 +498,7 @@ function summaryFromRow(row: AnalysedVideoRow): ComparisonVideoSummary {
       { viewCount: row.view_count },
       row.analytics_summary,
     ),
+    analyticsViews: row.analytics_summary?.views ?? null,
     averageViewDurationSeconds:
       row.analytics_summary?.averageViewDurationSeconds ?? null,
     averageViewPercentage:

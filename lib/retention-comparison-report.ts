@@ -27,12 +27,17 @@ import { RETENTION_COMPARISON_REPORT_SCHEMA_VERSION } from "@/lib/comparison-rep
 import { recordLlmCallCost, type LlmLogContext } from "@/lib/llm-calls"
 import { responsesCallCost, type ResponsesUsage } from "@/lib/llm-cost"
 import {
+  comparisonSampleSize,
   getRetentionComparison,
   watchRatioAt,
   type ComparisonVideo,
   type CurveDivergence,
   type RetentionComparisonData,
 } from "@/lib/retention-comparison"
+import {
+  worstCasePointMargin,
+  type ComparisonReliability,
+} from "@/lib/retention-sample-size"
 import { TIP_VOICE_PROMPT } from "@/lib/tip-voice"
 import { saveRetentionComparisonReport } from "@/lib/video-comparisons"
 import type { RetentionPoint, TranscriptCue } from "@/lib/youtube/youtube"
@@ -237,6 +242,11 @@ function sideForModel(
     durationSeconds: duration,
     length: formatTimestamp(duration),
     views: summary.views,
+    // How many viewers this curve was estimated from, which is what decides how
+    // much weight any level on it can carry. Given separately from `views`
+    // because that figure prefers the public counter, over a slightly different
+    // period than the curve.
+    viewersBehindCurve: comparisonSampleSize(summary),
     averageViewPercentage: summary.averageViewPercentage,
     averageViewDuration:
       summary.averageViewDurationSeconds != null
@@ -297,10 +307,52 @@ function divergenceForModel(
     inVideoA: `${formatTimestamp(inA.fromSeconds)} to ${formatTimestamp(inA.toSeconds)}`,
     inVideoB: `${formatTimestamp(inB.fromSeconds)} to ${formatTimestamp(inB.toSeconds)}`,
     gapChangeInPoints: percent(divergence.gapChange),
+    // The gap change already cleared this margin, or the divergence would have
+    // been withheld. Supplied so the report can size the difference honestly
+    // rather than treat every reported divergence as equally solid.
+    gapChangeMarginInPoints:
+      divergence.gapChangeMargin != null
+        ? percent(divergence.gapChangeMargin)
+        : null,
     videoAWentFromPercent: percent(divergence.aFromRatio),
     videoAWentToPercent: percent(divergence.aToRatio),
     videoBWentFromPercent: percent(divergence.bFromRatio),
     videoBWentToPercent: percent(divergence.bToRatio),
+  }
+}
+
+// A margin in watch-ratio points as a percentage, or null when it could not be
+// computed because the view count is unknown.
+function marginPercent(margin: number | null): number | null {
+  return margin != null ? percent(margin) : null
+}
+
+// How far the pair may be pushed, decided server-side and handed to the model
+// as a verdict rather than as raw inputs. The model cannot do the arithmetic
+// that separates a real retention difference from sampling noise, so it is
+// never asked to: the statistics are settled in lib/retention-sample-size.ts
+// and arrive here already resolved.
+function reliabilityForModel(reliability: ComparisonReliability) {
+  return {
+    comparable: reliability.comparable,
+    caveats: reliability.caveats,
+    videoAViewers: reliability.sampleSizeA,
+    videoBViewers: reliability.sampleSizeB,
+    // The widest margin any single share on each curve can carry. Two figures
+    // closer together than this are the same figure.
+    videoAPointMarginInPoints: marginPercent(
+      worstCasePointMargin(reliability.sampleSizeA),
+    ),
+    videoBPointMarginInPoints: marginPercent(
+      worstCasePointMargin(reliability.sampleSizeB),
+    ),
+    endingGapInPoints:
+      reliability.endingGap != null ? percent(reliability.endingGap) : null,
+    endingGapMarginInPoints:
+      reliability.endingGapMargin != null
+        ? percent(reliability.endingGapMargin)
+        : null,
+    endingGapIsSignificant: reliability.endingGapIsSignificant,
   }
 }
 
@@ -331,6 +383,7 @@ export function retentionComparisonForModel(
   const inB = stretchFor(data.b, transcriptB)
 
   return {
+    reliability: reliabilityForModel(data.reliability),
     divergence: divergenceForModel(divergence, data.a, data.b),
     videoA: sideForModel(data.a, inA.transcript, inA.window),
     videoB: sideForModel(data.b, inB.transcript, inB.window),
@@ -347,10 +400,16 @@ const INSTRUCTIONS = [
   "Whoever is heard speaking may be the uploader, a co-host, a guest or a voiceover, so never pin what is said on a specific or gendered person (he, she, the creator); refer to the uploader's own video, or simply Video A and Video B.",
   "Write the name in full every time: Video A and Video B, never a bare A or B on its own, in the summary and in every section. 'Video B holds through the midpoint, Video A sheds a third of its audience' is right; 'B holds through the midpoint, A sheds a third' is not. The same holds for the possessive, so write Video A's opening rather than A's opening.",
   "Views and average watched are provided for orientation. Treat any link between something in a video and how its curve moved as correlation worth acting on, never as proof; hedge accordingly.",
+  "reliability decides how far this pair may be pushed, and it is not negotiable. A retention curve is estimated from whoever actually watched, so a curve built from a few dozen viewers carries a margin of several watch-ratio points at every position, and two videos that reached very differently sized audiences reached differently mixed traffic too, which moves a curve on its own. The arithmetic is already settled for you: never redo it, never overrule it, and never write about the statistics themselves.",
+  "When reliability.comparable is 'shape_only' you may not claim either video held more of its audience than the other, anywhere in the report. Do not rank the two ending shares against each other, do not call either curve higher or stronger overall, and do not build the summary on the gap between two percentages. Compare shape instead: where in its own runtime each video loses people, how steep each loss is against that video's own starting audience, and whether the losses cluster at the hook, through the middle or at the end. State once, in the summary, that the smaller audience cannot be compared on level against the larger one, and then get on with the shape.",
+  "When reliability.comparable is 'level_and_shape' both readings are open and you may compare the two curves on level directly. When it is 'unknown' the view counts were not stored, so hedge any level claim once and carry on.",
+  "When reliability.endingGapIsSignificant is false the two videos finished within each other's margin of error, which means they finished level; never name one of them the stronger finisher.",
+  "videoAPointMarginInPoints and videoBPointMarginInPoints are the widest margin a single share on each curve can carry. Two figures that differ by less than the larger of the two are the same figure, so never present that difference as a difference, in either video or between them.",
+  "Whenever you give a share still watching for a video with fewer than a few hundred viewersBehindCurve, give the viewers it stands for alongside it, as in '9%, which is about 7 of its 80 viewers', so a small share of a small audience is never read as a large result.",
   "Keep every field short. This report is read on one screen, so say each difference once, in the fewest words that still carry the evidence, and stop. Cut wind-up clauses, restatement of the heading, hedging padding and any sentence that only says a difference matters without naming what it is.",
-  "summary: two sentences, about 45 words at most, giving the overall verdict on how the two curves compare and which video held its audience better, with the one figure that carries it.",
-  "sections: 3 to 5 titled paragraphs, each with a short heading and a body of one to two sentences, about 50 words at most, naming Video A and Video B explicitly. Cover, in this order and only where the evidence supports them: the openings (what each hook held, and by how much they differ); the stretch where the curves separated the most (what the transcripts and events say was happening there in each video); how each video ends (what share is still watching at the finish, and whether either drops away late); and the pattern across the drop-offs (whether one video loses viewers at the same kind of moment repeatedly).",
-  "One of your sections must answer the question the numbers alone cannot: why the stronger curve held. Say what that video was doing across the stretch where the other one lost people, using the transcript and the event evidence, rather than restating that it held.",
+  "summary: the overall verdict on how the two curves compare, with the one figure that carries it. Two sentences and about 45 words at most, naming which video held its audience better. When reliability.comparable is 'shape_only' you get three sentences and about 60 words instead, the extra one spent saying that the audiences are too far apart in size to compare on level, and the verdict is about where each video loses people rather than about which one held more.",
+  "sections: 3 to 5 titled paragraphs, each with a short heading and a body of one to two sentences, about 50 words at most, naming Video A and Video B explicitly. Cover, in this order and only where the evidence supports them: the openings (how much of its own starting audience each hook kept, and whether that difference clears the point margins); the stretch where the curves separated the most (what the transcripts and events say was happening there in each video); how each video ends (whether either drops away late in its own runtime); and the pattern across the drop-offs (whether one video loses viewers at the same kind of moment repeatedly).",
+  "One of your sections must answer the question the numbers alone cannot: why one curve held where the other did not, across the divergence stretch specifically. That stretch has already been checked against both margins of error, so it is a real difference whatever reliability.comparable says, and it is the one place you may always name a stronger side. Say what that video was doing there, using the transcript and the event evidence, rather than restating that it held.",
   TIP_VOICE_PROMPT,
   "In this report that rule also means the two videos stay out of the tips entirely: never name Video A or Video B inside a tip, and never phrase a tip as something one of these two videos should have done. The section bodies are the opposite: those describe what these two videos already did, so they name Video A and Video B freely.",
   "tip: every section carries one. It is the single change that section's comparison argues for, written as a one-sentence instruction of about 25 words at most for the uploader's next video (for example 'Put the first proof of the promise before the two minute mark, and cut any setup that delays it'). Name the change rather than restating the paragraph, and keep it specific to what this comparison actually showed rather than generic retention advice, while phrasing it as a rule to apply next time. Do not repeat another section's tip word for word.",
