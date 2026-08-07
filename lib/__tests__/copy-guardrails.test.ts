@@ -52,6 +52,7 @@ const CHANNEL_TRENDS_SOURCE_FILES = [
   "lib/packaging-comparison-report.ts",
   "lib/retention-comparison.ts",
   "lib/retention-comparison-report.ts",
+  "lib/retention-sample-size.ts",
   "lib/script-comparison-report.ts",
   "lib/tip-voice.ts",
   "lib/tips.ts",

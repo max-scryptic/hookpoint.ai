@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import {
   buildComparisonVideo,
+  buildRetentionComparison,
   calibrationFactor,
   computeEvidenceCalibration,
   defaultComparisonPair,
@@ -35,6 +36,7 @@ function summary(
     publishedAt: null,
     durationSeconds: 100,
     views: null,
+    analyticsViews: null,
     averageViewDurationSeconds: null,
     averageViewPercentage: null,
     netSubscribersGained: null,
@@ -161,6 +163,162 @@ describe("findLargestDivergence", () => {
     const curveB = [point(0.4, 0.9), point(1, 0.7)]
     const divergence = findLargestDivergence(curveA, curveB)
     expect(divergence!.widenedFor).toBe("b")
+  })
+
+  // The whole point of passing view counts: a gap that only exists because one
+  // curve was estimated from a handful of people is not a divergence.
+  describe("with the audiences behind each curve", () => {
+    // An 8 point gap opens between 20% and 60%: comfortably over the fixed
+    // practical floor, and nowhere near the noise floor at 60 viewers.
+    const curveA = [point(0.2, 0.6), point(0.6, 0.55), point(1, 0.4)]
+    const curveB = [point(0.2, 0.6), point(0.6, 0.47), point(1, 0.3)]
+
+    it("reports the gap when both audiences are large enough to measure it", () => {
+      const divergence = findLargestDivergence(curveA, curveB, {
+        a: 20_000,
+        b: 18_000,
+      })
+      expect(divergence).not.toBeNull()
+      expect(divergence!.widenedFor).toBe("a")
+      expect(divergence!.gapChangeMargin).toBeLessThan(divergence!.gapChange)
+    })
+
+    it("withholds the same gap when one curve came from 60 viewers", () => {
+      expect(
+        findLargestDivergence(curveA, curveB, { a: 20_000, b: 60 }),
+      ).toBeNull()
+    })
+
+    it("keeps a divergence wide enough to clear even a small audience", () => {
+      // A sheds 51 points across the stretch where B sheds 18: the screenshot
+      // pair, whose shape difference is real despite B's 80 viewers.
+      const steep = [point(0.05, 0.55), point(0.88, 0.04), point(1, 0.043)]
+      const shallow = [point(0.05, 0.27), point(0.88, 0.09), point(1, 0.088)]
+      const divergence = findLargestDivergence(steep, shallow, {
+        a: 2_000,
+        b: 80,
+      })
+      expect(divergence).not.toBeNull()
+      expect(divergence!.widenedFor).toBe("b")
+    })
+
+    it("falls back to the fixed floor when a view count is missing", () => {
+      const divergence = findLargestDivergence(curveA, curveB, {
+        a: 20_000,
+        b: null,
+      })
+      expect(divergence).not.toBeNull()
+      expect(divergence!.gapChangeMargin).toBeNull()
+    })
+
+    it("still applies the practical floor to enormous audiences", () => {
+      // At a million views a 2 point gap is statistically certain and
+      // practically meaningless, so it is not worth a creator's attention.
+      const flatA = [point(0.5, 0.6), point(1, 0.4)]
+      const flatB = [point(0.5, 0.6), point(1, 0.38)]
+      expect(
+        findLargestDivergence(flatA, flatB, { a: 1_000_000, b: 1_000_000 }),
+      ).toBeNull()
+    })
+  })
+})
+
+describe("buildRetentionComparison", () => {
+  const build = (
+    curveA: RetentionPoint[],
+    curveB: RetentionPoint[],
+    viewsA: number | null,
+    viewsB: number | null,
+  ) =>
+    buildRetentionComparison(
+      buildComparisonVideo({
+        summary: summary({ id: "a", analyticsViews: viewsA }),
+        curve: curveA,
+        windows: [],
+        events: [],
+        readySynthesisWindowIds: new Set(),
+        calibration: computeEvidenceCalibration([]),
+      }),
+      buildComparisonVideo({
+        summary: summary({ id: "b", analyticsViews: viewsB }),
+        curve: curveB,
+        windows: [],
+        events: [],
+        readySynthesisWindowIds: new Set(),
+        calibration: computeEvidenceCalibration([]),
+      }),
+      computeEvidenceCalibration([]),
+    )
+
+  it("binds a lopsided pair to shape only", () => {
+    const data = build(
+      [point(0.5, 0.2), point(1, 0.043)],
+      [point(0.5, 0.15), point(1, 0.088)],
+      2_000,
+      80,
+    )
+    expect(data.reliability.comparable).toBe("shape_only")
+    expect(data.reliability.sampleSizeA).toBe(2_000)
+    expect(data.reliability.sampleSizeB).toBe(80)
+    expect(data.reliability.endingGapIsSignificant).toBe(false)
+  })
+
+  it("leaves a well-matched pair comparable on level and shape", () => {
+    const data = build(
+      [point(0.5, 0.6), point(1, 0.4)],
+      [point(0.5, 0.4), point(1, 0.15)],
+      9_000,
+      7_000,
+    )
+    expect(data.reliability.comparable).toBe("level_and_shape")
+    expect(data.reliability.caveats).toEqual([])
+  })
+
+  it("uses the analytics audience over the public counter", () => {
+    // The retention curve is reported over the same lifetime window as the
+    // analytics views, so that is the sound denominator even when the public
+    // counter has run ahead of it.
+    const video = (analyticsViews: number | null, views: number | null) =>
+      buildComparisonVideo({
+        summary: summary({ analyticsViews, views }),
+        curve: [point(1, 0.3)],
+        windows: [],
+        events: [],
+        readySynthesisWindowIds: new Set(),
+        calibration: computeEvidenceCalibration([]),
+      })
+    const data = buildRetentionComparison(
+      video(1_800, 2_000),
+      video(75, 80),
+      computeEvidenceCalibration([]),
+    )
+    expect(data.reliability.sampleSizeA).toBe(1_800)
+    expect(data.reliability.sampleSizeB).toBe(75)
+  })
+
+  it("falls back to the public counter when analytics have not landed", () => {
+    const video = (views: number | null, ending: number) =>
+      buildComparisonVideo({
+        summary: summary({ analyticsViews: null, views }),
+        curve: [point(0.5, ending + 0.2), point(1, ending)],
+        windows: [],
+        events: [],
+        readySynthesisWindowIds: new Set(),
+        calibration: computeEvidenceCalibration([]),
+      })
+    const data = buildRetentionComparison(
+      video(9_000, 0.4),
+      video(7_000, 0.15),
+      computeEvidenceCalibration([]),
+    )
+    expect(data.reliability.sampleSizeA).toBe(9_000)
+    expect(data.reliability.comparable).toBe("level_and_shape")
+  })
+
+  it("reports unknown when neither audience is stored at all", () => {
+    const data = build([point(1, 0.3)], [point(1, 0.3)], null, null)
+    expect(data.reliability.comparable).toBe("unknown")
+    expect(data.divergence).toBeNull()
   })
 })
 

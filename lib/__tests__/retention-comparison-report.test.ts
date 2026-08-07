@@ -38,6 +38,7 @@ function summary(
     publishedAt: null,
     durationSeconds: 240,
     views: null,
+    analyticsViews: null,
     averageViewDurationSeconds: null,
     averageViewPercentage: null,
     netSubscribersGained: null,
@@ -110,6 +111,7 @@ describe("stretchSeconds", () => {
       toRatio: 0.45,
       widenedFor: "a" as const,
       gapChange: 0.2,
+      gapChangeMargin: null,
       aFromRatio: 0.8,
       aToRatio: 0.75,
       bFromRatio: 0.6,
@@ -196,6 +198,76 @@ describe("retentionComparisonForModel", () => {
     expect(payload.videoA.checkpoints[0].stillWatchingPercent).toBe(70)
     expect(payload.videoA.checkpoints[3].stillWatchingPercent).toBe(60)
     expect(payload.videoB.checkpoints[3].stillWatchingPercent).toBe(20)
+  })
+
+  // The model cannot work out for itself whether a gap is bigger than the noise
+  // in the audience it came from, so it is never asked to: the verdict arrives
+  // already decided, and the prompt binds the report to it.
+  describe("reliability", () => {
+    const pairWithViews = (viewsA: number | null, viewsB: number | null) =>
+      buildRetentionComparison(
+        video([point(0.25, 0.55), point(0.88, 0.04), point(1, 0.043)], {
+          id: "video-a",
+          analyticsViews: viewsA,
+        }),
+        video([point(0.25, 0.27), point(0.88, 0.09), point(1, 0.088)], {
+          id: "video-b",
+          analyticsViews: viewsB,
+        }),
+        computeEvidenceCalibration([]),
+      )
+
+    it("hands over the verdict and the audience behind each curve", () => {
+      const payload = retentionComparisonForModel(
+        pairWithViews(2_000, 80),
+        [],
+        [],
+      )
+      expect(payload.reliability.comparable).toBe("shape_only")
+      expect(payload.reliability.caveats).toContain("small_sample")
+      expect(payload.reliability.videoBViewers).toBe(80)
+      expect(payload.videoB.viewersBehindCurve).toBe(80)
+      // The 4.5 point ending gap sits inside its own margin.
+      expect(payload.reliability.endingGapIsSignificant).toBe(false)
+      // About 11 points at 80 viewers, about 2 at 2,000.
+      expect(payload.reliability.videoBPointMarginInPoints!).toBeGreaterThan(
+        payload.reliability.videoAPointMarginInPoints!,
+      )
+    })
+
+    it("opens the level reading up when both audiences are large", () => {
+      const payload = retentionComparisonForModel(
+        pairWithViews(20_000, 18_000),
+        [],
+        [],
+      )
+      expect(payload.reliability.comparable).toBe("level_and_shape")
+      expect(payload.reliability.endingGapIsSignificant).toBe(true)
+    })
+
+    it("sizes the divergence against its own margin", () => {
+      const payload = retentionComparisonForModel(
+        pairWithViews(2_000, 80),
+        [],
+        [],
+      )
+      // The shape difference is real even at 80 viewers, and the model is told
+      // by how much, so it cannot treat every divergence as equally solid.
+      expect(payload.divergence).not.toBeNull()
+      expect(
+        payload.divergence!.gapChangeMarginInPoints!,
+      ).toBeLessThan(payload.divergence!.gapChangeInPoints)
+    })
+
+    it("reports unknown rather than guessing when no views are stored", () => {
+      const payload = retentionComparisonForModel(
+        pairWithViews(null, null),
+        [],
+        [],
+      )
+      expect(payload.reliability.comparable).toBe("unknown")
+      expect(payload.reliability.videoAPointMarginInPoints).toBeNull()
+    })
   })
 })
 

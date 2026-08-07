@@ -34,5 +34,11 @@ export const PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION = 6
 // its own "Try:" line, written over both curves, both window sets with their
 // ranked events, and the transcript of the stretch where the curves separated.
 // Version 2 put every tip under the shared tip voice (lib/tip-voice.ts), which
-// bans a tip pointing back at the videos it came from.
-export const RETENTION_COMPARISON_REPORT_SCHEMA_VERSION = 2
+// bans a tip pointing back at the videos it came from. Version 3 bound the
+// report to the pair's sampling reliability (lib/retention-sample-size.ts): a
+// pair whose curves came from very differently sized audiences may now only be
+// compared on where each video loses people, not on how much of its audience
+// each one kept. Reports stored at version 2 were written with no view counts
+// in front of them at all, so they can read a handful of viewers on one side as
+// a retention win, and are rewritten rather than rendered.
+export const RETENTION_COMPARISON_REPORT_SCHEMA_VERSION = 3

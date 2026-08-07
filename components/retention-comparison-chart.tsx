@@ -3,12 +3,22 @@
 import { useMemo, useState } from "react"
 
 import type { CurveDivergence } from "@/lib/retention-comparison"
+import { marginOfError } from "@/lib/retention-sample-size"
 import type { RetentionPoint } from "@/lib/youtube/youtube"
 
 // Two retention curves overlaid on a shared normalized axis: x is the share
 // of each video's runtime (the honest way to overlay videos of different
 // lengths), y is the share of viewers still watching. The stretch where the
 // curves diverge most is shaded; hovering reads out both curves at once.
+//
+// Each curve is drawn inside its own 95% confidence band, because a retention
+// curve is a proportion estimated from however many people watched, and a video
+// seen by 80 people carries a margin of around 10 points at every position
+// where one seen by 80,000 carries well under one. Drawn rather than only
+// written about: a band wide enough to swallow the other curve makes the point
+// on sight, where a sentence under the chart gets skimmed. Where the two bands
+// overlap, the two videos are not measurably different at that position, no
+// matter how far apart the lines look.
 //
 // COPY GUARDRAIL: no em or en dashes anywhere in this file (comments
 // included) - it renders on the Channel Trends surface. Hyphens are fine.
@@ -23,6 +33,10 @@ export interface ComparisonCurve {
   label: string
   points: RetentionPoint[]
   durationSeconds: number
+  // Viewers the curve was estimated from, which sets the width of its band.
+  // Null when the view count is unknown, and then no band is drawn rather than
+  // a guessed one.
+  sampleSize: number | null
 }
 
 function formatTimestamp(totalSeconds: number): string {
@@ -30,6 +44,17 @@ function formatTimestamp(totalSeconds: number): string {
   const mins = Math.floor(seconds / 60)
   const secs = seconds % 60
   return `${mins}:${String(secs).padStart(2, "0")}`
+}
+
+// A share still watching with its own margin, so the hover readout carries the
+// precision of each figure rather than only the figure. Bare when the view
+// count is unknown and no margin could be computed.
+function formatShare(watchRatio: number, sampleSize: number | null): string {
+  const share = `${Math.round(watchRatio * 100)}%`
+  const margin = marginOfError(watchRatio, sampleSize)
+  return margin == null
+    ? share
+    : `${share} +/-${Math.max(1, Math.round(margin * 100))}`
 }
 
 // The same baseline treatment as RetentionChart: an explicit 0:00 = 100%
@@ -77,10 +102,40 @@ export function RetentionComparisonChart({
   const model = useMemo(() => {
     const curveA = normalizedCurve(a.points)
     const curveB = normalizedCurve(b.points)
-    const maxWatch = [...curveA, ...curveB].reduce(
-      (max, point) => Math.max(max, point.watchRatio),
-      1,
-    )
+
+    // The 95% interval at each point of a curve, clamped to the axis: a share
+    // still watching cannot be negative, and the synthetic 0:00 = 100% baseline
+    // is a definition rather than an estimate, so it carries no interval.
+    const bandFor = (
+      curve: typeof curveA,
+      sampleSize: number | null,
+    ): Array<{ elapsedRatio: number; lower: number; upper: number }> | null => {
+      if (sampleSize == null || sampleSize <= 0) return null
+      return curve.map((point) => {
+        const margin =
+          point.elapsedRatio === 0
+            ? 0
+            : (marginOfError(point.watchRatio, sampleSize) ?? 0)
+        return {
+          elapsedRatio: point.elapsedRatio,
+          lower: Math.max(0, point.watchRatio - margin),
+          upper: point.watchRatio + margin,
+        }
+      })
+    }
+
+    const bandA = bandFor(curveA, a.sampleSize)
+    const bandB = bandFor(curveB, b.sampleSize)
+
+    // The bands can reach above the highest sample, so the axis is sized to
+    // whatever is actually drawn; otherwise a wide band would spill out of the
+    // plot and read as a clipped curve.
+    const maxWatch = [
+      ...curveA.map((point) => point.watchRatio),
+      ...curveB.map((point) => point.watchRatio),
+      ...(bandA ?? []).map((point) => point.upper),
+      ...(bandB ?? []).map((point) => point.upper),
+    ].reduce((max, value) => Math.max(max, value), 1)
     const yMax = Math.max(1, Math.ceil(maxWatch * 2) / 2)
 
     const xFor = (fraction: number) => PAD.left + fraction * PLOT_W
@@ -95,6 +150,26 @@ export function RetentionComparisonChart({
         )
         .join(" ")
 
+    // Out along the top of the band and back along the bottom, closed into one
+    // fillable ribbon.
+    const bandPathFor = (band: ReturnType<typeof bandFor>) => {
+      if (band == null || band.length === 0) return null
+      const upper = band
+        .map(
+          (point, index) =>
+            `${index === 0 ? "M" : "L"}${xFor(point.elapsedRatio).toFixed(2)},${yFor(point.upper).toFixed(2)}`,
+        )
+        .join(" ")
+      const lower = [...band]
+        .reverse()
+        .map(
+          (point) =>
+            `L${xFor(point.elapsedRatio).toFixed(2)},${yFor(point.lower).toFixed(2)}`,
+        )
+        .join(" ")
+      return `${upper} ${lower} Z`
+    }
+
     const yTicks: number[] = []
     for (let v = 0; v <= yMax + 1e-9; v += 0.25) yTicks.push(v)
 
@@ -103,12 +178,14 @@ export function RetentionComparisonChart({
       curveB,
       pathA: pathFor(curveA),
       pathB: pathFor(curveB),
+      bandPathA: bandPathFor(bandA),
+      bandPathB: bandPathFor(bandB),
       yMax,
       xFor,
       yFor,
       yTicks,
     }
-  }, [a.points, b.points])
+  }, [a.points, a.sampleSize, b.points, b.sampleSize])
 
   function handleMove(event: React.PointerEvent<SVGSVGElement>) {
     const rect = event.currentTarget.getBoundingClientRect()
@@ -197,6 +274,13 @@ export function RetentionComparisonChart({
           />
         )}
 
+        {model.bandPathA && (
+          <path d={model.bandPathA} fill="var(--chart-1)" fillOpacity={0.15} />
+        )}
+        {model.bandPathB && (
+          <path d={model.bandPathB} fill="var(--chart-2)" fillOpacity={0.15} />
+        )}
+
         <path
           d={model.pathA}
           fill="none"
@@ -252,15 +336,15 @@ export function RetentionComparisonChart({
         {hoverFraction != null && hoveredA != null && hoveredB != null ? (
           <span className="font-mono tabular-nums">
             {Math.round(hoverFraction * 100)}% in ·{" "}
-            {Math.round(hoveredA * 100)}% vs {Math.round(hoveredB * 100)}%
-            watching ·{" "}
+            {formatShare(hoveredA, a.sampleSize)} vs{" "}
+            {formatShare(hoveredB, b.sampleSize)} watching ·{" "}
             {formatTimestamp(hoverFraction * a.durationSeconds)} /{" "}
             {formatTimestamp(hoverFraction * b.durationSeconds)}
           </span>
         ) : (
           <span className="text-muted-foreground">
-            Position is % of each video&apos;s runtime. Hover to compare any
-            point.
+            Position is % of each video&apos;s runtime. Shaded bands are each
+            curve&apos;s 95% margin of error. Hover to compare any point.
           </span>
         )}
       </div>
