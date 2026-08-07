@@ -126,3 +126,27 @@ export function isNearDuplicateAdvice(a: string, b: string): boolean {
   const shorter = Math.min(uniqueA.size, uniqueB.size)
   return shorter >= MIN_CONTAINED_WORDS && shared / shorter >= CONTAINED_RATIO
 }
+
+/**
+ * A running record of the advice a page has already given, for surfaces that
+ * assemble their tips from several sources and can only tell they have repeated
+ * themselves once all of it is in one place. Ask it about each tip in the order
+ * a reader meets them: the first wording of a suggestion answers true and is
+ * remembered, and anything that restates it later answers false so the caller
+ * can drop it.
+ *
+ * Blank and missing tips are not advice, so they answer false and are not
+ * recorded: a surface with no tip is not "already said".
+ */
+export function createAdviceDeduper(): (advice: string | null | undefined) => boolean {
+  const said: string[] = []
+  return (advice) => {
+    const text = advice?.trim()
+    if (!text) return false
+    if (said.some((earlier) => earlier === text || isNearDuplicateAdvice(earlier, text))) {
+      return false
+    }
+    said.push(text)
+    return true
+  }
+}
