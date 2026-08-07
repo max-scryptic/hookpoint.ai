@@ -18,6 +18,12 @@ import {
 } from "lucide-react"
 
 import { HookIcon } from "@/components/hook-icon"
+import {
+  createFirstSaying,
+  dedupePacingTips,
+  dedupeSectionTips,
+  type DeepWindowFeedback,
+} from "@/lib/report-tip-uniqueness"
 import type { ScriptTaxonomy } from "@/lib/script-taxonomy"
 import type { DeepAnalysisEvidence } from "@/lib/deep-analysis-evidence"
 import type { RankedRetentionWindowEvent } from "@/lib/deep-analysis-insight-ranking"
@@ -121,11 +127,6 @@ const ROW_HIGHLIGHT: Record<"hook" | "drop" | "gain" | "hold" | "pacing", string
   gain: "bg-emerald-50 ring-1 ring-inset ring-emerald-400/40 dark:bg-emerald-500/10",
   hold: "bg-teal-50 ring-1 ring-inset ring-teal-400/40 dark:bg-teal-500/10",
   pacing: "bg-blue-50 ring-1 ring-inset ring-blue-400/40 dark:bg-blue-500/10",
-}
-
-type DeepWindowFeedback = {
-  insight: RankedRetentionWindowEvent
-  recommendation?: DeepAnalysisRecommendation
 }
 
 function rowHighlightClass(
@@ -1367,10 +1368,29 @@ export function AnalysedVideoDetail({
     }
     return map
   }
-  const hookDeepFeedback = deepFeedbackByKind("hook")
-  const dropDeepFeedback = deepFeedbackByKind("drop_off")
-  const gainDeepFeedback = deepFeedbackByKind("gain")
-  const holdDeepFeedback = deepFeedbackByKind("hold")
+  // No two tips on a report may say the same thing, and this is the only place
+  // that holds every tip the page is about to render at once. The sections go
+  // through in the order they are read, so where the same advice is reached
+  // twice the first row keeps it and the later one shows its explanation alone.
+  // See lib/report-tip-uniqueness.ts.
+  const isFirstSaying = createFirstSaying()
+  const hookSection = dedupeSectionTips(
+    { attribution: hookAttribution, deepFeedback: deepFeedbackByKind("hook") },
+    isFirstSaying,
+  )
+  const dropSection = dedupeSectionTips(
+    { attribution: dropAttribution, deepFeedback: deepFeedbackByKind("drop_off") },
+    isFirstSaying,
+  )
+  const gainSection = dedupeSectionTips(
+    { attribution: gainAttribution, deepFeedback: deepFeedbackByKind("gain") },
+    isFirstSaying,
+  )
+  const holdSection = dedupeSectionTips(
+    { attribution: holdAttribution, deepFeedback: deepFeedbackByKind("hold") },
+    isFirstSaying,
+  )
+  const dedupedPacingAnalysis = dedupePacingTips(pacingAnalysis, isFirstSaying)
   const chartInsights: RetentionChartInsight[] = [
     ...hookWindows
       .filter((window) => !window.outOfRange)
@@ -1674,8 +1694,8 @@ export function AnalysedVideoDetail({
                   <RetentionWindows
                     windows={hookWindows}
                     transcript={transcript}
-                    attribution={hookAttribution}
-                    deepFeedback={hookDeepFeedback}
+                    attribution={hookSection.attribution}
+                    deepFeedback={hookSection.deepFeedback}
                     highlightedId={playbackWindow?.id ?? null}
                   />
                 </TabsContent>
@@ -1686,8 +1706,8 @@ export function AnalysedVideoDetail({
                   <DropList
                     drops={drops}
                     transcript={transcript}
-                    attribution={dropAttribution}
-                    deepFeedback={dropDeepFeedback}
+                    attribution={dropSection.attribution}
+                    deepFeedback={dropSection.deepFeedback}
                     highlightedId={playbackWindow?.id ?? null}
                   />
                 </TabsContent>
@@ -1698,8 +1718,8 @@ export function AnalysedVideoDetail({
                   <GainList
                     gains={gains}
                     transcript={transcript}
-                    attribution={gainAttribution}
-                    deepFeedback={gainDeepFeedback}
+                    attribution={gainSection.attribution}
+                    deepFeedback={gainSection.deepFeedback}
                     highlightedId={playbackWindow?.id ?? null}
                   />
                 </TabsContent>
@@ -1710,8 +1730,8 @@ export function AnalysedVideoDetail({
                   <HoldList
                     holds={holds}
                     transcript={transcript}
-                    attribution={holdAttribution}
-                    deepFeedback={holdDeepFeedback}
+                    attribution={holdSection.attribution}
+                    deepFeedback={holdSection.deepFeedback}
                     highlightedId={playbackWindow?.id ?? null}
                   />
                 </TabsContent>
@@ -1720,7 +1740,7 @@ export function AnalysedVideoDetail({
               {pacingStretches.length > 0 && (
                 <TabsContent value="pacing">
                   <PacingAnalysisSection
-                    analysis={pacingAnalysis}
+                    analysis={dedupedPacingAnalysis}
                     transcript={transcript}
                     hasTranscript={transcript.length > 0}
                     highlightedId={playbackWindow?.id ?? null}

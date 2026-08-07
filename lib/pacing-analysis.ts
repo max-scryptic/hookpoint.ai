@@ -316,6 +316,11 @@ export async function generatePacingAnalysis(
                 // other tip on the site. The reason beside it is not: that
                 // describes the stretch as it was.
                 TIP_VOICE_PROMPT,
+                // Written into the prompt as well as enforced at render time
+                // (lib/report-tip-uniqueness.ts): a repeat caught here is a
+                // stretch that keeps a useful tip, while one caught at render
+                // time is a stretch that loses its tip altogether.
+                "No two suggestions in your response may give the same advice. Two stretches often share a cause, and the second one still has to teach something the first did not: name a different action rather than restating the first suggestion in other words. Where you genuinely have nothing new to add about a stretch, say the one thing that is specific to it.",
                 "Order stretches from most to least worth reviewing. Return fewer than 3 only when the video genuinely has no such areas, and never more than 5.",
                 'Never output an em dash character (U+2014) anywhere in your response; if you would use one, rewrite the phrase with a comma, colon, parentheses, or two separate sentences instead.',
               ].join(" "),

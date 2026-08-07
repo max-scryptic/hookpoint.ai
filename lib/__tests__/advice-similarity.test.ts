@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest"
 
-import { isNearDuplicateAdvice } from "@/lib/advice-similarity"
+import {
+  createAdviceDeduper,
+  isNearDuplicateAdvice,
+} from "@/lib/advice-similarity"
 
 describe("isNearDuplicateAdvice", () => {
   // The pair that prompted this: a surface tip and the recommendation stacked
@@ -81,5 +84,42 @@ describe("isNearDuplicateAdvice", () => {
     expect(isNearDuplicateAdvice("Do it.", "Open on the claim itself.")).toBe(
       false,
     )
+  })
+})
+
+describe("createAdviceDeduper", () => {
+  it("keeps the first wording of a suggestion and turns down the rest", () => {
+    const isFirstSaying = createAdviceDeduper()
+    expect(isFirstSaying("Open on the claim itself rather than on a greeting.")).toBe(
+      true,
+    )
+    // Same advice, different words, so the page has already said it.
+    expect(isFirstSaying("Open on the claim rather than on a greeting.")).toBe(false)
+    expect(isFirstSaying("Hold the shot for a beat before the first cut.")).toBe(true)
+  })
+
+  it("catches a repeat however far down the page it appears", () => {
+    const isFirstSaying = createAdviceDeduper()
+    const tip = "Plan at least one purposeful visual change for a stretch like this."
+    expect(isFirstSaying(tip)).toBe(true)
+    expect(isFirstSaying("Hold the shot for a beat before the first cut.")).toBe(true)
+    expect(isFirstSaying("Name the payoff in the first three seconds.")).toBe(true)
+    expect(isFirstSaying(tip)).toBe(false)
+  })
+
+  // A surface with no tip has not said anything, so it must not be recorded as
+  // having said it: the next blank one would otherwise read as a repeat.
+  it("treats a missing tip as nothing said", () => {
+    const isFirstSaying = createAdviceDeduper()
+    expect(isFirstSaying(null)).toBe(false)
+    expect(isFirstSaying(undefined)).toBe(false)
+    expect(isFirstSaying("   ")).toBe(false)
+    expect(isFirstSaying("Open on the claim itself.")).toBe(true)
+  })
+
+  it("ignores the whitespace around an otherwise identical tip", () => {
+    const isFirstSaying = createAdviceDeduper()
+    expect(isFirstSaying("Open on the claim itself.")).toBe(true)
+    expect(isFirstSaying("  Open on the claim itself.  ")).toBe(false)
   })
 })

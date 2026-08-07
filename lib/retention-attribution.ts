@@ -200,6 +200,15 @@ export async function generateRetentionAttribution(
                 "For a drop_off, explain the most likely reason viewers left based on what was being said (e.g. a topic change, a slow tangent, an unmet promise, an ad or sponsor read, a natural stopping point), and give one concrete tip for handling that same situation differently in a future video.",
                 "For a gain, explain what likely pulled viewers back or made them re-watch, and always give a concrete tip (never null for a gain): the explanation names the specific thing that worked here, and the tip tells the uploader how to deliberately set that same thing up again in their next videos rather than offering generic praise.",
                 "For a hold, explain what in the supplied words likely sustained attention without a meaningful gain or loss, and set tip to a short note on what to keep doing in future videos.",
+                // A moment is explained in isolation, so several moments with
+                // one cause used to come back as one sentence repeated down the
+                // page. lib/report-tip-uniqueness.ts drops a repeat at render
+                // time, which costs that moment its tip, so it is worth asking
+                // for distinct advice here where the moment can still keep one.
+                // Stored attributions written before this instruction existed
+                // are covered by that render-time pass, so this does not need a
+                // schema version bump to take effect.
+                "No two tips across all the moments may give the same advice. Several moments often share a cause, and each tip still has to be worth reading on its own: give a different concrete action rather than restating an earlier tip in other words. Where a moment genuinely leaves nothing new to suggest, set its tip to null instead (except on a gain, which always keeps one).",
                 "relativePerformance (0..1) compares this moment to similar videos; below 0.5 is underperforming. Use it to judge severity, not as the explanation itself.",
                 "Keep each explanation to 1-2 specific sentences that reference what is actually said. Never invent dialogue that isn't in the transcript.",
                 "Return exactly one moments entry for every supplied moment, using its momentIndex. Write a one-sentence overview of the video's overall retention story.",
