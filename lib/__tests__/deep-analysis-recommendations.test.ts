@@ -68,6 +68,125 @@ describe("compileDeepAnalysisRecommendations", () => {
     expect(recommendations[0].action).toMatch(/signpost/i)
   })
 
+  // What the insight is about is measured on the event; freeze coverage, cut
+  // rate and the rest are measured on the whole window, so every event in it
+  // carries the same ones. Deciding from the window put a tip about visual
+  // pacing under an insight about a topic shift, and under the tab named after
+  // that topic shift.
+  describe("chooses the action from what the insight is about", () => {
+    // Straight from the report that prompted this: a structural insight in a
+    // window that happened to be cut slowly.
+    const slowlyCutWindow = {
+      editing: { cutsPerMinute: 0 } as never,
+      baseline: { cutsPerMinute: 0.75, speechRate: 150 },
+    }
+
+    it("answers a topic shift structurally in a slowly cut window", () => {
+      const [recommendation] = compileDeepAnalysisRecommendations({
+        events: [event({ eventType: "topic_shift", primaryEvidence: "transcript" })],
+        window,
+        audio: null,
+        ...slowlyCutWindow,
+      })
+      expect(recommendation.actionType).toBe("signpost_topic_shift")
+    })
+
+    it("answers a visual insight visually in a slowly cut window", () => {
+      const [recommendation] = compileDeepAnalysisRecommendations({
+        events: [event({ eventType: "visual_change", primaryEvidence: "visual" })],
+        window,
+        audio: null,
+        ...slowlyCutWindow,
+      })
+      expect(recommendation.actionType).toBe("add_visual_support")
+    })
+
+    it("lets an editing insight take the cut rate, which is its own subject", () => {
+      const [recommendation] = compileDeepAnalysisRecommendations({
+        events: [event({ eventType: "scene_cut", primaryEvidence: "editing" })],
+        window,
+        audio: null,
+        ...slowlyCutWindow,
+      })
+      expect(recommendation.actionType).toBe("increase_visual_pacing")
+    })
+
+    it("answers an audio insight from the audio, not from a held frame", () => {
+      const [recommendation] = compileDeepAnalysisRecommendations({
+        events: [event({ eventType: "audio_change", primaryEvidence: "audio" })],
+        window,
+        editing: { freezeCoverage: 0.2 } as never,
+        baseline: { cutsPerMinute: 8, speechRate: 150 },
+        audio: { silence: 0.2 } as never,
+      })
+      expect(recommendation.actionType).toBe("trim_silence")
+    })
+
+    it("reads a pacing insight as the delivery before the edit", () => {
+      const [recommendation] = compileDeepAnalysisRecommendations({
+        events: [event({ eventType: "pacing_change", primaryEvidence: "combined" })],
+        window,
+        editing: { cutsPerMinute: 0 } as never,
+        baseline: { cutsPerMinute: 0.75, speechRate: 150 },
+        audio: { speech_rate: 100 } as never,
+      })
+      expect(recommendation.actionType).toBe("adjust_delivery")
+    })
+
+    // The subject leads, but it cannot invent a measurement it does not have.
+    it("falls back to what the window measured when the subject has nothing", () => {
+      const [recommendation] = compileDeepAnalysisRecommendations({
+        events: [event({ eventType: "audio_change", primaryEvidence: "audio" })],
+        window,
+        editing: { freezeCoverage: 0.2 } as never,
+        baseline: { cutsPerMinute: 8, speechRate: 150 },
+        audio: null,
+      })
+      expect(recommendation.actionType).toBe("replace_freeze")
+    })
+
+    it("leaves an event that names no subject to the window measurements", () => {
+      const [recommendation] = compileDeepAnalysisRecommendations({
+        events: [event({ eventType: "other", primaryEvidence: "combined" })],
+        window,
+        audio: null,
+        ...slowlyCutWindow,
+      })
+      expect(recommendation.actionType).toBe("increase_visual_pacing")
+    })
+
+    // A gain is not a problem to diagnose, so it keeps its own answer whatever
+    // the moment was about.
+    it("still tells a gain to repeat what worked", () => {
+      const [recommendation] = compileDeepAnalysisRecommendations({
+        events: [event({ eventType: "topic_shift", primaryEvidence: "transcript" })],
+        window: { ...window, kind: "gain" },
+        audio: null,
+        ...slowlyCutWindow,
+      })
+      expect(recommendation.actionType).toBe("preserve_pattern")
+    })
+
+    // The two halves of the fix meet here: insights about different things no
+    // longer collapse onto one branch, so a window's own tabs stop competing
+    // for the same advice before the uniqueness pass has to intervene.
+    it("gives two insights about different things two kinds of advice", () => {
+      const recommendations = compileDeepAnalysisRecommendations({
+        events: [
+          event({ id: "event-1", eventType: "topic_shift", primaryEvidence: "transcript" }),
+          event({ id: "event-2", eventType: "visual_change", primaryEvidence: "visual" }),
+        ],
+        window,
+        audio: null,
+        ...slowlyCutWindow,
+      })
+      expect(recommendations.map((entry) => entry.actionType)).toEqual([
+        "signpost_topic_shift",
+        "add_visual_support",
+      ])
+    })
+  })
+
   // One case per branch of the generator. The rules below hold for every
   // wording a branch can produce, not only the one it prefers, so each test
   // walks the alternatives too.
