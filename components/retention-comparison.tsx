@@ -71,10 +71,28 @@ function SideDot({ side }: { side: Side }) {
   )
 }
 
-function Kpi({ label, value }: { label: string; value: string }) {
+function Kpi({
+  label,
+  value,
+  // Secondary reading shown alongside the value in muted text, for the one KPI
+  // that carries two related numbers (avg view duration and the share of the
+  // video that represents).
+  hint,
+}: {
+  label: string
+  value: string
+  hint?: string | null
+}) {
   return (
     <div className="flex flex-col">
-      <span className="text-sm font-medium tabular-nums">{value}</span>
+      <span className="text-sm font-medium tabular-nums">
+        {value}
+        {hint != null && (
+          <span className="ml-1 font-normal text-muted-foreground">
+            ({hint})
+          </span>
+        )}
+      </span>
       <span className="text-[10px] text-muted-foreground">{label}</span>
     </div>
   )
@@ -135,25 +153,23 @@ function VideoHeaderCard({
       </div>
       <div className="grid grid-cols-4 gap-2 border-t pt-3">
         <Kpi
-          label="avg watched"
+          label="views"
           value={
-            summary.averageViewPercentage != null
-              ? `${Math.round(summary.averageViewPercentage)}%`
-              : "-"
+            summary.views != null ? formatCompactNumber(summary.views) : "-"
           }
         />
         <Kpi
-          label="avg watch time"
+          label="avg view duration"
           value={
             summary.averageViewDurationSeconds != null
               ? formatTimestamp(summary.averageViewDurationSeconds)
               : "-"
           }
-        />
-        <Kpi
-          label="views"
-          value={
-            summary.views != null ? formatCompactNumber(summary.views) : "-"
+          hint={
+            summary.averageViewDurationSeconds != null &&
+            summary.averageViewPercentage != null
+              ? `${Math.round(summary.averageViewPercentage)}%`
+              : null
           }
         />
         <Kpi
@@ -161,6 +177,14 @@ function VideoHeaderCard({
           value={
             summary.durationSeconds > 0
               ? formatTimestamp(summary.durationSeconds)
+              : "-"
+          }
+        />
+        <Kpi
+          label="subscribers gained"
+          value={
+            summary.netSubscribersGained != null
+              ? formatCompactNumber(summary.netSubscribersGained)
               : "-"
           }
         />
