@@ -64,8 +64,15 @@ export async function POST(
     // would no-op against the partial unique index — so a retry on a stuck
     // pipeline would silently do nothing. Clearing it here makes the retry take
     // effect immediately rather than only once STALE_RUN_MS elapses.
-    await resetDeepAnalysis(supabase, user.id, analysedVideo.id)
+    //
+    // This has to happen BEFORE the reset, not after. Abandoning is what makes a
+    // still-live run notice it has been superseded (it checks ownership at each
+    // stage boundary), so releasing the lease first is what stops that run
+    // writing into the very rows the reset is about to recreate. With the old
+    // order, a retry landing mid-run had the previous invocation carry on
+    // through the wipe and settle jobs belonging to the fresh attempt.
     await abandonInFlightDeepAnalysisPipelineRun(createAdminClient(), analysedVideo.id)
+    await resetDeepAnalysis(supabase, user.id, analysedVideo.id)
     triggerRetentionWindowMediaExtraction(sourceFile)
 
     return NextResponse.json({ ok: true })

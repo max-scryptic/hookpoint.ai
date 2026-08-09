@@ -41,6 +41,11 @@ export interface DeepAnalysisPipelineRunSummary {
 // proving liveness, this can sit just above the invocation budget.
 const STALE_RUN_MS = 3 * 60 * 1000
 
+// Exported for the resume sweeper (lib/deep-analysis-resume.ts), which has to
+// draw the same live/dead line this module does when deciding whether a video's
+// pipeline still has an invocation behind it.
+export const DEEP_ANALYSIS_RUN_STALE_MS = STALE_RUN_MS
+
 // A running stage bumps its lease this often so the staleness sweep above can
 // tell a live long-running stage (a large file's extraction) from a dead
 // invocation. See runObservedPipelineStage.
@@ -110,12 +115,51 @@ function startLeaseHeartbeat(
   return () => clearInterval(timer)
 }
 
+// Thrown when a run discovers, at a stage boundary, that it no longer holds the
+// lease it started with. Distinct from a stage failure: nothing is wrong with
+// this video, the invocation has simply been superseded and must get out of the
+// way of whoever owns the pipeline now.
+export class DeepAnalysisPipelineSupersededError extends Error {
+  constructor(runId: string) {
+    super(`Deep analysis pipeline run ${runId} was superseded`)
+    this.name = "DeepAnalysisPipelineSupersededError"
+  }
+}
+
+// Whether this run is still the row the one-running-per-video index points at.
+//
+// Abandoning a run (a manual retry, or the staleness sweep) only clears the
+// *database* lease — it cannot kill the after() callback already executing
+// somewhere, which keeps working and writing rows that now belong to whichever
+// run took the lease next. Observed in production: a superseded run's synthesis
+// stage ran against evidence a concurrent retry had just wiped, released every
+// job back to 'pending', and then wrote itself back to 'ready', undoing the
+// abandon. Checking ownership at each stage boundary bounds that overlap to the
+// stage already in flight instead of letting it run the pipeline to completion.
+async function holdsLease(admin: SupabaseClient, runId: string): Promise<boolean> {
+  const { data, error } = await admin
+    .from("deep_analysis_pipeline_runs")
+    .select("status")
+    .eq("id", runId)
+    .maybeSingle()
+  // A read that fails says nothing about ownership — assume the lease is still
+  // held rather than aborting a healthy run on a transient DB blip.
+  if (error) return true
+  return (data as { status?: string } | null)?.status === "running"
+}
+
 export async function runObservedPipelineStage(
   admin: SupabaseClient,
   run: DeepAnalysisPipelineRun,
   stage: DeepAnalysisPipelineStage,
   task: () => Promise<void>,
 ): Promise<void> {
+  // Before anything is written for this stage: if the lease is gone, leave the
+  // row exactly as the new owner found it.
+  if (!(await holdsLease(admin, run.id))) {
+    throw new DeepAnalysisPipelineSupersededError(run.id)
+  }
+
   const startedAt = new Date().toISOString()
   const startedMs = Date.now()
   await admin.from("deep_analysis_pipeline_runs").update({
@@ -191,15 +235,30 @@ export async function finishDeepAnalysisPipelineRun(
   outcome: { status: "ready" } | { status: "failed"; error: string },
 ): Promise<void> {
   const now = new Date().toISOString()
-  const { error } = await admin.from("deep_analysis_pipeline_runs").update({
-    status: outcome.status,
-    current_stage: null,
-    stages: run.stages,
-    error: outcome.status === "failed" ? outcome.error : null,
-    finished_at: now,
-    updated_at: now,
-  }).eq("id", run.id)
+  // Scoped to status = 'running' so a run that was abandoned mid-flight can't
+  // resurrect itself. Without this guard a superseded invocation reaching its
+  // final write flips the row back to a terminal 'ready' — which is exactly how
+  // a video ended up looking finished while its actual work sat pending, and
+  // how an abandoned run silently erased the record of having been abandoned.
+  const { data, error } = await admin
+    .from("deep_analysis_pipeline_runs")
+    .update({
+      status: outcome.status,
+      current_stage: null,
+      stages: run.stages,
+      error: outcome.status === "failed" ? outcome.error : null,
+      finished_at: now,
+      updated_at: now,
+    })
+    .eq("id", run.id)
+    .eq("status", "running")
+    .select("id")
   if (error) throw new Error(`Failed to finish deep analysis pipeline: ${error.message}`)
+  if ((data?.length ?? 0) === 0) {
+    console.warn(
+      `Deep analysis pipeline run ${run.id} was superseded before it could be finished`,
+    )
+  }
 }
 
 export async function getLatestDeepAnalysisPipelineRun(

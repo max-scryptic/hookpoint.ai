@@ -37,6 +37,7 @@ import type { SourceFile } from "@/lib/source-files/source-files"
 import { synthesizeRetentionWindowEvents } from "@/lib/retention-window-event-synthesis"
 import {
   claimDeepAnalysisPipelineRun,
+  DeepAnalysisPipelineSupersededError,
   finishDeepAnalysisPipelineRun,
   runObservedPipelineStage,
 } from "@/lib/deep-analysis-pipeline-runs"
@@ -86,6 +87,10 @@ export function triggerRetentionWindowMediaExtraction(
           ),
         )
       } catch (taxonomyError) {
+        // Losing the lease is not a taxonomy failure to shrug off — it means
+        // this whole invocation must stop, so it has to escape the one catch
+        // in the pipeline that deliberately swallows its stage's errors.
+        if (taxonomyError instanceof DeepAnalysisPipelineSupersededError) throw taxonomyError
         console.error(
           "Transcript taxonomy stage failed; continuing to event synthesis",
           taxonomyError,
@@ -96,6 +101,15 @@ export function triggerRetentionWindowMediaExtraction(
       )
       await finishDeepAnalysisPipelineRun(admin, run, { status: "ready" })
     } catch (error) {
+      // Not a failure of this video's analysis — a retry (or the staleness
+      // sweep) handed the lease to a newer run while this invocation was still
+      // going. The new owner is responsible for the outcome now, so exit
+      // without touching the run row: writing 'failed' here would overwrite
+      // whatever the new owner has already recorded.
+      if (error instanceof DeepAnalysisPipelineSupersededError) {
+        console.warn("Deep analysis pipeline superseded mid-run; stopping", error.message)
+        return
+      }
       console.error("Failed to run deep analysis pipeline", error)
       await finishDeepAnalysisPipelineRun(admin, run, {
         status: "failed",

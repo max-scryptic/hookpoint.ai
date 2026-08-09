@@ -388,6 +388,34 @@ export async function listReadySourceFileSummaries(
   )
 }
 
+// Loads the fully-uploaded source files for a set of analysed videos, in one
+// round trip. Used by the deep-analysis resume sweeper
+// (lib/deep-analysis-resume.ts), which starts from a list of analysed-video ids
+// with unfinished pipeline work and needs the whole SourceFile for each — that
+// is what triggerRetentionWindowMediaExtraction takes. Not scoped to a user:
+// the cron sweep runs across every account through the admin client, and the
+// per-user callers narrow their own candidate ids before calling in.
+export async function listReadySourceFilesByAnalysedVideoIds(
+  supabase: SupabaseClient,
+  analysedVideoIds: string[],
+): Promise<SourceFile[]> {
+  if (analysedVideoIds.length === 0) return []
+
+  const { data, error } = await supabase
+    .from("source_files")
+    .select(COLUMNS)
+    .in("analysed_video_id", analysedVideoIds)
+    .eq("upload_status", "ready")
+
+  if (error) {
+    throw new Error(
+      `Failed to load source files by analysed video id: ${error.message}`,
+    )
+  }
+
+  return ((data ?? []) as SourceFileRow[]).map(mapSourceFileRow)
+}
+
 // Finds a source file by its transcoder job id. Used by the normalisation status
 // callback, which is an unauthenticated server-to-server request and therefore
 // runs through the service-role admin client (RLS would otherwise hide the row).

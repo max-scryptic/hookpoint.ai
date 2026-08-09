@@ -48,6 +48,10 @@ vi.mock("@/lib/retention-window-event-synthesis", () => ({
 
 const finishDeepAnalysisPipelineRun = vi.fn(async (..._args: unknown[]) => {})
 vi.mock("@/lib/deep-analysis-pipeline-runs", () => ({
+  // The real class, so the trigger's `instanceof` check against it is
+  // meaningful — it is what separates "this video failed" from "another run
+  // owns this video now".
+  DeepAnalysisPipelineSupersededError: class DeepAnalysisPipelineSupersededError extends Error {},
   claimDeepAnalysisPipelineRun: async () => ({ id: "run-1", stages: {} }),
   // Faithful to the real helper's contract: run the task and let it reject.
   runObservedPipelineStage: async (
