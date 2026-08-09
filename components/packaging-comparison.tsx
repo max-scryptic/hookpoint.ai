@@ -433,23 +433,18 @@ function SurfacePanel({
   comparison: PackagingComparison
   tipActions: boolean
 }) {
-  // The recommendations follow the tip as bare "Or:" lines: like the tip, each
-  // one is advice for the uploader's next video rather than a change to either
-  // published video, so none of them names a side.
-  const alternatives = tab.recommendations.map(
-    (recommendation) => recommendation.action,
-  )
-  // Every tab closes on something to try. This surface's own tip leads where
-  // there is one; reports stored before schema version 5 carry no surface tip,
-  // so the first tip the drivers left behind stands in, and before version 2
-  // there were no driver tips either, so the first recommendation leads for
-  // those. A surface with none of the three is the one case that still closes
-  // without advice.
+  // Every tab closes on one thing to try, the same as every other tip in the
+  // app: the surface's own tip where there is one; reports stored before schema
+  // version 5 carry no surface tip, so the first tip the drivers left behind
+  // stands in, and before version 2 there were no driver tips either, so the
+  // first recommendation leads for those. The rest of the recommendations are
+  // held back rather than stacked under it. A surface with none of the three is
+  // the one case that still closes without advice.
   const surfaceTip = tab.read?.tip?.trim() ?? ""
   const driverTip =
     tab.drivers.find((driver) => driver.tip)?.tip?.trim() ?? ""
-  const leadIsRecommendation = surfaceTip.length === 0 && driverTip.length === 0
-  const tip = surfaceTip || driverTip || (alternatives[0] ?? null)
+  const tip =
+    surfaceTip || driverTip || tab.recommendations[0]?.action.trim() || null
   return (
     <div className="flex w-full flex-col gap-4 rounded-xl border bg-card p-4">
       <SurfaceColumns
@@ -468,9 +463,6 @@ function SurfacePanel({
             PACKAGING_REPORT_SURFACE_TAB_LABEL[tab.surface]
           }`}
           actions={tipActions}
-          alternatives={
-            leadIsRecommendation ? alternatives.slice(1) : alternatives
-          }
         >
           {tip}
         </TryCallout>

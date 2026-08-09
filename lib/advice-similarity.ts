@@ -1,10 +1,9 @@
-// A tip and the "Or:" lines under it are written by the model in one pass but
-// as separate fields, so it regularly lands on the same advice twice in
-// different words: "Make the thumbnail show one outcome at a glance, using a
-// simple before and after or result graphic" and "Build the thumbnail around
-// one simple before and after or result" are one suggestion, not two. Stacked
-// under each other they read as padding and bury whatever genuinely new thing
-// the next line has to say.
+// A report's tips are written by the model in one pass but as separate fields,
+// so it regularly lands on the same advice twice in different words: "Make the
+// thumbnail show one outcome at a glance, using a simple before and after or
+// result graphic" and "Build the thumbnail around one simple before and after
+// or result" are one suggestion, not two. Shown near each other they read as
+// padding and bury whatever genuinely new thing the second one has to say.
 //
 // The prompt already asks for distinct recommendations, so this is the second
 // line of defence: it also cleans up every report already stored. Comparing
