@@ -143,6 +143,10 @@ export interface ComparableVideo {
   title: string | null
   dateAnalysed: string | null
   averageViewPercentage: number | null
+  // Carried so the picker can warn about a pair that will not be readable on
+  // performance BEFORE the creator spends credits generating it, rather than
+  // letting the report be the first place they find out.
+  views: number | null
 }
 
 // ---------------------------------------------------------------------------
@@ -709,7 +713,7 @@ export async function listComparableVideos(
   const { data, error } = await supabase
     .from("analysed_videos")
     .select(
-      "id, video_title, date_analysed, average_view_percentage:analytics_summary->averageViewPercentage",
+      "id, video_title, date_analysed, average_view_percentage:analytics_summary->averageViewPercentage, view_count:video_details->viewCount, analytics_views:analytics_summary->views",
     )
     .eq("user_id", userId)
     .in("id", deeplyAnalysedIds)
@@ -727,12 +731,18 @@ export async function listComparableVideos(
       video_title: string | null
       date_analysed: string | null
       average_view_percentage: number | null
+      view_count: number | null
+      analytics_views: number | null
     }>
   ).map((row) => ({
     id: row.id,
     title: row.video_title,
     dateAnalysed: row.date_analysed,
     averageViewPercentage: row.average_view_percentage,
+    views: preferredViewCount(
+      { viewCount: row.view_count },
+      { views: row.analytics_views },
+    ),
   }))
 }
 

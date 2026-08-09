@@ -1,5 +1,6 @@
 import { QuoteIcon } from "lucide-react"
 
+import { ComparabilityNote } from "@/components/comparability-note"
 import { ComparisonReportTabs } from "@/components/comparison-report-tabs"
 import { TryCallout } from "@/components/try-callout"
 import { nameVideoSides, stripEmDashes } from "@/lib/copy-guardrails"
@@ -118,6 +119,10 @@ export function ScriptComparison({
       </div>
 
       <div className="flex flex-col gap-4">
+        <ComparabilityNote
+          comparability={report.comparability}
+          question="watch"
+        />
         <ReportSummary summary={report.summary} />
         <ComparisonReportTabs tabs={tabs} />
       </div>

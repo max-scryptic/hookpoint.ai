@@ -7,6 +7,7 @@ import {
   TypeIcon,
 } from "lucide-react"
 
+import { ComparabilityNote } from "@/components/comparability-note"
 import { HookIcon } from "@/components/hook-icon"
 import { VideoThumbnail } from "@/components/video-thumbnail"
 import { ComparisonReportTabs } from "@/components/comparison-report-tabs"
@@ -506,6 +507,10 @@ function ReportNarrative({
 
   return (
     <div className="flex flex-col gap-4">
+      <ComparabilityNote
+        comparability={report.comparability}
+        question="click"
+      />
       <ReportVerdict verdict={report.verdict} />
       {tabs.length > 0 && (
         <ComparisonReportTabs
