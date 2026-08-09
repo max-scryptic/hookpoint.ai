@@ -26,7 +26,11 @@ export const SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION = 3
 // its own, so each tab of the report closes on advice even when no driver and
 // no recommendation landed on that surface. Version 6 put every tip and
 // recommendation under the shared tip voice (lib/tip-voice.ts), which bans
-// advice pointing back at the videos it came from.
+// advice pointing back at the videos it came from. Dropping the recommendations
+// themselves, so each surface closes on one tip and one only, was deliberately
+// not a bump: a report stored with them renders exactly as it did, since only
+// the leading tip was ever shown, and a bump would send every stored report
+// back through the generator for a page the reader cannot tell apart.
 export const PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION = 6
 
 // Bumped whenever the stored retention report shape changes. Version 1 is the

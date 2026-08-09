@@ -18,7 +18,7 @@ const TIP_PROMPT_SOURCE_FILES = [
   "lib/pacing-analysis.ts", // suggestion, per slow or repetitive stretch
   "lib/retention-attribution.ts", // tip, per hook / drop-off / gain / hold
   // Head-to-head comparison reports
-  "lib/packaging-comparison-report.ts", // driver tips, surface tips, recommendations
+  "lib/packaging-comparison-report.ts", // driver tips, surface tips
   "lib/retention-comparison-report.ts", // section tips
   "lib/script-comparison-report.ts", // section tips
 ]

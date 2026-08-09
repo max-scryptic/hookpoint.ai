@@ -437,9 +437,9 @@ function SurfacePanel({
   // app: the surface's own tip where there is one; reports stored before schema
   // version 5 carry no surface tip, so the first tip the drivers left behind
   // stands in, and before version 2 there were no driver tips either, so the
-  // first recommendation leads for those. The rest of the recommendations are
-  // held back rather than stacked under it. A surface with none of the three is
-  // the one case that still closes without advice.
+  // first recommendation an older report happens to carry leads for those. Any
+  // recommendations after that one are not shown. A surface with none of the
+  // three is the one case that still closes without advice.
   const surfaceTip = tab.read?.tip?.trim() ?? ""
   const driverTip =
     tab.drivers.find((driver) => driver.tip)?.tip?.trim() ?? ""
@@ -486,7 +486,9 @@ function ReportNarrative({
     surface,
     read: report.surfaces.find((read) => read.surface === surface) ?? null,
     drivers: report.drivers.filter((driver) => driver.surface === surface),
-    recommendations: report.recommendations.filter(
+    // Only a report stored while the model still wrote a second piece of advice
+    // per surface carries any of these.
+    recommendations: (report.recommendations ?? []).filter(
       (recommendation) => recommendation.surface === surface,
     ),
   })).filter(

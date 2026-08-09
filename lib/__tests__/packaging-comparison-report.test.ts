@@ -128,21 +128,6 @@ function modelOutput() {
         confidence: 0.6,
       },
     ],
-    recommendations: [
-      {
-        surface: "title",
-        addsBeyondTip: "The tip is about the thumbnail, this one is the title.",
-        action: "  Name the number the title is hiding.  ",
-        rationale: "Video A's concrete figure is what makes its promise legible.",
-        effort: "quick",
-      },
-      {
-        surface: "hook",
-        action: "   ",
-        rationale: "Dropped because it has no action.",
-        effort: "rework",
-      },
-    ],
   }
 }
 
@@ -252,34 +237,22 @@ describe("isPackagingComparisonReportOutput", () => {
     expect(isPackagingComparisonReportOutput(output)).toBe(true)
   })
 
-  it("still accepts a recommendation that names a target side, as stored before schema version 3", () => {
-    const output = modelOutput()
-    ;(output.recommendations[0] as { target?: string }).target = "b"
+  // A surface gets one tip and one only, so the model is no longer asked for
+  // the recommendations that used to sit under it. A report stored while it
+  // still was carries them, and is read rather than rewritten, so one fed back
+  // through here has to pass on its tips alone.
+  it("still accepts a report carrying the recommendations it was stored with", () => {
+    const output = modelOutput() as Record<string, unknown>
+    output.recommendations = [
+      {
+        surface: "title",
+        target: "b",
+        action: "Name the number the title is hiding.",
+        rationale: "Video A's concrete figure makes its promise legible.",
+        effort: "quick",
+      },
+    ]
     expect(isPackagingComparisonReportOutput(output)).toBe(true)
-  })
-
-  // The model has to name what a recommendation adds to the tip above it
-  // before it writes the action, which is what keeps the two from being the
-  // same advice twice. Nothing stored carries the field, so a report fed back
-  // through here without one still validates.
-  it("accepts a recommendation with or without the addsBeyondTip guardrail", () => {
-    const output = modelOutput()
-    expect(isPackagingComparisonReportOutput(output)).toBe(true)
-    delete (output.recommendations[0] as { addsBeyondTip?: string })
-      .addsBeyondTip
-    expect(isPackagingComparisonReportOutput(output)).toBe(true)
-  })
-
-  it("rejects a recommendation whose addsBeyondTip is not text", () => {
-    const output = modelOutput()
-    ;(output.recommendations[0] as { addsBeyondTip?: unknown }).addsBeyondTip = 3
-    expect(isPackagingComparisonReportOutput(output)).toBe(false)
-  })
-
-  it("rejects a recommendation whose target is neither a side nor 'both'", () => {
-    const output = modelOutput()
-    ;(output.recommendations[0] as { target?: string }).target = "neither"
-    expect(isPackagingComparisonReportOutput(output)).toBe(false)
   })
 })
 
@@ -319,19 +292,11 @@ describe("normalizePackagingComparisonReport", () => {
     // A whitespace-only tip is dropped rather than stored blank, so the report
     // renders no empty "Try:" line under that driver.
     expect(report.drivers[1].tip).toBeUndefined()
-    // The recommendation with a blank action is dropped, the real one kept.
-    expect(report.recommendations).toHaveLength(1)
-    expect(report.recommendations[0].action).toBe(
-      "Name the number the title is hiding.",
-    )
-    // A stored recommendation carries no side any more: it is advice for the
-    // next video, not a change to either published one.
-    expect(report.recommendations[0]).not.toHaveProperty("target")
-    // addsBeyondTip is the model checking its own work, not copy, so it is
-    // dropped rather than stored.
-    expect(report.recommendations[0]).not.toHaveProperty("addsBeyondTip")
-    // The report no longer carries a caveats list: the tabs render the reads,
-    // drivers and recommendations only.
+    // Each surface closes on one tip and one only, so a new report carries no
+    // recommendations behind it for anything to stack under that tip.
+    expect(report).not.toHaveProperty("recommendations")
+    // The report no longer carries a caveats list either: the tabs render the
+    // reads and the tips only.
     expect(report).not.toHaveProperty("caveats")
     expect(report.model).toBe("test-gpt")
     expect(report.schemaVersion).toBe(
