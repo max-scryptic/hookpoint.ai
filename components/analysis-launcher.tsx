@@ -12,6 +12,11 @@ import { useRouter } from "next/navigation"
 
 import { AnalysisProcessingOverlay } from "@/components/analysis-processing"
 import { ConfettiBurst } from "@/components/confetti-burst"
+import {
+  createAnalysisStreamParser,
+  type AnalysisStageUpdate,
+  type AnalysisStreamEvent,
+} from "@/lib/analysis-progress-stream"
 
 // How long the celebratory "done" state lingers before we navigate to the
 // report, so the user registers the win (and sees the confetti) first. The
@@ -53,6 +58,10 @@ export function AnalysisLauncherProvider({
   const router = useRouter()
   const [phase, setPhase] = useState<AnalysisPhase>("idle")
   const [error, setError] = useState<string | null>(null)
+  // Latest stage streamed by /api/analyze, which drives the popup's progress
+  // bar. Null until the first event lands (the popup falls back to a simulated
+  // climb until then).
+  const [stage, setStage] = useState<AnalysisStageUpdate | null>(null)
   // Guards against re-entrant launches (e.g. a double click) without waiting on
   // the async state updates.
   const activeRef = useRef(false)
@@ -62,7 +71,20 @@ export function AnalysisLauncherProvider({
       if (activeRef.current) return
       activeRef.current = true
       setError(null)
+      setStage(null)
       setPhase("running")
+
+      const fail = (failure: { error?: string; message?: string }) => {
+        setError(
+          failure.error === "reconnect_required"
+            ? (failure.message ?? "Please reconnect your YouTube account.")
+            : (failure.message ??
+                failure.error ??
+                "We couldn't analyse that video."),
+        )
+        setPhase("error")
+        activeRef.current = false
+      }
 
       try {
         // parseVideoId (server-side) accepts a bare video ID as well as a full
@@ -73,18 +95,25 @@ export function AnalysisLauncherProvider({
           body: JSON.stringify({ url: videoId }),
         })
 
+        // Failures the route can detect before it starts working (no session,
+        // unusable body) still come back as a plain JSON error response.
         if (!response.ok) {
-          const data = (await response.json().catch(() => ({}))) as {
-            error?: string
-            message?: string
-          }
-          setError(
-            data.error === "reconnect_required"
-              ? (data.message ?? "Please reconnect your YouTube account.")
-              : (data.message ?? data.error ?? "We couldn't analyse that video."),
+          fail(
+            (await response.json().catch(() => ({}))) as {
+              error?: string
+              message?: string
+            },
           )
-          setPhase("error")
-          activeRef.current = false
+          return
+        }
+
+        // Otherwise the route streams progress: a stage event per step of the
+        // analysis, then exactly one terminal result/error event. Consume it so
+        // the popup's bar tracks the real work, and so we only navigate once
+        // the analysis has actually finished.
+        const failure = await consumeAnalysisStream(response, setStage)
+        if (failure) {
+          fail(failure)
           return
         }
 
@@ -107,6 +136,7 @@ export function AnalysisLauncherProvider({
   const dismiss = useCallback(() => {
     setPhase("idle")
     setError(null)
+    setStage(null)
     activeRef.current = false
   }, [])
 
@@ -127,6 +157,7 @@ export function AnalysisLauncherProvider({
                 ? "error"
                 : "analysing"
           }
+          stage={stage}
           error={error}
           onDismiss={dismiss}
         />
@@ -134,4 +165,54 @@ export function AnalysisLauncherProvider({
       {phase === "done" && <ConfettiBurst />}
     </AnalysisLauncherContext.Provider>
   )
+}
+
+// Reads /api/analyze's newline-delimited progress stream, pushing each stage
+// event at the popup as it arrives. Resolves to null when the analysis
+// succeeded, or to the failure to show otherwise — including the case where the
+// stream ends without a terminal event, which means the connection dropped
+// mid-analysis and we must not pretend the report is ready.
+async function consumeAnalysisStream(
+  response: Response,
+  onStage: (stage: AnalysisStageUpdate) => void,
+): Promise<{ error?: string; message?: string } | null> {
+  if (!response.body) {
+    // No readable stream (an environment without streaming support). Nothing to
+    // report progress from, but the request itself succeeded.
+    return null
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  const parser = createAnalysisStreamParser()
+  const outcome: {
+    failure: { error?: string; message?: string } | null
+    succeeded: boolean
+  } = { failure: null, succeeded: false }
+
+  const handle = (events: AnalysisStreamEvent[]) => {
+    for (const event of events) {
+      if (event.type === "stage") {
+        const { key, label, start, end, estimatedMs } = event
+        onStage({ key, label, start, end, estimatedMs })
+      } else if (event.type === "result") {
+        outcome.succeeded = true
+      } else {
+        outcome.failure = { error: event.error, message: event.message }
+      }
+    }
+  }
+
+  for (;;) {
+    const { value, done } = await reader.read()
+    if (done) break
+    handle(parser.push(decoder.decode(value, { stream: true })))
+  }
+  handle(parser.flush())
+
+  if (outcome.failure) return outcome.failure
+  if (!outcome.succeeded) {
+    return { message: "We lost the connection while analysing that video." }
+  }
+  return null
 }

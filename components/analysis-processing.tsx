@@ -1,22 +1,21 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { CircleCheckBigIcon, Loader2Icon, TriangleAlertIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import type { AnalysisStageUpdate } from "@/lib/analysis-progress-stream"
 
-// "analysing" shows the spinner + rotating stages; "done" snaps the bar to 100%,
+// "analysing" shows the spinner + stage copy; "done" snaps the bar to 100%,
 // swaps in a checkmark and the completion copy. The launcher flips to "done" the
 // moment /api/analyze resolves so the user gets a beat of celebration (and
 // confetti) before we navigate to the report. "error" replaces the spinner with
 // a warning and a dismiss button when the analysis request fails.
 export type AnalysisStatus = "analysing" | "done" | "error"
 
-// The messages we cycle through while the analysis server render is in flight.
-// They loosely track the work the page does (see app/api/analyze/route.ts and
-// the analysed-video page): fetch details → retention → drop-offs → transcript.
-// The wording is reassuring rather than a literal progress feed, since we can't
-// observe the server's exact stage from here.
+// Fallback copy for when we have no live stage from the server (the stream
+// hasn't produced its first event yet, or a caller renders this popup without
+// one). They loosely track the work /api/analyze does, in order.
 const STAGES = [
   "Fetching your video details…",
   "Pulling audience retention from YouTube…",
@@ -28,12 +27,18 @@ const STAGES = [
 
 const STAGE_INTERVAL_MS = 2600
 
-// The progress bar is simulated: the request duration is unknown, so we ease
-// toward a ceiling well short of 100% and let the page swap (Next replaces this
-// loading UI with the finished page) deliver the visual "complete". Climbing
-// then slowing avoids both a frozen bar and a bar that hits 100% and waits.
+// Ceiling for the fallback (server-less) climb, well short of 100% so the page
+// swap delivers the visual "complete".
 const PROGRESS_CEILING = 92
-const PROGRESS_INTERVAL_MS = 400
+const PROGRESS_INTERVAL_MS = 250
+const INITIAL_PROGRESS = 4
+
+// How aggressively the bar approaches the current stage's end. The eased
+// fraction is 1 - e^(-DECAY × elapsed/estimated), so a stage that takes exactly
+// as long as we estimated lands ~90% of the way through its slice, and one that
+// runs long keeps inching forward instead of freezing — without ever spilling
+// into the next stage's slice.
+const STAGE_EASE_DECAY = 2.4
 
 // Full-screen backdrop + centred popup. Shown from the Analyse Video form the
 // moment the user presses "Analyse Video" and kept up while the analysis runs,
@@ -41,57 +46,94 @@ const PROGRESS_INTERVAL_MS = 400
 // empty page, and is taken to the report only once it's ready.
 export function AnalysisProcessingOverlay({
   status = "analysing",
+  stage = null,
   error = null,
   onDismiss,
 }: {
   status?: AnalysisStatus
+  stage?: AnalysisStageUpdate | null
   error?: string | null
   onDismiss?: () => void
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
-      <AnalysisProcessing status={status} error={error} onDismiss={onDismiss} />
+      <AnalysisProcessing
+        status={status}
+        stage={stage}
+        error={error}
+        onDismiss={onDismiss}
+      />
     </div>
   )
 }
 
 export function AnalysisProcessing({
   status = "analysing",
+  stage = null,
   error = null,
   onDismiss,
 }: {
+  // The latest stage streamed by /api/analyze. Every event is a fresh object,
+  // so re-entering the same stage (sub-progress within a fan-out) restarts the
+  // animation from the new floor.
+  stage?: AnalysisStageUpdate | null
   status?: AnalysisStatus
   error?: string | null
   onDismiss?: () => void
 }) {
   const isDone = status === "done"
   const isError = status === "error"
-  const [stage, setStage] = useState(0)
-  const [progress, setProgress] = useState(8)
+  const [fallbackStage, setFallbackStage] = useState(0)
+  const [progress, setProgress] = useState(INITIAL_PROGRESS)
+  // Mirrors `progress` so the animation can read it without re-running its
+  // effect on every tick.
+  const progressRef = useRef(INITIAL_PROGRESS)
 
-  // Rotate the wording. We stop advancing once we reach the final message so it
-  // sits on "Putting your report together…" until the page is ready. Frozen once
-  // we're done — the completion copy takes over.
+  // The bar only ever moves forward: a late-arriving event, or a stage whose
+  // easing has already passed the incoming floor, must never rewind it.
+  const advanceTo = useCallback((value: number) => {
+    if (value <= progressRef.current) return
+    progressRef.current = value
+    setProgress(value)
+  }, [])
+
+  // Rotate the fallback wording when there's no live stage to show. Stops on the
+  // final message so it sits there until the server says otherwise.
   useEffect(() => {
-    if (isDone || isError) return
+    if (stage || isDone || isError) return
     const id = setInterval(() => {
-      setStage((current) => Math.min(current + 1, STAGES.length - 1))
+      setFallbackStage((current) => Math.min(current + 1, STAGES.length - 1))
     }, STAGE_INTERVAL_MS)
     return () => clearInterval(id)
-  }, [isDone, isError])
+  }, [stage, isDone, isError])
 
-  // Advance the bar by a shrinking fraction of the remaining distance to the
-  // ceiling, so it decelerates as it approaches and never quite arrives.
+  // Live mode: ease through the slice of the bar the current stage owns, paced
+  // by how long that stage usually takes. The next stage event snaps us to its
+  // start, so the bar advances because the server advanced.
   useEffect(() => {
-    if (isDone || isError) return
+    if (!stage || isDone || isError) return
+    advanceTo(stage.start)
+    const from = progressRef.current
+    const startedAt = Date.now()
     const id = setInterval(() => {
-      setProgress((current) => {
-        if (current >= PROGRESS_CEILING) return current
-        return current + Math.max(0.5, (PROGRESS_CEILING - current) * 0.08)
-      })
+      const ratio =
+        stage.estimatedMs > 0 ? (Date.now() - startedAt) / stage.estimatedMs : 1
+      const eased = 1 - Math.exp(-STAGE_EASE_DECAY * ratio)
+      advanceTo(from + (stage.end - from) * eased)
     }, PROGRESS_INTERVAL_MS)
     return () => clearInterval(id)
-  }, [isDone, isError])
+  }, [stage, isDone, isError, advanceTo])
+
+  // Fallback mode: no stage events (yet), so decelerate toward a fixed ceiling.
+  useEffect(() => {
+    if (stage || isDone || isError) return
+    const id = setInterval(() => {
+      const current = progressRef.current
+      if (current >= PROGRESS_CEILING) return
+      advanceTo(current + Math.max(0.25, (PROGRESS_CEILING - current) * 0.04))
+    }, PROGRESS_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [stage, isDone, isError, advanceTo])
 
   // Snap the bar to 100% the instant the analysis lands, completing the climb.
   const displayProgress = isDone ? 100 : progress
@@ -147,7 +189,9 @@ export function AnalysisProcessing({
           {isDone ? "Analysis complete!" : "Analysing your video"}
         </p>
         <p className="min-h-[1.25rem] text-sm text-muted-foreground transition-opacity">
-          {isDone ? "Taking you to your report…" : STAGES[stage]}
+          {isDone
+            ? "Taking you to your report…"
+            : (stage?.label ?? STAGES[fallbackStage])}
         </p>
       </div>
 
