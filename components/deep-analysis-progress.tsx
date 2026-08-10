@@ -1,6 +1,14 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 import { useRouter } from "next/navigation"
 import {
   CheckCircle2Icon,
@@ -21,17 +29,17 @@ const POLL_INTERVAL_MS = 4000
 // snapshot, plus the latest pipeline-run summary and a `degraded` flag the
 // route sets when it couldn't compute the per-stage breakdown but a source
 // file is still ready (e.g. a transient DB error or schema drift). `degraded`
-// lets the card keep showing a generic "analysing" state instead of a blank
-// row — the failure mode that once left an in-flight upload with no visible
-// indication at all.
+// still counts as analysing, so the report keeps showing its processing badge
+// instead of nothing at all — the failure mode that once left an in-flight
+// upload with no visible indication anywhere.
 export interface DeepAnalysisProgressResponse extends ProgressResponse {
   pipelineRun?: DeepAnalysisPipelineRunSummary | null
   degraded?: boolean
 }
 
 // High-level, card-ready read of where a video's deep analysis stands, derived
-// from the raw poll. Kept deliberately small so the source-file card can drive
-// a single spinner/failure indicator off it without re-deriving the rules.
+// from the raw poll. Kept deliberately small so the report can drive a single
+// spinner/failure indicator off it without re-deriving the rules.
 export interface DeepAnalysisStatus {
   // The pipeline is running (or we can't yet tell, but a source file is ready
   // and nothing says it finished) — show a spinner.
@@ -42,6 +50,16 @@ export interface DeepAnalysisStatus {
   // Full per-stage breakdown when the endpoint could compute it; null while
   // degraded/loading.
   progress: DeepAnalysisProgressResponse | null
+}
+
+// One poll's reading, stamped with the video and the restart it belongs to so a
+// reading from a previous run is recognisably stale rather than silently read
+// as the current one's.
+interface PollReading {
+  videoId: string
+  restartToken: number
+  progress: DeepAnalysisProgressResponse | null
+  unreachable: boolean
 }
 
 const STAGE_LABELS: {
@@ -59,31 +77,53 @@ const STAGE_LABELS: {
 ]
 
 // Polls /api/videos/:videoId/analysis-progress and folds the raw response into
-// a small, card-ready status. Owns the single poll for the source-file card so
-// both the high-level spinner and the detailed checklist read the same data
-// without double-polling. Keeps polling while a run is in flight and while the
-// endpoint is unreachable (it may recover), and stops once the run has settled
-// or failed — the resting "Source file ready" row covers steady state. To
-// restart it after a manual retry, remount the caller (via a `key`) rather than
-// resetting state here.
+// a small, card-ready status. Owns the single poll for the whole report (see
+// DeepAnalysisStatusProvider below) so the header's processing badge and the
+// source-file card's failure prompt read the same data without double-polling.
+// Keeps polling while a run is in flight and while the endpoint is unreachable
+// (it may recover), and stops once the run has settled or failed — the resting
+// "Source file ready" row covers steady state. Bump `restartToken` to start a
+// fresh poll after a manual retry.
 //
 // When a run finishes while the page is open it also refreshes the route once.
-// The card's own state comes from this poll, but everything else about a
-// finished deep analysis is server-rendered and gated on the pipeline having
-// settled — most visibly the report's deep-analysis insights, which the page
-// only loads once progress is complete. Without that refresh the checklist would
-// tick every stage green and the insights it produced still wouldn't appear
-// until the user reloaded by hand.
-export function useDeepAnalysisProgress(videoId: string): DeepAnalysisStatus {
+// Everything else about a finished deep analysis is server-rendered and gated on
+// the pipeline having settled — most visibly the report's deep-analysis
+// insights, which the page only loads once progress is complete. Without that
+// refresh the processing badge would clear and the insights the run produced
+// still wouldn't appear until the user reloaded by hand.
+function useDeepAnalysisProgress(
+  videoId: string,
+  restartToken = 0,
+): DeepAnalysisStatus {
   const router = useRouter()
-  const [progress, setProgress] = useState<DeepAnalysisProgressResponse | null>(
-    null,
-  )
-  const [unreachable, setUnreachable] = useState(false)
+  // The poll's readings are stamped with the run they belong to, so a restart
+  // (or a different video) reads as a clean slate from the very first render
+  // rather than briefly reporting the previous run's settled state.
+  const [reading, setReading] = useState<PollReading>(() => ({
+    videoId,
+    restartToken,
+    progress: null,
+    unreachable: false,
+  }))
+  const stale =
+    reading.videoId !== videoId || reading.restartToken !== restartToken
+  const progress = stale ? null : reading.progress
+  const unreachable = stale ? false : reading.unreachable
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     let cancelled = false
+    const stamp = { videoId, restartToken }
+    const recordProgress = (data: DeepAnalysisProgressResponse) =>
+      setReading({ ...stamp, progress: data, unreachable: false })
+    // An unreachable endpoint keeps whatever this run last read, so a blip
+    // doesn't wipe the stages out from under the reader.
+    const recordUnreachable = () =>
+      setReading((current) =>
+        current.videoId === videoId && current.restartToken === restartToken
+          ? { ...current, unreachable: true }
+          : { ...stamp, progress: null, unreachable: true },
+      )
     // Whether this mount has actually seen the pipeline unsettled. A page opened
     // on an already-finished analysis settles on its first poll with nothing new
     // to show, so only a run that finished *under us* is worth a refresh.
@@ -94,14 +134,13 @@ export function useDeepAnalysisProgress(videoId: string): DeepAnalysisStatus {
         const res = await fetch(`/api/videos/${videoId}/analysis-progress`)
         if (cancelled) return
         if (!res.ok) {
-          setUnreachable(true)
+          recordUnreachable()
           timerRef.current = setTimeout(poll, POLL_INTERVAL_MS)
           return
         }
         const data = (await res.json()) as DeepAnalysisProgressResponse
         if (cancelled) return
-        setUnreachable(false)
-        setProgress(data)
+        recordProgress(data)
         // Stop once the run has genuinely settled, or failed outright — either
         // way there's no more live work to reflect. A degraded read is not
         // settled: we still can't see the stages, so keep watching for recovery.
@@ -118,7 +157,7 @@ export function useDeepAnalysisProgress(videoId: string): DeepAnalysisStatus {
         if (complete && sawUnsettled) router.refresh()
       } catch {
         if (cancelled) return
-        setUnreachable(true)
+        recordUnreachable()
         timerRef.current = setTimeout(poll, POLL_INTERVAL_MS)
       }
     }
@@ -129,7 +168,7 @@ export function useDeepAnalysisProgress(videoId: string): DeepAnalysisStatus {
       cancelled = true
       if (timerRef.current) clearTimeout(timerRef.current)
     }
-  }, [videoId, router])
+  }, [videoId, router, restartToken])
 
   const pipelineRun = progress?.pipelineRun ?? null
   const failed = pipelineRun?.status === "failed"
@@ -145,13 +184,79 @@ export function useDeepAnalysisProgress(videoId: string): DeepAnalysisStatus {
       unreachable ||
       pipelineRun?.status === "running")
 
-  return { analysing, failed, progress }
+  return useMemo(
+    () => ({ analysing, failed, progress }),
+    [analysing, failed, progress],
+  )
+}
+
+// What the report's two consumers of deep-analysis state share: the status
+// itself, plus a way to restart the poll after a manual retry.
+export interface DeepAnalysisStatusValue extends DeepAnalysisStatus {
+  restart: () => void
+}
+
+// Nothing is analysing until a provider says otherwise, so a component used
+// outside one simply renders its resting state rather than needing a null
+// check at every call site.
+const IDLE_STATUS: DeepAnalysisStatusValue = {
+  analysing: false,
+  failed: false,
+  progress: null,
+  restart: () => {},
+}
+
+const DeepAnalysisStatusContext =
+  createContext<DeepAnalysisStatusValue>(IDLE_STATUS)
+
+// Owns the report page's single deep-analysis poll and hands it to both the
+// header (which shows the "Processing…" badge while the pipeline runs) and the
+// source-file card at the foot of the report (which prompts a retry when a run
+// failed). They sit in different subtrees, so without this they'd poll the same
+// endpoint twice over and each fire their own refresh when a run landed.
+export function DeepAnalysisStatusProvider({
+  videoId,
+  children,
+}: {
+  videoId: string
+  children: React.ReactNode
+}) {
+  const [restartToken, setRestartToken] = useState(0)
+  const status = useDeepAnalysisProgress(videoId, restartToken)
+  const restart = useCallback(() => setRestartToken((token) => token + 1), [])
+  const value = useMemo(() => ({ ...status, restart }), [status, restart])
+
+  return (
+    <DeepAnalysisStatusContext.Provider value={value}>
+      {children}
+    </DeepAnalysisStatusContext.Provider>
+  )
+}
+
+export function useDeepAnalysisStatus(): DeepAnalysisStatusValue {
+  return useContext(DeepAnalysisStatusContext)
+}
+
+// The report header's live indicator that the footage-based half of the
+// analysis is still running. Deliberately the same amber spinner the analysed
+// videos table shows against a processing row, so the two places a video's
+// deeper analysis surfaces read as one state.
+export function DeepAnalysisProcessingBadge() {
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-600 dark:text-amber-500"
+      title="Deeper analysis is still running. This updates automatically when it finishes."
+    >
+      <Loader2Icon className="size-3.5 animate-spin" />
+      Processing…
+    </span>
+  )
 }
 
 // The bare per-stage checklist. Presentational only: given a stage snapshot it
-// renders each labelled stage with its status icon. Shared by the source-file
-// card's live progress list (below) and the admin video-detail view, so both
-// read the pipeline's stages the same way.
+// renders each labelled stage with its status icon. Admin-facing only — the
+// report itself says no more than "Processing…", so a reader waiting on their
+// analysis isn't watching a list of pipeline internals tick over.
 export function DeepAnalysisStageChecklist({
   stages,
   title = "Conducting deeper analysis…",
@@ -167,31 +272,6 @@ export function DeepAnalysisStageChecklist({
           <StageRow key={key} label={label} status={stages[key]} />
         ))}
       </ul>
-    </div>
-  )
-}
-
-// The per-stage checklist rendered under the source-file card while deep
-// analysis runs. Presentational only — it reads the status the card already
-// polled. Renders nothing unless there's a live, fully-detailed breakdown to
-// show; the card's own spinner covers the degraded/loading case.
-export function DeepAnalysisProgressList({
-  progress,
-}: {
-  progress: DeepAnalysisProgressResponse | null
-}) {
-  if (
-    !progress?.active ||
-    !progress.stages ||
-    progress.complete ||
-    progress.degraded
-  ) {
-    return null
-  }
-
-  return (
-    <div className="mt-4 border-t pt-4">
-      <DeepAnalysisStageChecklist stages={progress.stages} />
     </div>
   )
 }

@@ -17,6 +17,10 @@ import {
   TypeIcon,
 } from "lucide-react"
 
+import {
+  DeepAnalysisProcessingBadge,
+  useDeepAnalysisStatus,
+} from "@/components/deep-analysis-progress"
 import { HookIcon } from "@/components/hook-icon"
 import {
   createFirstSaying,
@@ -1295,6 +1299,14 @@ export function AnalysedVideoDetail({
     toSeconds: number
   } | null>(null)
   const insightAreaRef = useRef<HTMLDivElement | null>(null)
+  // Whether the footage-based half of the analysis is still running for this
+  // video, shown as a "Processing…" badge on the metrics row. Only once a poll
+  // has actually landed (progress != null): the status reads as analysing while
+  // the very first request is still in flight, which would otherwise flash the
+  // badge on every report, deeply analysed or not.
+  const deepAnalysis = useDeepAnalysisStatus()
+  const deepAnalysisProcessing =
+    deepAnalysis.analysing && deepAnalysis.progress != null
 
   // Dismiss the open insight (returning the video to its thumbnail) when the
   // user clicks anywhere outside the video/chart area — not just inside the
@@ -1550,38 +1562,46 @@ export function AnalysedVideoDetail({
               Audience retention across this video, with the moments where you
               lost and held the most viewers.
             </p>
-            {analyticsSummary && (
+            {(analyticsSummary || deepAnalysisProcessing) && (
               <div className="mt-4 flex flex-wrap items-end gap-x-8 gap-y-3 sm:mt-auto sm:pt-4">
-                <Metric
-                  label="Views"
-                  value={formatCompactNumber(
-                    preferredViewCount(video, analyticsSummary),
-                  )}
-                />
-                <Metric
-                  label="Subscribers gained"
-                  value={formatCompactNumber(
-                    netSubscribersGained(analyticsSummary),
-                  )}
-                />
-                <Metric
-                  label="Avg. view duration"
-                  value={
-                    analyticsSummary.averageViewDurationSeconds != null
-                      ? formatTimestamp(
-                          analyticsSummary.averageViewDurationSeconds,
-                        )
-                      : "N/A"
-                  }
-                />
-                {analyticsSummary.impressionClickThroughRate != null && (
-                  <Metric
-                    label="Thumbnail CTR"
-                    value={formatClickThroughRate(
-                      analyticsSummary.impressionClickThroughRate,
+                {analyticsSummary && (
+                  <>
+                    <Metric
+                      label="Views"
+                      value={formatCompactNumber(
+                        preferredViewCount(video, analyticsSummary),
+                      )}
+                    />
+                    <Metric
+                      label="Subscribers gained"
+                      value={formatCompactNumber(
+                        netSubscribersGained(analyticsSummary),
+                      )}
+                    />
+                    <Metric
+                      label="Avg. view duration"
+                      value={
+                        analyticsSummary.averageViewDurationSeconds != null
+                          ? formatTimestamp(
+                              analyticsSummary.averageViewDurationSeconds,
+                            )
+                          : "N/A"
+                      }
+                    />
+                    {analyticsSummary.impressionClickThroughRate != null && (
+                      <Metric
+                        label="Thumbnail CTR"
+                        value={formatClickThroughRate(
+                          analyticsSummary.impressionClickThroughRate,
+                        )}
+                      />
                     )}
-                  />
+                  </>
                 )}
+                {/* Sits at the end of the metrics row, so the one live thing
+                    about the report reads alongside the video's numbers rather
+                    than resizing the card at the foot of the page. */}
+                {deepAnalysisProcessing && <DeepAnalysisProcessingBadge />}
               </div>
             )}
           </div>

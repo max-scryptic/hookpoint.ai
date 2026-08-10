@@ -1,4 +1,5 @@
 import { AnalysedVideoDetail } from "@/components/analysed-video-detail"
+import { DeepAnalysisStatusProvider } from "@/components/deep-analysis-progress"
 import { SourceFileUpload } from "@/components/source-file-upload"
 import { UnlockFullReportCta } from "@/components/unlock-full-report-cta"
 import { getDeepAnalysisEvidence } from "@/lib/deep-analysis-evidence"
@@ -524,7 +525,11 @@ export default async function Page({
       </header>
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         {result.status === "ok" && (
-          <>
+          // One poll of the deep-analysis pipeline for the whole report: the
+          // header reads it for its "Processing…" badge while a run is in
+          // flight, and the source-file card below reads it to prompt a retry
+          // when the last run failed.
+          <DeepAnalysisStatusProvider videoId={videoId}>
             <AnalysedVideoDetail
               video={result.video}
               retention={result.retention}
@@ -556,7 +561,7 @@ export default async function Page({
                 initialSourceFile={initialSourceFile}
               />
             )}
-          </>
+          </DeepAnalysisStatusProvider>
         )}
 
         {result.status === "not_found" && (
