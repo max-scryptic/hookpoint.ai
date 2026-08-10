@@ -1,8 +1,11 @@
 import { AnalysedVideoDetail } from "@/components/analysed-video-detail"
 import { SourceFileUpload } from "@/components/source-file-upload"
+import { UnlockFullReportCta } from "@/components/unlock-full-report-cta"
 import { getDeepAnalysisEvidence } from "@/lib/deep-analysis-evidence"
 import { getDeepAnalysisRollout } from "@/lib/deep-analysis-config"
 import { requireAuthenticatedUser } from "@/lib/auth"
+import { getEntitlement } from "@/lib/billing/entitlements"
+import { maxUploadBytesForPlan } from "@/lib/plans"
 import { createClient } from "@/lib/supabase/server"
 import {
   getAnalysedVideo,
@@ -422,6 +425,33 @@ export default async function Page({
     }
   }
 
+  // The "unlock the full report" banner is only worth showing while there is
+  // something left to unlock: no source file has been accepted for this video
+  // yet, so the footage-based half of the analysis hasn't been run. A file that
+  // is still pending or that failed validation counts as nothing uploaded,
+  // matching what the upload card itself offers in those states.
+  const reportUnlocked =
+    initialSourceFile != null &&
+    initialSourceFile.uploadStatus !== "pending" &&
+    initialSourceFile.uploadStatus !== "failed" &&
+    initialSourceFile.validationStatus !== "failed"
+  const showUnlockCta = result.status === "ok" && !reportUnlocked
+
+  // Which of the two unlock paths this user gets: paid plans can upload the
+  // source file themselves (the button scrolls to the card below), Free plans
+  // have to upgrade first. A failed entitlement lookup falls back to the
+  // upgrade CTA, the same fail-closed default the billing code uses, so we
+  // never offer an upload the API would then refuse.
+  let canUploadSourceFile = false
+  if (showUnlockCta) {
+    try {
+      const entitlement = await getEntitlement(user.id)
+      canUploadSourceFile = maxUploadBytesForPlan(entitlement.plan) != null
+    } catch (error) {
+      console.error("Failed to resolve plan for the unlock CTA", error)
+    }
+  }
+
   // Only surface the deep-analysis evidence section once the pipeline has
   // fully settled for this video — every window's snapshots/audio have been
   // harvested and analysed, and events have been synthesized from all of it.
@@ -492,6 +522,12 @@ export default async function Page({
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         {result.status === "ok" && (
           <>
+            {showUnlockCta && (
+              <UnlockFullReportCta
+                videoId={videoId}
+                canUpload={canUploadSourceFile}
+              />
+            )}
             <AnalysedVideoDetail
               video={result.video}
               retention={result.retention}
