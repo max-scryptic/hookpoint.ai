@@ -10,6 +10,8 @@ import {
   higherViewsSide,
   isPackagingComparisonReportOutput,
   normalizePackagingComparisonReport,
+  packagingComparability,
+  packagingComparisonForModel,
   packagingSideForModel,
   PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION,
   type PackagingComparisonReportSide,
@@ -77,6 +79,16 @@ function side(
     title: "I Lost Everything In Crypto At 26",
     thumbnailUrl: "https://i.ytimg.com/vi/abc/maxresdefault.jpg",
     views: 120_000,
+    // A pair of healthy, similarly reached videos by default, so the fixtures
+    // that are not about comparability stay anchored and keep asserting what
+    // they were written to assert.
+    impressions: 2_000_000,
+    impressionClickThroughRate: 0.061,
+    averageViewPercentage: 42,
+    trafficSources: [
+      { source: "SUBSCRIBER", views: 80_000 },
+      { source: "RELATED_VIDEO", views: 40_000 },
+    ],
     packagingTaxonomy: null,
     hook: hookEvidence(),
     ...overrides,
@@ -141,6 +153,62 @@ describe("higherViewsSide", () => {
     expect(higherViewsSide({ views: 500 }, { views: 500 })).toBeNull()
     expect(higherViewsSide({ views: null }, { views: 900 })).toBeNull()
     expect(higherViewsSide({ views: 900 }, { views: null })).toBeNull()
+  })
+
+  it("returns null for a pair whose view counts cannot carry a verdict", () => {
+    // The gap is real and it is not about packaging: at 73 views there is no
+    // way to tell a thumbnail nobody clicked from one nobody was shown.
+    expect(higherViewsSide({ views: 1_100 }, { views: 73 }, false)).toBeNull()
+  })
+})
+
+describe("packagingComparability", () => {
+  it("asks the click question, not the watch one", () => {
+    // The same pair, read two ways. A 12x view gap between two well-watched
+    // videos is a confound on how well each held its audience and is exactly
+    // the outcome packaging is meant to move, so the click verdict survives it.
+    const comparability = packagingComparability(
+      side({ views: 120_000 }),
+      side({ views: 10_000, impressionClickThroughRate: 0.021 }),
+    )
+    expect(comparability.watch.anchor).toBe("contrast")
+    expect(comparability.click.anchor).toBe("anchored")
+  })
+
+  it("withholds a click verdict when one video was barely shown", () => {
+    const comparability = packagingComparability(
+      side({ views: 1_100, impressions: null, impressionClickThroughRate: null }),
+      side({ views: 73, impressions: null, impressionClickThroughRate: null }),
+    )
+    expect(comparability.click.anchor).toBe("contrast")
+    expect(comparability.click.caveats).toContain("small_sample")
+  })
+})
+
+describe("packagingComparisonForModel", () => {
+  it("withholds both view counts, and higherViewsSide, when the pair cannot be ranked", () => {
+    const a = side({ views: 1_100, impressions: null, impressionClickThroughRate: null })
+    const b = side({ views: 73, impressions: null, impressionClickThroughRate: null })
+    const payload = packagingComparisonForModel(a, b, packagingComparability(a, b))
+
+    expect(payload.higherViewsSide).toBeNull()
+    expect(payload.videoA.views).toBeNull()
+    expect(payload.videoB.views).toBeNull()
+    // The evidence the report actually judges packaging on is untouched, and
+    // so is the opening's own retention, which is measured inside one video
+    // and carries none of the cross-video problem.
+    expect(payload.videoA.hasThumbnailImage).toBe(true)
+    expect(payload.videoA.hook.retention).not.toBeNull()
+  })
+
+  it("passes them through for a pair that earned a click verdict", () => {
+    const a = side({ views: 120_000 })
+    const b = side({ views: 10_000, impressionClickThroughRate: 0.021 })
+    const payload = packagingComparisonForModel(a, b, packagingComparability(a, b))
+
+    expect(payload.higherViewsSide).toBe("a")
+    expect(payload.videoA.views).toBe(120_000)
+    expect(payload.comparability.videoAClickThroughPercent).toBeCloseTo(6.1)
   })
 })
 
@@ -311,8 +379,8 @@ describe("generatePackagingComparisonReport", () => {
     vi.stubGlobal("fetch", fetchMock)
 
     const result = await generatePackagingComparisonReport(
-      { title: null, thumbnailUrl: null, views: null, packagingTaxonomy: null, hook: emptyHookEvidence() },
-      { title: null, thumbnailUrl: null, views: null, packagingTaxonomy: null, hook: emptyHookEvidence() },
+      side({ title: null, thumbnailUrl: null, views: null, hook: emptyHookEvidence() }),
+      side({ title: null, thumbnailUrl: null, views: null, hook: emptyHookEvidence() }),
     )
 
     expect(result).toBeNull()
@@ -340,7 +408,9 @@ describe("generatePackagingComparisonReport", () => {
       side({
         title: "STOP CHECKING THE CHARTS",
         thumbnailUrl: "https://i.ytimg.com/vi/def/maxresdefault.jpg",
-        views: 4_000,
+        views: 90_000,
+        impressions: 1_800_000,
+        impressionClickThroughRate: 0.048,
       }),
     )
 

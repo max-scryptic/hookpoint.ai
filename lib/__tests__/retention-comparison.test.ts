@@ -432,7 +432,13 @@ describe("defaultComparisonPair", () => {
   const video = (
     id: string,
     averageViewPercentage: number | null,
-  ) => ({ id, title: id, dateAnalysed: null, averageViewPercentage })
+  ) => ({
+    id,
+    title: id,
+    dateAnalysed: null,
+    averageViewPercentage,
+    views: 10_000,
+  })
 
   it("returns null below two videos", () => {
     expect(defaultComparisonPair([])).toBeNull()

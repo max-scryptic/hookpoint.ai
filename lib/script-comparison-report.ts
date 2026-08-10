@@ -9,11 +9,34 @@
 // migration); the report page only ever reads it back and never calls this, so
 // a report is never re-written just because someone opened the page.
 //
+// WHAT THE REPORT IS ALLOWED TO CLAIM
+//
+// This prompt used to receive both videos' views and average watched with only
+// a "treat it as correlation" nudge attached, which is a tone instruction and
+// not a constraint. Handed 19% average watched on 73 views against 16% on
+// 1,100, it did the obvious thing: named the 73 view video the stronger
+// retention play and pointed every tip at it. Neither the 3 point gap (well
+// inside the margin a 73 view audience carries) nor the comparison itself (two
+// very different traffic mixes) supported that.
+//
+// So the pair's comparability is settled first, in
+// lib/comparison-comparability.ts, and it binds this report two ways: the
+// shared rules go into the prompt, and, for a pair with no usable performance
+// anchor, the per video performance figures are left out of the model input
+// altogether. A number the model never receives cannot orient a tip.
+//
 // COPY GUARDRAIL: no em or en dashes (U+2014 / U+2013), ever, in any generated
 // or literal text in this file. Hyphens are fine.
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import {
+  assessPairComparability,
+  comparabilityForModel,
+  COMPARABILITY_PROMPT,
+  isAnchored,
+  type PairComparability,
+} from "@/lib/comparison-comparability"
 import { SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION } from "@/lib/comparison-report-versions"
 import { recordLlmCallCost, type LlmLogContext } from "@/lib/llm-calls"
 import { responsesCallCost, type ResponsesUsage } from "@/lib/llm-cost"
@@ -23,6 +46,7 @@ import { TIP_VOICE_PROMPT } from "@/lib/tip-voice"
 import { saveScriptComparisonReport } from "@/lib/video-comparisons"
 import {
   preferredViewCount,
+  type TrafficSource,
   type TranscriptCue,
   type VideoAnalyticsSummary,
   type VideoDetails,
@@ -54,6 +78,11 @@ export interface ScriptComparisonReport {
   summary: string
   // The per-theme body: structure, substance, hook, emotion, likely driver.
   sections: ScriptComparisonReportSection[]
+  // What this pair could honestly be compared on when the report was written,
+  // stored alongside it so the page can show the reader the same limit the
+  // model wrote under without recomputing it from analytics. Optional only
+  // because reports stored before schema version 4 predate it.
+  comparability?: PairComparability
   schemaVersion: number
   model: string
   generatedAt: string
@@ -66,6 +95,10 @@ export interface ScriptComparisonReportSide {
   title: string | null
   views: number | null
   averageViewPercentage: number | null
+  // Where this video's views came from, used to measure how differently the two
+  // audiences were reached rather than infer it from the view gap alone. Empty
+  // when YouTube reported no breakdown.
+  trafficSources: TrafficSource[]
   packagingTaxonomy: PackagingTaxonomy | null
   transcript: TranscriptCue[]
 }
@@ -160,14 +193,76 @@ function extractOutputText(response: {
 // A compact, model-friendly view of one side. The packaging taxonomy is passed
 // through as-is (it is already a small structured object) so the model can
 // ground hook/title observations in the same read the packaging tab uses.
-function sideForModel(side: ScriptComparisonReportSide) {
+//
+// `anchored` decides whether this side's performance figures travel with it.
+// For a pair that cannot be compared on performance they are withheld: the
+// rules in the prompt forbid ranking the two videos, and withholding the two
+// numbers a ranking would be built from is what makes that rule hold rather
+// than merely ask. Everything else about the side is unchanged, so the report
+// loses none of its ability to describe what each script does.
+export function scriptSideForModel(
+  side: ScriptComparisonReportSide,
+  anchored: boolean,
+) {
   return {
     title: side.title,
-    views: side.views,
-    averageViewPercentage: side.averageViewPercentage,
+    views: anchored ? side.views : null,
+    averageViewPercentage: anchored ? side.averageViewPercentage : null,
     packaging: side.packagingTaxonomy ?? null,
     transcript: timestampedTranscript(side.transcript),
   }
+}
+
+// Exported so a test can assert what the prompt actually binds the report to
+// without a network call.
+export const SCRIPT_COMPARISON_INSTRUCTIONS = [
+  "You write a head-to-head comparison of the SCRIPTS (the spoken content) of two YouTube videos, Video A and Video B, reading both full timestamped transcripts. Each video also comes with a packaging read (its title/thumbnail/hook taxonomy) that you may use as context for the opening and framing. Your job is to explain how the two scripts differ in what they SAY and how they FEEL, and what in the writing most plausibly moved audience retention.",
+  "Ground every claim in what is genuinely in the transcripts; never invent lines that are not there, and use the packaging read only as supporting context, not as the main evidence. When a video's transcript is missing, say so plainly for that side rather than guessing at its content.",
+  "Whoever is heard speaking may be the uploader, a co-host, a guest or a voiceover, so never pin what is said on a specific or gendered person (he, she, the creator); refer to the uploader's own video, or simply Video A and Video B.",
+  "Write the name in full every time: Video A and Video B, never a bare A or B on its own, in the summary and in every section. 'Video B front-loads the payoff, Video A holds it back' is right; 'B front-loads the payoff, A holds it back' is not. The same holds for the possessive, so write Video A's opening rather than A's opening.",
+  COMPARABILITY_PROMPT,
+  "In this report, where the pair is anchored, views and averageViewPercentage come through for orientation and every link you draw between a script trait and performance is still correlation worth noting rather than proof, so hedge accordingly. Where it is not, those two fields arrive null on both videos by design, and the script evidence is the whole of what you have to argue from, which is enough: what a script does with its structure, its payoffs and its asides is visible in the transcript without any performance figure at all.",
+  "Keep every field short. This report is read on one screen, so say each difference once, in the fewest words that still carry the evidence, and stop. Cut wind-up clauses, restatement of the heading, hedging padding and any sentence that only says a difference matters without naming what it is. A body that names the concrete difference in two sentences beats a longer one that circles it.",
+  "summary: two sentences, about 45 words at most, on how the two scripts compare. When comparability.anchor is 'anchored' that includes which reads as the stronger retention play. Otherwise this is the one place the pair's limit is named, in a single short clause, and the rest of the summary says what the two scripts are each doing differently.",
+  "sections: 3 to 6 titled paragraphs. Give each a short heading (e.g. Structure, Substance and payoff, Hook and opening, Emotion and energy, Likely retention driver) and a body of one to two sentences, about 50 words at most, comparing the two videos on that theme, naming Video A and Video B explicitly.",
+  TIP_VOICE_PROMPT,
+  "In this report that rule also means the two videos stay out of the tips entirely: never name Video A or Video B inside a tip, and never phrase a tip as something one of these two scripts should have done. The section bodies are the opposite: those describe what these two scripts already did, so they name Video A and Video B freely.",
+  "tip: every section carries one. It is the single change that section's comparison argues for, written as a one-sentence instruction of about 25 words at most for the uploader's next script (for example 'State the payoff you are building to within the first fifteen seconds, then keep every aside under one sentence'). Name the change rather than restating the paragraph, and keep it specific to what this comparison actually showed rather than generic scripting advice, while phrasing it as a rule to apply next time. Do not repeat another section's tip word for word.",
+  "Write in plain, direct prose. Never output an em dash character (U+2014) or en dash (U+2013) anywhere in your response; if you would use one, rewrite with a comma, colon, parentheses or two sentences instead.",
+].join(" ")
+
+// The whole comparison as the model receives it, comparability first so the
+// verdict is read before the evidence it governs. Exported so a test can assert
+// that a pair with no performance anchor really does travel without its
+// performance figures, rather than only being told not to use them.
+export function scriptComparisonForModel(
+  a: ScriptComparisonReportSide,
+  b: ScriptComparisonReportSide,
+  comparability: PairComparability,
+) {
+  const anchored = isAnchored(comparability, "watch")
+  return {
+    comparability: comparabilityForModel(comparability, "watch"),
+    videoA: scriptSideForModel(a, anchored),
+    videoB: scriptSideForModel(b, anchored),
+  }
+}
+
+// The pair's comparability, read off the two sides. Exported for the same
+// reason: the verdict is what the whole report hangs on, so it is testable on
+// its own.
+export function scriptComparability(
+  a: ScriptComparisonReportSide,
+  b: ScriptComparisonReportSide,
+): PairComparability {
+  return assessPairComparability({
+    viewsA: a.views,
+    viewsB: b.views,
+    averageWatchedPercentA: a.averageViewPercentage,
+    averageWatchedPercentB: b.averageViewPercentage,
+    trafficSourcesA: a.trafficSources,
+    trafficSourcesB: b.trafficSources,
+  })
 }
 
 // Writes the head-to-head from both scripts. Returns null (without calling
@@ -179,9 +274,9 @@ export async function generateScriptComparisonReport(
   b: ScriptComparisonReportSide,
   logContext?: LlmLogContext,
 ): Promise<ScriptComparisonReport | null> {
-  const modelA = sideForModel(a)
-  const modelB = sideForModel(b)
-  if (!modelA.transcript && !modelB.transcript) return null
+  const comparability = scriptComparability(a, b)
+  const payload = scriptComparisonForModel(a, b, comparability)
+  if (!payload.videoA.transcript && !payload.videoB.transcript) return null
 
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) throw new Error("OPENAI_API_KEY is not configured")
@@ -204,33 +299,12 @@ export async function generateScriptComparisonReport(
         {
           role: "developer",
           content: [
-            {
-              type: "input_text",
-              text: [
-                "You write a head-to-head comparison of the SCRIPTS (the spoken content) of two YouTube videos, Video A and Video B, reading both full timestamped transcripts. Each video also comes with a packaging read (its title/thumbnail/hook taxonomy) that you may use as context for the opening and framing. Your job is to explain how the two scripts differ in what they SAY and how they FEEL, and what in the writing most plausibly moved audience retention.",
-                "Ground every claim in what is genuinely in the transcripts; never invent lines that are not there, and use the packaging read only as supporting context, not as the main evidence. When a video's transcript is missing, say so plainly for that side rather than guessing at its content.",
-                "Whoever is heard speaking may be the uploader, a co-host, a guest or a voiceover, so never pin what is said on a specific or gendered person (he, she, the creator); refer to the uploader's own video, or simply Video A and Video B.",
-                "Write the name in full every time: Video A and Video B, never a bare A or B on its own, in the summary and in every section. 'Video B front-loads the payoff, Video A holds it back' is right; 'B front-loads the payoff, A holds it back' is not. The same holds for the possessive, so write Video A's opening rather than A's opening.",
-                "Views and averageViewPercentage are provided for orientation. Treat any link between a script trait and performance as correlation worth noting, never as proof; hedge accordingly.",
-                "Keep every field short. This report is read on one screen, so say each difference once, in the fewest words that still carry the evidence, and stop. Cut wind-up clauses, restatement of the heading, hedging padding and any sentence that only says a difference matters without naming what it is. A body that names the concrete difference in two sentences beats a longer one that circles it.",
-                "summary: two sentences, about 45 words at most, giving the overall verdict on how the two scripts compare and which reads as the stronger retention play, if either.",
-                "sections: 3 to 6 titled paragraphs. Give each a short heading (e.g. Structure, Substance and payoff, Hook and opening, Emotion and energy, Likely retention driver) and a body of one to two sentences, about 50 words at most, comparing the two videos on that theme, naming Video A and Video B explicitly.",
-                TIP_VOICE_PROMPT,
-                "In this report that rule also means the two videos stay out of the tips entirely: never name Video A or Video B inside a tip, and never phrase a tip as something one of these two scripts should have done. The section bodies are the opposite: those describe what these two scripts already did, so they name Video A and Video B freely.",
-                "tip: every section carries one. It is the single change that section's comparison argues for, written as a one-sentence instruction of about 25 words at most for the uploader's next script (for example 'State the payoff you are building to within the first fifteen seconds, then keep every aside under one sentence'). Name the change rather than restating the paragraph, and keep it specific to what this comparison actually showed rather than generic scripting advice, while phrasing it as a rule to apply next time. Do not repeat another section's tip word for word.",
-                "Write in plain, direct prose. Never output an em dash character (U+2014) or en dash (U+2013) anywhere in your response; if you would use one, rewrite with a comma, colon, parentheses or two sentences instead.",
-              ].join(" "),
-            },
+            { type: "input_text", text: SCRIPT_COMPARISON_INSTRUCTIONS },
           ],
         },
         {
           role: "user",
-          content: [
-            {
-              type: "input_text",
-              text: JSON.stringify({ videoA: modelA, videoB: modelB }),
-            },
-          ],
+          content: [{ type: "input_text", text: JSON.stringify(payload) }],
         },
       ],
       text: {
@@ -287,6 +361,7 @@ export async function generateScriptComparisonReport(
       })
       .filter((section) => section.heading.length > 0 && section.body.length > 0)
       .slice(0, MAX_SECTIONS),
+    comparability,
     schemaVersion: SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION,
     model,
     generatedAt: new Date().toISOString(),
@@ -370,6 +445,7 @@ export async function buildAndStoreScriptComparisonReport(
     title: row.video_title ?? row.video_details?.title ?? null,
     views: preferredViewCount(row.video_details, row.analytics_summary),
     averageViewPercentage: row.analytics_summary?.averageViewPercentage ?? null,
+    trafficSources: row.analytics_summary?.trafficSources ?? [],
     packagingTaxonomy: row.packaging_taxonomy,
     transcript: row.transcript ?? [],
   })

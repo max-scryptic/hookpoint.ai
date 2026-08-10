@@ -13,8 +13,16 @@
 // something to do next; reports stored at version 1 simply render without one.
 // Version 3 put every tip under the shared tip voice (lib/tip-voice.ts), which
 // bans a tip pointing back at the videos it came from; tips stored at version 2
-// can still read as notes on those two videos rather than as advice.
-export const SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION = 3
+// can still read as notes on those two videos rather than as advice. Version 4
+// bound the report to the pair's comparability
+// (lib/comparison-comparability.ts): a pair whose two videos reached audiences
+// too small or too differently mixed to be read against each other is now
+// written as a contrast rather than as a ranking, and its performance figures
+// are withheld from the model entirely. Reports stored at version 3 were
+// handed both videos' views and average watched with nothing holding them, so
+// they can name a 73 view video the stronger retention play and point every
+// tip at it, and are rewritten rather than rendered.
+export const SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION = 4
 
 // Bumped whenever the stored packaging report shape changes. Version 2 added
 // the per driver "Try:" tip; reports stored at version 1 simply render without
@@ -30,8 +38,14 @@ export const SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION = 3
 // themselves, so each surface closes on one tip and one only, was deliberately
 // not a bump: a report stored with them renders exactly as it did, since only
 // the leading tip was ever shown, and a bump would send every stored report
-// back through the generator for a page the reader cannot tell apart.
-export const PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION = 6
+// back through the generator for a page the reader cannot tell apart. Version 7
+// bound the report to the pair's comparability
+// (lib/comparison-comparability.ts), so a pair whose view counts cannot carry a
+// verdict is judged on packaging craft alone rather than on which video
+// happened to get more views; that one IS a bump, because reports stored at
+// version 6 were handed higherViewsSide as an unqualified performance anchor
+// and read differently for it, so they are rewritten rather than rendered.
+export const PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION = 7
 
 // Bumped whenever the stored retention report shape changes. Version 1 is the
 // first: a two sentence verdict plus 3 to 5 titled sections, each closing on

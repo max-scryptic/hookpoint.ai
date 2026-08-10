@@ -13,7 +13,30 @@
 //     retention actually behaved,
 //   - each video's stored packaging taxonomy, as the scored context the
 //     deterministic tables below the report are built from,
-//   - and views, as the only performance anchor.
+//   - and a performance anchor, when the pair has earned one.
+//
+// THAT LAST CLAUSE
+//
+// This prompt used to be handed higherViewsSide unconditionally, as "the video
+// with more views, computed for you", with no test of whether the two view
+// counts could carry a verdict at all. Two videos three days apart on 1,100 and
+// 73 views produced a confident packaging verdict resting on a 15x view gap,
+// and a view gap conflates two things: how good the packaging was, and how
+// often YouTube offered it at all. At 73 views there is no way to tell a
+// thumbnail nobody clicked from a thumbnail nobody was shown.
+//
+// So the pair's comparability is settled first
+// (lib/comparison-comparability.ts) and this report asks it the click question,
+// which is answered from impressions and click-through where the reporting job
+// has served them and from views where it has not. Only a pair that can carry
+// an anchor gets one; otherwise the view counts are withheld and the report
+// judges packaging craft on the thumbnails, titles and openings themselves,
+// which is evidence this report has in abundance and never needed a view count
+// to read.
+//
+// Note that this is a different question from the one the Script head-to-head
+// asks of the same pair, and the same two videos can answer one and not the
+// other. See ComparisonQuestion in the comparability module.
 //
 // The paid audio read is excluded on purpose; see the evidence module's header.
 //
@@ -29,6 +52,13 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import {
+  assessPairComparability,
+  comparabilityForModel,
+  COMPARABILITY_PROMPT,
+  isAnchored,
+  type PairComparability,
+} from "@/lib/comparison-comparability"
 import { PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION } from "@/lib/comparison-report-versions"
 import { recordLlmCallCost, type LlmLogContext } from "@/lib/llm-calls"
 import { responsesCallCost, type ResponsesUsage } from "@/lib/llm-cost"
@@ -44,6 +74,7 @@ import { TIP_VOICE_PROMPT } from "@/lib/tip-voice"
 import { savePackagingComparisonReport } from "@/lib/video-comparisons"
 import {
   preferredViewCount,
+  type TrafficSource,
   type TranscriptCue,
   type VideoAnalyticsSummary,
   type VideoDetails,
@@ -155,6 +186,11 @@ export interface PackagingComparisonReport {
   // The honest limits the model used to write out, on reports stored before
   // schema version 4. Nothing writes this and nothing renders it.
   caveats?: string[]
+  // What this pair could honestly be compared on when the report was written,
+  // stored alongside it so the page can show the reader the same limit the
+  // model wrote under. Optional only because reports stored before schema
+  // version 7 predate it.
+  comparability?: PairComparability
   schemaVersion: number
   model: string
   generatedAt: string
@@ -165,6 +201,19 @@ export interface PackagingComparisonReportSide {
   title: string | null
   thumbnailUrl: string | null
   views: number | null
+  // How often YouTube offered this video and how often that offer was taken.
+  // This is the honest click anchor, and the reason the report no longer leans
+  // on the raw view gap: a click-through rate is a proportion of impressions,
+  // so it separates what the packaging did from how often the packaging was
+  // shown, which a view count cannot. Null whenever the asynchronous reporting
+  // job has not served them, which is common and simply narrows the verdict.
+  impressions: number | null
+  impressionClickThroughRate: number | null
+  // Both used only to settle what this pair can be compared on; neither is
+  // shown to the model. Null and empty are fine, and simply mean the pair falls
+  // back to being judged on craft.
+  averageViewPercentage: number | null
+  trafficSources: TrafficSource[]
   packagingTaxonomy: PackagingTaxonomy | null
   hook: PackagingHookEvidence
 }
@@ -259,14 +308,15 @@ const REPORT_SCHEMA = {
 
 const INSTRUCTIONS = [
   "You compare the PACKAGING of two YouTube videos, Video A and Video B, and explain why one of them plausibly out-performed the other. Packaging means the thumbnail, the title, the first ten seconds, and how tightly those three promise the same thing. Everything after the first ten seconds is out of scope.",
-  "You are given, for each video: its verbatim title; its thumbnail as an image (Video A's image is supplied first, then Video B's, each labelled); its view count; its stored packaging read (a fixed taxonomy scored on that video alone at analysis time, with 0-10 axes and short verbatim spans); and hook, the full stored evidence for its first ten seconds.",
+  "You are given, for each video: its verbatim title; its thumbnail as an image (Video A's image is supplied first, then Video B's, each labelled); its view count, but only where the pair has earned a performance anchor and null otherwise (see comparability below); its stored packaging read (a fixed taxonomy scored on that video alone at analysis time, with 0-10 axes and short verbatim spans); and hook, the full stored evidence for its first ten seconds.",
   "hook contains: retention (how the opening's watch ratio actually moved), transcript (the spoken opening, verbatim), transcriptTaxonomy (a structured read of those words), visual (frames already described by a vision pass, each with a timestamp, its deterministic OCR text as ground truth, and scored axes such as faceProminence, colorContrast, visualComplexity, textProminence, shotScale and motion), editing (cut count, cuts per minute, freeze and black coverage across the opening), audio (measured speech rate in words per minute, silence coverage and mean loudness; no listener judgement of tone), events (retention events already synthesized for this opening) and baseline (this video's own full-video averages). Judge editing, pacing and speech rate as deviations from that baseline, not in absolute terms.",
-  "higherViewsSide names the video with more views, computed for you; do not do that arithmetic yourself. When it is null, views are unknown or tied, so compare which packaging reads stronger and say plainly that there is no performance anchor.",
+  COMPARABILITY_PROMPT,
+  "The question this report asks of comparability is whether one of the two earned the click better, which is not the same question as whether one held its audience better and does not always have the same answer. In the anchored case you are given higherViewsSide, naming the video with more views, computed for you, and where impressions were available a click-through percentage for each side; do not do that arithmetic yourself. In every other case higherViewsSide is null and no view count reaches you at all, so judge which packaging reads stronger from the thumbnails, the titles and the openings themselves and say plainly, once, that there is no performance anchor behind it. That is not a weaker report: a thumbnail that buries its subject, a title that promises nothing specific and an opening that abandons what the two of them set up are all visible without knowing how either video did.",
   "Ground every claim in what you can actually see in the thumbnails or read in the supplied evidence. Never invent frame content, spoken lines, thumbnail text or numbers that were not given. When a video's evidence is missing (no frames, no transcript, no packaging read), say so for that side rather than guessing, and lean on what is present.",
   "Whoever is heard speaking may be the uploader, a co-host, a guest or a voiceover, so never pin what is said on a specific or gendered person (he, she, the creator). Address the uploader as you, about their own videos, and name the videos as Video A and Video B.",
   "Write the name in full every time: Video A and Video B, never a bare A or B on its own, in any sentence and any field. 'Video B makes the promise legible, Video A leads with a face' is right; 'B makes the promise legible, A leads with a face' is not. The same holds for the possessive, so write Video A's thumbnail rather than A's thumbnail.",
   "Views are one number about two videos, so treat every link between a packaging trait and performance as correlation worth acting on, never as proof. Thumbnails and titles are judged on click appeal, the opening ten seconds on whether it holds the promise those two made.",
-  "verdict: strongerSide is the video whose packaging is the stronger play (or neither when they are genuinely close), summary is two to three sentences on why, and confidence is 0 to 1 in how strongly the evidence supports that verdict. Lower it when the two are close, when evidence is thin on one side, or when views are unknown.",
+  "verdict: strongerSide is the video whose packaging is the stronger play (or neither when they are genuinely close), summary is two to three sentences on why, and confidence is 0 to 1 in how strongly the evidence supports that verdict. This is a judgement of the packaging itself, so it stays answerable in every mode; what changes is what stands behind it. Lower the confidence when the two are close, when evidence is thin on one side, and whenever comparability.anchor is not 'anchored', since no performance figure is backing you there.",
   "surfaces: one entry for each of thumbnail, title, hook and alignment that you have evidence for. aRead and bRead describe what that video's surface actually does, concretely (what is in the frame, what the title claims, what the opening says and shows). whyItMatters explains in one or two sentences why that difference would move clicks or hold the opening. Use surface 'alignment' for whether the title, thumbnail and opening promise one thing or pull apart.",
   "drivers: the ranked reasons the stronger video is stronger, most important first, one to six of them. label is a short phrase (for example 'Thumbnail is doing three things at once'). detail is one or two sentences. evidence is up to four short pointers back to the supplied inputs, quoting the real thing where possible (a verbatim title fragment, the thumbnail's overlaid words, 'frame at 0:04 is a wide shot with no face', 'one cut in the first ten seconds versus eleven per minute across the video'). Only emit a driver where the evidence genuinely supports it.",
   `The tips in this report are its advice, so every one of them is written under the rules that follow. ${TIP_VOICE_PROMPT}`,
@@ -374,12 +424,41 @@ export function isPackagingComparisonReportOutput(
 
 // The side with more views, or null when views are unknown or tied. Computed
 // here so the model is handed the answer rather than asked to derive it.
+//
+// `anchored` is what stops a view gap being handed over as a verdict it cannot
+// support. Two videos on 1,100 and 73 views have a perfectly well defined
+// higher side, and naming it tells the report nothing about their packaging: it
+// reports how the two were distributed. For any pair that has not earned a
+// performance anchor this returns null, which the prompt already knows how to
+// handle since it is the same value an unknown or tied pair produces.
 export function higherViewsSide(
   a: Pick<PackagingComparisonReportSide, "views">,
   b: Pick<PackagingComparisonReportSide, "views">,
+  anchored = true,
 ): ReportSide | null {
+  if (!anchored) return null
   if (a.views == null || b.views == null || a.views === b.views) return null
   return a.views > b.views ? "a" : "b"
+}
+
+// The pair's comparability, read off the two sides. Exported so a test can
+// assert the verdict on its own.
+export function packagingComparability(
+  a: PackagingComparisonReportSide,
+  b: PackagingComparisonReportSide,
+): PairComparability {
+  return assessPairComparability({
+    viewsA: a.views,
+    viewsB: b.views,
+    averageWatchedPercentA: a.averageViewPercentage,
+    averageWatchedPercentB: b.averageViewPercentage,
+    trafficSourcesA: a.trafficSources,
+    trafficSourcesB: b.trafficSources,
+    impressionsA: a.impressions,
+    impressionsB: b.impressions,
+    clickThroughRateA: a.impressionClickThroughRate,
+    clickThroughRateB: b.impressionClickThroughRate,
+  })
 }
 
 function formatTimestamp(totalSeconds: number): string {
@@ -393,11 +472,23 @@ function formatTimestamp(totalSeconds: number): string {
 // taxonomy pass through as-is (both are already small structured objects); the
 // frames are trimmed and timestamped so the model can talk about "the frame at
 // 0:04" without counting.
-export function packagingSideForModel(side: PackagingComparisonReportSide) {
+// `anchored` decides whether this side's view count travels with it. For a pair
+// that cannot be compared on performance it is withheld: the rules forbid
+// ranking the two videos by how they did, and withholding the number a ranking
+// would be built from is what makes that hold rather than merely ask.
+//
+// hook.retention stays in both modes on purpose. It measures how this one
+// video's own opening behaved against its own starting audience, so it is not a
+// comparison between the two videos and carries none of the traffic mix problem
+// that the view counts do.
+export function packagingSideForModel(
+  side: PackagingComparisonReportSide,
+  anchored = true,
+) {
   const { hook } = side
   return {
     title: side.title,
-    views: side.views,
+    views: anchored ? side.views : null,
     hasThumbnailImage: side.thumbnailUrl != null,
     packaging: side.packagingTaxonomy ?? null,
     hook: {
@@ -424,6 +515,24 @@ export function packagingSideForModel(side: PackagingComparisonReportSide) {
       })),
       baseline: hook.baseline,
     },
+  }
+}
+
+// The whole comparison as the model receives it, comparability first so the
+// verdict is read before the evidence it governs. Exported so a test can assert
+// that a pair with no performance anchor really does travel without its view
+// counts, rather than only being told not to rank on them.
+export function packagingComparisonForModel(
+  a: PackagingComparisonReportSide,
+  b: PackagingComparisonReportSide,
+  comparability: PairComparability,
+) {
+  const anchored = isAnchored(comparability, "click")
+  return {
+    comparability: comparabilityForModel(comparability, "click"),
+    higherViewsSide: higherViewsSide(a, b, anchored),
+    videoA: packagingSideForModel(a, anchored),
+    videoB: packagingSideForModel(b, anchored),
   }
 }
 
@@ -478,6 +587,8 @@ export async function generatePackagingComparisonReport(
   if (!apiKey) throw new Error("OPENAI_API_KEY is not configured")
 
   const model = packagingComparisonModel()
+  const comparability = packagingComparability(a, b)
+  const payload = packagingComparisonForModel(a, b, comparability)
 
   // The thumbnails ride alongside the JSON as real images, each announced by a
   // label so the model never has to guess which side it is looking at.
@@ -515,14 +626,7 @@ export async function generatePackagingComparisonReport(
         {
           role: "user",
           content: [
-            {
-              type: "input_text",
-              text: JSON.stringify({
-                higherViewsSide: higherViewsSide(a, b),
-                videoA: packagingSideForModel(a),
-                videoB: packagingSideForModel(b),
-              }),
-            },
+            { type: "input_text", text: JSON.stringify(payload) },
             ...thumbnailContent,
           ],
         },
@@ -566,7 +670,7 @@ export async function generatePackagingComparisonReport(
     )
   }
 
-  return normalizePackagingComparisonReport(parsed, model)
+  return normalizePackagingComparisonReport(parsed, model, comparability)
 }
 
 // Trims, clamps and caps the validated model output into the stored shape.
@@ -574,6 +678,7 @@ export async function generatePackagingComparisonReport(
 export function normalizePackagingComparisonReport(
   parsed: ModelReportOutput,
   model: string,
+  comparability?: PairComparability,
 ): PackagingComparisonReport {
   const clamp = (value: number) => Math.min(1, Math.max(0, value))
   return {
@@ -623,6 +728,10 @@ export function normalizePackagingComparisonReport(
       }))
       .filter((driver) => driver.label.length > 0 || driver.detail.length > 0)
       .slice(0, MAX_DRIVERS),
+    // Omitted rather than stored undefined, so a report normalised without a
+    // verdict (which only the existing tests do) matches the stored shape of a
+    // report written before version 7 rather than inventing a null one.
+    ...(comparability != null ? { comparability } : {}),
     schemaVersion: PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION,
     model,
     generatedAt: new Date().toISOString(),
@@ -730,6 +839,11 @@ export async function buildAndStorePackagingComparisonReport(
     title: row.video_title ?? row.video_details?.title ?? null,
     thumbnailUrl: row.video_details?.thumbnailUrl ?? null,
     views: preferredViewCount(row.video_details, row.analytics_summary),
+    impressions: row.analytics_summary?.impressions ?? null,
+    impressionClickThroughRate:
+      row.analytics_summary?.impressionClickThroughRate ?? null,
+    averageViewPercentage: row.analytics_summary?.averageViewPercentage ?? null,
+    trafficSources: row.analytics_summary?.trafficSources ?? [],
     packagingTaxonomy: taxonomy,
     hook,
   })
