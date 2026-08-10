@@ -41,6 +41,11 @@ import {
 // The accept attribute / human hint for the file picker.
 const ACCEPT_ATTR = ACCEPTED_EXTENSIONS.map((ext) => `.${ext}`).join(",")
 
+// The section's DOM id, so the "unlock the full report" CTA at the top of the
+// report can scroll the reader down to this card without both sides hard-coding
+// the same string.
+export const SOURCE_FILE_UPLOAD_SECTION_ID = "source-file-upload"
+
 type ClientState =
   | { phase: "idle" }
   | { phase: "preparing"; filename: string }
@@ -600,7 +605,7 @@ export function SourceFileUpload({
 
   return (
     <section
-      id="source-file-upload"
+      id={SOURCE_FILE_UPLOAD_SECTION_ID}
       tabIndex={-1}
       className="flex scroll-mt-4 flex-col gap-3 outline-none"
     >
