@@ -9,10 +9,16 @@ import { SOURCE_FILE_UPLOAD_SECTION_ID } from "@/components/source-file-upload"
 import { SOURCE_FILE_READY_EVENT } from "@/components/source-video-thumbnail"
 import { cn } from "@/lib/utils"
 
-// The banner at the top of a video's report offering the deeper, footage-based
-// half of the analysis. Everything above the fold is read from the retention
-// curve and the transcript; the frame-by-frame half only exists once the raw
-// source file has been uploaded, so this is the one prompt that leads there.
+// The compact prompt at the top of a video's report offering the deeper,
+// footage-based half of the analysis. Everything above the fold is read from
+// the retention curve and the transcript; the frame-by-frame half only exists
+// once the raw source file has been uploaded, so this is the one prompt that
+// leads there.
+//
+// It sits on the same row as the video's KPIs rather than in a banner above
+// them, so the report still opens on the title, the thumbnail and the numbers.
+// That row is the size budget: one short line of copy under the headline, and
+// nothing taller than the metrics beside it.
 //
 // Two audiences, one headline. A paid user only has to scroll to the upload
 // card further down the page, so the button takes them straight to it. A Free
@@ -49,7 +55,7 @@ export function UnlockFullReportCta({
   canUpload: boolean
 }) {
   // The page renders this on the server, so an upload that completes while the
-  // user is still on it would otherwise leave the banner behind, still offering
+  // user is still on it would otherwise leave the prompt behind, still offering
   // something they have just done. The upload card announces a finished upload
   // on the window; take that as the cue to retire.
   const [unlocked, setUnlocked] = useState(false)
@@ -69,43 +75,40 @@ export function UnlockFullReportCta({
   if (unlocked) return null
 
   return (
-    <section className="flex flex-col gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-center sm:gap-4">
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+    <section className="flex w-full items-center gap-2.5 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 sm:ml-auto sm:w-auto">
+      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
         {canUpload ? (
-          <SparklesIcon className="size-4.5" />
+          <SparklesIcon className="size-3.5" />
         ) : (
-          <LockIcon className="size-4.5" />
+          <LockIcon className="size-3.5" />
         )}
       </span>
 
-      <div className="flex-1">
-        <h2 className="font-heading text-base font-medium">
+      <div className="min-w-0 flex-1">
+        <h2 className="font-heading text-sm leading-tight font-medium">
           Unlock the full report
         </h2>
-        <p className="mt-0.5 text-sm text-muted-foreground">
+        <p className="text-xs leading-tight text-muted-foreground">
           {canUpload
-            ? "This report is read from your retention curve and transcript. Upload the raw source file and every key moment is analysed frame by frame too: the edit, the visuals, the on-screen text and the audio."
-            : "Deep analysis reads the footage itself, frame by frame: the edit, the visuals, the on-screen text and the audio behind every key moment. Upgrade to Starter or Pro to upload your source file and unlock it."}
+            ? "Upload the raw source file to analyse every key moment frame by frame."
+            : "Upgrade to Starter or Pro to analyse your footage frame by frame."}
         </p>
       </div>
 
       {canUpload ? (
         <Button
-          size="lg"
-          className="shrink-0 self-start sm:self-auto"
+          size="sm"
+          className="shrink-0"
           onClick={scrollToSourceFileUpload}
         >
-          Unlock full report
+          Unlock
         </Button>
       ) : (
         <Link
           href="/pricing"
-          className={cn(
-            buttonVariants({ size: "lg" }),
-            "shrink-0 self-start sm:self-auto",
-          )}
+          className={cn(buttonVariants({ size: "sm" }), "shrink-0")}
         >
-          Upgrade to unlock
+          Upgrade
         </Link>
       )}
     </section>

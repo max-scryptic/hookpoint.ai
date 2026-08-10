@@ -522,13 +522,15 @@ export default async function Page({
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         {result.status === "ok" && (
           <>
-            {showUnlockCta && (
-              <UnlockFullReportCta
-                videoId={videoId}
-                canUpload={canUploadSourceFile}
-              />
-            )}
             <AnalysedVideoDetail
+              unlockCta={
+                showUnlockCta ? (
+                  <UnlockFullReportCta
+                    videoId={videoId}
+                    canUpload={canUploadSourceFile}
+                  />
+                ) : null
+              }
               video={result.video}
               retention={result.retention}
               retentionWindows={result.retentionWindows}
