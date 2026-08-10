@@ -1,6 +1,6 @@
 "use client"
 
-import type { ComponentType, ReactNode } from "react"
+import type { ComponentType } from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
   AlignHorizontalJustifyCenterIcon,
@@ -1275,7 +1275,6 @@ export function AnalysedVideoDetail({
   analyticsSummary = null,
   deepAnalysisEvidence = null,
   showDeepRecommendations = true,
-  unlockCta = null,
 }: {
   video: VideoDetails
   retention: RetentionPoint[]
@@ -1288,10 +1287,6 @@ export function AnalysedVideoDetail({
   analyticsSummary?: VideoAnalyticsSummary | null
   deepAnalysisEvidence?: DeepAnalysisEvidence | null
   showDeepRecommendations?: boolean
-  // The prompt to unlock the footage-based half of the report. It rides at the
-  // end of the KPI row so it reads as part of the report header rather than as
-  // a banner sitting on top of it. Null once the report is already unlocked.
-  unlockCta?: ReactNode
 }) {
   const [previewTime, setPreviewTime] = useState<number | null>(null)
   const [playbackWindow, setPlaybackWindow] = useState<{
@@ -1555,43 +1550,38 @@ export function AnalysedVideoDetail({
               Audience retention across this video, with the moments where you
               lost and held the most viewers.
             </p>
-            {(analyticsSummary || unlockCta) && (
+            {analyticsSummary && (
               <div className="mt-4 flex flex-wrap items-end gap-x-8 gap-y-3 sm:mt-auto sm:pt-4">
-                {analyticsSummary && (
-                  <>
-                    <Metric
-                      label="Views"
-                      value={formatCompactNumber(
-                        preferredViewCount(video, analyticsSummary),
-                      )}
-                    />
-                    <Metric
-                      label="Subscribers gained"
-                      value={formatCompactNumber(
-                        netSubscribersGained(analyticsSummary),
-                      )}
-                    />
-                    <Metric
-                      label="Avg. view duration"
-                      value={
-                        analyticsSummary.averageViewDurationSeconds != null
-                          ? formatTimestamp(
-                              analyticsSummary.averageViewDurationSeconds,
-                            )
-                          : "N/A"
-                      }
-                    />
-                    {analyticsSummary.impressionClickThroughRate != null && (
-                      <Metric
-                        label="Thumbnail CTR"
-                        value={formatClickThroughRate(
-                          analyticsSummary.impressionClickThroughRate,
-                        )}
-                      />
+                <Metric
+                  label="Views"
+                  value={formatCompactNumber(
+                    preferredViewCount(video, analyticsSummary),
+                  )}
+                />
+                <Metric
+                  label="Subscribers gained"
+                  value={formatCompactNumber(
+                    netSubscribersGained(analyticsSummary),
+                  )}
+                />
+                <Metric
+                  label="Avg. view duration"
+                  value={
+                    analyticsSummary.averageViewDurationSeconds != null
+                      ? formatTimestamp(
+                          analyticsSummary.averageViewDurationSeconds,
+                        )
+                      : "N/A"
+                  }
+                />
+                {analyticsSummary.impressionClickThroughRate != null && (
+                  <Metric
+                    label="Thumbnail CTR"
+                    value={formatClickThroughRate(
+                      analyticsSummary.impressionClickThroughRate,
                     )}
-                  </>
+                  />
                 )}
-                {unlockCta}
               </div>
             )}
           </div>
