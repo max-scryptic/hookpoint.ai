@@ -27,6 +27,7 @@ function moment(
     toSeconds: windowIndex * 60 + 20,
     explanation: "Viewers left while the point was still being set up.",
     tip,
+    tipWarrant: tip == null ? 0 : 0.8,
     confidence: 0.7,
   }
 }
@@ -101,14 +102,30 @@ describe("dedupeSectionTips", () => {
     )
   })
 
-  it("reads a window's script tip before its deep tips", () => {
+  // Both writers describe the same moment, so page order cannot separate them.
+  // The deep tip is measured off the frames and the audio; the script tip is
+  // inferred from the transcript by a pass that cannot see either. The
+  // better-evidenced one keeps the advice.
+  it("keeps a window's deep tip over its script tip when they repeat each other", () => {
     const result = dedupeSectionTips(
       section([moment(0, PACING_TIP)], [[0, [deep(0, PACING_TIP)]]]),
       createFirstSaying(),
     )
 
+    expect(result.deepFeedback.get(0)?.[0].recommendation?.action).toBe(PACING_TIP)
+    expect(result.attribution.get(0)?.tip).toBeNull()
+  })
+
+  // The window's own deep tip outranks its script tip, but only within that
+  // window: a tip already said further up the page still wins on page order.
+  it("does not let a later window's deep tip beat an earlier window's script tip", () => {
+    const result = dedupeSectionTips(
+      section([moment(0, PACING_TIP)], [[1, [deep(1, PACING_TIP)]]]),
+      createFirstSaying(),
+    )
+
     expect(result.attribution.get(0)?.tip).toBe(PACING_TIP)
-    expect(result.deepFeedback.get(0)?.[0].recommendation).toBeUndefined()
+    expect(result.deepFeedback.get(1)?.[0].recommendation).toBeUndefined()
   })
 
   it("carries what it has said from one section into the next", () => {

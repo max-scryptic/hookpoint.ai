@@ -586,16 +586,11 @@ function deepFeedbackTabLabel(
 // their own tab. Only an insight that produced an actionable tip is worth a
 // tab (the reasoning is shown above the tip inside it), and each distinct tip
 // gets a single tab — several events in one window often synthesise the same
-// recommendation, and a tipless event would render an empty tab. Tips already
-// carried by the Script tab are excluded too, so a deep tab never just repeats
-// the script feedback.
+// recommendation, and a tipless event would render an empty tab.
 function dedupeDeepFeedback(
   deepFeedback: DeepWindowFeedback[],
-  scriptTip: string | null | undefined,
 ): DeepWindowFeedback[] {
   const seenTips = new Set<string>()
-  const scriptTipText = scriptTip?.trim()
-  if (scriptTipText) seenTips.add(scriptTipText)
 
   return deepFeedback.filter(({ recommendation }) => {
     const tip = recommendation?.action.trim()
@@ -605,16 +600,34 @@ function dedupeDeepFeedback(
   })
 }
 
+// Whether one of the window's deep tabs already carries this tip, in which case
+// the Script tab drops its own copy of it: a tip measured off the frames and the
+// audio is the better-evidenced version of the same advice, and it is the one
+// that can show its working. lib/report-tip-uniqueness.ts settles this for the
+// report as a whole, in the same direction and against near-duplicates rather
+// than exact ones; this is the last check before the tabs are built.
+function deepFeedbackCarriesTip(
+  deepFeedback: DeepWindowFeedback[],
+  tip: string,
+): boolean {
+  const wanted = tip.trim()
+  return deepFeedback.some(
+    ({ recommendation }) => recommendation?.action.trim() === wanted,
+  )
+}
+
 // A window's feedback block, rendered together with the row's header so the
 // Script/deep tab switcher can sit inline on the top row (after the transcript
 // quote) rather than below it. `header` is given the tab list to place in that
 // row — or null when there are no tabs to show — and returns the full header.
 //
-// The Script tab always carries the transcript-based tip. Each *unique* deep
-// tip synthesised from the window's events then earns its own additional tab
-// (reasoning above the tip); duplicate and tipless events are dropped so the
-// switcher only ever holds distinct, actionable feedback. When just one source
-// of feedback survives, it renders flat below the header exactly as before.
+// The Script tab carries the transcript reading of the window: its explanation
+// always, and its tip only when the transcript earned one — see THE WARRANT in
+// lib/retention-attribution.ts. Each *unique* deep tip synthesised from the
+// window's events then earns its own additional tab (reasoning above the tip);
+// duplicate and tipless events are dropped so the switcher only ever holds
+// distinct, actionable feedback. When just one source of feedback survives, it
+// renders flat below the header exactly as before.
 function WindowFeedback({
   header,
   attribution,
@@ -628,14 +641,20 @@ function WindowFeedback({
   // "Hold"), so a tip kept from it says where it was read.
   section: string
 }) {
-  const hasScript = attribution != null && attribution.explanation !== ""
-  const uniqueDeep = dedupeDeepFeedback(
-    deepFeedback,
-    hasScript ? attribution.tip : undefined,
-  )
+  const uniqueDeep = dedupeDeepFeedback(deepFeedback)
   const hasDeep = uniqueDeep.length > 0
+  // The window's script feedback as it will actually be shown, or undefined when
+  // there is none to show. A tip a deep tab already carries is dropped from it;
+  // the explanation stays either way, so only the duplicated "Try:" line goes.
+  const script =
+    attribution == null || attribution.explanation === ""
+      ? undefined
+      : attribution.tip != null &&
+          deepFeedbackCarriesTip(uniqueDeep, attribution.tip)
+        ? { ...attribution, tip: null }
+        : attribution
 
-  if (hasScript && hasDeep) {
+  if (script && hasDeep) {
     return (
       <Tabs defaultValue="script" className="gap-2">
         {header(
@@ -649,7 +668,7 @@ function WindowFeedback({
           </TabsList>
         )}
         <TabsContent value="script" className="pl-10">
-          <ScriptFeedbackBody attribution={attribution} section={section} />
+          <ScriptFeedbackBody attribution={script} section={section} />
         </TabsContent>
         {uniqueDeep.map(({ insight, recommendation }) => (
           <TabsContent
@@ -668,7 +687,7 @@ function WindowFeedback({
     )
   }
 
-  if (!hasScript && uniqueDeep.length > 1) {
+  if (!script && uniqueDeep.length > 1) {
     const defaultValue = `deep-${uniqueDeep[0].insight.id}`
     return (
       <Tabs defaultValue={defaultValue} className="gap-2">
@@ -701,7 +720,7 @@ function WindowFeedback({
   return (
     <>
       {header(null)}
-      <AttributionNote attribution={attribution} section={section} />
+      <AttributionNote attribution={script} section={section} />
       <MultimodalInsight insight={uniqueDeep[0]?.insight} />
       <ActionableRecommendation
         recommendation={uniqueDeep[0]?.recommendation}

@@ -27,7 +27,55 @@ export type RetentionMomentKind = "hook" | "drop_off" | "gain" | "hold"
 // bans a tip pointing back at the analysed video ("why this deck is
 // mysterious"); attributions written before it read as notes on a published
 // video rather than as advice, so they are regenerated too.
-export const RETENTION_ATTRIBUTION_SCHEMA_VERSION = 6
+// Bumped to 7 when a tip stopped being owed to every moment (see THE WARRANT
+// below). Every stored attribution up to 6 was written under a prompt that
+// demanded one per moment, so they all carry the tips this version exists to
+// stop producing.
+export const RETENTION_ATTRIBUTION_SCHEMA_VERSION = 7
+
+// THE WARRANT
+//
+// This pass reads a transcript. It has no picture and no sound, and the prompt
+// says so outright. But plenty of retention moments are not caused by the words:
+// a held frame, a jump cut, a sponsor bumper, a graphic that missed, a drop in
+// energy. Asked for a tip at such a moment anyway, the model cannot answer "the
+// cause is not in what I was given" - it can only reach for the nearest thing in
+// the transcript and write advice about that. The output is not a wrong tip so
+// much as a transcript-shaped rationalisation of a non-transcript cause, which
+// is the failure that quietly costs the reader their trust in the tips that are
+// right.
+//
+// So a tip is earned rather than owed. The model scores how far the supplied
+// words actually justify the advice it wrote (tipWarrant), and anything under
+// this threshold is dropped before it is stored. The explanation always stays:
+// it says what was said, which is checkable against the transcript in front of
+// it, and it is the part of a moment that is always worth reading.
+//
+// This mirrors what the deep-analysis path already does with insightScore
+// against getDeepAnalysisMinimumInsightScore() - evidence earns the insight -
+// with the difference that deep analysis can see the freeze frame and this
+// cannot. A moment whose cause is visual is exactly the moment this pass should
+// stay quiet about and that one should speak on.
+//
+// Expect this to remove a lot of tips. That is the point.
+const MINIMUM_TIP_WARRANT = 0.6
+
+// Fewest words a moment's transcript must carry before it is worth asking about.
+// Below this there is nothing for an explanation to reference and nothing for a
+// tip to be drawn from: a drop-off over four words of filler gets an invented
+// reading of those four words, since the model is given no way to say "there is
+// nothing here". Silence across a window is a real signal, but it belongs to the
+// deep-analysis path, which can hear it; this one would have to make up words.
+const MINIMUM_TRANSCRIPT_WORDS = 8
+
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value))
+}
+
+function wordCount(text: string): number {
+  const trimmed = text.trim()
+  return trimmed === "" ? 0 : trimmed.split(/\s+/).length
+}
 
 export interface RetentionMomentAttribution {
   kind: RetentionMomentKind
@@ -37,13 +85,17 @@ export interface RetentionMomentAttribution {
   fromSeconds: number
   toSeconds: number
   explanation: string
-  // A concrete, actionable suggestion for the uploader's *next* videos. The
+  // A concrete, actionable suggestion for the uploader's *next* videos, or null
+  // for any moment whose words did not earn one (see THE WARRANT above). The
   // video being attributed is already published, so a tip that asks for a
   // re-edit or an A/B against the current cut is not something they can act on;
-  // the prompt below forbids that framing. Gains always carry a tip (what proven
-  // thing to keep doing); it may still be null for other kinds when there's
-  // genuinely nothing worth changing.
+  // the prompt below forbids that framing.
   tip: string | null
+  // The model's own reading of how far the supplied transcript justifies the tip
+  // it wrote, 0..1. Kept after the gate has been applied so an admin can see
+  // that a moment was quiet by choice, and at what score, rather than for want
+  // of anything to say. 0 whenever the model wrote no tip at all.
+  tipWarrant: number
   confidence: number
 }
 
@@ -70,6 +122,7 @@ interface ModelMoment {
   momentIndex: number
   explanation: string
   tip: string | null
+  tipWarrant: number
   confidence: number
 }
 
@@ -89,11 +142,18 @@ const ATTRIBUTION_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["momentIndex", "explanation", "tip", "confidence"],
+        required: [
+          "momentIndex",
+          "explanation",
+          "tip",
+          "tipWarrant",
+          "confidence",
+        ],
         properties: {
           momentIndex: { type: "integer" },
           explanation: { type: "string" },
           tip: { type: ["string", "null"] },
+          tipWarrant: { type: "number", minimum: 0, maximum: 1 },
           confidence: { type: "number", minimum: 0, maximum: 1 },
         },
       },
@@ -105,6 +165,12 @@ const ATTRIBUTION_SCHEMA = {
 // drop-offs and gains, each in the order they appear on screen. The transcript for a moment is
 // taken over its padded analysis window when one exists (wider, so a mid-
 // sentence drop still picks up its lead-in), falling back to the detected step.
+//
+// A moment carrying fewer than MINIMUM_TRANSCRIPT_WORDS is left out entirely
+// rather than sent along with an empty `said`. Asked about a moment with no
+// words, the model still has to return an explanation and a tip for it, so what
+// comes back is invented; the window keeps its retention figures and its deep
+// analysis, and simply shows no script feedback.
 export function prepareRetentionMoments(
   windows: RetentionWindow[],
   transcript: TranscriptCue[],
@@ -118,6 +184,8 @@ export function prepareRetentionMoments(
       .forEach((window) => {
         const from = window.analysisFromSeconds ?? window.fromSeconds
         const to = window.analysisToSeconds ?? window.toSeconds
+        const said = transcriptForSegment(transcript, from, to)
+        if (wordCount(said) < MINIMUM_TRANSCRIPT_WORDS) return
         moments.push({
           kind,
           windowIndex: window.windowIndex,
@@ -125,7 +193,7 @@ export function prepareRetentionMoments(
           toSeconds: window.toSeconds,
           deltaPercent: Number((window.delta * 100).toFixed(1)),
           relativePerformance: window.relativePerformance,
-          said: transcriptForSegment(transcript, from, to),
+          said,
         })
       })
   }
@@ -153,8 +221,8 @@ function isModelOutput(value: unknown): value is ModelOutput {
 }
 
 // Generates the retention attribution, or null when there's nothing to attribute
-// (no drop-offs/gains, or none with any transcript to reason from — attributing
-// a moment with no words would just be invention).
+// (no drop-offs/gains, or none carrying enough transcript to reason from —
+// attributing a moment with no words would just be invention).
 export async function generateRetentionAttribution(
   video: Pick<VideoDetails, "title" | "durationSeconds">,
   windows: RetentionWindow[],
@@ -162,9 +230,7 @@ export async function generateRetentionAttribution(
   logContext?: LlmLogContext,
 ): Promise<RetentionAttribution | null> {
   const moments = prepareRetentionMoments(windows, transcript)
-  if (moments.length === 0 || moments.every((moment) => moment.said === "")) {
-    return null
-  }
+  if (moments.length === 0) return null
 
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) throw new Error("OPENAI_API_KEY is not configured")
@@ -196,10 +262,14 @@ export async function generateRetentionAttribution(
                 "Reason only from the supplied transcript, timestamps and retention numbers. Do not infer visuals, editing, music, thumbnails or vocal delivery; you cannot see or hear the video.",
                 TIP_VOICE_PROMPT,
                 "The explanation and the tip are written under different rules, so keep them apart. The explanation describes this video: it names what was said at that moment and may quote it. The tip never does; it is the advice for the next video, written to stand on its own.",
-                "For a hook, explain how effectively the words create curiosity, establish the promise, and move toward delivering it. Ground the explanation in the supplied transcript and give one concrete way to open a future video so it holds viewers.",
-                "For a drop_off, explain the most likely reason viewers left based on what was being said (e.g. a topic change, a slow tangent, an unmet promise, an ad or sponsor read, a natural stopping point), and give one concrete tip for handling that same situation differently in a future video.",
-                "For a gain, explain what likely pulled viewers back or made them re-watch, and always give a concrete tip (never null for a gain): the explanation names the specific thing that worked here, and the tip tells the uploader how to deliberately set that same thing up again in their next videos rather than offering generic praise.",
-                "For a hold, explain what in the supplied words likely sustained attention without a meaningful gain or loss, and set tip to a short note on what to keep doing in future videos.",
+                // The warrant. See THE WARRANT above for why a tip has to be
+                // earned here rather than produced on demand.
+                "Every moment gets an explanation. A tip is not owed one. You are reading a transcript with no picture and no sound, so a great many retention moments have a cause you cannot see: a held frame, a jump cut, a sponsor bumper, a graphic that did or did not land, a change in energy, a stretch where the picture stopped moving. Where that is the likelier story, the words in front of you cannot tell you what to advise, and a tip written anyway is a guess dressed up as analysis. Set tip to null and let the explanation stand on its own. Returning null is the expected outcome for a large share of moments and is never a failure to do the task.",
+                "tipWarrant (0..1) is your own honest reading of how far the supplied words justify the tip you wrote, judged on the transcript alone. Score it 0.8 or above when what is said is itself the cause and the advice follows directly from it: a promise made and not delivered, a topic changing with nothing to signpost it, a tangent that runs long, a payoff landing exactly where viewers came back. Score it around 0.5 when the words are merely consistent with the retention move and so is anything you cannot see. Score it 0.2 or below when the transcript is thin, generic, or tells you nothing beyond the fact that talking was happening. Do not inflate the score to keep a tip alive, and do not write a tip you would score below 0.5. Set tipWarrant to 0 whenever tip is null.",
+                "For a hook, explain how effectively the words create curiosity, establish the promise, and move toward delivering it, grounded in the supplied transcript. Where the wording of the opening is itself what holds or loses the viewer, give one concrete way to open a future video.",
+                "For a drop_off, explain the most likely reason viewers left based on what was being said (e.g. a topic change, a slow tangent, an unmet promise, an ad or sponsor read, a natural stopping point), and where the words are the cause, give one concrete tip for handling that same situation differently in a future video. Where the transcript reads as ordinary continuous speech with no such turn in it, the cause is more likely something you were not shown: explain what was being said and set tip to null.",
+                "For a gain, explain what likely pulled viewers back or made them re-watch. Where the transcript shows the thing that did it (a payoff arriving, a question finally answered, a turn in the story), give a tip telling the uploader how to deliberately set that same thing up again in their next videos. Where the words around the gain are unremarkable, what worked was probably visual or editorial and is not yours to name, so set tip to null rather than writing generic praise or telling them to reuse an approach you cannot identify.",
+                "For a hold, explain what in the supplied words likely sustained attention without a meaningful gain or loss. A hold is the moment least likely to earn a tip, since nothing measurably changed: give one only where the transcript shows a specific, repeatable technique doing the holding, and set tip to null otherwise.",
                 // A moment is explained in isolation, so several moments with
                 // one cause used to come back as one sentence repeated down the
                 // page. lib/report-tip-uniqueness.ts drops a repeat at render
@@ -208,7 +278,7 @@ export async function generateRetentionAttribution(
                 // Stored attributions written before this instruction existed
                 // are covered by that render-time pass, so this does not need a
                 // schema version bump to take effect.
-                "No two tips across all the moments may give the same advice. Several moments often share a cause, and each tip still has to be worth reading on its own: give a different concrete action rather than restating an earlier tip in other words. Where a moment genuinely leaves nothing new to suggest, set its tip to null instead (except on a gain, which always keeps one).",
+                "No two tips across all the moments may give the same advice. Several moments often share a cause, and each tip still has to be worth reading on its own: give a different concrete action rather than restating an earlier tip in other words. Where a moment leaves nothing new to suggest, set its tip to null instead.",
                 "relativePerformance (0..1) compares this moment to similar videos; below 0.5 is underperforming. Use it to judge severity, not as the explanation itself.",
                 "Keep each explanation to 1-2 specific sentences that reference what is actually said. Never invent dialogue that isn't in the transcript.",
                 "Return exactly one moments entry for every supplied moment, using its momentIndex. Write a one-sentence overview of the video's overall retention story.",
@@ -287,23 +357,25 @@ export async function generateRetentionAttribution(
     overview: parsed.overview,
     moments: moments.map((moment, index) => {
       const analysis = byIndex.get(index)
-      const tip = analysis?.tip?.trim() ? analysis.tip : null
+      const tip = analysis?.tip?.trim() ? analysis.tip.trim() : null
+      // Scored on the transcript alone by the model that wrote the tip. A tip
+      // with no score behind it (a malformed entry, a moment the model skipped)
+      // has nothing vouching for it, so it is treated as unwarranted.
+      const tipWarrant = clamp01(analysis?.tipWarrant ?? 0)
       return {
         kind: moment.kind,
         windowIndex: moment.windowIndex,
         fromSeconds: moment.fromSeconds,
         toSeconds: moment.toSeconds,
         explanation: analysis?.explanation ?? "",
-        // A gain documents a proven pattern, so it must always leave the
-        // uploader with something to reuse. If the model still returns no tip
-        // despite the instruction, fall back to a deterministic reuse prompt so
-        // the "Try:" recommendation never goes missing on a gain.
-        tip:
-          tip ??
-          (moment.kind === "gain"
-            ? "Note what worked in this moment and deliberately reuse the same approach in your next videos."
-            : null),
-        confidence: Math.min(1, Math.max(0, analysis?.confidence ?? 0)),
+        // The gate. A moment whose words did not earn advice keeps its
+        // explanation and shows no "Try:" line - including a gain, which used to
+        // fall back to a fixed "note what worked and reuse it" sentence. That
+        // fallback fired precisely when the model had nothing to say, so it was
+        // guaranteed to be filler every time it appeared.
+        tip: tip && tipWarrant >= MINIMUM_TIP_WARRANT ? tip : null,
+        tipWarrant: tip ? tipWarrant : 0,
+        confidence: clamp01(analysis?.confidence ?? 0),
       }
     }),
     model,
