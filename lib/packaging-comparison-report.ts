@@ -158,9 +158,12 @@ export interface PackagingReportDriver {
   confidence: number
 }
 
-// Something to try on the next upload. Rendered as an "Or:" line under the
-// driver tips for the same surface, so it reads as one more thing to try rather
-// than as a list of its own.
+// A second thing to try on the next upload, filed under the surface it
+// changes. Every surface now shows one tip and one only, so the model is no
+// longer asked for these and no new report carries any. Reports already stored
+// with them are still read rather than rewritten: on a report stored before
+// schema version 2 there are no tips at all, and the first recommendation for
+// a surface is the only advice that surface has.
 export interface PackagingReportRecommendation {
   surface: PackagingReportSurface
   // Which of the two videos the change was for, on reports stored before schema
@@ -176,7 +179,10 @@ export interface PackagingComparisonReport {
   verdict: PackagingReportVerdict
   surfaces: PackagingReportSurfaceRead[]
   drivers: PackagingReportDriver[]
-  recommendations: PackagingReportRecommendation[]
+  // Only on reports stored while the model was still asked for a second piece
+  // of advice per surface. Nothing writes this now; see the interface above for
+  // the one case that still renders it.
+  recommendations?: PackagingReportRecommendation[]
   // The honest limits the model used to write out, on reports stored before
   // schema version 4. Nothing writes this and nothing renders it.
   caveats?: string[]
@@ -215,8 +221,6 @@ export interface PackagingComparisonReportSide {
 const MAX_SURFACES = 4
 const MAX_DRIVERS = 6
 const MIN_DRIVERS = 1
-const MAX_RECOMMENDATIONS = 6
-const MIN_RECOMMENDATIONS = 1
 const MAX_EVIDENCE_PER_DRIVER = 4
 // Enough to cover a ten second window even on a heavily cut opening; the
 // dedupe in the evidence loader already collapses unchanged shots.
@@ -231,7 +235,7 @@ const surfaceEnum = [...PACKAGING_REPORT_SURFACES]
 const REPORT_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["verdict", "surfaces", "drivers", "recommendations"],
+  required: ["verdict", "surfaces", "drivers"],
   properties: {
     verdict: {
       type: "object",
@@ -299,33 +303,12 @@ const REPORT_SCHEMA = {
         },
       },
     },
-    recommendations: {
-      type: "array",
-      minItems: MIN_RECOMMENDATIONS,
-      maxItems: MAX_RECOMMENDATIONS,
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["surface", "addsBeyondTip", "action", "rationale", "effort"],
-        properties: {
-          surface: { type: "string", enum: surfaceEnum },
-          // Written before the action, since the model fills these keys in the
-          // order they are declared: having to name what this adds to the tip
-          // for the same surface is what stops the action being that tip
-          // reworded. Never stored, so it costs the reader nothing.
-          addsBeyondTip: { type: "string" },
-          action: { type: "string" },
-          rationale: { type: "string" },
-          effort: { type: "string", enum: ["quick", "rework"] },
-        },
-      },
-    },
   },
 } as const
 
 const INSTRUCTIONS = [
   "You compare the PACKAGING of two YouTube videos, Video A and Video B, and explain why one of them plausibly out-performed the other. Packaging means the thumbnail, the title, the first ten seconds, and how tightly those three promise the same thing. Everything after the first ten seconds is out of scope.",
-  "You are given, for each video: its verbatim title; its thumbnail as an image (Video A's image is supplied first, then Video B's, each labelled); its view count; its stored packaging read (a fixed taxonomy scored on that video alone at analysis time, with 0-10 axes and short verbatim spans); and hook, the full stored evidence for its first ten seconds.",
+  "You are given, for each video: its verbatim title; its thumbnail as an image (Video A's image is supplied first, then Video B's, each labelled); its view count, but only where the pair has earned a performance anchor and null otherwise (see comparability below); its stored packaging read (a fixed taxonomy scored on that video alone at analysis time, with 0-10 axes and short verbatim spans); and hook, the full stored evidence for its first ten seconds.",
   "hook contains: retention (how the opening's watch ratio actually moved), transcript (the spoken opening, verbatim), transcriptTaxonomy (a structured read of those words), visual (frames already described by a vision pass, each with a timestamp, its deterministic OCR text as ground truth, and scored axes such as faceProminence, colorContrast, visualComplexity, textProminence, shotScale and motion), editing (cut count, cuts per minute, freeze and black coverage across the opening), audio (measured speech rate in words per minute, silence coverage and mean loudness; no listener judgement of tone), events (retention events already synthesized for this opening) and baseline (this video's own full-video averages). Judge editing, pacing and speech rate as deviations from that baseline, not in absolute terms.",
   COMPARABILITY_PROMPT,
   "The question this report asks of comparability is whether one of the two earned the click better, which is not the same question as whether one held its audience better and does not always have the same answer. In the anchored case you are given higherViewsSide, naming the video with more views, computed for you, and where impressions were available a click-through percentage for each side; do not do that arithmetic yourself. In every other case higherViewsSide is null and no view count reaches you at all, so judge which packaging reads stronger from the thumbnails, the titles and the openings themselves and say plainly, once, that there is no performance anchor behind it. That is not a weaker report: a thumbnail that buries its subject, a title that promises nothing specific and an opening that abandons what the two of them set up are all visible without knowing how either video did.",
@@ -336,11 +319,11 @@ const INSTRUCTIONS = [
   "verdict: strongerSide is the video whose packaging is the stronger play (or neither when they are genuinely close), summary is two to three sentences on why, and confidence is 0 to 1 in how strongly the evidence supports that verdict. This is a judgement of the packaging itself, so it stays answerable in every mode; what changes is what stands behind it. Lower the confidence when the two are close, when evidence is thin on one side, and whenever comparability.anchor is not 'anchored', since no performance figure is backing you there.",
   "surfaces: one entry for each of thumbnail, title, hook and alignment that you have evidence for. aRead and bRead describe what that video's surface actually does, concretely (what is in the frame, what the title claims, what the opening says and shows). whyItMatters explains in one or two sentences why that difference would move clicks or hold the opening. Use surface 'alignment' for whether the title, thumbnail and opening promise one thing or pull apart.",
   "drivers: the ranked reasons the stronger video is stronger, most important first, one to six of them. label is a short phrase (for example 'Thumbnail is doing three things at once'). detail is one or two sentences. evidence is up to four short pointers back to the supplied inputs, quoting the real thing where possible (a verbatim title fragment, the thumbnail's overlaid words, 'frame at 0:04 is a wide shot with no face', 'one cut in the first ten seconds versus eleven per minute across the video'). Only emit a driver where the evidence genuinely supports it.",
-  `Both the tips and the recommendations in this report are advice, so both are written under the rules that follow. ${TIP_VOICE_PROMPT}`,
-  "In this report those rules also mean the two videos stay out of the advice entirely: never name Video A or Video B inside a tip or a recommendation, and never phrase advice as something one of these two videos should have done (for example 'Show the payoff itself in the first three seconds, not only in the title and thumbnail'). Your reads, drivers and evidence are the opposite: those describe what these two videos already did, so they name Video A and Video B freely.",
+  `The tips in this report are its advice, so every one of them is written under the rules that follow. ${TIP_VOICE_PROMPT}`,
+  "In this report those rules also mean the two videos stay out of the advice entirely: never name Video A or Video B inside a tip, and never phrase advice as something one of these two videos should have done (for example 'Show the payoff itself in the first three seconds, not only in the title and thumbnail'). Your reads, drivers and evidence are the opposite: those describe what these two videos already did, so they name Video A and Video B freely.",
   "tip: every driver is a comparison you have evidence for, so every driver carries one. It is the single change that driver's evidence argues for, written as a one-sentence instruction for the uploader's next video (for example 'Cut the thumbnail to one subject and one line of text, sized to read at phone width'). Name the change rather than restating detail, and keep it specific to what this comparison actually showed rather than generic packaging advice, while phrasing it as a rule to apply next time.",
-  "Every entry in surfaces carries a tip of its own as well, written under exactly those same rules: the single change that surface's comparison argues for, in one sentence, for the uploader's next video. Write one for every surface you cover, including the surfaces your drivers already speak to. The interface shows it only when no driver landed on that surface, so it has to stand on its own rather than continue a driver, and it must not repeat a driver tip for the same surface, in the same words or in different ones.",
-  "recommendations: up to six further things to try on the next upload, ordered by expected payoff. Each is filed under the surface it changes, and the interface renders it as an 'Or:' line directly beneath that surface's tip, where the reader sees the two lines one under the other. addsBeyondTip is written first for that reason: before you write the action, say in a few words what this change adds that the tip for its surface, and any recommendation you have already written for that surface, did not already ask for. The same change in other words does not count, and neither does the same change at a different level of detail: 'State the payoff in the first sentence, then move into the proof' and 'Put the exact promised result in the first sentence, then spend the next line proving it' are one recommendation written twice, and a reader sees a page repeating itself. If you cannot name what a recommendation adds, you do not have one: leave it out. One recommendation that says something new beats six that circle the tips, so returning a single recommendation, or one for only some of the surfaces, is the right answer more often than not. addsBeyondTip is a check on your own writing and is never shown to anyone, so keep it blunt and do not write advice in it. action is the concrete change, phrased as a one-sentence instruction for the next video under exactly the same rules as tip, written to stand on its own and not beginning with 'Try' or 'Or'. rationale ties it back to what this comparison showed and may name the videos, since it is not shown as advice. effort is 'quick' for something settled while writing a title or building a thumbnail and 'rework' for anything needing a different shoot or edit.",
+  "Every entry in surfaces carries a tip of its own as well, written under exactly those same rules: the single change that surface's comparison argues for, in one sentence, for the uploader's next video. Write one for every surface you cover, including the surfaces your drivers already speak to. This is the line the reader acts on, and the drivers themselves are never shown, so it has to stand on its own rather than continue a driver.",
+  "The reader sees one piece of advice per surface and it is that surface's tip, so that tip has to be the single most valuable change you can name there. Nothing else you write reaches them as advice: do not hold a second suggestion for a surface back for anywhere else in your answer, because there is nowhere for it to go and nothing will show it.",
   "Write in plain, direct prose with no marketing filler. Never output an em dash character (U+2014) or en dash (U+2013) anywhere in your response; if you would use one, rewrite with a comma, colon, parentheses or two sentences instead.",
 ].join(" ")
 
@@ -348,12 +331,6 @@ interface ModelReportOutput {
   verdict: PackagingReportVerdict
   surfaces: PackagingReportSurfaceRead[]
   drivers: PackagingReportDriver[]
-  // The model writes one more field per recommendation than the stored shape
-  // keeps: addsBeyondTip is a guardrail against the same advice being written
-  // twice, and normalisation drops it.
-  recommendations: (PackagingReportRecommendation & {
-    addsBeyondTip?: string
-  })[]
 }
 
 function isSide(value: unknown): value is ReportSide {
@@ -438,29 +415,10 @@ export function isPackagingComparisonReportOutput(
     return false
   }
 
-  if (
-    !Array.isArray(candidate.recommendations) ||
-    !candidate.recommendations.every((recommendation) => {
-      if (!recommendation || typeof recommendation !== "object") return false
-      const r = recommendation as Record<string, unknown>
-      return (
-        isSurface(r.surface) &&
-        // Optional so a report stored before schema version 3, when a
-        // recommendation still named the video it was for, still validates if
-        // it is ever fed back through here.
-        (r.target === undefined || isSide(r.target) || r.target === "both") &&
-        // Optional so a stored report, which never carries the guardrail
-        // field, still validates if it is ever fed back through here.
-        (r.addsBeyondTip === undefined || typeof r.addsBeyondTip === "string") &&
-        typeof r.action === "string" &&
-        typeof r.rationale === "string" &&
-        (r.effort === "quick" || r.effort === "rework")
-      )
-    })
-  ) {
-    return false
-  }
-
+  // Nothing checks recommendations: the model is no longer asked for a second
+  // piece of advice per surface, and a stored report that still carries some
+  // passes on the fields above, which is what a report fed back through here
+  // needs.
   return true
 }
 
@@ -770,15 +728,6 @@ export function normalizePackagingComparisonReport(
       }))
       .filter((driver) => driver.label.length > 0 || driver.detail.length > 0)
       .slice(0, MAX_DRIVERS),
-    recommendations: parsed.recommendations
-      .map((recommendation) => ({
-        surface: recommendation.surface,
-        action: recommendation.action.trim(),
-        rationale: recommendation.rationale.trim(),
-        effort: recommendation.effort,
-      }))
-      .filter((recommendation) => recommendation.action.length > 0)
-      .slice(0, MAX_RECOMMENDATIONS),
     // Omitted rather than stored undefined, so a report normalised without a
     // verdict (which only the existing tests do) matches the stored shape of a
     // report written before version 7 rather than inventing a null one.

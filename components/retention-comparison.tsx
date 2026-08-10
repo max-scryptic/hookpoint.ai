@@ -10,10 +10,7 @@ import {
   type ComparisonVideo,
   type RetentionComparisonData,
 } from "@/lib/retention-comparison"
-import {
-  LOW_SAMPLE_VIEWS,
-  reliabilityNote,
-} from "@/lib/retention-sample-size"
+import { reliabilityNote } from "@/lib/retention-sample-size"
 
 // The deterministic half of the Retention tab: the two head-to-head KPI cards
 // that sit above the tab strip, and the overlaid curves with the biggest
@@ -172,56 +169,6 @@ function VideoHeaderCard({
   )
 }
 
-// Under this many viewers a bare percentage flatters a curve, so the count it
-// represents is spelled out beside it. Tied to the threshold at which the
-// comparison stops trusting levels at all, so the sentence and the verdict
-// above it cannot disagree about which audiences are small.
-const SHOW_VIEWERS_BELOW = LOW_SAMPLE_VIEWS
-
-// A share of a video's audience, with the viewers it stands for when that
-// audience is small enough for the percentage alone to mislead. 9% of 80 views
-// is seven people, and seven people next to a percentage reads very differently
-// from the percentage on its own.
-function shareWithViewers(ratio: number, sampleSize: number | null): string {
-  const share = `${Math.round(ratio * 100)}%`
-  if (sampleSize == null || sampleSize >= SHOW_VIEWERS_BELOW) return share
-  return `${share} (about ${Math.round(ratio * sampleSize).toLocaleString("en")} of ${sampleSize.toLocaleString("en")} viewers)`
-}
-
-// "Between 20% and 45% of the way through, A held steady while B fell from
-// 61% to 38%." - the chart's takeaway sentence, built from the divergence.
-// Small audiences carry their viewer counts alongside the percentages, so a
-// curve held up by a handful of people cannot read as a large result.
-function divergenceSentence(data: RetentionComparisonData): string | null {
-  const divergence = data.divergence
-  if (divergence == null) return null
-  const winner = divergence.widenedFor === "a" ? data.a : data.b
-  const loser = divergence.widenedFor === "a" ? data.b : data.a
-  const winnerRatios =
-    divergence.widenedFor === "a"
-      ? [divergence.aFromRatio, divergence.aToRatio]
-      : [divergence.bFromRatio, divergence.bToRatio]
-  const loserRatios =
-    divergence.widenedFor === "a"
-      ? [divergence.bFromRatio, divergence.bToRatio]
-      : [divergence.aFromRatio, divergence.aToRatio]
-  const winnerViewers = comparisonSampleSize(winner.summary)
-  const loserViewers = comparisonSampleSize(loser.summary)
-  const pct = (value: number) => `${Math.round(value * 100)}%`
-  return (
-    `Between ${pct(divergence.fromRatio)} and ${pct(divergence.toRatio)} of the way through, ` +
-    `"${winner.summary.title ?? "Video"}" went from ${pct(winnerRatios[0])} to ${shareWithViewers(winnerRatios[1], winnerViewers)} watching ` +
-    `while "${loser.summary.title ?? "the other video"}" went from ${pct(loserRatios[0])} to ${shareWithViewers(loserRatios[1], loserViewers)}. ` +
-    `That stretch is where the gap between these two videos grew the most` +
-    // Only earned when both view counts were known, since that is what the
-    // statistical floor is computed from; otherwise only the fixed practical
-    // minimum was applied and the claim would be overstated.
-    (divergence.gapChangeMargin != null
-      ? `, by more than the margin of error on either curve.`
-      : `.`)
-  )
-}
-
 // The two video header cards. Split out from the detail body so the page can
 // keep them above the Retention / Packaging / Script tabs as shared context
 // for whichever tab is open.
@@ -244,17 +191,20 @@ export function RetentionComparisonVideos({
   )
 }
 
-// The overlaid curves, with the stretch where the two separated the most shaded
-// and spelled out underneath. This is the only deterministic card left in the
-// Retention tab: the written head-to-head takes it as a slot and stacks it
-// between its summary and its tab strip, so the tab reads summary, then curve,
-// then the sections.
+// The overlaid curves, with the stretch where the two separated the most
+// shaded. What that stretch means in words is left to the written head-to-head
+// above and to the report sections below, so the card carries no takeaway
+// sentence of its own; the only text under the chart is the reliability note,
+// which sits there because it qualifies everything above it rather than
+// introducing it. This is the only deterministic card left in the Retention
+// tab: the written head-to-head takes it as a slot and stacks it between its
+// summary and its tab strip, so the tab reads summary, then curve, then the
+// sections.
 export function RetentionCurvesCard({
   data,
 }: {
   data: RetentionComparisonData
 }) {
-  const sentence = divergenceSentence(data)
   const note = reliabilityNote(data.reliability)
   return (
     <Card className="flex flex-col gap-3 p-5">
@@ -263,15 +213,9 @@ export function RetentionCurvesCard({
         <p className="mt-0.5 text-xs text-muted-foreground">
           Both curves on one axis, aligned by share of runtime so a short and a
           long video compare fairly. The shaded band is the stretch where the
-          gap grew the most, and each curve&apos;s own band shows how precisely
-          its audience size lets it be measured.
+          gap grew the most.
         </p>
       </div>
-      {note != null && (
-        <p className="rounded-r-md border-l-2 border-l-amber-500/60 bg-amber-500/5 px-3 py-2 text-xs text-muted-foreground">
-          {note}
-        </p>
-      )}
       <RetentionComparisonChart
         a={{
           label: data.a.summary.title ?? "Video A",
@@ -287,15 +231,15 @@ export function RetentionCurvesCard({
         }}
         divergence={data.divergence}
       />
-      {sentence != null ? (
-        <p className="rounded-r-md border-l-2 bg-muted/50 px-3 py-2 text-sm">
-          {sentence}
+      {note != null && (
+        <p className="rounded-r-md border-l-2 border-l-amber-500/60 bg-amber-500/5 px-3 py-2 text-xs text-muted-foreground">
+          {note}
         </p>
-      ) : (
+      )}
+      {data.divergence == null && (
         <p className="text-xs text-muted-foreground">
           No stretch separates these two curves by more than the margin of error
-          their audiences allow, so nothing here is worth reading as a
-          difference between the videos.
+          their audiences allow, so there is no band to read.
         </p>
       )}
     </Card>

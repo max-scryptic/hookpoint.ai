@@ -6,8 +6,8 @@ import {
 } from "@/lib/advice-similarity"
 
 describe("isNearDuplicateAdvice", () => {
-  // The pair that prompted this: a surface tip and the recommendation stacked
-  // under it as an "Or:" line, which are one suggestion written twice.
+  // The pair that prompted this: a surface tip and the recommendation filed
+  // beside it, which are one suggestion written twice.
   it("catches a tip and an alternative that restate the same change", () => {
     expect(
       isNearDuplicateAdvice(

@@ -34,12 +34,17 @@ export const SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION = 4
 // its own, so each tab of the report closes on advice even when no driver and
 // no recommendation landed on that surface. Version 6 put every tip and
 // recommendation under the shared tip voice (lib/tip-voice.ts), which bans
-// advice pointing back at the videos it came from. Version 7 bound the report
-// to the pair's comparability (lib/comparison-comparability.ts), so a pair
-// whose view counts cannot carry a verdict is judged on packaging craft alone
-// rather than on which video happened to get more views; reports stored at
+// advice pointing back at the videos it came from. Dropping the recommendations
+// themselves, so each surface closes on one tip and one only, was deliberately
+// not a bump: a report stored with them renders exactly as it did, since only
+// the leading tip was ever shown, and a bump would send every stored report
+// back through the generator for a page the reader cannot tell apart. Version 7
+// bound the report to the pair's comparability
+// (lib/comparison-comparability.ts), so a pair whose view counts cannot carry a
+// verdict is judged on packaging craft alone rather than on which video
+// happened to get more views; that one IS a bump, because reports stored at
 // version 6 were handed higherViewsSide as an unqualified performance anchor
-// and are rewritten rather than rendered.
+// and read differently for it, so they are rewritten rather than rendered.
 export const PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION = 7
 
 // Bumped whenever the stored retention report shape changes. Version 1 is the

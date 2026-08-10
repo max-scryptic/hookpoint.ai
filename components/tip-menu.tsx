@@ -99,10 +99,10 @@ export function TipMenu({
 }: {
   tip: string
   section: string
-  // The word that introduces the tip, "Try:" or "Or:". It lives inside the
-  // trigger rather than beside it so the label and the advice are one run of
-  // inline text: a long tip wraps mid sentence instead of being pushed whole
-  // onto the line below its own label.
+  // The word that introduces the tip, "Try:". It lives inside the trigger
+  // rather than beside it so the label and the advice are one run of inline
+  // text: a long tip wraps mid sentence instead of being pushed whole onto the
+  // line below its own label.
   label?: string
 }) {
   const { savedFingerprints, markSaved, markRemoved } = useSavedTips()
