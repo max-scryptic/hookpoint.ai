@@ -5,7 +5,7 @@ import { getDeepAnalysisEvidence } from "@/lib/deep-analysis-evidence"
 import { getDeepAnalysisRollout } from "@/lib/deep-analysis-config"
 import { requireAuthenticatedUser } from "@/lib/auth"
 import { getEntitlement } from "@/lib/billing/entitlements"
-import { maxUploadBytesForPlan } from "@/lib/plans"
+import { planIncludesUploads } from "@/lib/plans"
 import { createClient } from "@/lib/supabase/server"
 import {
   getAnalysedVideo,
@@ -434,7 +434,7 @@ export default async function Page({
   if (result.status === "ok") {
     try {
       const entitlement = await getEntitlement(user.id)
-      canUploadSourceFile = maxUploadBytesForPlan(entitlement.plan) != null
+      canUploadSourceFile = planIncludesUploads(entitlement.plan)
     } catch (error) {
       console.error("Failed to resolve plan for the source file card", error)
     }

@@ -18,6 +18,28 @@ import { cn } from "@/lib/utils"
 // COPY GUARDRAIL: no em or en dashes anywhere in this file (comments
 // included). Hyphens are fine.
 
+// The prompt itself, without the card around it, so the upload card can show
+// the same offer in place of its own body when the API refuses an upload the
+// plan no longer covers (a downgrade part-way through one). `message` carries
+// the server's reason in that case; the default is the copy for a plan that
+// never included uploads.
+export function UpgradeToUploadPrompt({ message }: { message?: string }) {
+  return (
+    <div className="flex flex-col items-start gap-3">
+      <h3 className="font-heading text-sm font-medium">
+        Unlock the full report
+      </h3>
+      <p className="text-sm text-muted-foreground">
+        {message ??
+          "Upgrade to Starter or Pro to upload your raw source file and analyse every key moment frame by frame."}
+      </p>
+      <Link href="/pricing" className={cn(buttonVariants())}>
+        Upgrade plan
+      </Link>
+    </div>
+  )
+}
+
 export function UnlockFullReportCta() {
   return (
     <section className="flex flex-col gap-3">
@@ -26,17 +48,8 @@ export function UnlockFullReportCta() {
         <h2 className="text-sm font-medium">Raw source file</h2>
       </div>
 
-      <div className="flex flex-col items-start gap-3 rounded-xl border bg-card p-4">
-        <h3 className="font-heading text-sm font-medium">
-          Unlock the full report
-        </h3>
-        <p className="text-sm text-muted-foreground">
-          Upgrade to Starter or Pro to upload your raw source file and analyse
-          every key moment frame by frame.
-        </p>
-        <Link href="/pricing" className={cn(buttonVariants())}>
-          Upgrade plan
-        </Link>
+      <div className="rounded-xl border bg-card p-4">
+        <UpgradeToUploadPrompt />
       </div>
     </section>
   )

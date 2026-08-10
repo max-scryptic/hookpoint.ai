@@ -141,6 +141,14 @@ export function maxUploadBytesForPlan(plan: Plan): number | null {
   return plan.maxUploadGb * 1024 * 1024 * 1024
 }
 
+// Whether a plan can upload raw source files at all, which is what separates a
+// report that stops at the retention curve from the frame-by-frame half of it.
+// Every gate on the upload path asks this, from the button on the report to the
+// two API routes that mint and finalise an upload.
+export function planIncludesUploads(plan: Plan): boolean {
+  return maxUploadBytesForPlan(plan) != null
+}
+
 // The explanatory copy shown wherever "credits" appears in the product.
 export const CREDITS_TOOLTIP =
   "1 credit = 1 minute of raw source video analysed."

@@ -2,11 +2,22 @@ import { NextResponse, type NextRequest } from "next/server"
 
 import { createClient } from "@/lib/supabase/server"
 import { getStorageProvider } from "@/lib/storage/provider"
-import { completeSourceFileUpload } from "@/lib/source-files/upload-service"
+import {
+  abortSourceFileUpload,
+  completeSourceFileUpload,
+} from "@/lib/source-files/upload-service"
 import { errorResponse, serialiseSourceFile } from "@/lib/source-files/http"
 import { triggerRetentionWindowMediaExtraction } from "@/lib/retention-window-media-trigger"
-import { getEntitlement, incrementUsage } from "@/lib/billing/entitlements"
-import { creditsForDurationSeconds, maxUploadBytesForPlan } from "@/lib/plans"
+import {
+  getEntitlement,
+  incrementUsage,
+  uploadsNotIncludedMessage,
+} from "@/lib/billing/entitlements"
+import {
+  creditsForDurationSeconds,
+  maxUploadBytesForPlan,
+  planIncludesUploads,
+} from "@/lib/plans"
 import { updateSourceFile, type SourceFile } from "@/lib/source-files/source-files"
 import type { CompletedPart } from "@/lib/storage"
 
@@ -54,11 +65,33 @@ export async function POST(
   // The single-PUT path sends no part list; only multipart uploads post one.
   const multipart = parseMultipartBody(body)
 
-  // Resolve the user's plan once: its size cap gates completion, and its window
-  // is where the deep-dive credit charge lands below.
+  // Resolve the user's plan once: it gates completion, its size cap bounds the
+  // object, and its window is where the deep-dive credit charge lands below.
   const entitlement = await getEntitlement(user.id)
 
   try {
+    // The plan is re-checked here and not just at initiate time. An upload can
+    // be started on a paid plan and land after a downgrade, and a plan without
+    // uploads must never end up with a completed source file: completing one
+    // would unlock the footage-based half of the report on a plan that doesn't
+    // include it. Discard what was transferred (multipart parts included) so
+    // the slot is clean, then answer with the same reason the initiate route
+    // uses, which is what puts the upgrade prompt back in front of the user.
+    if (!planIncludesUploads(entitlement.plan)) {
+      await abortSourceFileUpload(supabase, getStorageProvider(), {
+        userId: user.id,
+        sourceFileId,
+        uploadId: multipart?.uploadId,
+      })
+      return NextResponse.json(
+        {
+          error: "uploads_not_included",
+          message: uploadsNotIncludedMessage(entitlement.plan),
+        },
+        { status: 402 },
+      )
+    }
+
     let sourceFile = await completeSourceFileUpload(
       supabase,
       getStorageProvider(),
