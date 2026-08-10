@@ -23,10 +23,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  DeepAnalysisProgressList,
-  useDeepAnalysisProgress,
-} from "@/components/deep-analysis-progress"
+import { useDeepAnalysisStatus } from "@/components/deep-analysis-progress"
 import { notifySourceFileReady } from "@/components/source-video-thumbnail"
 import { UpgradeToUploadPrompt } from "@/components/unlock-full-report-cta"
 import { useNavigationGuard } from "@/hooks/use-navigation-guard"
@@ -324,9 +321,9 @@ export function SourceFileUpload({
     busy: boolean
     error: string | null
   }>({ busy: false, error: null })
-  // Bumped on every successful retry to remount DeepAnalysisProgress, which
+  // Restarts the report's deep-analysis poll after a successful retry, which
   // otherwise stops polling for good once it's seen every stage settle.
-  const [analysisAttempt, setAnalysisAttempt] = useState(0)
+  const { restart: restartDeepAnalysisPoll } = useDeepAnalysisStatus()
   // Shows the "upload succeeded, analysis started in the background" dialog once
   // a fresh upload completes validation.
   const [showUploadedDialog, setShowUploadedDialog] = useState(false)
@@ -614,7 +611,7 @@ export function SourceFileUpload({
         return
       }
       setRetryState({ busy: false, error: null })
-      setAnalysisAttempt((attempt) => attempt + 1)
+      restartDeepAnalysisPoll()
     } catch {
       setRetryState({
         busy: false,
@@ -651,7 +648,6 @@ export function SourceFileUpload({
           <UpgradeToUploadPrompt message={uploadsLocked} />
         ) : (
           <Body
-            videoId={videoId}
             sourceFile={sourceFile}
             client={client}
             isBusy={isBusy}
@@ -663,7 +659,6 @@ export function SourceFileUpload({
             youtubeDurationSeconds={youtubeDurationSeconds}
             onRetryDeepAnalysis={onRetryDeepAnalysis}
             retryState={retryState}
-            analysisAttempt={analysisAttempt}
           />
         )}
       </div>
@@ -723,7 +718,6 @@ export function SourceFileUpload({
 }
 
 function Body({
-  videoId,
   sourceFile,
   client,
   isBusy,
@@ -735,9 +729,7 @@ function Body({
   youtubeDurationSeconds,
   onRetryDeepAnalysis,
   retryState,
-  analysisAttempt,
 }: {
-  videoId: string
   sourceFile: SerialisedSourceFile | null
   client: ClientState
   isBusy: boolean
@@ -749,7 +741,6 @@ function Body({
   youtubeDurationSeconds: number
   onRetryDeepAnalysis: () => void
   retryState: { busy: boolean; error: string | null }
-  analysisAttempt: number
 }) {
   // In-flight states take precedence over the stored record's state.
   if (client.phase === "preparing") {
@@ -913,14 +904,10 @@ function Body({
     )
   }
 
-  // Ready. Rendered by its own component so the deep-analysis progress hook is
-  // called unconditionally (this branch sits after several early returns). The
-  // analysisAttempt key remounts it on a manual retry, restarting the poll from
-  // a clean slate.
+  // Ready. Rendered by its own component so the deep-analysis status hook is
+  // called unconditionally (this branch sits after several early returns).
   return (
     <ReadySourceFileCard
-      key={analysisAttempt}
-      videoId={videoId}
       sourceFile={sourceFile}
       isBusy={isBusy}
       onPick={onPick}
@@ -931,14 +918,16 @@ function Body({
   )
 }
 
-// The settled "Source file ready" state. Split from Body so it can poll deep-
-// analysis progress at the top of a component (Body reaches this branch only
-// after early returns, where a hook can't live). Shows a compact file row with
-// a live deep-analysis indicator: a spinner while the pipeline runs, a failure
-// note prompting a retry when the last run didn't finish, and the per-stage
-// checklist underneath while stages are in flight.
+// The settled "Source file ready" state. Split from Body so it can read the
+// deep-analysis status at the top of a component (Body reaches this branch only
+// after early returns, where a hook can't live). Shows a compact file row plus,
+// when the last run didn't finish, a note prompting a retry.
+//
+// A run that is still in flight is deliberately not shown here: the card would
+// grow a spinner line and an eight-stage checklist, changing size under the
+// reader for as long as the pipeline ran. The report header carries that state
+// instead, as a "Processing…" badge beside the video's metrics.
 function ReadySourceFileCard({
-  videoId,
   sourceFile,
   isBusy,
   onPick,
@@ -946,7 +935,6 @@ function ReadySourceFileCard({
   onRetryDeepAnalysis,
   retryState,
 }: {
-  videoId: string
   sourceFile: SerialisedSourceFile
   isBusy: boolean
   onPick: () => void
@@ -954,10 +942,7 @@ function ReadySourceFileCard({
   onRetryDeepAnalysis: () => void
   retryState: { busy: boolean; error: string | null }
 }) {
-  const { analysing, failed, progress } = useDeepAnalysisProgress(videoId)
-  // A manual retry is itself a fresh in-flight analysis, so treat it as
-  // analysing straight away rather than waiting for the first poll to catch up.
-  const showAnalysing = (analysing || retryState.busy) && !failed
+  const { failed } = useDeepAnalysisStatus()
 
   return (
     <div className="flex flex-col">
@@ -994,16 +979,6 @@ function ReadySourceFileCard({
         </div>
       </div>
 
-      {/* High-level deep-analysis status, always visible in the card while the
-          pipeline is doing (or owes) work — the file being "ready" is only the
-          upload; deeper analysis keeps running after it. */}
-      {showAnalysing && (
-        <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2Icon className="size-4 shrink-0 animate-spin" />
-          <span>Analysing your video… this runs in the background.</span>
-        </div>
-      )}
-
       {failed && (
         <div className="mt-2 flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400">
           <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" />
@@ -1017,8 +992,6 @@ function ReadySourceFileCard({
       {retryState.error && (
         <p className="mt-2 text-sm text-destructive">{retryState.error}</p>
       )}
-
-      <DeepAnalysisProgressList progress={progress} />
     </div>
   )
 }
