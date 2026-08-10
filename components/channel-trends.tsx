@@ -6,7 +6,6 @@ import {
   MousePointerClickIcon,
   RefreshCwIcon,
   ShieldCheckIcon,
-  SparklesIcon,
   TrendingUpIcon,
   UserPlusIcon,
   VideoIcon,
@@ -71,21 +70,12 @@ import {
 // lib/__tests__/copy-guardrails.test.ts.
 
 // The progressive-unlock meter. Building toward EARLY it counts down to the
-// first trends; from EARLY it counts toward full strength; at ESTABLISHED it
-// becomes a quiet confirmation instead of a bar.
+// first trends; from EARLY it counts toward full strength; at ESTABLISHED the
+// meter has nothing left to say, so it disappears and the snapshot tiles take
+// the top of the page.
 function StageProgress({ data }: { data: ChannelTrendsData }) {
   if (data.stage === "established") {
-    return (
-      <Card size="sm">
-        <CardContent className="flex items-center gap-2 text-sm">
-          <SparklesIcon className="size-4 shrink-0 text-muted-foreground" />
-          <span>
-            Trends at full strength - built from{" "}
-            {plural(data.libraryVideoCount, "deeply analysed video")}.
-          </span>
-        </CardContent>
-      </Card>
-    )
+    return null
   }
 
   const target =
