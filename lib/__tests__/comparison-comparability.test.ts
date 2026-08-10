@@ -6,7 +6,6 @@ import { describe, expect, it } from "vitest"
 import {
   assessPairComparability,
   comparabilityForModel,
-  comparabilityNote,
   comparabilityReason,
   COMPARABILITY_PROMPT,
   COMPARABILITY_RULES,
@@ -299,33 +298,26 @@ describe("comparabilityForModel", () => {
   })
 })
 
-describe("comparabilityReason and comparabilityNote", () => {
-  it("say nothing at all for an anchored pair", () => {
+describe("comparabilityReason", () => {
+  it("says nothing at all for an anchored pair", () => {
     const comparability = assessPairComparability(HEALTHY_PAIR)
     expect(isAnchored(comparability, "watch")).toBe(true)
     expect(comparabilityReason(comparability, "watch")).toBeNull()
-    expect(comparabilityNote(comparability, "watch")).toBeNull()
   })
 
-  it("name the smaller audience in real numbers", () => {
+  it("names the smaller audience in real numbers", () => {
     const comparability = assessPairComparability(REAL_PAIR)
     expect(comparabilityReason(comparability, "watch")).toContain("73")
-    expect(comparabilityNote(comparability, "watch")).toContain("73")
   })
 
-  it("tell the reader what to do with the report instead of only apologising", () => {
-    const note = comparabilityNote(assessPairComparability(REAL_PAIR), "watch")
-    expect(note).toContain("two different approaches")
+  it("gives the click question its own wording rather than the watch one", () => {
+    const comparability = assessPairComparability(REAL_PAIR)
+    expect(comparabilityReason(comparability, "click")).toContain("thumbnail")
+    expect(comparabilityReason(comparability, "watch")).toContain("watched by")
   })
 
-  it("give the click question its own wording rather than the watch one", () => {
-    const note = comparabilityNote(assessPairComparability(REAL_PAIR), "click")
-    expect(note).toContain("impression data")
-    expect(note).not.toContain("watch figures")
-  })
-
-  it("quote the measured overlap when the traffic mix is what disqualified the pair", () => {
-    const note = comparabilityNote(
+  it("names the traffic mix when that is what disqualified the pair", () => {
+    const reason = comparabilityReason(
       assessPairComparability({
         ...HEALTHY_PAIR,
         trafficSourcesA: [
@@ -339,7 +331,7 @@ describe("comparabilityReason and comparabilityNote", () => {
       }),
       "watch",
     )
-    expect(note).toMatch(/about \d+% of their traffic/)
+    expect(reason).toContain("different mixes of traffic")
   })
 })
 

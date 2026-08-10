@@ -28,7 +28,6 @@ const CHANNEL_TRENDS_SOURCE_FILES = [
   "components/channel-trends-shared.tsx",
   "components/channel-trends-tabs.tsx",
   "components/channel-trends-taxonomy.tsx",
-  "components/comparability-note.tsx",
   "components/comparison-processing.tsx",
   "components/comparison-report-tabs.tsx",
   "components/event-type-badge.tsx",
