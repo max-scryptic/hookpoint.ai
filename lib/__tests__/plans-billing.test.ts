@@ -6,6 +6,7 @@ import {
   isPaidPlanId,
   maxUploadBytesForPlan,
   PLAN_BY_ID,
+  planIncludesUploads,
 } from "@/lib/plans"
 import {
   getSubscriptionReturnUrl,
@@ -36,6 +37,20 @@ describe("maxUploadBytesForPlan", () => {
   it("converts the plan's GB cap to bytes for paid plans", () => {
     expect(maxUploadBytesForPlan(PLAN_BY_ID.starter)).toBe(10 * 1024 ** 3)
     expect(maxUploadBytesForPlan(PLAN_BY_ID.pro)).toBe(20 * 1024 ** 3)
+  })
+})
+
+// Every gate on the upload path reads this one predicate, including the
+// completion route that refuses an upload started before a downgrade, so Free
+// answering false is what keeps a finished source file off an unpaid plan.
+describe("planIncludesUploads", () => {
+  it("is false for the Free plan", () => {
+    expect(planIncludesUploads(PLAN_BY_ID.free)).toBe(false)
+  })
+
+  it("is true for every paid plan", () => {
+    expect(planIncludesUploads(PLAN_BY_ID.starter)).toBe(true)
+    expect(planIncludesUploads(PLAN_BY_ID.pro)).toBe(true)
   })
 })
 

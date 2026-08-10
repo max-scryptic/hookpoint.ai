@@ -336,6 +336,14 @@ function formatResetDate(date: Date): string {
   }).format(date)
 }
 
+// The refusal shown wherever a plan without uploads meets the upload path: the
+// initiate route turning one away, and the completion route refusing an upload
+// that was started on a paid plan and landed after a downgrade. Both point at
+// the same fix, which is the upgrade prompt the report itself offers.
+export function uploadsNotIncludedMessage(plan: Plan): string {
+  return `Source-file uploads aren't included on the ${plan.name} plan. Upgrade to Starter or Pro to analyse your footage frame-by-frame.`
+}
+
 // Can the user upload a source file of `sizeBytes` for a video of
 // `durationSeconds`? Enforces three things in order: the plan must include
 // uploads at all, the file must fit the plan's size cap, and the user must have
@@ -353,7 +361,7 @@ export async function checkUploadAllowed(
     return {
       allowed: false,
       reason: "uploads_not_included",
-      message: `Source-file uploads aren't included on the ${plan.name} plan. Upgrade to Starter or Pro to analyse your footage frame-by-frame.`,
+      message: uploadsNotIncludedMessage(plan),
       entitlement,
     }
   }

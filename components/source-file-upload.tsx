@@ -28,6 +28,7 @@ import {
   useDeepAnalysisProgress,
 } from "@/components/deep-analysis-progress"
 import { notifySourceFileReady } from "@/components/source-video-thumbnail"
+import { UpgradeToUploadPrompt } from "@/components/unlock-full-report-cta"
 import { useNavigationGuard } from "@/hooks/use-navigation-guard"
 import { ACCEPTED_EXTENSIONS, isAcceptedExtension } from "@/lib/source-files/config"
 import type { SerialisedSourceFile } from "@/lib/source-files/serialise"
@@ -333,6 +334,11 @@ export function SourceFileUpload({
   // notification in the corner (mirroring the "fully analysed" alert) rather than
   // inline under the upload button.
   const [creditNotice, setCreditNotice] = useState<string | null>(null)
+  // Set when the API refuses an upload because the plan doesn't include them,
+  // which the page's own gate cannot catch: the plan can change while this page
+  // is open, mid-upload included. The card then shows the upgrade prompt the
+  // report would have rendered here had it known.
+  const [uploadsLocked, setUploadsLocked] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Whether a stored record is in a settled (non-in-flight) state.
@@ -441,6 +447,13 @@ export function SourceFileUpload({
           setClient({ phase: "idle" })
           return
         }
+        // The plan stopped including uploads while this page was open. Nothing
+        // was created server-side, so swap the card for the upgrade prompt.
+        if ("error" in initData && initData.error === "uploads_not_included") {
+          setUploadsLocked(message)
+          setClient({ phase: "idle" })
+          return
+        }
         setClient({ phase: "error", message })
         return
       }
@@ -510,12 +523,23 @@ export function SourceFileUpload({
         | { error?: string; message?: string }
 
       if (!completeRes.ok || !("sourceFile" in completeData)) {
-        setClient({
-          phase: "error",
-          message:
-            ("message" in completeData && completeData.message) ||
-            "Validation could not be completed.",
-        })
+        const message =
+          ("message" in completeData && completeData.message) ||
+          "Validation could not be completed."
+        // The plan lost uploads part-way through this one (a downgrade while the
+        // bytes were in flight). The server has already discarded the record and
+        // the transferred object, so drop the local copy too and show the
+        // upgrade prompt instead of an upload the plan can no longer finish.
+        if (
+          "error" in completeData &&
+          completeData.error === "uploads_not_included"
+        ) {
+          setSourceFile(null)
+          setUploadsLocked(message)
+          setClient({ phase: "idle" })
+          return
+        }
+        setClient({ phase: "error", message })
         return
       }
 
@@ -623,21 +647,25 @@ export function SourceFileUpload({
       />
 
       <div className="rounded-xl border bg-card p-4">
-        <Body
-          videoId={videoId}
-          sourceFile={sourceFile}
-          client={client}
-          isBusy={isBusy}
-          onPick={triggerPicker}
-          onDelete={onDelete}
-          onProceed={proceedAfterWarning}
-          onChooseAnother={chooseAnotherFile}
-          videoTitle={videoTitle}
-          youtubeDurationSeconds={youtubeDurationSeconds}
-          onRetryDeepAnalysis={onRetryDeepAnalysis}
-          retryState={retryState}
-          analysisAttempt={analysisAttempt}
-        />
+        {uploadsLocked ? (
+          <UpgradeToUploadPrompt message={uploadsLocked} />
+        ) : (
+          <Body
+            videoId={videoId}
+            sourceFile={sourceFile}
+            client={client}
+            isBusy={isBusy}
+            onPick={triggerPicker}
+            onDelete={onDelete}
+            onProceed={proceedAfterWarning}
+            onChooseAnother={chooseAnotherFile}
+            videoTitle={videoTitle}
+            youtubeDurationSeconds={youtubeDurationSeconds}
+            onRetryDeepAnalysis={onRetryDeepAnalysis}
+            retryState={retryState}
+            analysisAttempt={analysisAttempt}
+          />
+        )}
       </div>
 
       <Dialog open={showUploadedDialog} onOpenChange={setShowUploadedDialog}>
