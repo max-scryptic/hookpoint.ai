@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { format } from "date-fns"
 import {
+  ArrowLeftRightIcon,
   ArrowUpDownIcon,
   HistoryIcon,
   SearchIcon,
@@ -174,10 +175,18 @@ export function PreviousComparisons({
       </div>
 
       {comparisons.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          Comparisons you generate show up here so you can re-open them any time
-          without spending more credits.
-        </p>
+        // The same dashed placeholder card the checklist shows when it is
+        // empty, so an empty list looks like a place waiting to be filled
+        // rather than a stray line of text under the heading.
+        <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed p-10 text-center">
+          <ArrowLeftRightIcon className="size-6 text-muted-foreground" />
+          <p className="text-sm font-medium">No comparisons yet</p>
+          <p className="max-w-md text-sm text-muted-foreground">
+            Pick two videos above and generate a report. Comparisons you
+            generate show up here so you can re-open them any time without
+            spending more credits.
+          </p>
+        </div>
       ) : (
         <>
           {/* Filter bar */}
