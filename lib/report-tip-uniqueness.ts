@@ -17,10 +17,25 @@
 // THE RULE: the first wording of a piece of advice is kept, and any later
 // restatement is dropped. Applied in the order a reader meets the tips, which is
 // why the caller passes the sections in page order and this walks each section
-// by window index, script tip before deep tips. Nothing is rewritten and nothing
-// is regenerated: a repeat simply loses its "Try:" line, keeping its explanation
-// and its evidence. That is the honest outcome, since the advice is already on
-// the page a screen further up.
+// by window index. Nothing is rewritten and nothing is regenerated: a repeat
+// simply loses its "Try:" line, keeping its explanation and its evidence. That
+// is the honest outcome, since the advice is already on the page a screen
+// further up.
+//
+// WITHIN ONE WINDOW, THE BETTER-EVIDENCED TIP WINS
+//
+// Page order settles which of two windows keeps a repeated tip. It cannot settle
+// which of two *writers* keeps it, because both are describing the same moment,
+// and there the tips are not equal. The deep tip is synthesised from frames,
+// audio, cut rate and silence measured over the window. The script tip is
+// inferred from the transcript by a pass that is told outright it cannot see or
+// hear anything. When the two land on the same advice, the deep one is the one
+// that can say why.
+//
+// So each window is walked deep tips first, script tip second. This used to run
+// the other way round, which meant a tie was resolved in favour of the weaker
+// evidence: the transcript tip survived, and the multimodal one that could have
+// shown the freeze frame behind it was the one stripped.
 //
 // Sameness is isNearDuplicateAdvice, not string equality: three writers phrase
 // one idea three ways, and a rewording is still a repeat.
@@ -71,14 +86,9 @@ export function dedupeSectionTips(
   ].sort((a, b) => a - b)
 
   for (const windowIndex of windowIndexes) {
-    // A gain's tip is the one the attribution guarantees is never null, since a
-    // gain exists to leave the uploader something to reuse. Dropping a repeat of
-    // it costs nothing: the same instruction is still on the page above.
-    const moment = attribution.get(windowIndex)
-    if (moment?.tip && !isFirstSaying(moment.tip)) {
-      attribution.set(windowIndex, { ...moment, tip: null })
-    }
-
+    // Deep first: it is the better-evidenced account of this window, so it is
+    // the one that should survive a tie with the transcript reading of the same
+    // moment. See the header.
     const feedback = deepFeedback.get(windowIndex)
     if (feedback) {
       deepFeedback.set(
@@ -91,6 +101,11 @@ export function dedupeSectionTips(
             : entry,
         ),
       )
+    }
+
+    const moment = attribution.get(windowIndex)
+    if (moment?.tip && !isFirstSaying(moment.tip)) {
+      attribution.set(windowIndex, { ...moment, tip: null })
     }
   }
 
