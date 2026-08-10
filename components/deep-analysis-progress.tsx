@@ -209,11 +209,12 @@ const IDLE_STATUS: DeepAnalysisStatusValue = {
 const DeepAnalysisStatusContext =
   createContext<DeepAnalysisStatusValue>(IDLE_STATUS)
 
-// Owns the report page's single deep-analysis poll and hands it to both the
-// header (which shows the "Processing…" badge while the pipeline runs) and the
-// source-file card at the foot of the report (which prompts a retry when a run
-// failed). They sit in different subtrees, so without this they'd poll the same
-// endpoint twice over and each fire their own refresh when a run landed.
+// Owns the report page's single deep-analysis poll and hands it to everything
+// on the page that reflects it — chiefly the source-file card at the foot of
+// the report, which shows the "Processing…" badge while the pipeline runs and
+// prompts a retry when a run failed. Consumers sit in different subtrees, so
+// without this they'd poll the same endpoint twice over and each fire their own
+// refresh when a run landed.
 export function DeepAnalysisStatusProvider({
   videoId,
   children,
@@ -237,7 +238,7 @@ export function useDeepAnalysisStatus(): DeepAnalysisStatusValue {
   return useContext(DeepAnalysisStatusContext)
 }
 
-// The report header's live indicator that the footage-based half of the
+// The source-file card's live indicator that the footage-based half of the
 // analysis is still running. Deliberately the same amber spinner the analysed
 // videos table shows against a processing row, so the two places a video's
 // deeper analysis surfaces read as one state.

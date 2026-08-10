@@ -23,7 +23,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { useDeepAnalysisStatus } from "@/components/deep-analysis-progress"
+import {
+  DeepAnalysisProcessingBadge,
+  useDeepAnalysisStatus,
+} from "@/components/deep-analysis-progress"
 import { notifySourceFileReady } from "@/components/source-video-thumbnail"
 import { UpgradeToUploadPrompt } from "@/components/unlock-full-report-cta"
 import { useNavigationGuard } from "@/hooks/use-navigation-guard"
@@ -923,10 +926,10 @@ function Body({
 // after early returns, where a hook can't live). Shows a compact file row plus,
 // when the last run didn't finish, a note prompting a retry.
 //
-// A run that is still in flight is deliberately not shown here: the card would
-// grow a spinner line and an eight-stage checklist, changing size under the
-// reader for as long as the pipeline ran. The report header carries that state
-// instead, as a "Processing…" badge beside the video's metrics.
+// A run still in flight shows as a single "Processing…" badge beside the file's
+// duration — deliberately not a spinner line and an eight-stage checklist,
+// which would change the card's size under the reader for as long as the
+// pipeline ran.
 function ReadySourceFileCard({
   sourceFile,
   isBusy,
@@ -942,7 +945,13 @@ function ReadySourceFileCard({
   onRetryDeepAnalysis: () => void
   retryState: { busy: boolean; error: string | null }
 }) {
-  const { failed } = useDeepAnalysisStatus()
+  // Whether the footage-based half of the analysis is still running for this
+  // video, shown as a "Processing…" badge beside the file's duration. Only once
+  // a poll has actually landed (progress != null): the status reads as
+  // analysing while the very first request is still in flight, which would
+  // otherwise flash the badge on every report, deeply analysed or not.
+  const { failed, analysing, progress } = useDeepAnalysisStatus()
+  const processing = analysing && progress != null
 
   return (
     <div className="flex flex-col">
@@ -953,7 +962,7 @@ function ReadySourceFileCard({
           subtitle={sourceFile.originalFilename}
         />
 
-        <Meta sourceFile={sourceFile} />
+        <Meta sourceFile={sourceFile} processing={processing} />
 
         <div className="flex gap-2 sm:ml-auto">
           <Button
@@ -1024,14 +1033,29 @@ function StatusRow({
   )
 }
 
-function Meta({ sourceFile }: { sourceFile: SerialisedSourceFile }) {
+function Meta({
+  sourceFile,
+  processing = false,
+}: {
+  sourceFile: SerialisedSourceFile
+  processing?: boolean
+}) {
   return (
-    <dl className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
+    <dl className="flex flex-wrap items-end gap-x-8 gap-y-2 text-sm">
       <Field label="File size" value={formatBytes(sourceFile.fileSizeBytes)} />
       <Field
         label="Duration"
         value={formatDuration(sourceFile.uploadedDurationSeconds)}
       />
+      {/* Sits to the right of the file's own facts, so the one live thing about
+          the report reads alongside the footage it's working through rather
+          than at the top of the page. Wrapped so the list holds only the
+          <div>s a <dl> allows between its groups. */}
+      {processing && (
+        <div className="flex flex-col justify-end">
+          <DeepAnalysisProcessingBadge />
+        </div>
+      )}
     </dl>
   )
 }
