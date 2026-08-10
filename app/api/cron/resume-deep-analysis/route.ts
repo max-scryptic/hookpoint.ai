@@ -9,7 +9,7 @@ import { triggerRetentionWindowMediaExtraction } from "@/lib/retention-window-me
 export const maxDuration = 300
 
 // Never serve this from a cache — a sweep's whole job is to observe current
-// state, and Vercel's cron hits a plain GET.
+// state, and it is invoked as a plain GET.
 export const dynamic = "force-dynamic"
 
 // How many videos one sweep will pick up. They are resumed sequentially inside
@@ -21,8 +21,13 @@ export const dynamic = "force-dynamic"
 const MAX_VIDEOS_PER_SWEEP = 5
 
 // GET /api/cron/resume-deep-analysis
-// Scheduled sweep (see vercel.json) that restarts deep-analysis pipelines which
-// stalled with no invocation left to finish them.
+// Scheduled sweep that restarts deep-analysis pipelines which stalled with no
+// invocation left to finish them.
+//
+// Driven by pg_cron in the database rather than by Vercel's scheduler — see
+// supabase/migrations/20260810120000_schedule_deep_analysis_resume_sweep.sql
+// for why. Nothing about this route depends on that choice: it is an ordinary
+// authenticated GET, so any scheduler that can send a bearer token will do.
 //
 // This exists because every other trigger for this pipeline is attached to a
 // user request: the original kickoff after an upload or analysis, and the
@@ -31,10 +36,11 @@ const MAX_VIDEOS_PER_SWEEP = 5
 // page — for as long as that took, the dashboard just showed "Processing…"
 // forever. This is the trigger that does not need anybody to be looking.
 export async function GET(request: NextRequest) {
-  // Vercel Cron sends `Authorization: Bearer $CRON_SECRET` whenever the env var
-  // is set. Required rather than optional: without it this route is an
-  // unauthenticated way for anyone to make the app start transcoding and
-  // running OpenAI calls, so refusing to run is the safe failure.
+  // The scheduler sends `Authorization: Bearer $CRON_SECRET`; the database job
+  // reads the same value from Vault. Required rather than optional: without it
+  // this route is an unauthenticated way for anyone to make the app start
+  // transcoding and running OpenAI calls, so refusing to run is the safe
+  // failure.
   const secret = process.env.CRON_SECRET
   if (!secret) {
     console.error("CRON_SECRET is not set; refusing to run the deep analysis sweep")
