@@ -4,7 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowLeftRightIcon } from "lucide-react"
 
-import { ComparisonProcessingOverlay } from "@/components/comparison-processing"
+import {
+  ComparisonProcessingOverlay,
+  type ComparisonMode,
+} from "@/components/comparison-processing"
 import { ConfettiBurst } from "@/components/confetti-burst"
 import { Button } from "@/components/ui/button"
 import { useNavigationGuard } from "@/hooks/use-navigation-guard"
@@ -127,6 +130,13 @@ export function RetentionComparePicker({
   // True when the run finished but a section could not be written, so the done
   // state promises a little less than a clean run does.
   const [partial, setPartial] = useState(false)
+  // Whether this run is writing a head-to-head the creator did not have, or
+  // finishing one they did, so the popup can end on the right promise. Guessed
+  // from the saved pairs when the button is pressed (that is all we know before
+  // the response) and then corrected from what the server actually did, since
+  // the pairs this page was rendered with can be a deploy or another tab out of
+  // date.
+  const [mode, setMode] = useState<ComparisonMode>("new")
   // Guards against re-entrant generates (for example a double click) without
   // waiting on the async state updates.
   const activeRef = useRef(false)
@@ -203,6 +213,7 @@ export function RetentionComparePicker({
 
     activeRef.current = true
     setError(null)
+    setMode(alreadyGenerated ? "update" : "new")
     setPhase("generating")
     // Record the run before it starts, so that leaving at any point from here on
     // has everything it needs to undo it. startedAt is what limits the undo to
@@ -225,6 +236,7 @@ export function RetentionComparePicker({
       const payload = (await response.json().catch(() => null)) as {
         error?: string
         reportsReady?: boolean
+        charged?: number
       } | null
       if (!response.ok) {
         runRef.current = null
@@ -240,7 +252,17 @@ export function RetentionComparePicker({
       // creator reads the done state so pressing through is instant.
       runRef.current = null
       setPartial(payload?.reportsReady === false)
+      // What the server charged is the only reliable answer to whether this
+      // press made something new: nothing is charged for a pair that already
+      // existed, whatever the pairs this page was rendered with happened to say.
+      setMode(payload?.charged === 0 ? "update" : "new")
       router.prefetch(reportHref(a, b))
+      // Pull the history and the saved pairs back down now the run has landed,
+      // rather than waiting for the creator to press through to the report. A
+      // new pair appears in the list behind the popup, a finished one stops
+      // asking to be finished, and either way what is on this page after a run
+      // is what actually happened rather than what was true before it started.
+      router.refresh()
       setPhase("done")
     } catch {
       // Abandoning the run aborts this request on purpose, and the page is
@@ -257,6 +279,7 @@ export function RetentionComparePicker({
     setPhase("idle")
     setError(null)
     setPartial(false)
+    setMode("new")
     activeRef.current = false
   }
 
@@ -349,6 +372,7 @@ export function RetentionComparePicker({
                 ? "error"
                 : "generating"
           }
+          mode={mode}
           error={error}
           partial={partial}
           opening={opening}
@@ -356,7 +380,11 @@ export function RetentionComparePicker({
           onOpenReport={openReport}
         />
       )}
-      {phase === "done" && <ConfettiBurst />}
+      {/* Confetti is for a head-to-head that did not exist a minute ago.
+          Filling in a section of one the creator already had is worth finishing
+          well, but celebrating it the same way is part of what makes it read as
+          a report that was created and then went missing from the list. */}
+      {phase === "done" && mode === "new" && <ConfettiBurst />}
     </div>
   )
 }
