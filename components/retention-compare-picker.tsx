@@ -8,10 +8,6 @@ import { ComparisonProcessingOverlay } from "@/components/comparison-processing"
 import { ConfettiBurst } from "@/components/confetti-burst"
 import { Button } from "@/components/ui/button"
 import { useNavigationGuard } from "@/hooks/use-navigation-guard"
-import {
-  assessPairComparability,
-  isAnchored,
-} from "@/lib/comparison-comparability"
 import { VIDEO_COMPARISON_CREDIT_COST } from "@/lib/plans"
 import type { ComparableVideo } from "@/lib/retention-comparison"
 import { isSamePair } from "@/lib/video-comparisons"
@@ -107,35 +103,6 @@ function optionLabel(video: ComparableVideo): string {
     : title
 }
 
-// What a pair will and will not be able to say, worked out from the two view
-// counts before a credit is spent. Two videos whose audiences cannot be read
-// against each other still make a comparison worth having, and it is a
-// comparison of two approaches rather than a verdict on which one won, so the
-// picker says which one is on offer rather than letting the report be the first
-// place the creator finds out. Null when the pair reads normally, or when
-// either side has no view count to check.
-function pairWarning(
-  videos: ComparableVideo[],
-  a: string,
-  b: string,
-): string | null {
-  const videoA = videos.find((video) => video.id === a)
-  const videoB = videos.find((video) => video.id === b)
-  if (!videoA || !videoB) return null
-
-  const comparability = assessPairComparability({
-    viewsA: videoA.views,
-    viewsB: videoB.views,
-    averageWatchedPercentA: videoA.averageViewPercentage,
-    averageWatchedPercentB: videoB.averageViewPercentage,
-  })
-  if (isAnchored(comparability, "watch")) return null
-  if (videoA.views == null || videoB.views == null) return null
-
-  const smallest = Math.min(videoA.views, videoB.views).toLocaleString("en")
-  return `These two reached very differently sized audiences (one of them ${smallest} views), so their watch figures cannot be read against each other. The report will compare what the two do rather than name a winner.`
-}
-
 function reportHref(a: string, b: string): string {
   return `/dashboard/video-comparator/report?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`
 }
@@ -179,7 +146,6 @@ export function RetentionComparePicker({
   // write what is missing.
   const alreadyComplete = alreadyGenerated && saved.reportsReady
   const busy = phase === "generating" || phase === "done"
-  const warning = bothPicked ? pairWarning(videos, a, b) : null
 
   // A reload or a tab close mid-generation abandons a run that has already been
   // charged for, so warn before the page goes away. Only while the work is
@@ -361,11 +327,6 @@ export function RetentionComparePicker({
         </Button>
       </div>
 
-      {warning != null && (
-        <p className="rounded-r-md border-l-2 border-l-amber-500/60 bg-amber-500/5 px-3 py-2 text-xs text-muted-foreground">
-          {warning}
-        </p>
-      )}
       {!alreadyGenerated && (
         <p className="text-xs text-muted-foreground">
           A comparison costs {VIDEO_COMPARISON_CREDIT_COST} deep-dive credits,
