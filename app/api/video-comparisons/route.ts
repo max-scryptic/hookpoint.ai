@@ -11,12 +11,14 @@ import { rollBackComparison } from "@/lib/comparison-cleanup"
 import type { LlmLogContext } from "@/lib/llm-calls"
 import { VIDEO_COMPARISON_CREDIT_COST } from "@/lib/plans"
 import {
+  claimComparisonRun,
   createSavedComparison,
   findSavedComparison,
   getComparisonReports,
   isPackagingReportCurrent,
   isRetentionReportCurrent,
   isScriptReportCurrent,
+  releaseComparisonRun,
 } from "@/lib/video-comparisons"
 import { buildAndStorePackagingComparisonReport } from "@/lib/packaging-comparison-report"
 import { buildAndStoreRetentionComparisonReport } from "@/lib/retention-comparison-report"
@@ -260,32 +262,61 @@ export async function POST(request: NextRequest) {
       // an older shape than the report page now renders. Write it now, on this press,
       // using the row's own A/B order so the new report is oriented the same way
       // as the one already stored beside it.
-      const stored = await getComparisonReports(
-        supabase,
-        user.id,
-        existing.id,
-      ).catch((error) => {
-        console.error("Failed to read stored comparison reports", error)
-        return { script: null, packaging: null, retention: null }
-      })
-      const ready = await ensureComparisonReports(
-        supabase,
-        user.id,
-        existing.id,
-        existing.videoAId,
-        existing.videoBId,
-        logContext,
-        {
-          retention: isRetentionReportCurrent(stored.retention),
-          script: isScriptReportCurrent(stored.script),
-          packaging: isPackagingReportCurrent(stored.packaging),
-        },
-      )
-      return settle({
-        id: existing.id,
-        charged: 0,
-        reportsReady: allReportsReady(ready),
-      })
+      //
+      // Take the row first. This is the press that can arrive more than once for
+      // the same pair (a second tab, a reload landing on a picker that still
+      // says "Finish report"), and every one of those arrivals used to run the
+      // whole generation again and overwrite the last. Whoever holds the row
+      // finishes it; everyone else is told to wait rather than paying for the
+      // same three reports twice.
+      const claim = await claimComparisonRun(supabase, user.id, existing.id)
+      if (!claim.granted) {
+        return settle(
+          {
+            error:
+              "This comparison is already being written. Give it a minute, then reload the page.",
+          },
+          { status: 409 },
+        )
+      }
+
+      try {
+        const stored = await getComparisonReports(
+          supabase,
+          user.id,
+          existing.id,
+        ).catch((error) => {
+          console.error("Failed to read stored comparison reports", error)
+          return { script: null, packaging: null, retention: null }
+        })
+        const ready = await ensureComparisonReports(
+          supabase,
+          user.id,
+          existing.id,
+          existing.videoAId,
+          existing.videoBId,
+          logContext,
+          {
+            retention: isRetentionReportCurrent(stored.retention),
+            script: isScriptReportCurrent(stored.script),
+            packaging: isPackagingReportCurrent(stored.packaging),
+          },
+        )
+        return settle({
+          id: existing.id,
+          charged: 0,
+          reportsReady: allReportsReady(ready),
+        })
+      } finally {
+        if (claim.claimedAt) {
+          await releaseComparisonRun(
+            supabase,
+            user.id,
+            existing.id,
+            claim.claimedAt,
+          )
+        }
+      }
     }
 
     // Comparisons ride on the same deep-dive credit budget as deep analysis;
@@ -346,8 +377,14 @@ export async function POST(request: NextRequest) {
     }
 
     // From here on this row is this request's to finish, and this request's to
-    // take back if it cannot.
+    // take back if it cannot. Claim it too, so a press that arrives for this
+    // pair while these three reports are being written is turned away rather
+    // than writing its own set over the top. A row this new is never already
+    // held by anybody else, so the claim is only ever recorded here, never
+    // refused.
     run.comparisonId = saved.id
+    const claim = await claimComparisonRun(supabase, user.id, saved.id)
+    const claimedAt = claim.granted ? claim.claimedAt : null
 
     // Charge for the freshly saved comparison. Best-effort, matching the upload
     // path: the saved row is the record that the pair was generated, and a
@@ -364,24 +401,30 @@ export async function POST(request: NextRequest) {
     // Write all three head-to-heads now, before the response, so the report is
     // complete the moment the client opens it and the report page has nothing
     // left to generate.
-    const ready = await ensureComparisonReports(
-      supabase,
-      user.id,
-      saved.id,
-      videoAId,
-      videoBId,
-      logContext,
-      { retention: false, script: false, packaging: false },
-    )
+    try {
+      const ready = await ensureComparisonReports(
+        supabase,
+        user.id,
+        saved.id,
+        videoAId,
+        videoBId,
+        logContext,
+        { retention: false, script: false, packaging: false },
+      )
 
-    // The client holds its "generating" popup until this response lands and
-    // only then offers the way through to the report, so tell it whether the
-    // report it is about to open is complete.
-    return settle({
-      id: saved.id,
-      charged: VIDEO_COMPARISON_CREDIT_COST,
-      reportsReady: allReportsReady(ready),
-    })
+      // The client holds its "generating" popup until this response lands and
+      // only then offers the way through to the report, so tell it whether the
+      // report it is about to open is complete.
+      return settle({
+        id: saved.id,
+        charged: VIDEO_COMPARISON_CREDIT_COST,
+        reportsReady: allReportsReady(ready),
+      })
+    } finally {
+      if (claimedAt) {
+        await releaseComparisonRun(supabase, user.id, saved.id, claimedAt)
+      }
+    }
   } catch (error) {
     console.error("Failed to generate video comparison", error)
     // The run fell over after saving (and charging for) the pair, so the creator

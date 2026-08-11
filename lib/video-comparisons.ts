@@ -37,6 +37,18 @@ export interface SavedComparison {
   videoAThumbnailUrl: string | null
   videoBThumbnailUrl: string | null
   createdAt: string
+  // The most recent moment any of the three head-to-heads on this pair was
+  // written, as an ISO timestamp. Normalised (createdAt comes back in Postgres's
+  // own format, a stored generatedAt in ISO) so the two are safe to sort
+  // against each other. Falls back to createdAt, so every pair has one whether
+  // or not a report ever landed on it.
+  lastWrittenAt: string
+  // True when a report on this pair was written long enough after the pair
+  // itself that only a later press of the button can have done it. The history
+  // says so, because otherwise finishing a stale pair changes nothing the
+  // creator can see: the row keeps its original date and its original place in
+  // the list, which reads as the work having gone nowhere.
+  rewritten: boolean
   // True when all three written head-to-heads are stored at the current shape, so
   // this pair opens into a complete report with nothing left to write. False for
   // a pair created before one of those reports existed, one whose generation
@@ -53,6 +65,9 @@ interface ComparisonRow {
   script_ready: string | null
   packaging_ready: string | null
   retention_ready: string | null
+  script_written: string | null
+  packaging_written: string | null
+  retention_written: string | null
 }
 
 // Whether a stored report is present and current, without dragging the whole
@@ -60,6 +75,17 @@ interface ComparisonRow {
 // each report module's normalizer), so that one key answers both questions.
 const REPORT_READY_PROBE =
   "script_ready:script_report->>schemaVersion, packaging_ready:packaging_report->>schemaVersion, retention_ready:retention_report->>schemaVersion"
+
+// When each stored report was written, probed the same way and for the same
+// reason: it is one key out of each blob, not the blob. Every report carries a
+// generatedAt (see each report module's normalizer), which is what lets the
+// history show a pair that was rewritten after the fact.
+const REPORT_WRITTEN_PROBE =
+  "script_written:script_report->>generatedAt, packaging_written:packaging_report->>generatedAt, retention_written:retention_report->>generatedAt"
+
+// Everything the history and the generate endpoint need about a saved pair,
+// without reading a single report body back.
+const COMPARISON_COLUMNS = `id, video_a_id, video_b_id, created_at, ${REPORT_READY_PROBE}, ${REPORT_WRITTEN_PROBE}`
 
 // A report only counts as ready at the current shape version: an older one is
 // missing whatever the bump added (version 5 of the packaging report, for
@@ -91,6 +117,46 @@ function reportsReady(row: ComparisonRow): boolean {
       RETENTION_COMPARISON_REPORT_SCHEMA_VERSION,
     )
   )
+}
+
+// When this pair last had a report written onto it, and whether that was a
+// later press of the button rather than the run that created it.
+//
+// The run that creates a pair writes all three head-to-heads within its own
+// lifetime, and that lifetime is capped (see maxDuration on the generate
+// route), so a report stamped well beyond the pair's own creation cannot have
+// come from it. ABANDONED_COMPARISON_GRACE_MS is already the window past which
+// no run can still be alive, so it is the same line drawn here: past it, the
+// only thing that can have written a report is somebody pressing the button
+// again on a pair that was already in their history.
+//
+// Exported for its own test, and because the shape of this rule is the whole
+// reason a rewritten pair is visible in the history at all.
+export function comparisonWriteState(row: {
+  created_at: string
+  script_written: string | null
+  packaging_written: string | null
+  retention_written: string | null
+}): { lastWrittenAt: string; rewritten: boolean } {
+  const createdAt = new Date(row.created_at).getTime()
+  const written = [row.script_written, row.packaging_written, row.retention_written]
+    .map((value) => (value == null ? Number.NaN : new Date(value).getTime()))
+    .filter((value) => Number.isFinite(value))
+
+  const latest = written.length > 0 ? Math.max(...written) : Number.NaN
+  if (!Number.isFinite(createdAt)) {
+    // Nothing to measure against, so report the row as it stands rather than
+    // guessing. A pair whose timestamp we cannot read is not a rewritten one.
+    return { lastWrittenAt: row.created_at, rewritten: false }
+  }
+  if (!Number.isFinite(latest) || latest <= createdAt) {
+    return { lastWrittenAt: new Date(createdAt).toISOString(), rewritten: false }
+  }
+
+  return {
+    lastWrittenAt: new Date(latest).toISOString(),
+    rewritten: latest - createdAt > ABANDONED_COMPARISON_GRACE_MS,
+  }
 }
 
 // The same test against a report already read back in full, for the generate
@@ -154,7 +220,7 @@ export async function listSavedComparisons(
 ): Promise<SavedComparison[]> {
   const { data, error } = await supabase
     .from("video_comparisons")
-    .select(`id, video_a_id, video_b_id, created_at, ${REPORT_READY_PROBE}`)
+    .select(COMPARISON_COLUMNS)
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(limit)
@@ -203,6 +269,7 @@ export async function listSavedComparisons(
     videoAThumbnailUrl: videoById.get(row.video_a_id)?.thumbnailUrl ?? null,
     videoBThumbnailUrl: videoById.get(row.video_b_id)?.thumbnailUrl ?? null,
     createdAt: row.created_at,
+    ...comparisonWriteState(row),
     reportsReady: reportsReady(row),
   }))
 }
@@ -219,7 +286,7 @@ export async function findSavedComparison(
 ): Promise<SavedComparison | null> {
   const { data, error } = await supabase
     .from("video_comparisons")
-    .select(`id, video_a_id, video_b_id, created_at, ${REPORT_READY_PROBE}`)
+    .select(COMPARISON_COLUMNS)
     .eq("user_id", userId)
     .or(
       `and(video_a_id.eq.${videoAId},video_b_id.eq.${videoBId}),and(video_a_id.eq.${videoBId},video_b_id.eq.${videoAId})`,
@@ -242,6 +309,7 @@ export async function findSavedComparison(
     videoAThumbnailUrl: null,
     videoBThumbnailUrl: null,
     createdAt: row.created_at,
+    ...comparisonWriteState(row),
     reportsReady: reportsReady(row),
   }
 }
@@ -380,10 +448,7 @@ export async function createSavedComparison(
     throw new Error(`Failed to save comparison: ${error.message}`)
   }
 
-  const row = data as Omit<
-    ComparisonRow,
-    "script_ready" | "packaging_ready" | "retention_ready"
-  >
+  const row = data as { id: string; video_a_id: string; video_b_id: string; created_at: string }
   return {
     id: row.id,
     videoAId: row.video_a_id,
@@ -393,9 +458,93 @@ export async function createSavedComparison(
     videoAThumbnailUrl: null,
     videoBThumbnailUrl: null,
     createdAt: row.created_at,
-    // The row is one insert old, so no head-to-head can be on it yet. The
-    // caller writes all three before it responds.
+    // The row is one insert old, so no head-to-head can be on it yet: nothing
+    // has been written, and nothing can have been rewritten. The caller writes
+    // all three before it responds.
+    lastWrittenAt: row.created_at,
+    rewritten: false,
     reportsReady: false,
+  }
+}
+
+// The outcome of trying to take a row for the run that is about to write onto
+// it. Granted means go ahead; claimedAt is the stamp to release it with, or null
+// when the claim could not be taken at all and the run proceeds unguarded.
+export type ComparisonRunClaim =
+  | { granted: true; claimedAt: string | null }
+  | { granted: false }
+
+// Takes this row for the run that is about to write onto it.
+//
+// Writing a head-to-head is three model calls, and the generate endpoint is
+// reachable more than once for the same pair: a second tab, a reload landing on
+// a picker whose button still says "Finish report", two presses either side of a
+// navigation. Without this, each of those ran the full generation against the
+// same row and the last to finish overwrote the others, so the creator saw one
+// report and we paid for several.
+//
+// The claim is one conditional update, which is what makes it safe: Postgres
+// re-checks the predicate after a competing update commits, so of two runs
+// racing for the same row exactly one comes back with a stamp. A run that dies
+// without releasing its claim only holds the row until the grace window passes,
+// so a pair can never be left permanently unfinishable.
+//
+// A claim that cannot be taken at all grants the run anyway. Migrations here are
+// applied out of band from deploys, so this code can be live for a window before
+// the column it writes to exists, and the two failures are not comparable: an
+// unguarded run risks paying for a report twice, while a refused one is a
+// creator who cannot generate a comparison at all.
+export async function claimComparisonRun(
+  supabase: SupabaseClient,
+  userId: string,
+  comparisonId: string,
+  now: Date = new Date(),
+): Promise<ComparisonRunClaim> {
+  const claimedAt = now.toISOString()
+  const staleBefore = new Date(
+    now.getTime() - ABANDONED_COMPARISON_GRACE_MS,
+  ).toISOString()
+
+  const { data, error } = await supabase
+    .from("video_comparisons")
+    .update({ report_run_started_at: claimedAt })
+    .eq("id", comparisonId)
+    .eq("user_id", userId)
+    .or(
+      `report_run_started_at.is.null,report_run_started_at.lt.${staleBefore}`,
+    )
+    .select("id")
+
+  if (error) {
+    console.error("Failed to claim comparison run", error.message)
+    return { granted: true, claimedAt: null }
+  }
+
+  return ((data ?? []) as Array<{ id: string }>).length > 0
+    ? { granted: true, claimedAt }
+    : { granted: false }
+}
+
+// Gives the row back once the run has finished with it. Only ever releases this
+// run's own claim: a run that overran the grace window has already had the row
+// taken off it, and must not clear the stamp of whoever has it now. Best-effort,
+// since this runs on the way out of a request whose real work is already done
+// (and whose row may have been rolled back out from under it).
+export async function releaseComparisonRun(
+  supabase: SupabaseClient,
+  userId: string,
+  comparisonId: string,
+  claimedAt: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("video_comparisons")
+    .update({ report_run_started_at: null })
+    .eq("id", comparisonId)
+    .eq("user_id", userId)
+    .eq("report_run_started_at", claimedAt)
+
+  if (error) {
+    console.error("Failed to release comparison run", error.message)
   }
 }
 

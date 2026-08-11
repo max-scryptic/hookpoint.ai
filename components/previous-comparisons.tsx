@@ -46,14 +46,25 @@ import type { SavedComparison } from "@/lib/video-comparisons"
 // COPY GUARDRAIL: no em or en dashes anywhere in this file (comments
 // included). Hyphens are fine.
 
-// Both directions of "compared on", since every field the history offers can be
-// sorted client-side.
-type SortOption = "compared-desc" | "compared-asc"
+// Sorted either by when a pair was compared (both directions, since every field
+// the history offers can be sorted client-side) or by when its report was last
+// written, which is not the same thing: a pair generated weeks ago whose report
+// was rewritten this afternoon is the most recent work here, and by "compared
+// on" alone it sits wherever it always sat.
+//
+// Recently updated leads, and is the default, because the press that rewrites a
+// pair has nowhere else to show up. It costs nothing (the pair is already paid
+// for) and adds no row, so a creator who finishes a stale report and comes back
+// to an unchanged list has no way to tell it worked.
+type SortOption = "updated-desc" | "compared-desc" | "compared-asc"
 
 const SORT_OPTIONS: Array<{ value: SortOption; label: string }> = [
+  { value: "updated-desc", label: "Recently updated" },
   { value: "compared-desc", label: "Newest compared" },
   { value: "compared-asc", label: "Oldest compared" },
 ]
+
+const DEFAULT_SORT: SortOption = "updated-desc"
 
 function formatDate(value: string): string {
   const date = new Date(value)
@@ -105,8 +116,7 @@ export function PreviousComparisons({
   const [comparedRange, setComparedRange] = useState<DateRange | undefined>(
     undefined,
   )
-  // Defaults to "Newest compared", which matches the order the rows arrive in.
-  const [sort, setSort] = useState<SortOption>("compared-desc")
+  const [sort, setSort] = useState<SortOption>(DEFAULT_SORT)
 
   // Debounce the search box so typing doesn't refilter on every keystroke.
   useEffect(() => {
@@ -147,11 +157,16 @@ export function PreviousComparisons({
   }, [comparisons, debouncedSearch, comparedFrom, comparedTo])
 
   const sorted = useMemo(() => {
-    return [...filtered].sort((a, b) =>
-      sort === "compared-asc"
+    return [...filtered].sort((a, b) => {
+      if (sort === "updated-desc") {
+        // lastWrittenAt is normalised to one format server-side, so unlike the
+        // raw timestamps it is safe to compare as a string.
+        return b.lastWrittenAt.localeCompare(a.lastWrittenAt)
+      }
+      return sort === "compared-asc"
         ? a.createdAt.localeCompare(b.createdAt)
-        : b.createdAt.localeCompare(a.createdAt),
-    )
+        : b.createdAt.localeCompare(a.createdAt)
+    })
   }, [filtered, sort])
 
   const hasActiveFilters =
@@ -160,12 +175,12 @@ export function PreviousComparisons({
   function clearFilters() {
     setSearch("")
     setComparedRange(undefined)
-    setSort("compared-desc")
+    setSort(DEFAULT_SORT)
   }
 
   const sortLabel =
     SORT_OPTIONS.find((option) => option.value === sort)?.label ??
-    "Newest compared"
+    "Recently updated"
 
   return (
     <div className="flex flex-col gap-3">
@@ -305,6 +320,15 @@ export function PreviousComparisons({
                         </TableCell>
                         <TableCell className="hidden px-4 py-3 text-right align-middle text-sm text-muted-foreground sm:table-cell">
                           {formatDate(comparison.createdAt)}
+                          {/* A pair whose report was rewritten after the fact
+                              says so, so that finishing a stale report is
+                              visible work rather than a list that did not
+                              move. */}
+                          {comparison.rewritten && (
+                            <span className="mt-0.5 block text-xs">
+                              Updated {formatDate(comparison.lastWrittenAt)}
+                            </span>
+                          )}
                         </TableCell>
                       </TableRow>
                     )

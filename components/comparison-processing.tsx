@@ -27,6 +27,15 @@ import { Button } from "@/components/ui/button"
 // included). Hyphens are fine.
 export type ComparisonStatus = "generating" | "done" | "error"
 
+// Whether this run is making a head-to-head that did not exist, or filling in a
+// section of one the creator already has. Both run the same three model passes
+// and take the same couple of minutes, but they end somewhere different: a new
+// one arrives in the history, an updated one changes a row that is already
+// there. Saying "Comparison report ready!" for both is what makes a free
+// re-finish look like a report that generated and then vanished, since the
+// creator goes back to the list expecting a new row and finds nothing added.
+export type ComparisonMode = "new" | "update"
+
 // The messages we cycle through while the comparison is generated. They loosely
 // track the work the endpoint does (see app/api/video-comparisons/route.ts):
 // the retention head-to-head over both curves, the packaging head-to-head over
@@ -58,6 +67,7 @@ const PROGRESS_INTERVAL_MS = 700
 // moment the creator presses "Generate report".
 export function ComparisonProcessingOverlay({
   status = "generating",
+  mode = "new",
   error = null,
   partial = false,
   opening = false,
@@ -65,6 +75,7 @@ export function ComparisonProcessingOverlay({
   onOpenReport,
 }: {
   status?: ComparisonStatus
+  mode?: ComparisonMode
   error?: string | null
   // True when the run finished but a section could not be written, so the done
   // state promises a little less than a clean run does. The report page fills a
@@ -80,6 +91,7 @@ export function ComparisonProcessingOverlay({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
       <ComparisonProcessing
         status={status}
+        mode={mode}
         error={error}
         partial={partial}
         opening={opening}
@@ -92,6 +104,7 @@ export function ComparisonProcessingOverlay({
 
 export function ComparisonProcessing({
   status = "generating",
+  mode = "new",
   error = null,
   partial = false,
   opening = false,
@@ -99,6 +112,7 @@ export function ComparisonProcessing({
   onOpenReport,
 }: {
   status?: ComparisonStatus
+  mode?: ComparisonMode
   error?: string | null
   partial?: boolean
   opening?: boolean
@@ -107,6 +121,7 @@ export function ComparisonProcessing({
 }) {
   const isDone = status === "done"
   const isError = status === "error"
+  const isUpdate = mode === "update"
   const [stage, setStage] = useState(0)
   const [progress, setProgress] = useState(5)
 
@@ -179,13 +194,21 @@ export function ComparisonProcessing({
 
       <div className="space-y-1.5">
         <p className="font-heading text-base font-medium">
-          {isDone ? "Comparison report ready!" : "Building your comparison"}
+          {isDone
+            ? isUpdate
+              ? "Comparison report updated!"
+              : "Comparison report ready!"
+            : isUpdate
+              ? "Updating your comparison"
+              : "Building your comparison"}
         </p>
         <p className="min-h-[1.25rem] text-sm text-muted-foreground transition-opacity">
           {isDone
             ? partial
               ? "One section could not be written this time. The rest of the report is ready."
-              : "Retention, packaging and script are all written up."
+              : isUpdate
+                ? "The part of this report that was missing has been written."
+                : "Retention, packaging and script are all written up."
             : STAGES[stage]}
         </p>
       </div>
@@ -206,7 +229,14 @@ export function ComparisonProcessing({
         </div>
         <p className="text-xs text-muted-foreground">
           {isDone
-            ? "All done. Your report is saved, so you can re-open it any time."
+            ? isUpdate
+              ? // Says the one thing the creator cannot see from here: this was
+                // a pair they already had, so the history has not grown. Without
+                // it, they go back to the list looking for a new row, find none,
+                // and reasonably conclude the report they just watched being
+                // written has gone missing.
+                "All done. This pair was already in your history, so it has been updated where it is rather than added again."
+              : "All done. Your report is saved, so you can re-open it any time."
             : "This takes a couple of minutes. Keep this tab open and we'll show you the report the moment it's ready. Leaving stops it and puts your credits back."}
         </p>
       </div>
