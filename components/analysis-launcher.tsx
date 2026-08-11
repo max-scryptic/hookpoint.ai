@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useRef,
   useState,
   type ReactNode,
@@ -12,6 +13,7 @@ import { useRouter } from "next/navigation"
 
 import { AnalysisProcessingOverlay } from "@/components/analysis-processing"
 import { ConfettiBurst } from "@/components/confetti-burst"
+import { useNavigationGuard } from "@/hooks/use-navigation-guard"
 import {
   createAnalysisStreamParser,
   type AnalysisStageUpdate,
@@ -23,6 +25,17 @@ import {
 // report reads from the cache /api/analyze just wrote, so it loads straight
 // into the finished UI.
 const DONE_HOLD_MS = 1800
+
+// Leaving mid-analysis undoes the run rather than letting it finish unwatched.
+// An analysis saves as it goes and is charged for the moment its row lands, so a
+// user who walks away part-way through would otherwise be charged for a video
+// that reads as analysed while missing most of what makes it worth opening.
+// Dropping the request is what tells the server: it stops at the next stage,
+// deletes what this run created and hands the charge back (see
+// app/api/analyze/route.ts). The warning below is what gives the user the
+// chance to stay instead.
+const LEAVE_WARNING =
+  "Your video is still being analysed. Leaving now stops it and undoes it: nothing is saved, and the analysis goes back into your allowance."
 
 type AnalysisPhase = "idle" | "running" | "done" | "error"
 
@@ -65,6 +78,41 @@ export function AnalysisLauncherProvider({
   // Guards against re-entrant launches (e.g. a double click) without waiting on
   // the async state updates.
   const activeRef = useRef(false)
+  // The request carrying the run in flight, or null when there is nothing to
+  // give up on. Held in a ref because the places that read it (the page hiding,
+  // this provider unmounting) are cleanups that must see the current run without
+  // being re-subscribed on every phase change.
+  const runRef = useRef<AbortController | null>(null)
+
+  // A reload, a closed tab or a link out of the app throws away a run that has
+  // already been charged for, so warn before the page goes away. Only while the
+  // analysis is actually in flight: once it is written there is nothing to lose.
+  useNavigationGuard(phase === "running", LEAVE_WARNING)
+
+  // Gives up on the run in flight. Dropping the request is the whole message:
+  // the route notices the connection has gone, stops at the next stage and
+  // rolls back whatever it had created.
+  const abandonRun = useCallback(() => {
+    const controller = runRef.current
+    if (!controller) return
+    runRef.current = null
+    activeRef.current = false
+    controller.abort()
+  }, [])
+
+  // The two ways a run gets left behind: the whole page going away (a reload, a
+  // closed tab, a link out of the app), and this provider being replaced by a
+  // client-side navigation, which unmounts us without the document ever
+  // unloading. The second is the one that would otherwise go unnoticed, since
+  // the request would happily carry on with nobody reading it.
+  useEffect(() => {
+    const handlePageHide = () => abandonRun()
+    window.addEventListener("pagehide", handlePageHide)
+    return () => {
+      window.removeEventListener("pagehide", handlePageHide)
+      abandonRun()
+    }
+  }, [abandonRun])
 
   const startAnalysis = useCallback(
     async (videoId: string) => {
@@ -74,7 +122,13 @@ export function AnalysisLauncherProvider({
       setStage(null)
       setPhase("running")
 
+      // The request the run rides on, so leaving the page can drop it and the
+      // route can see that it has been left.
+      const controller = new AbortController()
+      runRef.current = controller
+
       const fail = (failure: { error?: string; message?: string }) => {
+        runRef.current = null
         setError(
           failure.error === "reconnect_required"
             ? (failure.message ?? "Please reconnect your YouTube account.")
@@ -93,6 +147,7 @@ export function AnalysisLauncherProvider({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ url: videoId }),
+          signal: controller.signal,
         })
 
         // Failures the route can detect before it starts working (no session,
@@ -120,11 +175,16 @@ export function AnalysisLauncherProvider({
         // Flip to the celebratory state, then hold briefly before navigating.
         // The popup stays up and covers the navigation until this provider
         // unmounts on the route change.
+        runRef.current = null
         setPhase("done")
         window.setTimeout(() => {
           router.push(`/dashboard/analysed-video/${videoId}`)
         }, DONE_HOLD_MS)
       } catch {
+        // Giving up on the run aborts this request on purpose, and the page is
+        // already on its way out, so there is nobody left to show an error to.
+        if (runRef.current !== controller) return
+        runRef.current = null
         setError("Something went wrong. Please try again.")
         setPhase("error")
         activeRef.current = false

@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowLeftRightIcon } from "lucide-react"
 
@@ -35,6 +35,16 @@ import { isSamePair } from "@/lib/video-comparisons"
 // then a button through to the finished report. That way the creator never
 // lands on a report page that is still writing itself.
 //
+// Leaving mid-generation undoes the run rather than abandoning it half-written.
+// The pair is saved and charged for before the first word of it can be written,
+// so a creator who closes the tab (or clicks away) would otherwise be left with
+// a paid-for pair in their history that opens onto an empty report. So the
+// moment this page goes away with a run still in flight, we tell the server, and
+// it deletes the pair that run created and hands the credits back: pressing the
+// button and walking away costs exactly nothing, and the picker is right back
+// where it was. The warning below is what gives the creator the chance to stay
+// instead.
+//
 // Selecting a pair is local state here; opening a finished report (or
 // re-opening a paid-for one) is a navigation to the dedicated report page at
 // video-comparator/report?a=..&b=.. so the report renders on its own page and
@@ -46,7 +56,49 @@ import { isSamePair } from "@/lib/video-comparisons"
 type Phase = "idle" | "generating" | "done" | "error"
 
 const LEAVE_WARNING =
-  "Your comparison report is still being generated. Leaving now will stop it, and the credits you just spent will be used up."
+  "Your comparison report is still being generated. Leaving now stops it and undoes it: nothing is saved, and the credits go back."
+
+const ABANDON_ENDPOINT = "/api/video-comparisons/abandon"
+
+// The run in flight, as much of it as the server needs to undo it: which pair it
+// is writing, when it started (so it can only ever take back the row this run
+// created), and the handle to stop waiting on it.
+interface ActiveRun {
+  a: string
+  b: string
+  startedAt: string
+  controller: AbortController
+}
+
+// Tells the server the run was abandoned. Sent as a beacon because the usual
+// reason to send it is that this page is going away: a beacon outlives the
+// document, where a normal request would be cancelled with everything else.
+function reportAbandonedRun(run: ActiveRun): void {
+  const body = JSON.stringify({
+    videoAId: run.a,
+    videoBId: run.b,
+    startedAt: run.startedAt,
+  })
+
+  if (typeof navigator !== "undefined" && navigator.sendBeacon) {
+    navigator.sendBeacon(
+      ABANDON_ENDPOINT,
+      new Blob([body], { type: "application/json" }),
+    )
+    return
+  }
+
+  void fetch(ABANDON_ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body,
+    keepalive: true,
+  }).catch(() => {
+    // Nothing to do from a page that is on its way out. The generate endpoint
+    // sees the dropped connection too, and the Video Comparator sweeps up any
+    // run neither of them reported.
+  })
+}
 
 function optionLabel(video: ComparableVideo): string {
   const title = video.title ?? "Untitled video"
@@ -111,6 +163,11 @@ export function RetentionComparePicker({
   // Guards against re-entrant generates (for example a double click) without
   // waiting on the async state updates.
   const activeRef = useRef(false)
+  // The run in flight, or null when there is nothing to undo. Held in a ref
+  // rather than state because the two places that read it (the page hiding, this
+  // component unmounting) are cleanups that must see the current run without
+  // being re-subscribed every time the phase changes.
+  const runRef = useRef<ActiveRun | null>(null)
 
   const bothPicked = a !== "" && b !== "" && a !== b
   const saved = bothPicked
@@ -128,6 +185,35 @@ export function RetentionComparePicker({
   // charged for, so warn before the page goes away. Only while the work is
   // actually in flight: once the report is written there is nothing to lose.
   useNavigationGuard(phase === "generating", LEAVE_WARNING)
+
+  // Gives up on the run in flight and asks the server to undo it. Called once
+  // per run: whichever way out fires first clears the ref, so a departure that
+  // trips both (the page hiding, then this component unmounting) still only
+  // reports it once.
+  const abandonRun = useCallback(() => {
+    const run = runRef.current
+    if (!run) return
+    runRef.current = null
+    activeRef.current = false
+    // Stop waiting on the response. This also drops the connection, which is
+    // the generate endpoint's own cue that the run has been abandoned.
+    run.controller.abort()
+    reportAbandonedRun(run)
+  }, [])
+
+  // The two ways a run is left behind, both of which have to undo it: the whole
+  // page going away (a reload, a closed tab, a link out of the app) and this
+  // page being replaced by a client-side navigation, which unmounts us without
+  // the document ever unloading. Bound once, for the life of the component,
+  // since both read the run through the ref.
+  useEffect(() => {
+    const handlePageHide = () => abandonRun()
+    window.addEventListener("pagehide", handlePageHide)
+    return () => {
+      window.removeEventListener("pagehide", handlePageHide)
+      abandonRun()
+    }
+  }, [abandonRun])
 
   const open = useCallback(
     (nextA: string, nextB: string) => {
@@ -152,17 +238,30 @@ export function RetentionComparePicker({
     activeRef.current = true
     setError(null)
     setPhase("generating")
+    // Record the run before it starts, so that leaving at any point from here on
+    // has everything it needs to undo it. startedAt is what limits the undo to
+    // this run's own work: a pair generated before this moment was paid for
+    // previously and stays where it is.
+    const run: ActiveRun = {
+      a,
+      b,
+      startedAt: new Date().toISOString(),
+      controller: new AbortController(),
+    }
+    runRef.current = run
     try {
       const response = await fetch("/api/video-comparisons", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ videoAId: a, videoBId: b }),
+        signal: run.controller.signal,
       })
       const payload = (await response.json().catch(() => null)) as {
         error?: string
         reportsReady?: boolean
       } | null
       if (!response.ok) {
+        runRef.current = null
         setError(payload?.error ?? "We couldn't generate that comparison.")
         setPhase("error")
         activeRef.current = false
@@ -173,10 +272,15 @@ export function RetentionComparePicker({
       // only when a section could not be written at all, in which case the
       // report opens without it and the popup says so. Warm the route while the
       // creator reads the done state so pressing through is instant.
+      runRef.current = null
       setPartial(payload?.reportsReady === false)
       router.prefetch(reportHref(a, b))
       setPhase("done")
     } catch {
+      // Abandoning the run aborts this request on purpose, and the page is
+      // already on its way out, so there is nobody left to show an error to.
+      if (runRef.current !== run) return
+      runRef.current = null
       setError("We couldn't reach the server. Please try again.")
       setPhase("error")
       activeRef.current = false

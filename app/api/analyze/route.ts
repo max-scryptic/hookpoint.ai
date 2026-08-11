@@ -12,6 +12,11 @@ import {
   saveAnalysedVideo,
 } from "@/lib/analysed-videos"
 import {
+  createAnalysisRunRecord,
+  rollBackAnalysis,
+  type AnalysisRunRecord,
+} from "@/lib/analysis-cleanup"
+import {
   ANALYSIS_STREAM_CONTENT_TYPE,
   CACHED_ANALYSIS_STAGES,
   createAnalysisProgressReporter,
@@ -67,6 +72,19 @@ class AnalysisFailure extends Error {
   }
 }
 
+// Thrown to unwind the analysis when the user has left: the tab is closed, the
+// page navigated away, the connection dropped. Nothing is reported back (there
+// is nobody there to report to); the run is rolled back instead.
+class AnalysisAbandoned extends Error {}
+
+// Every stage of the analysis is followed by one of these, so a run the user has
+// walked away from stops at the next boundary instead of working on for another
+// minute (and charging for it) with nowhere to send the result. Checked between
+// stages rather than mid-write so it can never stop half-way through a save.
+function assertNotAbandoned(signal: AbortSignal): void {
+  if (signal.aborted) throw new AnalysisAbandoned()
+}
+
 // POST /api/analyze  { url: string }
 // Resolves the pasted YouTube URL, confirms the signed-in user owns the video,
 // fetches its audience retention curve, and returns the curve plus the steepest
@@ -80,6 +98,15 @@ class AnalysisFailure extends Error {
 // instead of a timer that races to the end and waits. Failures we can detect
 // before any work starts (no session, unusable body) are still plain JSON error
 // responses with a real status code.
+//
+// A run the user walks away from is rolled back rather than carried on with. The
+// analysis saves as it goes and charges the moment its row lands, so a run that
+// is abandoned half-way through would otherwise leave them charged for a video
+// that reads as analysed while missing most of what makes it worth opening.
+// Losing the client (the tab closed, the page navigated away) stops the run at
+// the next stage boundary, deletes the analysis this run created and hands the
+// charge back, leaving them free to press the button again. See
+// lib/analysis-cleanup.ts.
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
   const {
@@ -105,6 +132,25 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  // What this run has created so far, so that whatever it has reached when the
+  // user leaves can be undone.
+  const run = createAnalysisRunRecord()
+  // Set the moment the analysis is finished and its result is on its way out.
+  // Past that point the user has what they paid for, so the connection closing
+  // (which is what finishing looks like from here) must not undo any of it.
+  let settled = false
+
+  // The user leaving is the one thing that can stop this run. It reaches us two
+  // ways, depending on how they left and where the request is being served:
+  // the request's own signal, and the response body being cancelled because
+  // nobody is reading it any more. Either is enough.
+  const abandoned = new AbortController()
+  const abandon = () => {
+    if (settled) return
+    abandoned.abort()
+  }
+  request.signal.addEventListener("abort", abandon)
+
   const encoder = new TextEncoder()
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -114,18 +160,32 @@ export async function POST(request: NextRequest) {
         try {
           controller.enqueue(encoder.encode(encodeAnalysisStreamEvent(event)))
         } catch {
-          // The client navigated away or aborted; stop writing but let the
-          // analysis itself run to completion so the work isn't wasted.
+          // Nobody is reading any more, which means the user has gone. Stop
+          // writing, and treat the run as abandoned: it is charged for and it
+          // has nowhere to deliver, so it is undone rather than finished.
           open = false
+          abandon()
         }
       }
       const reporter = createAnalysisProgressReporter(send)
 
       try {
-        const result = await runAnalysis(supabase, user.id, videoId, reporter)
+        const result = await runAnalysis(
+          supabase,
+          user.id,
+          videoId,
+          reporter,
+          abandoned.signal,
+          run,
+        )
+        settled = true
         send({ type: "result", result })
       } catch (error) {
-        if (error instanceof AnalysisFailure) {
+        if (error instanceof AnalysisAbandoned) {
+          // The user is gone, so there is no error to report: put them back
+          // where they were before they pressed the button instead.
+          await rollBackAnalysis(supabase, user.id, run)
+        } else if (error instanceof AnalysisFailure) {
           send({
             type: "error",
             status: error.status,
@@ -153,6 +213,11 @@ export async function POST(request: NextRequest) {
         controller.close()
       }
     },
+    // The response body was dropped without being read to the end, which only
+    // happens when the user has gone. Stop the run and let it undo itself.
+    cancel() {
+      abandon()
+    },
   })
 
   return new Response(stream, {
@@ -171,6 +236,12 @@ async function runAnalysis(
   userId: string,
   videoId: string,
   reporter: AnalysisProgressReporter,
+  // Raised when the user leaves. Checked between stages, so the run stops at the
+  // next boundary rather than working on with nowhere to deliver.
+  abandoned: AbortSignal,
+  // Filled in as the run creates things, so an abandoned run can undo exactly
+  // what it made and nothing else.
+  run: AnalysisRunRecord,
 ): Promise<unknown> {
   // Replay a saved analysis when we have one — calling YouTube costs quota.
   reporter.stage("lookup")
@@ -180,6 +251,10 @@ async function runAnalysis(
     // here because "lookup" is a shared prefix of both plans: the bar can't
     // rewind.
     reporter.usePlan(CACHED_ANALYSIS_STAGES)
+    // Nothing here is charged for or newly created, so there is nothing for an
+    // abandonment to undo. Stopping is still the right thing: the healing work
+    // below is only worth doing for a user who is still waiting on the report.
+    assertNotAbandoned(abandoned)
     reporter.stage("transcript")
     const transcript = await healCachedTranscript(
       supabase,
@@ -238,6 +313,8 @@ async function runAnalysis(
 
   const accessToken = await getGoogleAccessToken(userId)
 
+  // Last check before any YouTube quota is spent on a user who has left.
+  assertNotAbandoned(abandoned)
   reporter.stage("details")
   const video = await getVideoDetails(accessToken, videoId)
   if (!video) {
@@ -271,6 +348,11 @@ async function runAnalysis(
       return [] as TranscriptCue[]
     },
   )
+  // The last point at which walking away leaves nothing behind at all: past
+  // here the analysis is saved and charged for, and an abandoned run has to be
+  // rolled back rather than simply dropped.
+  assertNotAbandoned(abandoned)
+
   // Persist the analysis so subsequent requests are served from the cache
   // above, and so pacing analysis below has a video row to claim against.
   // Best-effort: a DB failure shouldn't fail the analysis response.
@@ -288,6 +370,10 @@ async function runAnalysis(
     if (savedVideo) {
       videoPersisted = true
       analysedVideoId = savedVideo.id
+      // This run inserted the row (a video that was already analysed is served
+      // from the cache above and never reaches here), so this run is the one
+      // that has to take it away again if the user leaves.
+      run.createdAnalysedVideoId = savedVideo.id
       reporter.advance(0.3)
       // Tally this new analysis against the plan's monthly allowance. Best
       // effort: a counter hiccup must not fail an analysis the user can use,
@@ -296,6 +382,7 @@ async function runAnalysis(
         await incrementUsage(userId, analysisPeriodStart, {
           videoAnalyses: 1,
         })
+        run.chargedPeriodStart = analysisPeriodStart
       } catch (usageError) {
         console.error("Failed to record video-analysis usage", usageError)
       }
@@ -345,6 +432,10 @@ async function runAnalysis(
       } catch (retentionSaveError) {
         console.error("Failed to save retention windows", retentionSaveError)
       }
+      // The curve, the windows and their pending work are stored. Everything
+      // past here is a model call, so it is the point where an abandoned run is
+      // worth stopping rather than paying to finish for nobody.
+      assertNotAbandoned(abandoned)
       if (transcript.length > 0) {
         reporter.stage("pacing")
         try {
@@ -363,6 +454,10 @@ async function runAnalysis(
       }
     }
   } catch (saveError) {
+    // A persistence failure is best-effort here, but the user having left is
+    // not something to swallow: it has to reach the caller so the run can be
+    // rolled back.
+    if (saveError instanceof AnalysisAbandoned) throw saveError
     console.error("Failed to save analysed video", saveError)
   }
 
@@ -378,6 +473,8 @@ async function runAnalysis(
       console.error("Failed to generate pacing analysis", pacingError)
     }
   }
+
+  assertNotAbandoned(abandoned)
 
   if (analysedVideoId) {
     reporter.stage("extras")
