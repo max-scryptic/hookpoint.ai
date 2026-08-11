@@ -200,6 +200,35 @@ export async function getAnalysedVideo(
   return data ? mapRow(data as AnalysedVideoRow) : null
 }
 
+// Removes an analysed video, and reports whether it removed anything. Every
+// table hung off a video (its retention windows and their media, transcripts,
+// events and costs, pacing, notifications, saved comparisons) cascades from
+// here, so this is the whole of the undo.
+//
+// The one caller is the analysis route, rolling back a run the user walked away
+// from part-way through: what it deletes is the row that same run created
+// moments earlier, never a video that was already analysed. The answer matters
+// because the charge is only handed back when the analysis it paid for actually
+// went away, and a rollback can be attempted more than once.
+export async function deleteAnalysedVideo(
+  supabase: SupabaseClient,
+  userId: string,
+  analysedVideoId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("analysed_videos")
+    .delete()
+    .eq("user_id", userId)
+    .eq("id", analysedVideoId)
+    .select("id")
+
+  if (error) {
+    throw new Error(`Failed to delete analysed video: ${error.message}`)
+  }
+
+  return ((data ?? []) as Array<{ id: string }>).length > 0
+}
+
 // Lightweight lookup for workers that already have the analysed_videos UUID
 // rather than YouTube's video id. Event synthesis uses the timestamped cues to
 // compare speech rate inside a retention episode with its preceding control.

@@ -207,7 +207,7 @@ export function ComparisonProcessing({
         <p className="text-xs text-muted-foreground">
           {isDone
             ? "All done. Your report is saved, so you can re-open it any time."
-            : "This takes a couple of minutes. Keep this tab open and we'll show you the report the moment it's ready."}
+            : "This takes a couple of minutes. Keep this tab open and we'll show you the report the moment it's ready. Leaving stops it and puts your credits back."}
         </p>
       </div>
 

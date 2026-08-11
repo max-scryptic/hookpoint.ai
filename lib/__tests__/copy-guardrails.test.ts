@@ -46,6 +46,7 @@ const CHANNEL_TRENDS_SOURCE_FILES = [
   "components/video-comparison-tabs.tsx",
   "lib/advice-similarity.ts",
   "lib/channel-taxonomy-trends.ts",
+  "lib/comparison-cleanup.ts",
   "lib/comparison-comparability.ts",
   "lib/comparison-report-versions.ts",
   "lib/packaging-comparison.ts",

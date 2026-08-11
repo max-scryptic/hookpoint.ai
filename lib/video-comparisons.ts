@@ -350,6 +350,12 @@ export async function saveRetentionComparisonReport(
   }
 }
 
+// How long after it was created a comparison carrying no written report at all
+// is treated as abandoned rather than as one still being written. The generate
+// endpoint is capped at 300 seconds (see its maxDuration), so anything older
+// than this cannot still be in flight, whichever tab or device started it.
+export const ABANDONED_COMPARISON_GRACE_MS = 15 * 60 * 1000
+
 // Records a newly generated comparison for the pair, in the order the creator
 // picked them. The caller charges credits before inserting; the unique index on
 // the unordered pair is the backstop against a duplicate slipping through a
@@ -391,4 +397,109 @@ export async function createSavedComparison(
     // caller writes all three before it responds.
     reportsReady: false,
   }
+}
+
+// Removes a saved comparison, and reports whether it removed anything. Every
+// caller is undoing an abandoned run, and the credits only go back when a row
+// actually went away, so the answer matters: the same abandonment can be
+// reported more than once (the creator's browser says so on its way out, and
+// the server notices the dropped connection independently), and only the first
+// report finds a row to delete. Scoped to the owning creator via RLS.
+export async function deleteComparison(
+  supabase: SupabaseClient,
+  userId: string,
+  comparisonId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("video_comparisons")
+    .delete()
+    .eq("id", comparisonId)
+    .eq("user_id", userId)
+    .select("id")
+
+  if (error) {
+    throw new Error(`Failed to delete comparison: ${error.message}`)
+  }
+
+  return ((data ?? []) as Array<{ id: string }>).length > 0
+}
+
+// Removes the pair's comparison, but only when this run is the run that created
+// it. The creator's browser reports an abandonment by pair (it never learns the
+// row's id, since it left before the response), and pressing the button on a
+// pair that already existed writes a missing section onto a row that was paid
+// for long ago: leaving that behind is the whole point, because it is what the
+// creator had before they pressed.
+//
+// Two things keep this to the abandoned run's own row. Only a row created at or
+// after the moment the run started can be this run's, and only a row carrying
+// none of the three written head-to-heads can be one nothing was ever written
+// onto. The second is what carries the weight when the first cannot be trusted
+// to the millisecond: startedAt is read off the creator's clock, which is not
+// the clock created_at was stamped by.
+export async function deleteComparisonCreatedSince(
+  supabase: SupabaseClient,
+  userId: string,
+  videoAId: string,
+  videoBId: string,
+  startedAt: Date,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("video_comparisons")
+    .delete()
+    .eq("user_id", userId)
+    .gte("created_at", startedAt.toISOString())
+    .is("script_report", null)
+    .is("packaging_report", null)
+    .is("retention_report", null)
+    .or(
+      `and(video_a_id.eq.${videoAId},video_b_id.eq.${videoBId}),and(video_a_id.eq.${videoBId},video_b_id.eq.${videoAId})`,
+    )
+    .select("id")
+
+  if (error) {
+    throw new Error(`Failed to delete abandoned comparison: ${error.message}`)
+  }
+
+  return ((data ?? []) as Array<{ id: string }>).length > 0
+}
+
+// A comparison left behind by a run nobody ever reported the end of: the tab was
+// closed without the browser getting its message out, the laptop went to sleep,
+// the deploy that was writing the report went away. Such a row carries no
+// written head-to-head at all and cannot still be being written (see
+// ABANDONED_COMPARISON_GRACE_MS), so it is exactly the state the creator was
+// charged for and never received.
+export interface AbandonedComparison {
+  id: string
+  createdAt: string
+}
+
+// Deletes those rows for one creator and says which ones went, so the caller can
+// hand back the credits each of them was charged. Every row this returns was
+// deleted by this call, so a refund can follow one for one even if two page
+// loads race.
+export async function deleteAbandonedComparisons(
+  supabase: SupabaseClient,
+  userId: string,
+  now: Date = new Date(),
+): Promise<AbandonedComparison[]> {
+  const cutoff = new Date(now.getTime() - ABANDONED_COMPARISON_GRACE_MS)
+  const { data, error } = await supabase
+    .from("video_comparisons")
+    .delete()
+    .eq("user_id", userId)
+    .lt("created_at", cutoff.toISOString())
+    .is("script_report", null)
+    .is("packaging_report", null)
+    .is("retention_report", null)
+    .select("id, created_at")
+
+  if (error) {
+    throw new Error(`Failed to clear abandoned comparisons: ${error.message}`)
+  }
+
+  return ((data ?? []) as Array<{ id: string; created_at: string }>).map(
+    (row) => ({ id: row.id, createdAt: row.created_at }),
+  )
 }

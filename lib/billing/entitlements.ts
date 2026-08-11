@@ -249,6 +249,34 @@ export async function incrementUsage(
   }
 }
 
+// Hands back usage that was charged for work the user never received: a
+// comparison report or a video analysis they abandoned part-way through, which
+// is rolled back to the state it was in before they pressed the button. Backed
+// by refund_usage_counters, which floors each tally at zero, so a refund that
+// arrives twice (the client reporting the abandonment and the server noticing
+// the disconnect can both land) never credits more than was spent.
+//
+// Only refund a charge whose work was actually undone. The callers all follow
+// the same rule: the row the run created is deleted first, and the refund only
+// follows when that delete removed something.
+export async function refundUsage(
+  userId: string,
+  periodStart: Date,
+  delta: { videoAnalyses?: number; deepCredits?: number },
+): Promise<void> {
+  const admin = createAdminClient()
+  const { error } = await admin.rpc("refund_usage_counters", {
+    p_user_id: userId,
+    p_period_start: periodStart.toISOString(),
+    p_video_analyses: delta.videoAnalyses ?? 0,
+    p_deep_credits: delta.deepCredits ?? 0,
+  })
+
+  if (error) {
+    throw new Error(`Failed to refund usage: ${error.message}`)
+  }
+}
+
 // A resolved view of one meter: the plan's allowance, how much is used, and
 // what's left. `unlimited` short-circuits every check.
 export type MeterStatus = {

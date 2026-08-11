@@ -7,6 +7,7 @@ import { buttonVariants } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { requireAuthenticatedUser } from "@/lib/auth"
 import { getEntitlement } from "@/lib/billing/entitlements"
+import { sweepAbandonedComparisons } from "@/lib/comparison-cleanup"
 import {
   listComparableVideos,
   type ComparableVideo,
@@ -58,6 +59,14 @@ async function loadComparePage(userId: string): Promise<CompareResult> {
 
   try {
     const supabase = await createClient()
+    // Clear out any run that was abandoned without the browser or the generate
+    // endpoint getting to say so (a browser killed outright, a deploy that went
+    // away mid-write) before reading the history back. Such a pair carries no
+    // report at all and cannot still be being written, so it is a charge the
+    // creator never got anything for: it goes, and the credits go back with it.
+    // Doing it here means the page they would notice it on is the page that
+    // tidies it up.
+    await sweepAbandonedComparisons(supabase, userId)
     const [videos, comparisons] = await Promise.all([
       listComparableVideos(supabase, userId),
       listSavedComparisons(supabase, userId),

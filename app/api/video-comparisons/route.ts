@@ -7,6 +7,7 @@ import {
   getUsageForWindow,
   incrementUsage,
 } from "@/lib/billing/entitlements"
+import { rollBackComparison } from "@/lib/comparison-cleanup"
 import type { LlmLogContext } from "@/lib/llm-calls"
 import { VIDEO_COMPARISON_CREDIT_COST } from "@/lib/plans"
 import {
@@ -48,6 +49,16 @@ export const maxDuration = 300
 // out of date (a pair created before these reports existed, one whose
 // generation failed, or one written against an older shape than the code now
 // renders), so a stale pair is repaired by the same deliberate action.
+//
+// A run that never finishes is rolled back rather than left half-done. The pair
+// is saved and charged for before any report can be written onto it, so a run
+// that is abandoned (the creator closed the tab, the connection dropped) or that
+// fails outright would otherwise leave a paid-for pair in the history that opens
+// onto an empty report. Both endings undo this run's own work: the row this
+// request created is deleted and its credits handed back, so the creator is left
+// exactly where they were before they pressed the button. A pair that already
+// existed is never touched by that rollback, since it is not this run's to
+// delete. See lib/comparison-cleanup.ts.
 
 // Which of the three head-to-heads a comparison row is carrying.
 interface ReportReadiness {
@@ -182,6 +193,47 @@ export async function POST(request: NextRequest) {
     userEmail: user.email ?? null,
   }
 
+  // What this request created, so an ending that leaves the report unwritten can
+  // undo exactly that and nothing else. Only ever set for a pair this request
+  // saved itself: an existing pair being finished for free is not ours to
+  // delete. chargedAt stays null until the credits are actually taken, so a
+  // rollback never refunds a charge that did not land.
+  const run: { comparisonId: string | null; chargedAt: Date | null } = {
+    comparisonId: null,
+    chargedAt: null,
+  }
+  // Set the moment we have an answer to send. Past this point the request is
+  // over on our side, so a late abort (a client that hangs up while the response
+  // is on the wire) must not tear down a report that was finished and stored.
+  let settled = false
+
+  // The creator closing the tab or navigating away is the common way a run is
+  // abandoned, and the browser telling us so is the only notice we get. Undo the
+  // run rather than leaving them charged for a report nobody will ever see. The
+  // reports still in flight cannot be recalled, but they write with the row id
+  // in hand, so once it is gone their writes land nowhere.
+  const abandon = () => {
+    if (settled || !run.comparisonId) return
+    void rollBackComparison(
+      supabase,
+      user.id,
+      run.comparisonId,
+      run.chargedAt,
+    ).then((rolledBack) => {
+      if (rolledBack) {
+        console.info("Rolled back an abandoned video comparison")
+      }
+    })
+  }
+  request.signal.addEventListener("abort", abandon)
+
+  // Every way out of the work below goes through here, so the run counts as
+  // finished the moment it has an answer and a late abort finds nothing to undo.
+  const settle = (payload: unknown, init?: { status: number }) => {
+    settled = true
+    return NextResponse.json(payload, init)
+  }
+
   try {
     // An already-generated pair re-opens for free: it was paid for once, so
     // there is nothing new to charge for. Any head-to-head that never made it
@@ -197,7 +249,7 @@ export async function POST(request: NextRequest) {
       // The common case: a complete pair, so there is nothing to write and the
       // client can go straight through to the report.
       if (existing.reportsReady) {
-        return NextResponse.json({
+        return settle({
           id: existing.id,
           charged: 0,
           reportsReady: true,
@@ -229,7 +281,7 @@ export async function POST(request: NextRequest) {
           packaging: isPackagingReportCurrent(stored.packaging),
         },
       )
-      return NextResponse.json({
+      return settle({
         id: existing.id,
         charged: 0,
         reportsReady: allReportsReady(ready),
@@ -240,7 +292,7 @@ export async function POST(request: NextRequest) {
     // plans without a budget cannot generate one.
     const entitlement = await getEntitlement(user.id)
     if (entitlement.plan.deepCreditsPerMonth <= 0) {
-      return NextResponse.json(
+      return settle(
         {
           error: `Video comparison is a paid feature. Upgrade to Starter or Pro to compare two videos side by side.`,
         },
@@ -252,7 +304,7 @@ export async function POST(request: NextRequest) {
     const remaining =
       entitlement.plan.deepCreditsPerMonth - usage.deepCreditsUsed
     if (remaining < VIDEO_COMPARISON_CREDIT_COST) {
-      return NextResponse.json(
+      return settle(
         {
           error: `A comparison costs ${VIDEO_COMPARISON_CREDIT_COST} deep-dive credits and you have ${Math.max(
             0,
@@ -284,7 +336,7 @@ export async function POST(request: NextRequest) {
       if (raced) {
         // A concurrent request created the pair and is writing its reports; say
         // what the row carries right now rather than promising a finished one.
-        return NextResponse.json({
+        return settle({
           id: raced.id,
           charged: 0,
           reportsReady: raced.reportsReady,
@@ -293,6 +345,10 @@ export async function POST(request: NextRequest) {
       throw error
     }
 
+    // From here on this row is this request's to finish, and this request's to
+    // take back if it cannot.
+    run.comparisonId = saved.id
+
     // Charge for the freshly saved comparison. Best-effort, matching the upload
     // path: the saved row is the record that the pair was generated, and a
     // metering hiccup must not strand a report the creator can already see.
@@ -300,6 +356,7 @@ export async function POST(request: NextRequest) {
       await incrementUsage(user.id, entitlement.periodStart, {
         deepCredits: VIDEO_COMPARISON_CREDIT_COST,
       })
+      run.chargedAt = new Date()
     } catch (error) {
       console.error("Failed to charge for video comparison", error)
     }
@@ -320,14 +377,26 @@ export async function POST(request: NextRequest) {
     // The client holds its "generating" popup until this response lands and
     // only then offers the way through to the report, so tell it whether the
     // report it is about to open is complete.
-    return NextResponse.json({
+    return settle({
       id: saved.id,
       charged: VIDEO_COMPARISON_CREDIT_COST,
       reportsReady: allReportsReady(ready),
     })
   } catch (error) {
     console.error("Failed to generate video comparison", error)
-    return NextResponse.json(
+    // The run fell over after saving (and charging for) the pair, so the creator
+    // is holding a paid-for row with nothing written on it. Put them back where
+    // they started rather than leaving that in their history: a failed press
+    // should cost them nothing and be safe to repeat.
+    if (run.comparisonId) {
+      await rollBackComparison(
+        supabase,
+        user.id,
+        run.comparisonId,
+        run.chargedAt,
+      )
+    }
+    return settle(
       { error: "We couldn't generate that comparison right now." },
       { status: 500 },
     )
