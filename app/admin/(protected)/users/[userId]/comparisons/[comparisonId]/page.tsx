@@ -186,7 +186,11 @@ export default async function AdminUserComparisonDetailPage({
         }
         script={
           reports.script != null ? (
-            <ScriptComparison report={reports.script} tipActions={false} />
+            <ScriptComparison
+              report={reports.script}
+              higherViewsSide={packaging?.higherViewsSide ?? null}
+              tipActions={false}
+            />
           ) : (
             <MissingReportCard>
               No script read is stored for these two videos. It is written from

@@ -57,12 +57,31 @@ import {
 // script report.
 export { SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION }
 
-// One titled paragraph of the written comparison, plus the one change that
-// paragraph argues for. The paragraph is deliberately short (one to two
-// sentences): the tab stacks these cards, so a long body pushes the later
-// sections off screen.
+export type ScriptReportSide = "a" | "b"
+
+// One theme of the written comparison, laid out the way the packaging
+// head-to-head lays out a surface: what each video's script does on that theme,
+// side by side, then the conclusion drawn from the pair, then the one change
+// that conclusion argues for. Everything here is deliberately short: the tab
+// stacks these panels, so a long section pushes the later ones off screen.
 export interface ScriptComparisonReportSection {
   heading: string
+  // What each video's script actually does on this theme, as a few short
+  // points shown under that video's own column. They sit under a header that
+  // already names the side, so they never name it themselves. Optional only
+  // because reports stored before schema version 5 predate them, and those
+  // render as the body paragraph alone.
+  videoA?: string[]
+  videoB?: string[]
+  // Which of the two writes this theme better, judged on the writing itself
+  // and never on which video performed better (see the comparability rules).
+  // Optional for the same reason the two columns are.
+  strongerSide?: ScriptReportSide | "neither"
+  // The conclusion the columns add up to: what this theme does for a script in
+  // general, rather than a restatement of what these two did. From schema
+  // version 5 this names neither video, because the columns above it already
+  // do. Reports stored earlier carry a paragraph comparing the two directly,
+  // which still renders in the same place.
   body: string
   // This section's own "Try:" line, so every section of the report closes on
   // something to do next rather than only stating the difference. Both videos
@@ -105,9 +124,21 @@ export interface ScriptComparisonReportSide {
 
 const MAX_SECTIONS = 6
 const MIN_SECTIONS = 3
+// How many points each video's column carries on a theme. Two or three is what
+// a reader can take in across two columns at a glance; a fourth turns the panel
+// into a wall and pushes the conclusion below the fold.
+const MIN_SIDE_POINTS = 2
+const MAX_SIDE_POINTS = 3
 // Keep each transcript bounded so a very long video cannot blow the token
 // budget. The head of a script carries the hook and setup that matter most.
 const MAX_TRANSCRIPT_CHARS = 14_000
+
+const sidePointsSchema = {
+  type: "array",
+  minItems: MIN_SIDE_POINTS,
+  maxItems: MAX_SIDE_POINTS,
+  items: { type: "string" },
+} as const
 
 const REPORT_SCHEMA = {
   type: "object",
@@ -122,9 +153,19 @@ const REPORT_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["heading", "body", "tip"],
+        required: [
+          "heading",
+          "videoA",
+          "videoB",
+          "strongerSide",
+          "body",
+          "tip",
+        ],
         properties: {
           heading: { type: "string" },
+          videoA: sidePointsSchema,
+          videoB: sidePointsSchema,
+          strongerSide: { type: "string", enum: ["a", "b", "neither"] },
           body: { type: "string" },
           tip: { type: "string" },
         },
@@ -136,6 +177,16 @@ const REPORT_SCHEMA = {
 interface ModelReportOutput {
   summary: string
   sections: ScriptComparisonReportSection[]
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string")
+}
+
+function isSideOrNeither(
+  value: unknown,
+): value is ScriptReportSide | "neither" {
+  return value === "a" || value === "b" || value === "neither"
 }
 
 function isModelReportOutput(value: unknown): value is ModelReportOutput {
@@ -151,6 +202,12 @@ function isModelReportOutput(value: unknown): value is ModelReportOutput {
       return (
         typeof s.heading === "string" &&
         typeof s.body === "string" &&
+        // The per side columns and the craft verdict over them arrived at
+        // schema version 5, so they are optional here: a report stored before
+        // that still validates if it is ever fed back through.
+        (s.videoA === undefined || isStringArray(s.videoA)) &&
+        (s.videoB === undefined || isStringArray(s.videoB)) &&
+        (s.strongerSide === undefined || isSideOrNeither(s.strongerSide)) &&
         // A report stored before schema version 2 carried no section tip, and
         // still validates if it is ever fed back through here.
         (s.tip === undefined || typeof s.tip === "string")
@@ -177,6 +234,15 @@ function timestampedTranscript(cues: TranscriptCue[]): string {
     total += line.length + 1
   }
   return lines.join("\n")
+}
+
+// One video's column on a theme, trimmed and capped. Empty points are dropped
+// rather than rendered as a blank bullet.
+function sidePoints(points: string[] | undefined): string[] {
+  return (points ?? [])
+    .map((point) => point.trim())
+    .filter((point) => point.length > 0)
+    .slice(0, MAX_SIDE_POINTS)
 }
 
 function extractOutputText(response: {
@@ -219,15 +285,18 @@ export const SCRIPT_COMPARISON_INSTRUCTIONS = [
   "You write a head-to-head comparison of the SCRIPTS (the spoken content) of two YouTube videos, Video A and Video B, reading both full timestamped transcripts. Each video also comes with a packaging read (its title/thumbnail/hook taxonomy) that you may use as context for the opening and framing. Your job is to explain how the two scripts differ in what they SAY and how they FEEL, and what in the writing most plausibly moved audience retention.",
   "Ground every claim in what is genuinely in the transcripts; never invent lines that are not there, and use the packaging read only as supporting context, not as the main evidence. When a video's transcript is missing, say so plainly for that side rather than guessing at its content.",
   "Whoever is heard speaking may be the uploader, a co-host, a guest or a voiceover, so never pin what is said on a specific or gendered person (he, she, the creator); refer to the uploader's own video, or simply Video A and Video B.",
-  "Write the name in full every time: Video A and Video B, never a bare A or B on its own, in the summary and in every section. 'Video B front-loads the payoff, Video A holds it back' is right; 'B front-loads the payoff, A holds it back' is not. The same holds for the possessive, so write Video A's opening rather than A's opening.",
+  "Wherever you do name one of the two, write the name in full: Video A and Video B, never a bare A or B on its own. 'Video B front-loads the payoff, Video A holds it back' is right; 'B front-loads the payoff, A holds it back' is not. The same holds for the possessive, so write Video A's opening rather than A's opening.",
   COMPARABILITY_PROMPT,
   "In this report, where the pair is anchored, views and averageViewPercentage come through for orientation and every link you draw between a script trait and performance is still correlation worth noting rather than proof, so hedge accordingly. Where it is not, those two fields arrive null on both videos by design, and the script evidence is the whole of what you have to argue from, which is enough: what a script does with its structure, its payoffs and its asides is visible in the transcript without any performance figure at all.",
-  "Keep every field short. This report is read on one screen, so say each difference once, in the fewest words that still carry the evidence, and stop. Cut wind-up clauses, restatement of the heading, hedging padding and any sentence that only says a difference matters without naming what it is. A body that names the concrete difference in two sentences beats a longer one that circles it.",
+  "Keep every field short. This report is read on one screen, so say each thing once, in the fewest words that still carry the evidence, and stop. Cut wind-up clauses, restatement of the heading, hedging padding and any sentence that only says a difference matters without naming what it is. A point that names the concrete thing the script does beats a longer one that circles it.",
   "summary: two sentences, about 45 words at most, on how the two scripts compare. When comparability.anchor is 'anchored' that includes which reads as the stronger retention play. Otherwise this is the one place the pair's limit is named, in a single short clause, and the rest of the summary says what the two scripts are each doing differently.",
-  "sections: 3 to 6 titled paragraphs. Give each a short heading (e.g. Structure, Substance and payoff, Hook and opening, Emotion and energy, Likely retention driver) and a body of one to two sentences, about 50 words at most, comparing the two videos on that theme, naming Video A and Video B explicitly.",
+  "sections: 3 to 6 themes, each with a short heading (e.g. Structure and pacing, Substance and payoff, Hook and opening, Emotion and energy, Audience engagement). Every section is written in four parts, in this order: videoA and videoB, then strongerSide, then body, then tip. The reader meets them as two columns side by side, a conclusion under both, and one line of advice under that, so write each part for the place it lands.",
+  "videoA and videoB: 2 or 3 short points each, about 14 words apiece, saying concretely what that video's script does on this theme, grounded in what is actually in its transcript. Each point sits in a column already headed Video A or Video B, so never open a point with the video's name and never mention the other video inside one: write the observation itself, as in 'Opens on the deck list before naming the problem it solves'. Keep the two columns parallel, so a reader can read straight across from a point on one side to the matching point on the other.",
+  "strongerSide: which of the two writes this theme better, judged on the writing in front of you, or 'neither' when they are genuinely close or simply doing two different things well. This is a judgement of the scripts themselves and never a report of which video performed better.",
+  "body: the conclusion the two columns add up to, in one or two sentences of about 40 words, written as a general principle about scripts rather than about these two videos, as in 'A script holds attention when every aside pays back the thread it interrupted, and loses it when the asides stack up'. The columns above already say what each video did, so do not name Video A or Video B here, do not restate the points, and where this pair carries no performance anchor phrase the principle as what an approach buys and trades rather than as a claim about what performed.",
   TIP_VOICE_PROMPT,
-  "In this report that rule also means the two videos stay out of the tips entirely: never name Video A or Video B inside a tip, and never phrase a tip as something one of these two scripts should have done. The section bodies are the opposite: those describe what these two scripts already did, so they name Video A and Video B freely.",
-  "tip: every section carries one. It is the single change that section's comparison argues for, written as a one-sentence instruction of about 25 words at most for the uploader's next script (for example 'State the payoff you are building to within the first fifteen seconds, then keep every aside under one sentence'). Name the change rather than restating the paragraph, and keep it specific to what this comparison actually showed rather than generic scripting advice, while phrasing it as a rule to apply next time. Do not repeat another section's tip word for word.",
+  "In this report that rule also means the two videos stay out of the tips entirely: never name Video A or Video B inside a tip, and never phrase a tip as something one of these two scripts should have done. The per video points are the opposite: those describe what these two scripts already did, in the column belonging to the video that did it.",
+  "tip: every section carries one. It is the single change that section's comparison argues for, written as a one-sentence instruction of about 25 words at most for the uploader's next script (for example 'State the payoff you are building to within the first fifteen seconds, then keep every aside under one sentence'). Name the change rather than restating the principle the body just stated, and keep it specific to what this comparison actually showed rather than generic scripting advice, while phrasing it as a rule to apply next time. Do not repeat another section's tip word for word.",
   "Write in plain, direct prose. Never output an em dash character (U+2014) or en dash (U+2013) anywhere in your response; if you would use one, rewrite with a comma, colon, parentheses or two sentences instead.",
 ].join(" ")
 
@@ -294,7 +363,10 @@ export async function generateScriptComparisonReport(
     },
     body: JSON.stringify({
       model,
-      max_output_tokens: 2_000,
+      // Six themes now carry two columns of points each on top of their
+      // conclusion and their tip, so the ceiling that fitted the paragraph-only
+      // shape would truncate a full report.
+      max_output_tokens: 3_000,
       input: [
         {
           role: "developer",
@@ -351,8 +423,18 @@ export async function generateScriptComparisonReport(
     sections: parsed.sections
       .map((section) => {
         const tip = section.tip?.trim() ?? ""
+        const videoA = sidePoints(section.videoA)
+        const videoB = sidePoints(section.videoB)
         return {
           heading: section.heading.trim(),
+          // Each column is dropped rather than stored empty, for the same
+          // reason the tip is: the renderer decides whether to draw the two
+          // columns at all on a plain presence check.
+          ...(videoA.length > 0 ? { videoA } : {}),
+          ...(videoB.length > 0 ? { videoB } : {}),
+          ...(section.strongerSide != null
+            ? { strongerSide: section.strongerSide }
+            : {}),
           body: section.body.trim(),
           // Dropped rather than stored empty, so the renderer's "has a tip"
           // test stays a simple presence check.
