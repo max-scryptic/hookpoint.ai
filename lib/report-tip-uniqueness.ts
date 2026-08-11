@@ -115,6 +115,14 @@ export function dedupeSectionTips(
 /**
  * The pacing analysis with any suggestion the report has already made blanked,
  * which is how that list hides a tip it has nothing to show for.
+ *
+ * The returned stretches are in chronological order, and that is part of this
+ * function's contract rather than an implementation detail: the pacing stretches
+ * arrive from the model ranked by how much they are worth reviewing, and the
+ * report shows them in two places at once (a numbered row in the pacing list and
+ * a marker on the retention chart). Both number them by position, so "Pacing
+ * opportunity 2" only means one stretch if a single pass decides the order.
+ * Callers render this array as given; none of them sort it again.
  */
 export function dedupePacingTips(
   analysis: PacingAnalysis | null,

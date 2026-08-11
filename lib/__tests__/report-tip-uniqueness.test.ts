@@ -228,6 +228,26 @@ describe("dedupePacingTips", () => {
     expect(result?.slowOrRepetitiveStretches[1].suggestion).toBe("")
   })
 
+  // The report renders these stretches twice — as numbered rows in the pacing
+  // list and as markers on the retention chart — and both number them by
+  // position in this array. Neither sorts it again, so if this pass stopped
+  // ordering them the two would silently disagree about which stretch is
+  // "Pacing opportunity 2".
+  it("returns the stretches in chronological order", () => {
+    const result = dedupePacingTips(
+      analysis([
+        { startSeconds: 240, suggestion: PACING_TIP },
+        { startSeconds: 60, suggestion: SIGNPOST_TIP },
+        { startSeconds: 150, suggestion: "Cut the recap to a single sentence." },
+      ]),
+      createFirstSaying(),
+    )
+
+    expect(
+      result?.slowOrRepetitiveStretches.map((stretch) => stretch.startSeconds),
+    ).toEqual([60, 150, 240])
+  })
+
   it("passes a missing analysis through", () => {
     expect(dedupePacingTips(null, createFirstSaying())).toBeNull()
   })

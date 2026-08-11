@@ -343,9 +343,11 @@ function PacingAnalysisSection({
         </div>
       ) : (
         <ul className="divide-y overflow-hidden rounded-xl border bg-card [&>li:first-child]:rounded-t-xl [&>li:last-child]:rounded-b-xl">
-          {[...analysis.slowOrRepetitiveStretches]
-            .sort((a, b) => a.startSeconds - b.startSeconds)
-            .map((stretch, index) => {
+          {/* Rendered in the order given, which dedupePacingTips has already put
+              in chronological order. Sorting again here would be harmless today
+              and wrong the moment the two lists disagree: the chart numbers its
+              markers off that same array, and the numbers have to match. */}
+          {analysis.slowOrRepetitiveStretches.map((stretch, index) => {
             const rowId = `pacing-${stretch.startSeconds}-${stretch.endSeconds}`
             const isHighlighted = rowId === highlightedId
             return (
@@ -1516,7 +1518,12 @@ export function AnalysedVideoDetail({
         transcript: said || undefined,
       }
     }),
-    ...(pacingAnalysis?.slowOrRepetitiveStretches ?? []).map(
+    // Built from the deduped analysis rather than the raw one, so a marker is
+    // numbered off the same ordered list its row is numbered off (see
+    // dedupePacingTips) and carries the suggestion the row actually shows. Read
+    // straight from the model instead, these markers were numbered by the
+    // model's own ranking while the rows below were numbered chronologically.
+    ...(dedupedPacingAnalysis?.slowOrRepetitiveStretches ?? []).map(
       (stretch, index) => ({
         id: `pacing-${stretch.startSeconds}-${stretch.endSeconds}`,
         kind: "pacing" as const,
