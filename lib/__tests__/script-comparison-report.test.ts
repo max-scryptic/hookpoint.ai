@@ -68,8 +68,47 @@ function modelOutput() {
     sections: [
       {
         heading: " Structure and pacing ",
-        body: " Video A digresses between hands; Video B moves hand to hand. ",
+        videoA: [
+          "  Breaks off mid-hand to explain the colour grade  ",
+          "Returns to the match without restating the stakes",
+          "   ",
+        ],
+        videoB: ["Moves hand to hand with no detour", "Names the swap, then plays it"],
+        strongerSide: "b",
+        body: " A script holds attention when every aside pays back the thread it interrupted. ",
         tip: "  Keep every aside between plays under one sentence.  ",
+      },
+      {
+        heading: "Substance",
+        videoA: ["Shows the swap without saying why", "Leaves the counter unnamed"],
+        videoB: ["Names the tactical reason for each swap", "Says what the swap loses"],
+        strongerSide: "b",
+        body: "A swap is only teaching when the reason travels with it.",
+        tip: "Name the reason for a swap in the same breath as the swap.",
+      },
+      {
+        heading: "Hook",
+        videoA: ["Opens on the deck list itself", "States the arena before the claim"],
+        videoB: ["Opens on the deck list itself", "Adds a joke before the claim"],
+        strongerSide: "neither",
+        body: "An opening lands faster when the claim arrives before the inventory.",
+        tip: "Open on the claim the deck makes, then show the list.",
+      },
+    ],
+  }
+}
+
+// The shape the model wrote before schema version 5: a paragraph per section
+// and nothing beside it. Reports stored like this are still read back through
+// the same validator, so they have to survive it.
+function legacyModelOutput() {
+  return {
+    summary: "Video A meanders where Video B stays on one line.",
+    sections: [
+      {
+        heading: "Structure and pacing",
+        body: "Video A digresses between hands; Video B moves hand to hand.",
+        tip: "Keep every aside between plays under one sentence.",
       },
       {
         heading: "Substance",
@@ -164,6 +203,19 @@ describe("SCRIPT_COMPARISON_INSTRUCTIONS", () => {
     expect(SCRIPT_COMPARISON_INSTRUCTIONS).toMatch(/one place the pair's limit/)
   })
 
+  // The section is read as two columns and a conclusion under them, so the
+  // points have to belong to one video each and the conclusion has to stand
+  // without naming either. A body that restates the columns reads as the same
+  // sentence twice on the page.
+  it("asks for a column per video and keeps the videos out of the conclusion", () => {
+    expect(SCRIPT_COMPARISON_INSTRUCTIONS).toMatch(
+      /never open a point with the video's name/,
+    )
+    expect(SCRIPT_COMPARISON_INSTRUCTIONS).toMatch(
+      /do not name Video A or Video B here/,
+    )
+  })
+
   it("no longer asks for a stronger retention play unconditionally", () => {
     // The old instruction read "which reads as the stronger retention play, if
     // either", with nothing conditioning it. That single clause is what turned
@@ -208,6 +260,49 @@ describe("generateScriptComparisonReport", () => {
     expect(report?.sections[0].tip).toBe(
       "Keep every aside between plays under one sentence.",
     )
+  })
+
+  it("stores each video's own points, trimmed, beside the conclusion", async () => {
+    process.env.OPENAI_API_KEY = "test-key"
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(responseOf(modelOutput())))
+
+    const [a, b] = lopsidedPair()
+    const section = (await generateScriptComparisonReport(a, b))?.sections[0]
+
+    expect(section?.videoA).toEqual([
+      "Breaks off mid-hand to explain the colour grade",
+      "Returns to the match without restating the stakes",
+    ])
+    expect(section?.videoB).toEqual([
+      "Moves hand to hand with no detour",
+      "Names the swap, then plays it",
+    ])
+    // The craft verdict behind the "stronger here" badge on the column header.
+    expect(section?.strongerSide).toBe("b")
+    // The conclusion under the two columns is a principle, not a restatement of
+    // them, so it names neither video.
+    expect(section?.body).toBe(
+      "A script holds attention when every aside pays back the thread it interrupted.",
+    )
+  })
+
+  // A pair generated before the columns existed is rewritten by the generate
+  // button rather than on view, so the older shape has to keep parsing until
+  // then instead of failing the whole report.
+  it("still accepts a report written in the paragraph-only shape", async () => {
+    process.env.OPENAI_API_KEY = "test-key"
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(responseOf(legacyModelOutput())),
+    )
+
+    const [a, b] = lopsidedPair()
+    const section = (await generateScriptComparisonReport(a, b))?.sections[0]
+
+    expect(section?.videoA).toBeUndefined()
+    expect(section?.videoB).toBeUndefined()
+    expect(section?.strongerSide).toBeUndefined()
+    expect(section?.body).toContain("Video A digresses between hands")
   })
 
   it("hands the model the comparability verdict before the evidence", async () => {

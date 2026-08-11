@@ -179,14 +179,24 @@ function MissingReportCard({ children }: { children: ReactNode }) {
 }
 
 // The Script tab body, rendered straight from what is stored. Nothing is
-// generated here.
+// generated here. The one thing that is not stored on the report is which video
+// has more views, which the section's column headers badge exactly as the
+// packaging tab does, so it is read off the packaging diff (derived on every
+// open) and simply left off for a pair that has none.
 function ScriptComparisonSection({
+  packaging,
   report,
 }: {
+  packaging: PackagingComparisonData | null
   report: ScriptComparisonReport | null
 }) {
   if (report) {
-    return <ScriptComparison report={report} />
+    return (
+      <ScriptComparison
+        report={report}
+        higherViewsSide={packaging?.higherViewsSide ?? null}
+      />
+    )
   }
 
   return (
@@ -370,6 +380,7 @@ export default async function Page({
               }
               script={
                 <ScriptComparisonSection
+                  packaging={result.active.packaging}
                   report={result.active.scriptReport}
                 />
               }

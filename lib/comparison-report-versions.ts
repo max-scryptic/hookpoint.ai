@@ -21,8 +21,14 @@
 // are withheld from the model entirely. Reports stored at version 3 were
 // handed both videos' views and average watched with nothing holding them, so
 // they can name a 73 view video the stronger retention play and point every
-// tip at it, and are rewritten rather than rendered.
-export const SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION = 4
+// tip at it, and are rewritten rather than rendered. Version 5 split every
+// section into the shape the packaging head-to-head already uses: what each
+// video's script does on that theme in its own column, a craft verdict over the
+// two, and a conclusion written as a principle rather than as a paragraph about
+// this pair. Reports stored at version 4 carry only that paragraph, which
+// still renders where the conclusion goes with no columns above it, so nothing
+// is lost while they wait to be rewritten.
+export const SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION = 5
 
 // Bumped whenever the stored packaging report shape changes. Version 2 added
 // the per driver "Try:" tip; reports stored at version 1 simply render without
