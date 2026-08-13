@@ -31,7 +31,13 @@ export type RetentionMomentKind = "hook" | "drop_off" | "gain" | "hold"
 // below). Every stored attribution up to 6 was written under a prompt that
 // demanded one per moment, so they all carry the tips this version exists to
 // stop producing.
-export const RETENTION_ATTRIBUTION_SCHEMA_VERSION = 7
+// Bumped to 8 when the hold instruction was rewritten. Version 7 told the model
+// a hold was "the moment least likely to earn a tip, since nothing measurably
+// changed", which is the wrong reading of a hold and produced a Holds section
+// where no row ever carried advice. Every attribution stored at 7 was written
+// under that instruction, so their holds are silent for a reason that no longer
+// applies and they are regenerated.
+export const RETENTION_ATTRIBUTION_SCHEMA_VERSION = 8
 
 // THE WARRANT
 //
@@ -265,11 +271,21 @@ export async function generateRetentionAttribution(
                 // The warrant. See THE WARRANT above for why a tip has to be
                 // earned here rather than produced on demand.
                 "Every moment gets an explanation. A tip is not owed one. You are reading a transcript with no picture and no sound, so a great many retention moments have a cause you cannot see: a held frame, a jump cut, a sponsor bumper, a graphic that did or did not land, a change in energy, a stretch where the picture stopped moving. Where that is the likelier story, the words in front of you cannot tell you what to advise, and a tip written anyway is a guess dressed up as analysis. Set tip to null and let the explanation stand on its own. Returning null is the expected outcome for a large share of moments and is never a failure to do the task.",
-                "tipWarrant (0..1) is your own honest reading of how far the supplied words justify the tip you wrote, judged on the transcript alone. Score it 0.8 or above when what is said is itself the cause and the advice follows directly from it: a promise made and not delivered, a topic changing with nothing to signpost it, a tangent that runs long, a payoff landing exactly where viewers came back. Score it around 0.5 when the words are merely consistent with the retention move and so is anything you cannot see. Score it 0.2 or below when the transcript is thin, generic, or tells you nothing beyond the fact that talking was happening. Do not inflate the score to keep a tip alive, and do not write a tip you would score below 0.5. Set tipWarrant to 0 whenever tip is null.",
+                "tipWarrant (0..1) is your own honest reading of how far the supplied words justify the tip you wrote, judged on the transcript alone. Score it 0.8 or above when what is said is itself the cause and the advice follows directly from it: a promise made and not delivered, a topic changing with nothing to signpost it, a tangent that runs long, a payoff landing exactly where viewers came back, a question held open across a stretch nobody left. Score it around 0.5 when the words are merely consistent with the retention move and so is anything you cannot see. Score it 0.2 or below when the transcript is thin, generic, or tells you nothing beyond the fact that talking was happening. Do not inflate the score to keep a tip alive, and do not write a tip you would score below 0.5. Set tipWarrant to 0 whenever tip is null.",
                 "For a hook, explain how effectively the words create curiosity, establish the promise, and move toward delivering it, grounded in the supplied transcript. Where the wording of the opening is itself what holds or loses the viewer, give one concrete way to open a future video.",
                 "For a drop_off, explain the most likely reason viewers left based on what was being said (e.g. a topic change, a slow tangent, an unmet promise, an ad or sponsor read, a natural stopping point), and where the words are the cause, give one concrete tip for handling that same situation differently in a future video. Where the transcript reads as ordinary continuous speech with no such turn in it, the cause is more likely something you were not shown: explain what was being said and set tip to null.",
                 "For a gain, explain what likely pulled viewers back or made them re-watch. Where the transcript shows the thing that did it (a payoff arriving, a question finally answered, a turn in the story), give a tip telling the uploader how to deliberately set that same thing up again in their next videos. Where the words around the gain are unremarkable, what worked was probably visual or editorial and is not yours to name, so set tip to null rather than writing generic praise or telling them to reuse an approach you cannot identify.",
-                "For a hold, explain what in the supplied words likely sustained attention without a meaningful gain or loss. A hold is the moment least likely to earn a tip, since nothing measurably changed: give one only where the transcript shows a specific, repeatable technique doing the holding, and set tip to null otherwise.",
+                // A hold is not a quiet moment, it is a stretch the audience sat
+                // through in full, and it is usually the longest span on the
+                // page. The instruction here used to open by calling it the
+                // moment least likely to earn a tip; the model took that as the
+                // answer rather than as a warning, and the Holds section went
+                // out with an explanation on every row and advice on none. What
+                // the warrant actually asks is whether the words in front of you
+                // name the thing doing the holding, which for a hold they often
+                // do, since holding an audience for a minute is usually a
+                // property of the writing rather than of a single cut.
+                "For a hold, the words were spoken across a stretch where the audience stayed put, so explain what in them likely kept people watching. Where the transcript names the technique doing it (a question left open, stakes being raised, a decision narrated as it is taken, a mistake admitted, a story working towards a payoff), give a tip on how to set that same technique up deliberately in a future video, the way you would for a gain. Set tip to null where the words across the hold are unremarkable and whatever held the audience is more likely something you were not shown.",
                 // A moment is explained in isolation, so several moments with
                 // one cause used to come back as one sentence repeated down the
                 // page. lib/report-tip-uniqueness.ts drops a repeat at render
