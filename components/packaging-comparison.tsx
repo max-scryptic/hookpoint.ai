@@ -190,15 +190,32 @@ function ScoreBar({
   )
 }
 
-// The frame every piece of per-side material sits in: the video's own words, or
-// its alignment numbers, tinted and ruled off so they read as that video's own
-// material rather than as more of the report. The written read below the columns
-// is plain foreground text now, matching the detail line on a single video's
-// packaging card, so this panel is what sets the material apart without dimming
-// the words themselves.
-function EvidenceQuote({ children }: { children: ReactNode }) {
+// The frame every piece of per-side material sits in: the video's own words,
+// its real thumbnail, or its alignment numbers, tinted and ruled off so they
+// read as that video's own material rather than as more of the report. Every
+// surface tab uses it, so the thumbnail pair is framed the same way the title
+// and the opening are. The written read below the columns is plain foreground
+// text now, matching the detail line on a single video's packaging card, so
+// this panel is what sets the material apart without dimming the words
+// themselves.
+function EvidenceQuote({
+  children,
+  // The thumbnail is a picture rather than words, so it asks for an even inset
+  // all round instead of the roomier sides text reads better with. Everything
+  // else about the panel stays fixed, so the four tabs still frame their
+  // material identically.
+  className,
+}: {
+  children: ReactNode
+  className?: string
+}) {
   return (
-    <div className="rounded-md border-l-2 border-muted-foreground/30 bg-muted/40 py-2 pr-3 pl-3">
+    <div
+      className={cn(
+        "rounded-md border-l-2 border-muted-foreground/30 bg-muted/40 py-2 pr-3 pl-3",
+        className,
+      )}
+    >
       {children}
     </div>
   )
@@ -295,13 +312,15 @@ function SurfaceEvidence({
 
   if (surface === "thumbnail") {
     return (
-      <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-background">
-        <VideoThumbnail
-          src={video.thumbnailUrl}
-          alt=""
-          sizes="(min-width: 640px) 50vw, 100vw"
-        />
-      </div>
+      <EvidenceQuote className="p-2">
+        <div className="relative aspect-video w-full overflow-hidden rounded-sm bg-background">
+          <VideoThumbnail
+            src={video.thumbnailUrl}
+            alt=""
+            sizes="(min-width: 640px) 50vw, 100vw"
+          />
+        </div>
+      </EvidenceQuote>
     )
   }
 
