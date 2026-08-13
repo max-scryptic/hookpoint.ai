@@ -68,6 +68,7 @@ export type RecommendationActionType =
   | "add_visual_support"
   | "signpost_topic_shift"
   | "preserve_pattern"
+  | "sustain_attention"
   | "review_transition"
 
 // One way of acting on what a window measured, with the line of subtext that
@@ -131,6 +132,36 @@ const PRESERVE_PATTERN: RecommendationChoice = {
         "Place a beat like this early in your next videos, while most of the audience is still watching, so more of them reach the moment that lands.",
       expectedPurpose:
         "Where a strong moment sits decides how many people ever see it.",
+    },
+  ],
+}
+
+// A hold is the other window kind that is not a fault to diagnose, and it is not
+// the same success as a gain. A gain is a spike: one beat pulled people back, so
+// the advice is to stage that beat again. A hold is a stretch, often the longest
+// single thing on the page, where the audience simply did not leave for its whole
+// span. What that teaches is about structure rather than about a moment, so the
+// advice is about how much of the next video is built the way this stretch was.
+const SUSTAIN_ATTENTION: RecommendationChoice = {
+  actionType: "sustain_attention",
+  copy: [
+    {
+      action:
+        "Plan a whole segment around whatever a stretch like this runs on, a decision being worked through or a question you have not answered yet, and give it room to play out at length.",
+      expectedPurpose:
+        "A mechanism you can name is one you can build the next video around.",
+    },
+    {
+      action:
+        "Keep one thread running underneath a long section, something the audience is waiting to see resolved, so the minutes in the middle of a video have their own reason to be watched.",
+      expectedPurpose:
+        "An unresolved thread is what gives a long middle section its pull.",
+    },
+    {
+      action:
+        "Spend more of your runtime on material that behaves like this and less on the sections around it, so the parts that carry the audience are the parts that run long.",
+      expectedPurpose:
+        "Runtime spent on what holds is runtime the audience stays for.",
     },
   ],
 }
@@ -528,6 +559,11 @@ function choiceForEvent(params: {
   // A gain is not a problem to diagnose. Whatever the moment was made of, the
   // advice is to do it again on purpose, so this outranks the subject.
   if (params.window.kind === "gain") return PRESERVE_PATTERN
+
+  // Neither is a hold, and answering one from the subject was how a stretch that
+  // kept every viewer it had came back advising the uploader to cut its silence
+  // or add a graphic to it. See SUSTAIN_ATTENTION.
+  if (params.window.kind === "hold") return SUSTAIN_ATTENTION
 
   return choiceForSubject(params) ?? choiceFromMeasurements(params)
 }

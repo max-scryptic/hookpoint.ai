@@ -167,6 +167,39 @@ describe("compileDeepAnalysisRecommendations", () => {
       expect(recommendation.actionType).toBe("preserve_pattern")
     })
 
+    // Nor is a hold. Answered from the subject and the measurements, a stretch
+    // that kept every viewer it had came back advised to cut its silence or add
+    // a graphic to it.
+    it("tells a hold to build more of the next video the same way", () => {
+      const [recommendation] = compileDeepAnalysisRecommendations({
+        events: [event({ eventType: "audio_change", primaryEvidence: "audio" })],
+        window: { ...window, kind: "hold" },
+        editing: { freezeCoverage: 0.2 } as never,
+        baseline: { cutsPerMinute: 8, speechRate: 150 },
+        audio: { silence: 0.2 } as never,
+      })
+      expect(recommendation.actionType).toBe("sustain_attention")
+    })
+
+    // A gain is a beat to stage again; a hold is a span to build more of. Both
+    // are successes, and a report carrying one of each has to have something
+    // different to say about them or the uniqueness pass silences the second.
+    it("gives a hold different advice from a gain", () => {
+      const [gain] = compileDeepAnalysisRecommendations({
+        events: [event()],
+        window: { ...window, kind: "gain" },
+        audio: null,
+        ...slowlyCutWindow,
+      })
+      const [hold] = compileDeepAnalysisRecommendations({
+        events: [event({ id: "event-2" })],
+        window: { ...window, id: "window-2", kind: "hold" },
+        audio: null,
+        ...slowlyCutWindow,
+      })
+      expect(isNearDuplicateAdvice(gain.action, hold.action)).toBe(false)
+    })
+
     // The two halves of the fix meet here: insights about different things no
     // longer collapse onto one branch, so a window's own tabs stop competing
     // for the same advice before the uniqueness pass has to intervene.
@@ -193,6 +226,7 @@ describe("compileDeepAnalysisRecommendations", () => {
   const BRANCH_CASES: Parameters<typeof compileDeepAnalysisRecommendations>[0][] = [
     { events: [event()], window, editing: null, baseline: { cutsPerMinute: null, speechRate: null }, audio: null },
     { events: [event()], window: { ...window, kind: "gain" }, editing: null, baseline: { cutsPerMinute: null, speechRate: null }, audio: null },
+    { events: [event()], window: { ...window, kind: "hold" }, editing: null, baseline: { cutsPerMinute: null, speechRate: null }, audio: null },
     { events: [event()], window, editing: { freezeCoverage: 0.2 } as never, baseline: { cutsPerMinute: null, speechRate: null }, audio: null },
     { events: [event()], window, editing: { freezeCoverage: 0, blackCoverage: 0.2 } as never, baseline: { cutsPerMinute: null, speechRate: null }, audio: null },
     { events: [event()], window, editing: null, baseline: { cutsPerMinute: null, speechRate: null }, audio: { silence: 0.2 } as never },
@@ -234,7 +268,7 @@ describe("compileDeepAnalysisRecommendations", () => {
 
     // Guards the loop itself: if a new branch is added without a case here, the
     // count stops matching and this test asks for the missing coverage.
-    expect(seen.size).toBe(10)
+    expect(seen.size).toBe(11)
   })
 
   // The tip is already labelled as advice for the next video, so a "next time"
