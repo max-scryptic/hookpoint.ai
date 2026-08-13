@@ -184,7 +184,7 @@ export function SourceVideoPlayer({
         <button
           type="button"
           onClick={onClose}
-          className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full border bg-card/95 px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-md backdrop-blur-sm transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-black/55 px-3 py-1.5 text-xs font-medium text-white shadow-md backdrop-blur-sm transition-colors hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
           aria-label="Close highlights"
         >
           <XIcon className="size-4" aria-hidden="true" />
