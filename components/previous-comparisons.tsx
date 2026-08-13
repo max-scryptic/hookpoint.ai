@@ -320,15 +320,6 @@ export function PreviousComparisons({
                         </TableCell>
                         <TableCell className="hidden px-4 py-3 text-right align-middle text-sm text-muted-foreground sm:table-cell">
                           {formatDate(comparison.createdAt)}
-                          {/* A pair whose report was rewritten after the fact
-                              says so, so that finishing a stale report is
-                              visible work rather than a list that did not
-                              move. */}
-                          {comparison.rewritten && (
-                            <span className="mt-0.5 block text-xs">
-                              Updated {formatDate(comparison.lastWrittenAt)}
-                            </span>
-                          )}
                         </TableCell>
                       </TableRow>
                     )
