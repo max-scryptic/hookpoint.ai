@@ -25,9 +25,11 @@ import {
   type ChannelEventRecord,
 } from "@/lib/channel-event-history"
 import {
+  buildChannelAlignmentAverage,
   buildChannelAxisProfile,
   buildChannelStyleProfile,
   videoTopics,
+  type ChannelAlignmentAverage,
   type ChannelAxisProfile,
   type ChannelStyleProfile,
 } from "@/lib/channel-taxonomy-trends"
@@ -615,6 +617,9 @@ export interface ChannelTrendsData {
   // high-reach half separates from its low-reach half. Null until enough
   // videos carry an enriched (v2) packaging read.
   packagingAxes: ChannelAxisProfile | null
+  // The alignment readout every video report carries, averaged across the
+  // library. Null until enough videos carry a packaging read.
+  packagingAlignment: ChannelAlignmentAverage | null
   // What the channel's packaging repeats, and which of its choices reach
   // furthest.
   packagingStyle: ChannelStyleProfile | null
@@ -1491,6 +1496,7 @@ export function buildChannelTrends(params: {
       outcome: "reach",
       outcomeOf: videoReachPerDay,
     }),
+    packagingAlignment: buildChannelAlignmentAverage(videos),
     packagingStyle: buildChannelStyleProfile({
       videos,
       source: "packaging",

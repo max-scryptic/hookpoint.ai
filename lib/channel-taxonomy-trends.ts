@@ -301,6 +301,86 @@ export function buildChannelAxisProfile<V extends TaxonomyProfileVideo>(params: 
   }
 }
 
+// --- alignment average -------------------------------------------------------
+
+// Which of the two cross axes a part row carries, so the page can name it with
+// the same words a single video's report uses
+// (components/packaging-alignment-score.tsx).
+export type AlignmentPartKey = "titleThumbnailMatch" | "hookDeliversPromise"
+
+export interface ChannelAlignmentPart {
+  key: AlignmentPartKey
+  value: number
+}
+
+export interface ChannelAlignmentAverage {
+  // The mean of every read video's alignment score, on the same 0-10 scale a
+  // single video's report prints it on.
+  score: number
+  // The same mean over the two axes the headline is made of, in reading order.
+  // Empty when no video carries an enriched (v2) packaging read.
+  parts: ChannelAlignmentPart[]
+  // Videos behind the headline: every one carrying a packaging read at all.
+  videoCount: number
+  // Videos behind the parts, which a v1 row cannot contribute to. 0 when the
+  // parts are empty.
+  partVideoCount: number
+}
+
+const ALIGNMENT_PART_AXES: {
+  key: AlignmentPartKey
+  read: (taxonomy: PackagingTaxonomy) => number | null
+}[] = [
+  {
+    key: "titleThumbnailMatch",
+    read: (t) => t.detail?.cross.titleThumbnailMatch ?? null,
+  },
+  {
+    key: "hookDeliversPromise",
+    read: (t) => t.detail?.cross.hookDeliversPromise ?? null,
+  },
+]
+
+// One decimal, because a mean across a handful of videos lands between the
+// integers a single video is always scored on.
+function mean(values: number[]): number {
+  const total = values.reduce((sum, value) => sum + value, 0)
+  return Math.round((total / values.length) * 10) / 10
+}
+
+// The channel's alignment headline: how tightly its packaging promises one
+// thing, averaged over every analysed video carrying a packaging read.
+//
+// A mean rather than the medians the rest of this file reports, because this is
+// the one number a creator watches move as they publish, and a median over a
+// small library sits still while the work changes. Every video is scored on its
+// own at analysis time, so the average describes the library rather than
+// ranking anything inside it.
+export function buildChannelAlignmentAverage(
+  videos: TaxonomyProfileVideo[],
+): ChannelAlignmentAverage | null {
+  const taxonomies = videos.flatMap((video) => video.packaging ?? [])
+  if (taxonomies.length < TAXONOMY_PROFILE_MIN_VIDEOS) return null
+
+  const parts = ALIGNMENT_PART_AXES.flatMap((axis) => {
+    const values = taxonomies.flatMap((taxonomy) => axis.read(taxonomy) ?? [])
+    return values.length === 0
+      ? []
+      : [{ key: axis.key, value: mean(values) }]
+  })
+
+  return {
+    // Stored 0..1, printed 0-10, exactly as one video's readout scales it.
+    score: mean(taxonomies.map((taxonomy) => taxonomy.alignmentScore * 10)),
+    parts,
+    videoCount: taxonomies.length,
+    partVideoCount:
+      parts.length === 0
+        ? 0
+        : taxonomies.filter((taxonomy) => taxonomy.detail != null).length,
+  }
+}
+
 // --- style profile -----------------------------------------------------------
 
 interface DimensionDefinition<T> {
