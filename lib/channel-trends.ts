@@ -629,9 +629,13 @@ export interface ChannelTrendsData {
   // What the channel's packaging repeats, and which of its choices reach
   // furthest.
   packagingStyle: ChannelStyleProfile | null
-  // The same two views over the script taxonomy, contrasted against retention
+  // The same three views over the script taxonomy, contrasted against retention
   // rather than reach: what is said, not what got clicked.
   scriptAxes: ChannelAxisProfile | null
+  // The three best-retaining uploads against the three worst, over the
+  // library's own average. Null until six videos carry both a script read and
+  // an average view percentage.
+  scriptExtremes: ChannelExtremesProfile | null
   scriptStyle: ChannelStyleProfile | null
   // Uploads ranked by the share of them that gets watched.
   retentionRanking: ChannelRetentionRanking | null
@@ -1516,6 +1520,12 @@ export function buildChannelTrends(params: {
       outcomeOf: videoReachPerDay,
     }),
     scriptAxes: buildChannelAxisProfile({
+      videos,
+      source: "script",
+      outcome: "retention",
+      outcomeOf: (video) => video.averageViewPercentage,
+    }),
+    scriptExtremes: buildChannelExtremesProfile({
       videos,
       source: "script",
       outcome: "retention",

@@ -30,6 +30,7 @@ import {
   axisLowerIsBetter,
   type ChannelAxisProfile,
   type ChannelAxisRow,
+  type ChannelExtremeAxisRow,
   type ChannelExtremeVideo,
   type ChannelExtremesProfile,
   type ChannelStyleDimension,
@@ -46,8 +47,9 @@ import {
 //                     separates from the worse half, plus the channel's own
 //                     median on every axis behind a fold
 //   ExtremesRadarCard the same axes at the ends of the library rather than its
-//                     halves: the best few uploads against the worst few, drawn
-//                     one shape per surface
+//                     halves: the best few uploads against the worst few
+//                     against the channel's own average, drawn as three shapes
+//                     per surface
 //   StyleProfileCard  what the channel repeats on each categorical dimension,
 //                     and which of its choices performs unusually well
 //
@@ -110,20 +112,26 @@ function AxisCaption({ axisKey }: { axisKey: string }) {
   )
 }
 
-// One axis, drawn as the two bands' scores on it. The heavier bar is whichever
-// band scored higher, so the reader sees the direction before reading a number.
+// One axis, drawn as the two bands' scores on it, optionally over the channel's
+// own average as a third bar. The heavier bar is whichever band scored higher,
+// so the reader sees the direction before reading a number; the channel bar is
+// never emphasised, because it is the baseline rather than a competitor.
 function BandContrastRow({
   axisKey,
   topLabel,
   topValue,
   bottomLabel,
   bottomValue,
+  channelLabel,
+  channelValue,
 }: {
   axisKey: string
   topLabel: string
   topValue: number
   bottomLabel: string
   bottomValue: number
+  channelLabel?: string
+  channelValue?: number | null
 }) {
   const topLeads = topValue >= bottomValue
   return (
@@ -132,6 +140,13 @@ function BandContrastRow({
       <div className="flex flex-col gap-1">
         <BandBar label={topLabel} value={topValue} emphasis={topLeads} />
         <BandBar label={bottomLabel} value={bottomValue} emphasis={!topLeads} />
+        {channelLabel != null && channelValue != null && (
+          <BandBar
+            label={channelLabel}
+            value={channelValue}
+            emphasis={false}
+          />
+        )}
       </div>
     </div>
   )
@@ -292,10 +307,46 @@ function ExtremeBandList({
   )
 }
 
-// The best few uploads against the worst few, one shape per surface. The same
-// two bands are drawn on every chart, so a reader compares the same two videos
-// sets across title, thumbnail and opening in one pass, which is the whole
-// reason this sits next to the halves split rather than replacing it.
+// The numbers behind the shapes, written out: every axis as its three bars.
+// The card shows these in three places (the groups too small to draw as a
+// shape, the axes that separated most, and the full fold), so the mapping from
+// an axis row to a bar row lives here once.
+function ExtremeAxisRows({
+  axes,
+  topLabel,
+  bottomLabel,
+  channelLabel,
+}: {
+  axes: ChannelExtremeAxisRow[]
+  topLabel: string
+  bottomLabel: string
+  channelLabel: string
+}) {
+  return (
+    <div className="divide-y">
+      {axes.map((axis) => (
+        <BandContrastRow
+          key={axis.key}
+          axisKey={axis.key}
+          topLabel={topLabel}
+          topValue={axis.topMean}
+          bottomLabel={bottomLabel}
+          bottomValue={axis.bottomMean}
+          channelLabel={channelLabel}
+          channelValue={axis.channelMean}
+        />
+      ))}
+    </div>
+  )
+}
+
+// The best few uploads against the worst few, one shape per surface, over the
+// channel's own average as a third shape. The same three series are drawn on
+// every chart, so a reader compares the same two video sets across title,
+// thumbnail and opening in one pass, which is the whole reason this sits next
+// to the halves split rather than replacing it. The baseline is what turns
+// "the winners scored higher" into "the losers are the unusual ones", which is
+// the version a creator can act on.
 export function ExtremesRadarCard({
   profile,
   icon,
@@ -303,6 +354,7 @@ export function ExtremesRadarCard({
   description,
   topLabel,
   bottomLabel,
+  channelLabel = "your average",
   formatOutcome,
   emptyNote,
 }: {
@@ -313,6 +365,8 @@ export function ExtremesRadarCard({
   // What each band is called, in the reader's terms.
   topLabel: string
   bottomLabel: string
+  // What the whole-library baseline is called.
+  channelLabel?: string
   // Prints the metric the bands were ranked on, next to each video.
   formatOutcome: (value: number) => string
   // What to say when the two bands scored alike on every axis.
@@ -325,12 +379,18 @@ export function ExtremesRadarCard({
   const tooSmallToDraw = profile.groups.filter(
     (group) => group.axes.length < RADAR_MIN_AXES,
   )
+  // The baseline is over every read video, ranked or not, so say so only when
+  // those two counts actually differ.
+  const baselineNote =
+    profile.taxonomyVideoCount > profile.rankedVideoCount
+      ? ` The ${channelLabel} shape is over all ${plural(profile.taxonomyVideoCount, "read video")}, including the ones with no numbers to rank.`
+      : ""
   return (
     <TrendCard
       icon={icon}
       title={title}
       description={description}
-      footer={`Your ${profile.bandSize} best and ${profile.bandSize} worst of the ${plural(profile.rankedVideoCount, "video")} carrying both a ${profile.source} read and the numbers to rank. Correlation, not proof: ${profile.bandSize} uploads a side is a lead worth testing, not a law.`}
+      footer={`Your ${profile.bandSize} best and ${profile.bandSize} worst of the ${plural(profile.rankedVideoCount, "video")} carrying both a ${profile.source} read and the numbers to rank.${baselineNote} Correlation, not proof: ${profile.bandSize} uploads a side is a lead worth testing, not a law.`}
     >
       <div className="grid gap-3 sm:grid-cols-2">
         <ExtremeBandList
@@ -345,7 +405,11 @@ export function ExtremesRadarCard({
         />
       </div>
 
-      <RadarLegend topLabel={topLabel} bottomLabel={bottomLabel} />
+      <RadarLegend
+        topLabel={topLabel}
+        bottomLabel={bottomLabel}
+        channelLabel={channelLabel}
+      />
 
       <div className="grid gap-4 sm:grid-cols-2">
         {drawable.map((group) => (
@@ -358,9 +422,11 @@ export function ExtremesRadarCard({
                 key: axis.key,
                 topValue: axis.topMean,
                 bottomValue: axis.bottomMean,
+                channelValue: axis.channelMean,
               }))}
               topLabel={topLabel}
               bottomLabel={bottomLabel}
+              channelLabel={channelLabel}
               groupLabel={taxonomyAxisGroupLabel(group.group)}
             />
           </div>
@@ -375,18 +441,12 @@ export function ExtremesRadarCard({
           <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
             {taxonomyAxisGroupLabel(group.group)}
           </span>
-          <div className="divide-y">
-            {group.axes.map((axis) => (
-              <BandContrastRow
-                key={axis.key}
-                axisKey={axis.key}
-                topLabel={topLabel}
-                topValue={axis.topMean}
-                bottomLabel={bottomLabel}
-                bottomValue={axis.bottomMean}
-              />
-            ))}
-          </div>
+          <ExtremeAxisRows
+            axes={group.axes}
+            topLabel={topLabel}
+            bottomLabel={bottomLabel}
+            channelLabel={channelLabel}
+          />
         </div>
       ))}
 
@@ -409,18 +469,12 @@ export function ExtremesRadarCard({
               .
             </p>
           </div>
-          <div className="divide-y">
-            {profile.contrasts.map((axis) => (
-              <BandContrastRow
-                key={axis.key}
-                axisKey={axis.key}
-                topLabel={topLabel}
-                topValue={axis.topMean}
-                bottomLabel={bottomLabel}
-                bottomValue={axis.bottomMean}
-              />
-            ))}
-          </div>
+          <ExtremeAxisRows
+            axes={profile.contrasts}
+            topLabel={topLabel}
+            bottomLabel={bottomLabel}
+            channelLabel={channelLabel}
+          />
         </div>
       ) : (
         <CoverageNote>{emptyNote}</CoverageNote>
@@ -440,18 +494,12 @@ export function ExtremesRadarCard({
               <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                 {taxonomyAxisGroupLabel(group.group)}
               </span>
-              <div className="divide-y">
-                {group.axes.map((axis) => (
-                  <BandContrastRow
-                    key={axis.key}
-                    axisKey={axis.key}
-                    topLabel={topLabel}
-                    topValue={axis.topMean}
-                    bottomLabel={bottomLabel}
-                    bottomValue={axis.bottomMean}
-                  />
-                ))}
-              </div>
+              <ExtremeAxisRows
+                axes={group.axes}
+                topLabel={topLabel}
+                bottomLabel={bottomLabel}
+                channelLabel={channelLabel}
+              />
             </div>
           ))}
         </CollapsibleContent>

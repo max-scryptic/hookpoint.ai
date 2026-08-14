@@ -315,6 +315,12 @@ export function buildChannelAxisProfile<V extends TaxonomyProfileVideo>(params: 
 // biggest hits have that my three flops did not. Same axes, same per-video
 // scores, but only the ends of the ranking, which is what makes it drawable as
 // a shape rather than a list of bars.
+//
+// A third shape rides along: the channel's own average on every axis. Two
+// shapes tell a creator which end scored higher; the third tells them which end
+// is the unusual one, which is the actionable half of that. A top band level
+// with the channel average and a bottom band well under it is a different
+// finding from the reverse, and the two-shape chart draws them identically.
 export const EXTREMES_BAND_SIZE = 3
 // Both bands have to be full and disjoint before the comparison means
 // anything, so the ranking needs at least two full bands.
@@ -338,6 +344,11 @@ export interface ChannelExtremeAxisRow {
   bottomMean: number
   // topMean - bottomMean, so positive means the winners score higher here.
   delta: number
+  // The same axis averaged over every read video in the library, ranked or not,
+  // so the two bands can be read as departures from the channel's own habit
+  // rather than only against each other. Null when no video could be scored on
+  // it, which the two band means make unlikely but not impossible.
+  channelMean: number | null
 }
 
 export interface ChannelExtremeGroup {
@@ -361,11 +372,15 @@ export interface ChannelExtremesProfile {
   // Videos carrying both a taxonomy and the metric, so the page can say what
   // the two bands were picked out of.
   rankedVideoCount: number
+  // Videos behind `channelMean`: every one carrying a read, including those the
+  // ranking had to drop for want of a metric. Always at least rankedVideoCount.
+  taxonomyVideoCount: number
 }
 
-// The two ends of the library on one taxonomy: which videos they are, and what
-// each band averages on every axis. Videos missing the outcome metric cannot be
-// ranked, so unlike the profile above they are left out entirely.
+// The two ends of the library on one taxonomy: which videos they are, what each
+// band averages on every axis, and what the whole library averages there as a
+// baseline. Videos missing the outcome metric cannot be ranked, so they sit out
+// of the bands, but they still count toward the channel average.
 export function buildChannelExtremesProfile<
   V extends TaxonomyProfileVideo,
 >(params: {
@@ -376,12 +391,20 @@ export function buildChannelExtremesProfile<
 }): ChannelExtremesProfile | null {
   const { videos, source, outcome, outcomeOf } = params
 
-  const ranked = videos.flatMap((video) => {
+  // Every read video, whether or not it can be ranked. The bands come out of
+  // the subset carrying a metric; the channel average is taken over all of it,
+  // because "what this channel typically does" should not be narrowed to the
+  // videos that happen to have analytics attached.
+  const read = videos.flatMap((video) => {
     const taxonomy = source === "packaging" ? video.packaging : video.script
     // A v1 packaging row has no `detail`, so it carries no axes at all.
     if (taxonomy == null || taxonomy.detail == null) return []
-    const value = outcomeOf(video)
-    return value == null ? [] : [{ video, taxonomy, outcome: value }]
+    return [{ video, taxonomy }]
+  })
+
+  const ranked = read.flatMap((entry) => {
+    const value = outcomeOf(entry.video)
+    return value == null ? [] : [{ ...entry, outcome: value }]
   })
   if (ranked.length < EXTREMES_MIN_VIDEOS) return null
 
@@ -398,7 +421,7 @@ export function buildChannelExtremesProfile<
   ) as AxisDefinition<PackagingTaxonomy | ScriptTaxonomy>[]
 
   const bandMean = (
-    band: typeof ranked,
+    band: { taxonomy: PackagingTaxonomy | ScriptTaxonomy }[],
     axis: AxisDefinition<PackagingTaxonomy | ScriptTaxonomy>,
   ): number | null => {
     const values = band.flatMap((entry) => axis.read(entry.taxonomy) ?? [])
@@ -418,6 +441,7 @@ export function buildChannelExtremesProfile<
         topMean,
         bottomMean,
         delta: Math.round((topMean - bottomMean) * 10) / 10,
+        channelMean: bandMean(read, axis),
       },
     ]
   })
@@ -447,6 +471,7 @@ export function buildChannelExtremesProfile<
       )
       .slice(0, MAX_EXTREME_CONTRASTS),
     rankedVideoCount: ranked.length,
+    taxonomyVideoCount: read.length,
   }
 }
 
