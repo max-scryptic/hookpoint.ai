@@ -31,6 +31,7 @@ const CHANNEL_TRENDS_SOURCE_FILES = [
   "components/channel-trends-packaging.tsx",
   "components/channel-trends-radar.tsx",
   "components/channel-trends-retention.tsx",
+  "components/channel-trends-script.tsx",
   "components/channel-trends-shared.tsx",
   "components/channel-trends-tabs.tsx",
   "components/channel-trends-taxonomy.tsx",

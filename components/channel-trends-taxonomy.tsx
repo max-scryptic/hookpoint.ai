@@ -38,7 +38,7 @@ import {
 } from "@/lib/channel-taxonomy-trends"
 
 // The two views that render a taxonomy at channel level, shared by the
-// Packaging tab (the packaging read, split on reach) and the Content tab (the
+// Packaging tab (the packaging read, split on reach) and the Script tab (the
 // script read, split on retention). Both taxonomies score every video on the
 // same kind of material - closed vocabularies and 0-10 axes, each video judged
 // on its own - so one pair of components can draw either.
