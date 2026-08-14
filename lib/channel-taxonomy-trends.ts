@@ -336,6 +336,10 @@ export interface ChannelExtremeAxisRow {
   // videos is too few for a median to say anything the mean does not.
   topMean: number
   bottomMean: number
+  // The same mean over every read video, ranked or not: the baseline the two
+  // bands are read against, so "the winners score high here" can be told apart
+  // from "this channel scores high here".
+  libraryMean: number
   // topMean - bottomMean, so positive means the winners score higher here.
   delta: number
 }
@@ -361,11 +365,15 @@ export interface ChannelExtremesProfile {
   // Videos carrying both a taxonomy and the metric, so the page can say what
   // the two bands were picked out of.
   rankedVideoCount: number
+  // Videos behind the library average, which needs a read but not the metric,
+  // so it is never smaller than rankedVideoCount and is usually larger.
+  libraryVideoCount: number
 }
 
-// The two ends of the library on one taxonomy: which videos they are, and what
-// each band averages on every axis. Videos missing the outcome metric cannot be
-// ranked, so unlike the profile above they are left out entirely.
+// The two ends of the library on one taxonomy: which videos they are, what each
+// band averages on every axis, and where the library as a whole sits. Videos
+// missing the outcome metric cannot be ranked, so they are absent from the two
+// bands, but they still carry a read and so still count toward the average.
 export function buildChannelExtremesProfile<
   V extends TaxonomyProfileVideo,
 >(params: {
@@ -376,13 +384,15 @@ export function buildChannelExtremesProfile<
 }): ChannelExtremesProfile | null {
   const { videos, source, outcome, outcomeOf } = params
 
-  const ranked = videos.flatMap((video) => {
+  const carrying = videos.flatMap((video) => {
     const taxonomy = source === "packaging" ? video.packaging : video.script
     // A v1 packaging row has no `detail`, so it carries no axes at all.
     if (taxonomy == null || taxonomy.detail == null) return []
-    const value = outcomeOf(video)
-    return value == null ? [] : [{ video, taxonomy, outcome: value }]
+    return [{ video, taxonomy, outcome: outcomeOf(video) }]
   })
+  const ranked = carrying.flatMap((entry) =>
+    entry.outcome == null ? [] : [{ ...entry, outcome: entry.outcome }],
+  )
   if (ranked.length < EXTREMES_MIN_VIDEOS) return null
 
   ranked.sort(
@@ -398,7 +408,7 @@ export function buildChannelExtremesProfile<
   ) as AxisDefinition<PackagingTaxonomy | ScriptTaxonomy>[]
 
   const bandMean = (
-    band: typeof ranked,
+    band: { taxonomy: PackagingTaxonomy | ScriptTaxonomy }[],
     axis: AxisDefinition<PackagingTaxonomy | ScriptTaxonomy>,
   ): number | null => {
     const values = band.flatMap((entry) => axis.read(entry.taxonomy) ?? [])
@@ -406,17 +416,20 @@ export function buildChannelExtremesProfile<
   }
 
   // An axis only survives when both bands could be scored on it: half a
-  // comparison would draw a shape with a hole in it.
+  // comparison would draw a shape with a hole in it. The library average is
+  // taken over a superset of the bands, so it is there whenever they are.
   const rows = definitions.flatMap((axis): ChannelExtremeAxisRow[] => {
     const topMean = bandMean(top, axis)
     const bottomMean = bandMean(bottom, axis)
-    if (topMean == null || bottomMean == null) return []
+    const libraryMean = bandMean(carrying, axis)
+    if (topMean == null || bottomMean == null || libraryMean == null) return []
     return [
       {
         key: axis.key,
         group: axis.group,
         topMean,
         bottomMean,
+        libraryMean,
         delta: Math.round((topMean - bottomMean) * 10) / 10,
       },
     ]
@@ -447,6 +460,7 @@ export function buildChannelExtremesProfile<
       )
       .slice(0, MAX_EXTREME_CONTRASTS),
     rankedVideoCount: ranked.length,
+    libraryVideoCount: carrying.length,
   }
 }
 

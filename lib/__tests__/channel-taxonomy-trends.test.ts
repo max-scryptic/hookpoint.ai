@@ -368,6 +368,32 @@ describe("buildChannelExtremesProfile", () => {
     ).toBeNull()
   })
 
+  it("counts an unrankable video in the library average but not the bands", () => {
+    const profile = buildChannelExtremesProfile({
+      videos: [
+        ...sixVideos(),
+        // No reach figure, so it cannot be ranked, but it still carries a read.
+        video("g", null, { packaging: packaging({ titleSpecificity: 0 }) }),
+      ],
+      source: "packaging",
+      outcome: "reach",
+      outcomeOf: reachOf,
+    })
+
+    expect(profile!.rankedVideoCount).toBe(6)
+    expect(profile!.libraryVideoCount).toBe(7)
+    expect(profile!.top.map((entry) => entry.id)).toEqual(["a", "b", "c"])
+    expect(profile!.bottom.map((entry) => entry.id)).toEqual(["d", "e", "f"])
+
+    const specificity = profile!.groups
+      .find((group) => group.group === "title")!
+      .axes.find((axis) => axis.key === "title.specificity")
+    // (10 + 9 + 8 + 2 + 1 + 0 + 0) / 7, rounded to one decimal.
+    expect(specificity!.libraryMean).toBe(4.3)
+    expect(specificity!.topMean).toBe(9)
+    expect(specificity!.bottomMean).toBe(1)
+  })
+
   it("names the two bands and averages each one on every axis", () => {
     const profile = buildChannelExtremesProfile({
       videos: sixVideos(),
@@ -379,6 +405,7 @@ describe("buildChannelExtremesProfile", () => {
     expect(profile).not.toBeNull()
     expect(profile!.bandSize).toBe(3)
     expect(profile!.rankedVideoCount).toBe(6)
+    expect(profile!.libraryVideoCount).toBe(6)
     expect(profile!.top.map((entry) => entry.id)).toEqual(["a", "b", "c"])
     expect(profile!.bottom.map((entry) => entry.id)).toEqual(["d", "e", "f"])
     expect(profile!.top[0].outcome).toBe(100)
@@ -391,6 +418,8 @@ describe("buildChannelExtremesProfile", () => {
       .axes.find((axis) => axis.key === "title.specificity")
     expect(specificity!.topMean).toBe(9)
     expect(specificity!.bottomMean).toBe(1)
+    // (10 + 9 + 8 + 2 + 1 + 0) / 6, the whole library rather than either band.
+    expect(specificity!.libraryMean).toBe(5)
     expect(specificity!.delta).toBe(8)
   })
 
