@@ -49,7 +49,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { cleanCopy } from "@/lib/copy-guardrails"
+import { cleanCopy, limitSentences } from "@/lib/copy-guardrails"
 import type { PacingAnalysis } from "@/lib/pacing-analysis"
 import {
   prioritizePackagingImprovements,
@@ -1019,7 +1019,9 @@ function PackagingAlignmentSection({
       <div className="rounded-xl border bg-card p-4">
         <h3 className="text-sm font-medium">Alignment Summary</h3>
         <p className="mt-2 text-sm text-muted-foreground">
-          {cleanCopy(alignment.overall)}
+          {/* Two sentences at most, like every other summary card: the
+              per-component tabs under it carry the detail. */}
+          {limitSentences(cleanCopy(alignment.overall))}
         </p>
       </div>
 

@@ -3,7 +3,12 @@ import { join } from "node:path"
 
 import { describe, expect, it } from "vitest"
 
-import { cleanCopy, nameVideoSides, stripEmDashes } from "@/lib/copy-guardrails"
+import {
+  cleanCopy,
+  limitSentences,
+  nameVideoSides,
+  stripEmDashes,
+} from "@/lib/copy-guardrails"
 
 // GUARDRAIL: the Channel Trends page must never render an em dash (U+2014)
 // or an en dash (U+2013), in hard-coded copy or comments alike. Hyphens are
@@ -324,6 +329,64 @@ describe("nameVideoSides", () => {
     )
     expect(nameVideoSides("Run an A/B test on the next thumbnail.")).toBe(
       "Run an A/B test on the next thumbnail.",
+    )
+  })
+})
+
+// Every summary card in the app is capped at two sentences, so a model that
+// writes three or four is cut back at render time. See the SUMMARY LENGTH
+// section of lib/copy-guardrails.ts.
+describe("limitSentences", () => {
+  it("keeps the first two sentences and drops the rest", () => {
+    expect(
+      limitSentences(
+        "Video B packages itself better. Its title names the payoff while Video A only hints at it. The thumbnail carries one subject rather than three. Both openings then wander.",
+      ),
+    ).toBe(
+      "Video B packages itself better. Its title names the payoff while Video A only hints at it.",
+    )
+  })
+
+  it("leaves copy already inside the limit untouched", () => {
+    expect(
+      limitSentences(
+        "Video A holds its audience through the midpoint. Video B sheds a third of its viewers in the first minute.",
+      ),
+    ).toBe(
+      "Video A holds its audience through the midpoint. Video B sheds a third of its viewers in the first minute.",
+    )
+    expect(limitSentences("One sentence is plenty.")).toBe(
+      "One sentence is plenty.",
+    )
+    expect(limitSentences("")).toBe("")
+  })
+
+  it("keeps a closing quote or bracket with the sentence it ends", () => {
+    expect(
+      limitSentences(
+        'The title reads "Reaching Arena 16." Video B states the number up front. Video A buries it.',
+      ),
+    ).toBe(
+      'The title reads "Reaching Arena 16." Video B states the number up front.',
+    )
+  })
+
+  it("does not break on a decimal, a timestamp or an abbreviation", () => {
+    expect(
+      limitSentences(
+        "Video A holds 42.1% at 1:30 against 31.4% for Video B. Video A vs. Video B is a two point gap on click-through, i.e. within noise. The openings differ more than the curves do.",
+      ),
+    ).toBe(
+      "Video A holds 42.1% at 1:30 against 31.4% for Video B. Video A vs. Video B is a two point gap on click-through, i.e. within noise.",
+    )
+  })
+
+  it("takes a limit of its own and handles prose with no terminator", () => {
+    expect(
+      limitSentences("First point. Second point. Third point.", 1),
+    ).toBe("First point.")
+    expect(limitSentences("An unterminated verdict with no full stop")).toBe(
+      "An unterminated verdict with no full stop",
     )
   })
 })
