@@ -38,7 +38,7 @@ import {
 } from "@/lib/channel-taxonomy-trends"
 
 // The two views that render a taxonomy at channel level, shared by the
-// Packaging tab (the packaging read, split on reach) and the Content tab (the
+// Packaging tab (the packaging read, split on reach) and the Script tab (the
 // script read, split on retention). Both taxonomies score every video on the
 // same kind of material - closed vocabularies and 0-10 axes, each video judged
 // on its own - so one pair of components can draw either.
@@ -47,9 +47,8 @@ import {
 //                     separates from the worse half, plus the channel's own
 //                     median on every axis behind a fold
 //   ExtremesRadarCard the same axes at the ends of the library rather than its
-//                     halves: the best few uploads against the worst few
-//                     against the channel's own average, drawn as three shapes
-//                     per surface
+//                     halves: the best few uploads against the worst few, drawn
+//                     one shape per surface
 //   StyleProfileCard  what the channel repeats on each categorical dimension,
 //                     and which of its choices performs unusually well
 //
@@ -112,26 +111,26 @@ function AxisCaption({ axisKey }: { axisKey: string }) {
   )
 }
 
-// One axis, drawn as the two bands' scores on it, optionally over the channel's
-// own average as a third bar. The heavier bar is whichever band scored higher,
-// so the reader sees the direction before reading a number; the channel bar is
-// never emphasised, because it is the baseline rather than a competitor.
+// One axis, drawn as each band's score on it. The heavier bar is whichever of
+// the two compared bands scored higher, so the reader sees the direction before
+// reading a number; the library baseline, when there is one, is never the
+// emphasised bar because it is the thing being measured against.
 function BandContrastRow({
   axisKey,
   topLabel,
   topValue,
   bottomLabel,
   bottomValue,
-  channelLabel,
-  channelValue,
+  libraryLabel,
+  libraryValue,
 }: {
   axisKey: string
   topLabel: string
   topValue: number
   bottomLabel: string
   bottomValue: number
-  channelLabel?: string
-  channelValue?: number | null
+  libraryLabel?: string
+  libraryValue?: number
 }) {
   const topLeads = topValue >= bottomValue
   return (
@@ -140,12 +139,8 @@ function BandContrastRow({
       <div className="flex flex-col gap-1">
         <BandBar label={topLabel} value={topValue} emphasis={topLeads} />
         <BandBar label={bottomLabel} value={bottomValue} emphasis={!topLeads} />
-        {channelLabel != null && channelValue != null && (
-          <BandBar
-            label={channelLabel}
-            value={channelValue}
-            emphasis={false}
-          />
+        {libraryLabel != null && libraryValue != null && (
+          <BandBar label={libraryLabel} value={libraryValue} emphasis={false} />
         )}
       </div>
     </div>
@@ -307,20 +302,19 @@ function ExtremeBandList({
   )
 }
 
-// The numbers behind the shapes, written out: every axis as its three bars.
-// The card shows these in three places (the groups too small to draw as a
-// shape, the axes that separated most, and the full fold), so the mapping from
-// an axis row to a bar row lives here once.
+// A run of axes written out as bars: the three sets on every axis, in the order
+// the legend names them. Used wherever the shapes are not enough on their own,
+// which is the alignment pair, the biggest separations, and the fold.
 function ExtremeAxisRows({
   axes,
   topLabel,
   bottomLabel,
-  channelLabel,
+  libraryLabel,
 }: {
   axes: ChannelExtremeAxisRow[]
   topLabel: string
   bottomLabel: string
-  channelLabel: string
+  libraryLabel: string
 }) {
   return (
     <div className="divide-y">
@@ -332,21 +326,19 @@ function ExtremeAxisRows({
           topValue={axis.topMean}
           bottomLabel={bottomLabel}
           bottomValue={axis.bottomMean}
-          channelLabel={channelLabel}
-          channelValue={axis.channelMean}
+          libraryLabel={libraryLabel}
+          libraryValue={axis.libraryMean}
         />
       ))}
     </div>
   )
 }
 
-// The best few uploads against the worst few, one shape per surface, over the
-// channel's own average as a third shape. The same three series are drawn on
-// every chart, so a reader compares the same two video sets across title,
-// thumbnail and opening in one pass, which is the whole reason this sits next
-// to the halves split rather than replacing it. The baseline is what turns
-// "the winners scored higher" into "the losers are the unusual ones", which is
-// the version a creator can act on.
+// The best few uploads against the worst few against the library they came
+// from, one shape per surface. The same three sets are drawn on every chart, so
+// a reader compares them across title, thumbnail and opening in one pass, and
+// the library baseline is what stops a band being called unusual when the whole
+// channel scores that way.
 export function ExtremesRadarCard({
   profile,
   icon,
@@ -354,7 +346,7 @@ export function ExtremesRadarCard({
   description,
   topLabel,
   bottomLabel,
-  channelLabel = "your average",
+  libraryLabel,
   formatOutcome,
   emptyNote,
 }: {
@@ -365,8 +357,8 @@ export function ExtremesRadarCard({
   // What each band is called, in the reader's terms.
   topLabel: string
   bottomLabel: string
-  // What the whole-library baseline is called.
-  channelLabel?: string
+  // What the whole-library average is called.
+  libraryLabel: string
   // Prints the metric the bands were ranked on, next to each video.
   formatOutcome: (value: number) => string
   // What to say when the two bands scored alike on every axis.
@@ -379,18 +371,12 @@ export function ExtremesRadarCard({
   const tooSmallToDraw = profile.groups.filter(
     (group) => group.axes.length < RADAR_MIN_AXES,
   )
-  // The baseline is over every read video, ranked or not, so say so only when
-  // those two counts actually differ.
-  const baselineNote =
-    profile.taxonomyVideoCount > profile.rankedVideoCount
-      ? ` The ${channelLabel} shape is over all ${plural(profile.taxonomyVideoCount, "read video")}, including the ones with no numbers to rank.`
-      : ""
   return (
     <TrendCard
       icon={icon}
       title={title}
       description={description}
-      footer={`Your ${profile.bandSize} best and ${profile.bandSize} worst of the ${plural(profile.rankedVideoCount, "video")} carrying both a ${profile.source} read and the numbers to rank.${baselineNote} Correlation, not proof: ${profile.bandSize} uploads a side is a lead worth testing, not a law.`}
+      footer={`Your ${profile.bandSize} best and ${profile.bandSize} worst of the ${plural(profile.rankedVideoCount, "video")} carrying both a ${profile.source} read and the numbers to rank; the average covers all ${plural(profile.libraryVideoCount, "read video")}, ranked or not. Correlation, not proof: ${profile.bandSize} uploads a side is a lead worth testing, not a law.`}
     >
       <div className="grid gap-3 sm:grid-cols-2">
         <ExtremeBandList
@@ -408,7 +394,7 @@ export function ExtremesRadarCard({
       <RadarLegend
         topLabel={topLabel}
         bottomLabel={bottomLabel}
-        channelLabel={channelLabel}
+        libraryLabel={libraryLabel}
       />
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -422,11 +408,11 @@ export function ExtremesRadarCard({
                 key: axis.key,
                 topValue: axis.topMean,
                 bottomValue: axis.bottomMean,
-                channelValue: axis.channelMean,
+                libraryValue: axis.libraryMean,
               }))}
               topLabel={topLabel}
               bottomLabel={bottomLabel}
-              channelLabel={channelLabel}
+              libraryLabel={libraryLabel}
               groupLabel={taxonomyAxisGroupLabel(group.group)}
             />
           </div>
@@ -445,7 +431,7 @@ export function ExtremesRadarCard({
             axes={group.axes}
             topLabel={topLabel}
             bottomLabel={bottomLabel}
-            channelLabel={channelLabel}
+            libraryLabel={libraryLabel}
           />
         </div>
       ))}
@@ -473,7 +459,7 @@ export function ExtremesRadarCard({
             axes={profile.contrasts}
             topLabel={topLabel}
             bottomLabel={bottomLabel}
-            channelLabel={channelLabel}
+            libraryLabel={libraryLabel}
           />
         </div>
       ) : (
@@ -498,7 +484,7 @@ export function ExtremesRadarCard({
                 axes={group.axes}
                 topLabel={topLabel}
                 bottomLabel={bottomLabel}
-                channelLabel={channelLabel}
+                libraryLabel={libraryLabel}
               />
             </div>
           ))}

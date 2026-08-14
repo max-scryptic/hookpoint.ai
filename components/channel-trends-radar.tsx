@@ -5,16 +5,15 @@ import {
 import { formatScore } from "@/components/channel-trends-shared"
 
 // The radar (spider) chart the Channel Trends page draws one taxonomy surface
-// with: every axis in a group as a spoke, and two bands of videos as two shapes
-// laid over each other, over an optional third shape for the channel's own
-// average. It exists for one question the bar lists answer slowly: what shape
-// do my best uploads have that my worst ones do not, and which of the two is
-// the one that departs from what this channel usually does.
+// with: every axis in a group as a spoke, and three sets of videos as three
+// shapes laid over each other. It exists for one question the bar lists answer
+// slowly: what shape do my best uploads have that my worst ones do not, and
+// which of the two is the odd one out against the library they came from.
 //
 // Hand-drawn SVG rather than a charting library, because the page is
-// server-rendered end to end and a static three-series shape needs no client
-// runtime to draw. It also keeps the page's rule: no colour of its own. The
-// shapes separate by weight and dash, not by hue, so the chart survives
+// server-rendered end to end and a static two-series shape needs no client
+// runtime to draw. It also keeps the page's rule: no colour of its own. The two
+// bands separate by weight and dash, not by hue, so the chart survives
 // greyscale, colour blindness and dark mode without a legend key to memorise.
 //
 // The chart is never the only place its numbers live. Every value it draws is
@@ -52,12 +51,10 @@ const LABEL_WRAP_CHARS = 10
 export interface RadarAxis {
   // The taxonomy axis key, for its labels.
   key: string
-  // Both bands' means on the 0-10 scale.
+  // The three shapes' means on the 0-10 scale.
   topValue: number
   bottomValue: number
-  // The channel's own average on this axis. Omitted or null draws two shapes
-  // exactly as before; a number adds the baseline shape underneath them.
-  channelValue?: number | null
+  libraryValue: number
 }
 
 interface Point {
@@ -116,52 +113,60 @@ function anchorFor(cosine: number): "start" | "middle" | "end" {
   return "middle"
 }
 
-// How the three shapes tell themselves apart without a single hue between them:
-// the leading band is filled faintly and drawn solid, the trailing one is
-// hollow and dashed, and the channel baseline is a thin dotted outline with no
-// vertex markers at all, so it reads as the ruler the other two are measured
-// against rather than a third competitor. All three survive a black and white
-// print, which is the test this page holds every chart to.
-const SHAPE_STYLE = {
-  lead: {
+// The three shapes, told apart without a single hue. The winners are the only
+// solid, filled and dotted-vertex shape, because they are the thing being read;
+// the losers are dashed and hollow; the library average is a fine dotted
+// outline with no vertices at all, because it is a baseline rather than a third
+// competitor. Weight and dash carry all of it, so a greyscale print or a
+// colour-blind reader loses nothing.
+export type RadarBand = "top" | "bottom" | "library"
+
+const BAND_STYLE: Record<
+  RadarBand,
+  {
+    tone: string
+    fillOpacity: number
+    strokeOpacity: number
+    strokeWidth: number
+    dash?: string
+    vertexRadius: number
+  }
+> = {
+  top: {
     tone: "text-foreground",
-    fill: true,
+    fillOpacity: 0.12,
     strokeOpacity: 0.8,
     strokeWidth: 1.6,
-    dash: undefined,
-    dot: 2,
+    vertexRadius: 2,
   },
-  trail: {
+  bottom: {
     tone: "text-muted-foreground",
-    fill: false,
+    fillOpacity: 0,
     strokeOpacity: 0.75,
     strokeWidth: 1.2,
     dash: "3.5 2.5",
-    dot: 1.8,
+    vertexRadius: 1.8,
   },
-  baseline: {
+  library: {
     tone: "text-muted-foreground",
-    fill: false,
-    strokeOpacity: 0.7,
-    strokeWidth: 1.1,
-    dash: "1.5 2",
-    dot: null,
+    fillOpacity: 0,
+    strokeOpacity: 0.55,
+    strokeWidth: 1,
+    dash: "1 2.2",
+    vertexRadius: 0,
   },
-} as const
+}
 
-type ShapeVariant = keyof typeof SHAPE_STYLE
-
-// One overlaid shape: the series' score on every axis, closed into a polygon.
 function BandShape({
   axes,
   read,
-  variant,
+  band,
 }: {
   axes: RadarAxis[]
   read: (axis: RadarAxis) => number
-  variant: ShapeVariant
+  band: RadarBand
 }) {
-  const style = SHAPE_STYLE[variant]
+  const style = BAND_STYLE[band]
   const points = axes.map((axis, index) =>
     pointAt(index, axes.length, radiusFor(read(axis))),
   )
@@ -169,26 +174,26 @@ function BandShape({
     <g className={style.tone}>
       <polygon
         points={path(points)}
-        fill={style.fill ? "currentColor" : "none"}
-        fillOpacity={style.fill ? 0.12 : 0}
+        fill={style.fillOpacity > 0 ? "currentColor" : "none"}
+        fillOpacity={style.fillOpacity}
         stroke="currentColor"
         strokeOpacity={style.strokeOpacity}
         strokeWidth={style.strokeWidth}
         strokeDasharray={style.dash}
         strokeLinejoin="round"
       />
-      {style.dot != null &&
+      {style.vertexRadius > 0 &&
         points.map((point, index) => (
           <circle
             key={axes[index].key}
             cx={point.x}
             cy={point.y}
-            r={style.dot}
-            fill={style.fill ? "currentColor" : "var(--card)"}
-            fillOpacity={style.fill ? 0.85 : 1}
+            r={style.vertexRadius}
+            fill={band === "top" ? "currentColor" : "var(--card)"}
+            fillOpacity={band === "top" ? 0.85 : 1}
             stroke="currentColor"
             strokeOpacity={0.8}
-            strokeWidth={style.fill ? 0 : 1.1}
+            strokeWidth={band === "top" ? 0 : 1.1}
           />
         ))}
     </g>
@@ -199,48 +204,34 @@ export function TaxonomyRadar({
   axes,
   topLabel,
   bottomLabel,
-  channelLabel,
+  libraryLabel,
   groupLabel,
 }: {
   // Three or more, in the order they should run clockwise from the top.
   axes: RadarAxis[]
-  // What the two bands are called, in the reader's terms.
+  // What the three shapes are called, in the reader's terms.
   topLabel: string
   bottomLabel: string
-  // What the channel baseline is called. Absent, or present with any axis
-  // missing its channel value, draws the two bands alone.
-  channelLabel?: string
+  libraryLabel: string
   // The surface these axes belong to, for the chart's own description.
   groupLabel: string
 }) {
   if (axes.length < RADAR_MIN_AXES) return null
 
-  // The baseline closes a polygon across every spoke, so it is drawn only when
-  // all of them carry a value. A partial ring would read as a real shape.
-  const channelValues = axes.map((axis) => axis.channelValue)
-  const drawChannel =
-    channelLabel != null &&
-    channelValues.every((value): value is number => value != null)
-
-  const axisSummary = (axis: RadarAxis) => {
-    const bands = `${topLabel} ${formatScore(axis.topValue)}, ${bottomLabel} ${formatScore(axis.bottomValue)}`
-    return drawChannel
-      ? `${bands}, ${channelLabel} ${formatScore(axis.channelValue as number)}`
-      : bands
-  }
+  const readout = (axis: RadarAxis) =>
+    `${topLabel} ${formatScore(axis.topValue)}, ${bottomLabel} ${formatScore(
+      axis.bottomValue,
+    )}, ${libraryLabel} ${formatScore(axis.libraryValue)}`
   const summary = axes
-    .map((axis) => `${taxonomyAxisCopy(axis.key).name}: ${axisSummary(axis)}`)
+    .map((axis) => `${taxonomyAxisCopy(axis.key).name}: ${readout(axis)}`)
     .join(". ")
-  const against = drawChannel
-    ? `${topLabel} against ${bottomLabel} against ${channelLabel}`
-    : `${topLabel} against ${bottomLabel}`
 
   return (
     <svg
       viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
       className="w-full"
       role="img"
-      aria-label={`${groupLabel} scored 0 to 10 on each axis, ${against}. ${summary}.`}
+      aria-label={`${groupLabel} scored 0 to 10 on each axis, ${topLabel} against ${bottomLabel}. ${summary}.`}
     >
       <g className="text-muted-foreground">
         {RING_STEPS.map((step) => (
@@ -274,22 +265,17 @@ export function TaxonomyRadar({
         })}
       </g>
 
-      {drawChannel && (
-        <BandShape
-          axes={axes}
-          read={(axis) => axis.channelValue as number}
-          variant="baseline"
-        />
-      )}
-      <BandShape axes={axes} read={(axis) => axis.bottomValue} variant="trail" />
-      <BandShape axes={axes} read={(axis) => axis.topValue} variant="lead" />
+      {/* Drawn baseline first, winners last, so the shape being read is never
+          crossed out by the two under it. */}
+      <BandShape axes={axes} read={(axis) => axis.libraryValue} band="library" />
+      <BandShape axes={axes} read={(axis) => axis.bottomValue} band="bottom" />
+      <BandShape axes={axes} read={(axis) => axis.topValue} band="top" />
 
       {axes.map((axis, index) => {
         const angle = -Math.PI / 2 + (index / axes.length) * Math.PI * 2
         const anchor = anchorFor(Math.cos(angle))
         const label = pointAt(index, axes.length, RADIUS + LABEL_GAP)
         const lines = wrapLabel(taxonomyAxisShortLabel(axis.key))
-        const copy = taxonomyAxisCopy(axis.key)
         return (
           <text
             key={axis.key}
@@ -299,7 +285,9 @@ export function TaxonomyRadar({
             fontSize={LABEL_FONT_SIZE}
             className="fill-current text-muted-foreground"
           >
-            <title>{`${copy.name}: ${axisSummary(axis)}`}</title>
+            <title>
+              {`${taxonomyAxisCopy(axis.key).name}: ${readout(axis)}`}
+            </title>
             {lines.map((line, lineIndex) => (
               <tspan
                 key={line}
@@ -320,29 +308,21 @@ export function TaxonomyRadar({
   )
 }
 
-// One swatch in the legend, drawn with the same weight and dash the shape it
-// stands for uses on the chart.
-function LegendSwatch({
-  tone,
-  strokeOpacity,
-  dash,
-}: {
-  tone: string
-  strokeOpacity: number
-  dash?: string
-}) {
+// One entry in the key: the exact line the chart draws that band with, at the
+// size a line of text can carry.
+function LegendSwatch({ band }: { band: RadarBand }) {
+  const style = BAND_STYLE[band]
   return (
-    <svg viewBox="0 0 20 8" className="h-2 w-5" aria-hidden="true">
+    <svg viewBox="0 0 20 8" className={`h-2 w-5 ${style.tone}`} aria-hidden="true">
       <line
         x1="0"
         y1="4"
         x2="20"
         y2="4"
         stroke="currentColor"
-        strokeOpacity={strokeOpacity}
+        strokeOpacity={style.strokeOpacity}
         strokeWidth={2}
-        strokeDasharray={dash}
-        className={tone}
+        strokeDasharray={band === "top" ? undefined : band === "bottom" ? "4 3" : "1.5 2.5"}
       />
     </svg>
   )
@@ -353,29 +333,26 @@ function LegendSwatch({
 export function RadarLegend({
   topLabel,
   bottomLabel,
-  channelLabel,
+  libraryLabel,
 }: {
   topLabel: string
   bottomLabel: string
-  // Absent when the charts draw the two bands alone.
-  channelLabel?: string
+  libraryLabel: string
 }) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
       <span className="flex items-center gap-1.5">
-        <LegendSwatch tone="text-foreground" strokeOpacity={0.8} />
+        <LegendSwatch band="top" />
         {topLabel}
       </span>
       <span className="flex items-center gap-1.5">
-        <LegendSwatch tone="" strokeOpacity={0.75} dash="4 3" />
+        <LegendSwatch band="bottom" />
         {bottomLabel}
       </span>
-      {channelLabel && (
-        <span className="flex items-center gap-1.5">
-          <LegendSwatch tone="" strokeOpacity={0.7} dash="1.5 2.5" />
-          {channelLabel}
-        </span>
-      )}
+      <span className="flex items-center gap-1.5">
+        <LegendSwatch band="library" />
+        {libraryLabel}
+      </span>
       <span>Each spoke is a 0-10 score, centre 0, rim 10.</span>
     </div>
   )

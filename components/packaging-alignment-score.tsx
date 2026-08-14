@@ -143,7 +143,7 @@ export function PackagingAlignmentScore({
 
   return (
     <Frame className={className}>
-      <div className="flex flex-col gap-3">
+      <div className="@container flex flex-col gap-3">
         <div>
           <div className="flex items-baseline gap-1.5">
             <span className="text-3xl leading-none font-semibold tabular-nums">
@@ -157,7 +157,11 @@ export function PackagingAlignmentScore({
         </div>
         <ScoreBar value={score} color={color} />
         {parts.length > 0 && (
-          <div className="flex flex-col gap-2">
+          // Side by side once the block itself is wide enough to hold two of
+          // these rows, which is the full-width Alignment tab and not the
+          // narrow columns of the head-to-head. Measured on the block rather
+          // than the window so a wide screen never splits a narrow column.
+          <div className="grid gap-x-10 gap-y-2 @2xl:grid-cols-2">
             {parts.map((part) => (
               <div key={part.label} className="flex items-center gap-3">
                 <span className="flex-1 text-xs text-muted-foreground">

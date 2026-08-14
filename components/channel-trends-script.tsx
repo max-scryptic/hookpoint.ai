@@ -58,10 +58,10 @@ export function ScriptPanel({ data }: { data: ChannelTrendsData }) {
           profile={data.scriptExtremes}
           icon={RadarIcon}
           title="Your best and worst retaining uploads, side by side"
-          description="The same 0-10 axes, scored on the three uploads that held viewers longest and the three that lost them fastest, with your library average behind both. One shape per surface: where the solid shape sits outside the dotted one, your best retainers wrote harder on that axis than you usually do."
+          description="The same 0-10 axes, scored on the three uploads that held viewers longest, the three that lost them fastest, and your whole library as a baseline. One shape per surface: where the solid shape sits outside the dashed one, your best retainers wrote harder on that axis, and the dotted line says whether that is unusual for you."
           topLabel="top 3 retaining"
           bottomLabel="bottom 3 retaining"
-          channelLabel="your average"
+          libraryLabel="library average"
           formatOutcome={(value) => `${Math.round(value)}% watched`}
           emptyNote="Your best and worst retaining uploads score alike on every axis so far. When the two ends of your library start writing differently, the gap lands here."
         />

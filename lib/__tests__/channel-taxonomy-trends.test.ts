@@ -368,6 +368,32 @@ describe("buildChannelExtremesProfile", () => {
     ).toBeNull()
   })
 
+  it("counts an unrankable video in the library average but not the bands", () => {
+    const profile = buildChannelExtremesProfile({
+      videos: [
+        ...sixVideos(),
+        // No reach figure, so it cannot be ranked, but it still carries a read.
+        video("g", null, { packaging: packaging({ titleSpecificity: 0 }) }),
+      ],
+      source: "packaging",
+      outcome: "reach",
+      outcomeOf: reachOf,
+    })
+
+    expect(profile!.rankedVideoCount).toBe(6)
+    expect(profile!.libraryVideoCount).toBe(7)
+    expect(profile!.top.map((entry) => entry.id)).toEqual(["a", "b", "c"])
+    expect(profile!.bottom.map((entry) => entry.id)).toEqual(["d", "e", "f"])
+
+    const specificity = profile!.groups
+      .find((group) => group.group === "title")!
+      .axes.find((axis) => axis.key === "title.specificity")
+    // (10 + 9 + 8 + 2 + 1 + 0 + 0) / 7, rounded to one decimal.
+    expect(specificity!.libraryMean).toBe(4.3)
+    expect(specificity!.topMean).toBe(9)
+    expect(specificity!.bottomMean).toBe(1)
+  })
+
   it("names the two bands and averages each one on every axis", () => {
     const profile = buildChannelExtremesProfile({
       videos: sixVideos(),
@@ -379,6 +405,7 @@ describe("buildChannelExtremesProfile", () => {
     expect(profile).not.toBeNull()
     expect(profile!.bandSize).toBe(3)
     expect(profile!.rankedVideoCount).toBe(6)
+    expect(profile!.libraryVideoCount).toBe(6)
     expect(profile!.top.map((entry) => entry.id)).toEqual(["a", "b", "c"])
     expect(profile!.bottom.map((entry) => entry.id)).toEqual(["d", "e", "f"])
     expect(profile!.top[0].outcome).toBe(100)
@@ -391,38 +418,9 @@ describe("buildChannelExtremesProfile", () => {
       .axes.find((axis) => axis.key === "title.specificity")
     expect(specificity!.topMean).toBe(9)
     expect(specificity!.bottomMean).toBe(1)
+    // (10 + 9 + 8 + 2 + 1 + 0) / 6, the whole library rather than either band.
+    expect(specificity!.libraryMean).toBe(5)
     expect(specificity!.delta).toBe(8)
-    // The baseline shape: all six, so halfway between the two bands here.
-    expect(specificity!.channelMean).toBe(5)
-    expect(profile!.taxonomyVideoCount).toBe(6)
-  })
-
-  it("averages the channel baseline over read videos the ranking had to drop", () => {
-    const profile = buildChannelExtremesProfile({
-      videos: [
-        ...sixVideos(),
-        // No reach, so it cannot sit in a band, but it is still a video this
-        // channel made and the baseline is what this channel typically does.
-        video("g", null, { packaging: packaging({ titleSpecificity: 3 }) }),
-      ],
-      source: "packaging",
-      outcome: "reach",
-      outcomeOf: reachOf,
-    })
-
-    expect(profile!.rankedVideoCount).toBe(6)
-    expect(profile!.taxonomyVideoCount).toBe(7)
-    expect(profile!.top.map((entry) => entry.id)).toEqual(["a", "b", "c"])
-    expect(profile!.bottom.map((entry) => entry.id)).toEqual(["d", "e", "f"])
-
-    const specificity = profile!.groups
-      .find((group) => group.group === "title")!
-      .axes.find((axis) => axis.key === "title.specificity")
-    // (10 + 9 + 8 + 2 + 1 + 0 + 3) / 7, to one decimal.
-    expect(specificity!.channelMean).toBe(4.7)
-    // The bands themselves are untouched by the unranked video.
-    expect(specificity!.topMean).toBe(9)
-    expect(specificity!.bottomMean).toBe(1)
   })
 
   it("reports only the axes where the two bands genuinely separate", () => {
