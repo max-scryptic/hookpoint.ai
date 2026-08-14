@@ -8,6 +8,11 @@ import {
   taxonomyDimensionLabel,
 } from "@/components/channel-trends-copy"
 import {
+  RADAR_MIN_AXES,
+  RadarLegend,
+  TaxonomyRadar,
+} from "@/components/channel-trends-radar"
+import {
   Chip,
   CoverageNote,
   ScoreBar,
@@ -25,6 +30,8 @@ import {
   axisLowerIsBetter,
   type ChannelAxisProfile,
   type ChannelAxisRow,
+  type ChannelExtremeVideo,
+  type ChannelExtremesProfile,
   type ChannelStyleDimension,
   type ChannelStyleProfile,
 } from "@/lib/channel-taxonomy-trends"
@@ -38,12 +45,15 @@ import {
 //   AxisContrastCard  the axes where the better-performing half of the library
 //                     separates from the worse half, plus the channel's own
 //                     median on every axis behind a fold
+//   ExtremesRadarCard the same axes at the ends of the library rather than its
+//                     halves: the best few uploads against the worst few, drawn
+//                     one shape per surface
 //   StyleProfileCard  what the channel repeats on each categorical dimension,
 //                     and which of its choices performs unusually well
 //
 // Everything here is correlation. A library is a handful of videos made by one
-// person, so a gap between its halves is a lead worth testing, never a law, and
-// the copy says so on both cards.
+// person, so a gap between its halves, or between its two ends, is a lead worth
+// testing, never a law, and the copy says so on every card.
 //
 // COPY GUARDRAIL: no em dashes (U+2014) or en dashes (U+2013), ever, in any
 // text in this file. Hyphens are fine. Enforced by
@@ -60,8 +70,10 @@ function BandBar({
   emphasis: boolean
 }) {
   return (
-    <div className="grid grid-cols-[6.5rem_1fr_2rem] items-center gap-x-2">
-      <span className="text-xs text-muted-foreground">{label}</span>
+    <div className="grid grid-cols-[7rem_1fr_2rem] items-center gap-x-2">
+      <span className="truncate text-xs whitespace-nowrap text-muted-foreground">
+        {label}
+      </span>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
         <div
           className={`h-full rounded-full ${
@@ -77,9 +89,55 @@ function BandBar({
   )
 }
 
-// One axis where the two halves separated. The sentence under the name says
-// what a high score means, so the reader never has to infer the direction, and
-// the descriptor note says when neither end is better.
+// The name of an axis and what a 10 on it would mean, so a bar is never a bare
+// number the reader has to interpret, plus the notes that say when a high score
+// is not simply a good one.
+function AxisCaption({ axisKey }: { axisKey: string }) {
+  const copy = taxonomyAxisCopy(axisKey)
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+      <span className="text-sm font-medium">{copy.name}</span>
+      <span className="text-xs text-muted-foreground">10 = {copy.meaning}</span>
+      {axisIsDescriptor(axisKey) && (
+        <span className="text-xs text-muted-foreground">
+          (a descriptor, not a grade)
+        </span>
+      )}
+      {axisLowerIsBetter(axisKey) && (
+        <span className="text-xs text-muted-foreground">(less is more)</span>
+      )}
+    </div>
+  )
+}
+
+// One axis, drawn as the two bands' scores on it. The heavier bar is whichever
+// band scored higher, so the reader sees the direction before reading a number.
+function BandContrastRow({
+  axisKey,
+  topLabel,
+  topValue,
+  bottomLabel,
+  bottomValue,
+}: {
+  axisKey: string
+  topLabel: string
+  topValue: number
+  bottomLabel: string
+  bottomValue: number
+}) {
+  const topLeads = topValue >= bottomValue
+  return (
+    <div className="flex flex-col gap-1.5 py-2">
+      <AxisCaption axisKey={axisKey} />
+      <div className="flex flex-col gap-1">
+        <BandBar label={topLabel} value={topValue} emphasis={topLeads} />
+        <BandBar label={bottomLabel} value={bottomValue} emphasis={!topLeads} />
+      </div>
+    </div>
+  )
+}
+
+// One axis where the two halves of the library separated.
 function AxisContrastRow({
   row,
   topLabel,
@@ -90,33 +148,14 @@ function AxisContrastRow({
   bottomLabel: string
 }) {
   if (row.topMedian == null || row.bottomMedian == null) return null
-  const copy = taxonomyAxisCopy(row.key)
-  const topLeads = row.topMedian >= row.bottomMedian
   return (
-    <div className="flex flex-col gap-1.5 py-2">
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <span className="text-sm font-medium">{copy.name}</span>
-        <span className="text-xs text-muted-foreground">
-          10 = {copy.meaning}
-        </span>
-        {axisIsDescriptor(row.key) && (
-          <span className="text-xs text-muted-foreground">
-            (a descriptor, not a grade)
-          </span>
-        )}
-        {axisLowerIsBetter(row.key) && (
-          <span className="text-xs text-muted-foreground">(less is more)</span>
-        )}
-      </div>
-      <div className="flex flex-col gap-1">
-        <BandBar label={topLabel} value={row.topMedian} emphasis={topLeads} />
-        <BandBar
-          label={bottomLabel}
-          value={row.bottomMedian}
-          emphasis={!topLeads}
-        />
-      </div>
-    </div>
+    <BandContrastRow
+      axisKey={row.key}
+      topLabel={topLabel}
+      topValue={row.topMedian}
+      bottomLabel={bottomLabel}
+      bottomValue={row.bottomMedian}
+    />
   )
 }
 
@@ -211,6 +250,212 @@ export function AxisContrastCard({
         <CoverageNote>{emptyNote}</CoverageNote>
       )}
       <AxisProfileFold profile={profile} />
+    </TrendCard>
+  )
+}
+
+// --- The extremes, drawn as shapes -------------------------------------------
+
+// The two bands, named. A creator recognises their own uploads faster than any
+// bar, so the videos behind the shapes are listed before the shapes.
+function ExtremeBandList({
+  label,
+  videos,
+  formatOutcome,
+}: {
+  label: string
+  videos: ChannelExtremeVideo[]
+  formatOutcome: (value: number) => string
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+        {label}
+      </span>
+      <ul className="flex flex-col gap-0.5">
+        {videos.map((video) => (
+          <li
+            key={video.id}
+            className="grid grid-cols-[1fr_auto] items-baseline gap-x-2"
+            title={video.title ?? undefined}
+          >
+            <span className="truncate text-sm">
+              {video.title ?? "Untitled video"}
+            </span>
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {formatOutcome(video.outcome)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+// The best few uploads against the worst few, one shape per surface. The same
+// two bands are drawn on every chart, so a reader compares the same two videos
+// sets across title, thumbnail and opening in one pass, which is the whole
+// reason this sits next to the halves split rather than replacing it.
+export function ExtremesRadarCard({
+  profile,
+  icon,
+  title,
+  description,
+  topLabel,
+  bottomLabel,
+  formatOutcome,
+  emptyNote,
+}: {
+  profile: ChannelExtremesProfile
+  icon: ComponentType<{ className?: string }>
+  title: string
+  description: string
+  // What each band is called, in the reader's terms.
+  topLabel: string
+  bottomLabel: string
+  // Prints the metric the bands were ranked on, next to each video.
+  formatOutcome: (value: number) => string
+  // What to say when the two bands scored alike on every axis.
+  emptyNote: string
+}) {
+  const lead = profile.contrasts[0]
+  const drawable = profile.groups.filter(
+    (group) => group.axes.length >= RADAR_MIN_AXES,
+  )
+  const tooSmallToDraw = profile.groups.filter(
+    (group) => group.axes.length < RADAR_MIN_AXES,
+  )
+  return (
+    <TrendCard
+      icon={icon}
+      title={title}
+      description={description}
+      footer={`Your ${profile.bandSize} best and ${profile.bandSize} worst of the ${plural(profile.rankedVideoCount, "video")} carrying both a ${profile.source} read and the numbers to rank. Correlation, not proof: ${profile.bandSize} uploads a side is a lead worth testing, not a law.`}
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        <ExtremeBandList
+          label={topLabel}
+          videos={profile.top}
+          formatOutcome={formatOutcome}
+        />
+        <ExtremeBandList
+          label={bottomLabel}
+          videos={profile.bottom}
+          formatOutcome={formatOutcome}
+        />
+      </div>
+
+      <RadarLegend topLabel={topLabel} bottomLabel={bottomLabel} />
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        {drawable.map((group) => (
+          <div key={group.group} className="flex flex-col gap-1">
+            <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              {taxonomyAxisGroupLabel(group.group)}
+            </span>
+            <TaxonomyRadar
+              axes={group.axes.map((axis) => ({
+                key: axis.key,
+                topValue: axis.topMean,
+                bottomValue: axis.bottomMean,
+              }))}
+              topLabel={topLabel}
+              bottomLabel={bottomLabel}
+              groupLabel={taxonomyAxisGroupLabel(group.group)}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* Two axes cannot enclose a shape, so a group that small (the alignment
+          pair) runs full width underneath as the bars it would have been
+          anyway, rather than leaving a hole in the grid of charts. */}
+      {tooSmallToDraw.map((group) => (
+        <div key={group.group} className="flex flex-col">
+          <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+            {taxonomyAxisGroupLabel(group.group)}
+          </span>
+          <div className="divide-y">
+            {group.axes.map((axis) => (
+              <BandContrastRow
+                key={axis.key}
+                axisKey={axis.key}
+                topLabel={topLabel}
+                topValue={axis.topMean}
+                bottomLabel={bottomLabel}
+                bottomValue={axis.bottomMean}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+
+      {lead ? (
+        <div className="flex flex-col gap-2 rounded-r-md border-l-2 border-muted-foreground/30 bg-muted/40 px-3 py-2.5">
+          <div>
+            <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              Where they separate most
+            </span>
+            <p className="mt-0.5 text-sm">
+              {taxonomyAxisCopy(lead.key).name}:{" "}
+              {lead.delta > 0 ? topLabel : bottomLabel} average{" "}
+              <span className="font-medium tabular-nums">
+                {formatScore(lead.delta > 0 ? lead.topMean : lead.bottomMean)}
+              </span>{" "}
+              against{" "}
+              <span className="tabular-nums">
+                {formatScore(lead.delta > 0 ? lead.bottomMean : lead.topMean)}
+              </span>
+              .
+            </p>
+          </div>
+          <div className="divide-y">
+            {profile.contrasts.map((axis) => (
+              <BandContrastRow
+                key={axis.key}
+                axisKey={axis.key}
+                topLabel={topLabel}
+                topValue={axis.topMean}
+                bottomLabel={bottomLabel}
+                bottomValue={axis.bottomMean}
+              />
+            ))}
+          </div>
+        </div>
+      ) : (
+        <CoverageNote>{emptyNote}</CoverageNote>
+      )}
+
+      <Collapsible className="rounded-lg border">
+        <CollapsibleTrigger className="group flex w-full items-center gap-2 p-3 text-left text-sm font-medium">
+          <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[panel-open]:rotate-180" />
+          Every axis, written out
+          <span className="ml-auto text-xs font-normal text-muted-foreground">
+            the numbers behind the shapes
+          </span>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="flex flex-col gap-4 border-t p-3">
+          {profile.groups.map((group) => (
+            <div key={group.group} className="flex flex-col">
+              <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                {taxonomyAxisGroupLabel(group.group)}
+              </span>
+              <div className="divide-y">
+                {group.axes.map((axis) => (
+                  <BandContrastRow
+                    key={axis.key}
+                    axisKey={axis.key}
+                    topLabel={topLabel}
+                    topValue={axis.topMean}
+                    bottomLabel={bottomLabel}
+                    bottomValue={axis.bottomMean}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </CollapsibleContent>
+      </Collapsible>
     </TrendCard>
   )
 }

@@ -63,6 +63,13 @@ function median(values: number[]): number {
     : (sorted[mid - 1] + sorted[mid]) / 2
 }
 
+// One decimal, because a mean across a handful of videos lands between the
+// integers a single video is always scored on.
+function mean(values: number[]): number {
+  const total = values.reduce((sum, value) => sum + value, 0)
+  return Math.round((total / values.length) * 10) / 10
+}
+
 // --- axis definitions --------------------------------------------------------
 
 // Groups exist so the profile can be read surface by surface rather than as one
@@ -301,6 +308,148 @@ export function buildChannelAxisProfile<V extends TaxonomyProfileVideo>(params: 
   }
 }
 
+// --- the extremes: the best few uploads against the worst few ----------------
+
+// The halves split above answers "what does my better half do"; this answers
+// the blunter question a creator actually asks first: what did my three
+// biggest hits have that my three flops did not. Same axes, same per-video
+// scores, but only the ends of the ranking, which is what makes it drawable as
+// a shape rather than a list of bars.
+export const EXTREMES_BAND_SIZE = 3
+// Both bands have to be full and disjoint before the comparison means
+// anything, so the ranking needs at least two full bands.
+export const EXTREMES_MIN_VIDEOS = EXTREMES_BAND_SIZE * 2
+const MAX_EXTREME_CONTRASTS = 3
+
+export interface ChannelExtremeVideo {
+  id: string
+  title: string | null
+  // The metric the ranking was made on: views per day for reach, average view
+  // percentage for retention.
+  outcome: number
+}
+
+export interface ChannelExtremeAxisRow {
+  key: string
+  group: TaxonomyAxisGroup
+  // Band means on the 0-10 scale. A mean rather than a median because three
+  // videos is too few for a median to say anything the mean does not.
+  topMean: number
+  bottomMean: number
+  // topMean - bottomMean, so positive means the winners score higher here.
+  delta: number
+}
+
+export interface ChannelExtremeGroup {
+  group: TaxonomyAxisGroup
+  axes: ChannelExtremeAxisRow[]
+}
+
+export interface ChannelExtremesProfile {
+  source: TaxonomySource
+  outcome: ChannelOutcome
+  bandSize: number
+  // Best first in both bands, so the two lists read in the same direction.
+  top: ChannelExtremeVideo[]
+  bottom: ChannelExtremeVideo[]
+  // Every axis both bands could be scored on, grouped by surface in definition
+  // order, so each group can be drawn as one shape.
+  groups: ChannelExtremeGroup[]
+  // The axes where the two bands separate most, biggest gap first. Empty when
+  // the ends of the library score alike.
+  contrasts: ChannelExtremeAxisRow[]
+  // Videos carrying both a taxonomy and the metric, so the page can say what
+  // the two bands were picked out of.
+  rankedVideoCount: number
+}
+
+// The two ends of the library on one taxonomy: which videos they are, and what
+// each band averages on every axis. Videos missing the outcome metric cannot be
+// ranked, so unlike the profile above they are left out entirely.
+export function buildChannelExtremesProfile<
+  V extends TaxonomyProfileVideo,
+>(params: {
+  videos: V[]
+  source: TaxonomySource
+  outcome: ChannelOutcome
+  outcomeOf: (video: V) => number | null
+}): ChannelExtremesProfile | null {
+  const { videos, source, outcome, outcomeOf } = params
+
+  const ranked = videos.flatMap((video) => {
+    const taxonomy = source === "packaging" ? video.packaging : video.script
+    // A v1 packaging row has no `detail`, so it carries no axes at all.
+    if (taxonomy == null || taxonomy.detail == null) return []
+    const value = outcomeOf(video)
+    return value == null ? [] : [{ video, taxonomy, outcome: value }]
+  })
+  if (ranked.length < EXTREMES_MIN_VIDEOS) return null
+
+  ranked.sort(
+    (a, b) => b.outcome - a.outcome || a.video.id.localeCompare(b.video.id),
+  )
+  const top = ranked.slice(0, EXTREMES_BAND_SIZE)
+  const bottom = ranked.slice(-EXTREMES_BAND_SIZE)
+
+  // Same cast as the profile above: `ranked` is already narrowed to the
+  // source's own rows, so the union the readers see cannot be the wrong one.
+  const definitions = (
+    source === "packaging" ? PACKAGING_AXES : SCRIPT_AXES
+  ) as AxisDefinition<PackagingTaxonomy | ScriptTaxonomy>[]
+
+  const bandMean = (
+    band: typeof ranked,
+    axis: AxisDefinition<PackagingTaxonomy | ScriptTaxonomy>,
+  ): number | null => {
+    const values = band.flatMap((entry) => axis.read(entry.taxonomy) ?? [])
+    return values.length === 0 ? null : mean(values)
+  }
+
+  // An axis only survives when both bands could be scored on it: half a
+  // comparison would draw a shape with a hole in it.
+  const rows = definitions.flatMap((axis): ChannelExtremeAxisRow[] => {
+    const topMean = bandMean(top, axis)
+    const bottomMean = bandMean(bottom, axis)
+    if (topMean == null || bottomMean == null) return []
+    return [
+      {
+        key: axis.key,
+        group: axis.group,
+        topMean,
+        bottomMean,
+        delta: Math.round((topMean - bottomMean) * 10) / 10,
+      },
+    ]
+  })
+  if (rows.length === 0) return null
+
+  const asVideo = (entry: (typeof ranked)[number]): ChannelExtremeVideo => ({
+    id: entry.video.id,
+    title: entry.video.title,
+    outcome: entry.outcome,
+  })
+
+  return {
+    source,
+    outcome,
+    bandSize: EXTREMES_BAND_SIZE,
+    top: top.map(asVideo),
+    bottom: bottom.map(asVideo),
+    groups: [...new Set(rows.map((row) => row.group))].map((group) => ({
+      group,
+      axes: rows.filter((row) => row.group === group),
+    })),
+    contrasts: rows
+      .filter((row) => Math.abs(row.delta) >= AXIS_MIN_DELTA)
+      .sort(
+        (a, b) =>
+          Math.abs(b.delta) - Math.abs(a.delta) || a.key.localeCompare(b.key),
+      )
+      .slice(0, MAX_EXTREME_CONTRASTS),
+    rankedVideoCount: ranked.length,
+  }
+}
+
 // --- alignment average -------------------------------------------------------
 
 // Which of the two cross axes a part row carries, so the page can name it with
@@ -340,13 +489,6 @@ const ALIGNMENT_PART_AXES: {
     read: (t) => t.detail?.cross.hookDeliversPromise ?? null,
   },
 ]
-
-// One decimal, because a mean across a handful of videos lands between the
-// integers a single video is always scored on.
-function mean(values: number[]): number {
-  const total = values.reduce((sum, value) => sum + value, 0)
-  return Math.round((total / values.length) * 10) / 10
-}
 
 // The channel's alignment headline: how tightly its packaging promises one
 // thing, averaged over every analysed video carrying a packaging read.

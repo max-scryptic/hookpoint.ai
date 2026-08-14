@@ -1,0 +1,307 @@
+import {
+  taxonomyAxisCopy,
+  taxonomyAxisShortLabel,
+} from "@/components/channel-trends-copy"
+import { formatScore } from "@/components/channel-trends-shared"
+
+// The radar (spider) chart the Channel Trends page draws one taxonomy surface
+// with: every axis in a group as a spoke, and two bands of videos as two shapes
+// laid over each other. It exists for one question the bar lists answer slowly:
+// what shape do my best uploads have that my worst ones do not.
+//
+// Hand-drawn SVG rather than a charting library, because the page is
+// server-rendered end to end and a static two-series shape needs no client
+// runtime to draw. It also keeps the page's rule: no colour of its own. The two
+// bands separate by weight and dash, not by hue, so the chart survives
+// greyscale, colour blindness and dark mode without a legend key to memorise.
+//
+// The chart is never the only place its numbers live. Every value it draws is
+// also written out in the fold under it, so nothing here is load-bearing for a
+// reader who cannot see it.
+//
+// COPY GUARDRAIL: no em dashes (U+2014) or en dashes (U+2013), ever, in any
+// text in this file. Hyphens are fine. Enforced by
+// lib/__tests__/copy-guardrails.test.ts.
+
+// A radar needs three spokes to enclose an area; two would draw a line. Groups
+// smaller than this are rendered as paired bars by the caller instead.
+export const RADAR_MIN_AXES = 3
+
+// Drawn in an unitless viewBox and scaled to whatever width the card gives it,
+// so one set of numbers holds at every card size.
+const VIEW_WIDTH = 260
+const VIEW_HEIGHT = 186
+const CENTER_X = 130
+const CENTER_Y = 92
+const RADIUS = 62
+// Rim labels sit just outside the outer ring, and the viewBox leaves room for
+// two lines of them on every side.
+const LABEL_GAP = 12
+const LABEL_LINE_HEIGHT = 8.4
+const LABEL_FONT_SIZE = 7.6
+// Four rings: 2.5, 5, 7.5 and the outer 10, so a reader can place a shape on
+// the 0-10 scale without counting.
+const RING_STEPS = [0.25, 0.5, 0.75, 1]
+const MAX_SCORE = 10
+// A label longer than this is worth breaking over two lines; below it, a break
+// costs more than it saves.
+const LABEL_WRAP_CHARS = 10
+
+export interface RadarAxis {
+  // The taxonomy axis key, for its labels.
+  key: string
+  // Both bands' means on the 0-10 scale.
+  topValue: number
+  bottomValue: number
+}
+
+interface Point {
+  x: number
+  y: number
+}
+
+// Spokes start at twelve o'clock and run clockwise, so the first axis of a
+// group is always the one at the top.
+function pointAt(index: number, count: number, distance: number): Point {
+  const angle = -Math.PI / 2 + (index / count) * Math.PI * 2
+  return {
+    x: CENTER_X + Math.cos(angle) * distance,
+    y: CENTER_Y + Math.sin(angle) * distance,
+  }
+}
+
+function path(points: Point[]): string {
+  return points.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ")
+}
+
+function clampScore(value: number): number {
+  return Math.min(MAX_SCORE, Math.max(0, value))
+}
+
+function radiusFor(value: number): number {
+  return (clampScore(value) / MAX_SCORE) * RADIUS
+}
+
+// Breaks a rim label over two lines at the space that leaves them closest in
+// length, so "Personal disclosure" stacks evenly instead of hanging one word.
+function wrapLabel(label: string): string[] {
+  const words = label.split(" ")
+  if (words.length < 2 || label.length <= LABEL_WRAP_CHARS) return [label]
+  const halves = (at: number): [string, string] => [
+    words.slice(0, at).join(" "),
+    words.slice(at).join(" "),
+  ]
+  let best = 1
+  for (let at = 2; at < words.length; at += 1) {
+    const [leftBest, rightBest] = halves(best)
+    const [left, right] = halves(at)
+    if (
+      Math.abs(left.length - right.length) <
+      Math.abs(leftBest.length - rightBest.length)
+    ) {
+      best = at
+    }
+  }
+  return halves(best)
+}
+
+function anchorFor(cosine: number): "start" | "middle" | "end" {
+  if (cosine > 0.15) return "start"
+  if (cosine < -0.15) return "end"
+  return "middle"
+}
+
+// One overlaid shape: the band's score on every axis, closed into a polygon.
+// The leading band is filled faintly and drawn solid; the trailing one is
+// hollow and dashed, so which is which survives a black and white print.
+function BandShape({
+  axes,
+  read,
+  emphasis,
+}: {
+  axes: RadarAxis[]
+  read: (axis: RadarAxis) => number
+  emphasis: boolean
+}) {
+  const points = axes.map((axis, index) =>
+    pointAt(index, axes.length, radiusFor(read(axis))),
+  )
+  return (
+    <g className={emphasis ? "text-foreground" : "text-muted-foreground"}>
+      <polygon
+        points={path(points)}
+        fill={emphasis ? "currentColor" : "none"}
+        fillOpacity={emphasis ? 0.12 : 0}
+        stroke="currentColor"
+        strokeOpacity={emphasis ? 0.8 : 0.75}
+        strokeWidth={emphasis ? 1.6 : 1.2}
+        strokeDasharray={emphasis ? undefined : "3.5 2.5"}
+        strokeLinejoin="round"
+      />
+      {points.map((point, index) => (
+        <circle
+          key={axes[index].key}
+          cx={point.x}
+          cy={point.y}
+          r={emphasis ? 2 : 1.8}
+          fill={emphasis ? "currentColor" : "var(--card)"}
+          fillOpacity={emphasis ? 0.85 : 1}
+          stroke="currentColor"
+          strokeOpacity={0.8}
+          strokeWidth={emphasis ? 0 : 1.1}
+        />
+      ))}
+    </g>
+  )
+}
+
+export function TaxonomyRadar({
+  axes,
+  topLabel,
+  bottomLabel,
+  groupLabel,
+}: {
+  // Three or more, in the order they should run clockwise from the top.
+  axes: RadarAxis[]
+  // What the two bands are called, in the reader's terms.
+  topLabel: string
+  bottomLabel: string
+  // The surface these axes belong to, for the chart's own description.
+  groupLabel: string
+}) {
+  if (axes.length < RADAR_MIN_AXES) return null
+
+  const summary = axes
+    .map(
+      (axis) =>
+        `${taxonomyAxisCopy(axis.key).name}: ${topLabel} ${formatScore(
+          axis.topValue,
+        )}, ${bottomLabel} ${formatScore(axis.bottomValue)}`,
+    )
+    .join(". ")
+
+  return (
+    <svg
+      viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
+      className="w-full"
+      role="img"
+      aria-label={`${groupLabel} scored 0 to 10 on each axis, ${topLabel} against ${bottomLabel}. ${summary}.`}
+    >
+      <g className="text-muted-foreground">
+        {RING_STEPS.map((step) => (
+          <polygon
+            key={step}
+            points={path(
+              axes.map((_, index) =>
+                pointAt(index, axes.length, RADIUS * step),
+              ),
+            )}
+            fill="none"
+            stroke="currentColor"
+            strokeOpacity={step === 1 ? 0.35 : 0.18}
+            strokeWidth={0.8}
+          />
+        ))}
+        {axes.map((axis, index) => {
+          const outer = pointAt(index, axes.length, RADIUS)
+          return (
+            <line
+              key={axis.key}
+              x1={CENTER_X}
+              y1={CENTER_Y}
+              x2={outer.x}
+              y2={outer.y}
+              stroke="currentColor"
+              strokeOpacity={0.18}
+              strokeWidth={0.8}
+            />
+          )
+        })}
+      </g>
+
+      <BandShape axes={axes} read={(axis) => axis.bottomValue} emphasis={false} />
+      <BandShape axes={axes} read={(axis) => axis.topValue} emphasis />
+
+      {axes.map((axis, index) => {
+        const angle = -Math.PI / 2 + (index / axes.length) * Math.PI * 2
+        const anchor = anchorFor(Math.cos(angle))
+        const label = pointAt(index, axes.length, RADIUS + LABEL_GAP)
+        const lines = wrapLabel(taxonomyAxisShortLabel(axis.key))
+        const copy = taxonomyAxisCopy(axis.key)
+        return (
+          <text
+            key={axis.key}
+            x={label.x}
+            y={label.y}
+            textAnchor={anchor}
+            fontSize={LABEL_FONT_SIZE}
+            className="fill-current text-muted-foreground"
+          >
+            <title>
+              {`${copy.name}: ${topLabel} ${formatScore(axis.topValue)}, ${bottomLabel} ${formatScore(axis.bottomValue)}`}
+            </title>
+            {lines.map((line, lineIndex) => (
+              <tspan
+                key={line}
+                x={label.x}
+                y={
+                  label.y +
+                  (lineIndex - (lines.length - 1) / 2) * LABEL_LINE_HEIGHT
+                }
+                dominantBaseline="middle"
+              >
+                {line}
+              </tspan>
+            ))}
+          </text>
+        )
+      })}
+    </svg>
+  )
+}
+
+// The key the radars share, stated once above the grid of them rather than
+// repeated on every chart.
+export function RadarLegend({
+  topLabel,
+  bottomLabel,
+}: {
+  topLabel: string
+  bottomLabel: string
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+      <span className="flex items-center gap-1.5">
+        <svg viewBox="0 0 20 8" className="h-2 w-5" aria-hidden="true">
+          <line
+            x1="0"
+            y1="4"
+            x2="20"
+            y2="4"
+            stroke="currentColor"
+            strokeOpacity={0.8}
+            strokeWidth={2}
+            className="text-foreground"
+          />
+        </svg>
+        {topLabel}
+      </span>
+      <span className="flex items-center gap-1.5">
+        <svg viewBox="0 0 20 8" className="h-2 w-5" aria-hidden="true">
+          <line
+            x1="0"
+            y1="4"
+            x2="20"
+            y2="4"
+            stroke="currentColor"
+            strokeOpacity={0.75}
+            strokeWidth={2}
+            strokeDasharray="4 3"
+          />
+        </svg>
+        {bottomLabel}
+      </span>
+      <span>Each spoke is a 0-10 score, centre 0, rim 10.</span>
+    </div>
+  )
+}

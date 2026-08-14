@@ -27,10 +27,12 @@ import {
 import {
   buildChannelAlignmentAverage,
   buildChannelAxisProfile,
+  buildChannelExtremesProfile,
   buildChannelStyleProfile,
   videoTopics,
   type ChannelAlignmentAverage,
   type ChannelAxisProfile,
+  type ChannelExtremesProfile,
   type ChannelStyleProfile,
 } from "@/lib/channel-taxonomy-trends"
 import type {
@@ -617,6 +619,10 @@ export interface ChannelTrendsData {
   // high-reach half separates from its low-reach half. Null until enough
   // videos carry an enriched (v2) packaging read.
   packagingAxes: ChannelAxisProfile | null
+  // The same axes at the ends of the library rather than its halves: the three
+  // furthest-reaching uploads against the three that reached least. Null until
+  // six videos carry both an enriched packaging read and a reach figure.
+  packagingExtremes: ChannelExtremesProfile | null
   // The alignment readout every video report carries, averaged across the
   // library. Null until enough videos carry a packaging read.
   packagingAlignment: ChannelAlignmentAverage | null
@@ -1491,6 +1497,12 @@ export function buildChannelTrends(params: {
     packaging: buildPackagingPatterns(videos, libraryVideoCount),
     snapshot: buildChannelSnapshot(videos, libraryVideoCount),
     packagingAxes: buildChannelAxisProfile({
+      videos,
+      source: "packaging",
+      outcome: "reach",
+      outcomeOf: videoReachPerDay,
+    }),
+    packagingExtremes: buildChannelExtremesProfile({
       videos,
       source: "packaging",
       outcome: "reach",
