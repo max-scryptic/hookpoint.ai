@@ -8,7 +8,9 @@
 // verbatim spans (real titles, thumbnail text, opening lines) side by side.
 // Each side also carries the whole spoken first ten seconds, cut out of the
 // stored transcript, so the report's hook surface can quote the hook in full
-// rather than a single sentence off the taxonomy.
+// rather than a single sentence off the taxonomy, and the written alignment
+// summary generated for that video on its own at analysis time, so the report's
+// alignment surface can show both videos' summaries side by side.
 //
 // Everything degrades: the v1 taxonomy (flat fields) still yields the title
 // styles, promise, hook delivery and alignment diffs even when the enriched
@@ -70,6 +72,12 @@ export interface PackagingComparisonSide {
   // surface quotes it in full rather than the taxonomy's single opening line.
   // Null when the video has no transcript, or none of it lands in the window.
   hookTranscript: string | null
+  // The written read of this video's own packaging, generated per video in the
+  // initial analysis (lib/packaging-alignment.ts) rather than at comparison
+  // time, so the head-to-head can show both videos' summaries side by side
+  // without a model call of its own. Null for a video analysed before the
+  // alignment existed, or one whose generation failed.
+  alignmentSummary: string | null
   hasTaxonomy: boolean
   hasDetail: boolean
 }
@@ -157,6 +165,8 @@ export interface PackagingComparisonInput {
   // Empty for a video whose transcript was never captured.
   transcript: TranscriptCue[]
   taxonomy: PackagingTaxonomy | null
+  // The stored prose alignment summary, when the video has one.
+  alignmentSummary?: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -713,6 +723,7 @@ function sideFor(
     thumbnailUrl: input.thumbnailUrl,
     views: input.views,
     hookTranscript: hookTranscriptFor(input.transcript),
+    alignmentSummary: (input.alignmentSummary ?? "").trim() || null,
     hasTaxonomy: input.taxonomy != null,
     hasDetail: input.taxonomy?.detail != null,
   }
@@ -784,12 +795,13 @@ interface PackagingRow {
   analytics_summary: { views?: number | null } | null
   transcript: TranscriptCue[] | null
   packaging_taxonomy: PackagingTaxonomy | null
+  packaging_summary: string | null
 }
 
 // Loads the two videos' stored taxonomies (from the same
-// packaging_alignment->taxonomy JSON path the channel trends page reads) plus
-// their transcripts, from which each side's opening ten seconds is cut, and
-// diffs them. Returns null when either video is missing or belongs to someone
+// packaging_alignment->taxonomy JSON path the channel trends page reads), the
+// written alignment summary stored beside each one, plus their transcripts,
+// from which each side's opening ten seconds is cut, and diffs them. Returns null when either video is missing or belongs to someone
 // else (the user-scoped client cannot see it either way), or when neither
 // carries a taxonomy.
 export async function getPackagingComparison(
@@ -801,7 +813,7 @@ export async function getPackagingComparison(
   const { data, error } = await supabase
     .from("analysed_videos")
     .select(
-      "id, video_title, thumbnail_url:video_details->>thumbnailUrl, view_count:video_details->viewCount, analytics_summary, transcript, packaging_taxonomy:packaging_alignment->taxonomy",
+      "id, video_title, thumbnail_url:video_details->>thumbnailUrl, view_count:video_details->viewCount, analytics_summary, transcript, packaging_taxonomy:packaging_alignment->taxonomy, packaging_summary:packaging_alignment->>overall",
     )
     .eq("user_id", userId)
     .in("id", [videoIdA, videoIdB])
@@ -825,6 +837,7 @@ export async function getPackagingComparison(
     ),
     transcript: row.transcript ?? [],
     taxonomy: row.packaging_taxonomy,
+    alignmentSummary: row.packaging_summary,
   })
 
   return buildPackagingComparison(toInput(rowA), toInput(rowB))
