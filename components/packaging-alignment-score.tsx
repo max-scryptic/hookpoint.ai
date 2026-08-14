@@ -12,7 +12,7 @@ import type { PackagingTaxonomy } from "@/lib/packaging-taxonomy"
 //
 // Shared so those two surfaces show the identical thing: the packaging
 // head-to-head puts one of these in each column of its Alignment tab, and a
-// single video's packaging card puts one under its Alignment Summary.
+// single video's packaging card puts one inside its own Alignment tab.
 //
 // COPY GUARDRAIL: no em or en dashes (U+2014 / U+2013), ever, in any text in
 // this file. Hyphens are fine. Enforced by lib/__tests__/copy-guardrails.
