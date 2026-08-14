@@ -418,6 +418,38 @@ export function taxonomyAxisCopy(key: string): AxisCopy {
   return AXIS_COPY[key] ?? { name: key, meaning: "" }
 }
 
+// Rim labels for the radars, where a full axis name would run into its
+// neighbours. Each one is a clipped version of the name above, never a
+// different idea, and the chart keeps the full name one hover away. Axes whose
+// name is already short enough are absent and fall back to it.
+const AXIS_SHORT_LABELS: Record<string, string> = {
+  "title.curiosityGap": "Curiosity",
+  "title.emotionalCharge": "Emotion",
+  "thumbnail.faceProminence": "Face",
+  "thumbnail.emotionIntensity": "Expression",
+  "thumbnail.colorContrast": "Contrast",
+  "thumbnail.visualComplexity": "Complexity",
+  "hook.payoffSpeed": "Payoff",
+  "hook.restatesPromise": "Restates",
+  "hook.stakesEstablished": "Stakes",
+  "hook.specificity": "Specificity",
+  "hook.personalDisclosure": "Personal",
+  "cross.titleThumbnailMatch": "Title/thumb",
+  "cross.hookDeliversPromise": "Opening",
+  "substance.substanceDensity": "Substance",
+  "substance.noveltyOfIdeas": "Novelty",
+  "substance.educationalValue": "Educational",
+  "substance.entertainmentValue": "Entertaining",
+  "structure.topicCohesion": "Cohesion",
+  "structure.payoffPlacement": "Payoff",
+  "emotion.emotionalRange": "Range",
+  "rhetoric.directAddress": "Direct",
+}
+
+export function taxonomyAxisShortLabel(key: string): string {
+  return AXIS_SHORT_LABELS[key] ?? taxonomyAxisCopy(key).name
+}
+
 const AXIS_GROUP_LABELS: Record<string, string> = {
   title: "Title",
   thumbnail: "Thumbnail",

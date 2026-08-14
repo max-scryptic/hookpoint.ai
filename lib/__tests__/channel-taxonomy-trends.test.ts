@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
   buildChannelAlignmentAverage,
   buildChannelAxisProfile,
+  buildChannelExtremesProfile,
   buildChannelStyleProfile,
   videoTopics,
   type TaxonomyProfileVideo,
@@ -313,6 +314,142 @@ describe("buildChannelAxisProfile", () => {
     expect(profile!.source).toBe("script")
     expect(profile!.contrasts[0].key).toBe("substance.concreteness")
     expect(profile!.contrasts[0].delta).toBe(7)
+  })
+})
+
+describe("buildChannelExtremesProfile", () => {
+  // Six ranked videos: three winners scoring 10 on specificity, three losers
+  // scoring 0, and everything else identical so only that axis separates.
+  const sixVideos = () => [
+    video("a", 100, { packaging: packaging({ titleSpecificity: 10 }) }),
+    video("b", 90, { packaging: packaging({ titleSpecificity: 9 }) }),
+    video("c", 80, { packaging: packaging({ titleSpecificity: 8 }) }),
+    video("d", 30, { packaging: packaging({ titleSpecificity: 2 }) }),
+    video("e", 20, { packaging: packaging({ titleSpecificity: 1 }) }),
+    video("f", 10, { packaging: packaging({ titleSpecificity: 0 }) }),
+  ]
+
+  it("returns null until both bands can be filled without overlapping", () => {
+    expect(
+      buildChannelExtremesProfile({
+        videos: sixVideos().slice(0, 5),
+        source: "packaging",
+        outcome: "reach",
+        outcomeOf: reachOf,
+      }),
+    ).toBeNull()
+  })
+
+  it("returns null when a v1 packaging row leaves too few enriched reads", () => {
+    expect(
+      buildChannelExtremesProfile({
+        videos: [
+          ...sixVideos().slice(0, 5),
+          video("f", 10, { packaging: packaging({ detail: false }) }),
+        ],
+        source: "packaging",
+        outcome: "reach",
+        outcomeOf: reachOf,
+      }),
+    ).toBeNull()
+  })
+
+  it("leaves a video with no outcome out of the ranking entirely", () => {
+    expect(
+      buildChannelExtremesProfile({
+        videos: [
+          ...sixVideos().slice(0, 5),
+          video("f", null, { packaging: packaging({ titleSpecificity: 0 }) }),
+        ],
+        source: "packaging",
+        outcome: "reach",
+        outcomeOf: reachOf,
+      }),
+    ).toBeNull()
+  })
+
+  it("names the two bands and averages each one on every axis", () => {
+    const profile = buildChannelExtremesProfile({
+      videos: sixVideos(),
+      source: "packaging",
+      outcome: "reach",
+      outcomeOf: reachOf,
+    })
+
+    expect(profile).not.toBeNull()
+    expect(profile!.bandSize).toBe(3)
+    expect(profile!.rankedVideoCount).toBe(6)
+    expect(profile!.top.map((entry) => entry.id)).toEqual(["a", "b", "c"])
+    expect(profile!.bottom.map((entry) => entry.id)).toEqual(["d", "e", "f"])
+    expect(profile!.top[0].outcome).toBe(100)
+
+    const groups = profile!.groups.map((group) => group.group)
+    expect(groups).toEqual(["title", "thumbnail", "opening", "alignment"])
+
+    const specificity = profile!.groups
+      .find((group) => group.group === "title")!
+      .axes.find((axis) => axis.key === "title.specificity")
+    expect(specificity!.topMean).toBe(9)
+    expect(specificity!.bottomMean).toBe(1)
+    expect(specificity!.delta).toBe(8)
+  })
+
+  it("reports only the axes where the two bands genuinely separate", () => {
+    const profile = buildChannelExtremesProfile({
+      videos: sixVideos(),
+      source: "packaging",
+      outcome: "reach",
+      outcomeOf: reachOf,
+    })
+
+    expect(profile!.contrasts.map((row) => row.key)).toEqual([
+      "title.specificity",
+    ])
+    // An axis both bands scored alike on is still drawn, just not called out.
+    expect(
+      profile!.groups
+        .find((group) => group.group === "thumbnail")!
+        .axes.some((axis) => axis.key === "thumbnail.faceProminence"),
+    ).toBe(true)
+  })
+
+  it("says nothing separated when the ends of the library score alike", () => {
+    const profile = buildChannelExtremesProfile({
+      videos: [
+        video("a", 100, { packaging: packaging() }),
+        video("b", 90, { packaging: packaging() }),
+        video("c", 80, { packaging: packaging() }),
+        video("d", 30, { packaging: packaging() }),
+        video("e", 20, { packaging: packaging() }),
+        video("f", 10, { packaging: packaging() }),
+      ],
+      source: "packaging",
+      outcome: "reach",
+      outcomeOf: reachOf,
+    })
+
+    expect(profile!.contrasts).toEqual([])
+    expect(profile!.groups.length).toBeGreaterThan(0)
+  })
+
+  it("reads the script taxonomy against retention the same way", () => {
+    const profile = buildChannelExtremesProfile({
+      videos: [
+        video("a", 70, { script: script({ concreteness: 9 }) }),
+        video("b", 65, { script: script({ concreteness: 9 }) }),
+        video("c", 60, { script: script({ concreteness: 9 }) }),
+        video("d", 20, { script: script({ concreteness: 1 }) }),
+        video("e", 15, { script: script({ concreteness: 1 }) }),
+        video("f", 10, { script: script({ concreteness: 1 }) }),
+      ],
+      source: "script",
+      outcome: "retention",
+      outcomeOf: reachOf,
+    })
+
+    expect(profile!.source).toBe("script")
+    expect(profile!.contrasts[0].key).toBe("substance.concreteness")
+    expect(profile!.contrasts[0].delta).toBe(8)
   })
 })
 

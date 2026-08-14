@@ -1,6 +1,7 @@
 import {
   CrosshairIcon,
   ImageIcon,
+  RadarIcon,
   ShapesIcon,
   SlidersHorizontalIcon,
   TagsIcon,
@@ -21,6 +22,7 @@ import {
 } from "@/components/channel-trends-shared"
 import {
   AxisContrastCard,
+  ExtremesRadarCard,
   StyleProfileCard,
 } from "@/components/channel-trends-taxonomy"
 import { EventTypeBadge } from "@/components/event-type-badge"
@@ -43,8 +45,9 @@ import type {
 // The Packaging tab: what your uploads promise, and what that promise earns.
 // Reach first (which uploads travel, and what their packaging has in common),
 // then the enriched 0-10 read of the same packaging (the library's average
-// alignment, then the axes that separate its reach halves), then the
-// categorical fingerprint, then subscriber conversion.
+// alignment, then the axes that separate its reach halves, then the same axes
+// at the two ends of the ranking as shapes), then the categorical fingerprint,
+// then subscriber conversion.
 //
 // Reach is views per day at snapshot time, because raw views cannot compare a
 // two-week-old upload with a two-year-old one. Every comparison here is
@@ -481,6 +484,18 @@ export function PackagingPanel({ data }: { data: ChannelTrendsData }) {
           topLabel="high reach"
           bottomLabel="low reach"
           emptyNote="Your two reach halves score alike on every axis so far. Open your channel profile below to see where your packaging sits overall."
+        />
+      )}
+      {data.packagingExtremes != null && (
+        <ExtremesRadarCard
+          profile={data.packagingExtremes}
+          icon={RadarIcon}
+          title="Your best and worst uploads, side by side"
+          description="The same 0-10 axes, scored on the three uploads that reached furthest and the three that reached least. One shape per surface: where the solid shape sits outside the dashed one, your winners packaged themselves harder on that axis."
+          topLabel="top 3 by reach"
+          bottomLabel="bottom 3 by reach"
+          formatOutcome={(value) => `${formatRate(value)}/day`}
+          emptyNote="Your best and worst uploads score alike on every axis so far. When the two ends of your library start packaging themselves differently, the gap lands here."
         />
       )}
       {data.packagingStyle != null && (
