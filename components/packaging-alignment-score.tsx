@@ -1,18 +1,18 @@
 import type { ReactNode } from "react"
 
 import { cn } from "@/lib/utils"
-import type { PackagingTaxonomy } from "@/lib/packaging-taxonomy"
 
 // The alignment readout: how tightly one video's title, thumbnail and opening
 // promise the same thing, drawn as a headline score, the bar behind it and the
-// two links the score is made of. Every number here was scored on that video
-// alone at analysis time (lib/packaging-taxonomy.ts), so nothing in this file
-// is comparative and the same block is correct on a single video's report and
-// on one column of a head-to-head.
+// two links the score is made of. Every number here was scored on a video alone
+// at analysis time (lib/packaging-taxonomy.ts), so nothing in this file is
+// itself comparative.
 //
-// Shared so those two surfaces show the identical thing: the packaging
-// head-to-head puts one of these in each column of its Alignment tab, and a
-// single video's packaging card puts one inside its own Alignment tab.
+// Shared by the surfaces that set those numbers against something: the
+// packaging head-to-head puts one of these in each column of its Alignment tab,
+// and channel trends puts one behind a library-wide average. A single video's
+// report deliberately does not show it, since one score there has nothing to be
+// read against.
 //
 // COPY GUARDRAIL: no em or en dashes (U+2014 / U+2013), ever, in any text in
 // this file. Hyphens are fine. Enforced by lib/__tests__/copy-guardrails.
@@ -37,39 +37,6 @@ const DEFAULT_SCORE_COLOR = "var(--primary)"
 export interface AlignmentScorePart {
   label: string
   value: number
-}
-
-export interface AlignmentReadout {
-  // The headline, on the same 0-10 scale as the parts.
-  score: number
-  // Empty for a taxonomy generated before the enriched detail block existed.
-  parts: AlignmentScorePart[]
-}
-
-// Reads the alignment numbers off a stored packaging taxonomy, scaling the
-// headline to the 0-10 the parts are already on. Returns null when the video
-// carries no taxonomy at all, so the caller can leave the readout out rather
-// than render a zero.
-export function alignmentReadout(
-  taxonomy: PackagingTaxonomy | null | undefined,
-): AlignmentReadout | null {
-  if (!taxonomy) return null
-  const cross = taxonomy.detail?.cross
-  return {
-    score: Math.round(taxonomy.alignmentScore * 10),
-    parts: cross
-      ? [
-          {
-            label: ALIGNMENT_PART_LABEL.titleThumbnailMatch,
-            value: cross.titleThumbnailMatch,
-          },
-          {
-            label: ALIGNMENT_PART_LABEL.hookDeliversPromise,
-            value: cross.hookDeliversPromise,
-          },
-        ]
-      : [],
-  }
 }
 
 // The frame a piece of a video's own material sits in: its words, its real
@@ -126,23 +93,18 @@ export function PackagingAlignmentScore({
   score,
   parts,
   color,
-  // The head-to-head sets one of these beside three tabs of quoted material, so
-  // there it wears the evidence frame like everything else in a column. A single
-  // video's Alignment tab has no other material to sit next to and is already in
-  // a card of its own, so it drops the frame and shows the numbers plainly.
-  framed = true,
   className,
 }: {
   score: number
   parts: AlignmentScorePart[]
   color?: string
-  framed?: boolean
   className?: string
 }) {
-  const Frame = framed ? EvidencePanel : UnframedScore
-
   return (
-    <Frame className={className}>
+    // The head-to-head sets one of these beside three tabs of quoted material,
+    // so it wears the evidence frame like everything else in a column, and the
+    // channel trends card reads the same way.
+    <EvidencePanel className={className}>
       <div className="@container flex flex-col gap-3">
         <div>
           <div className="flex items-baseline gap-1.5">
@@ -158,7 +120,7 @@ export function PackagingAlignmentScore({
         <ScoreBar value={score} color={color} />
         {parts.length > 0 && (
           // Side by side once the block itself is wide enough to hold two of
-          // these rows, which is the full-width Alignment tab and not the
+          // these rows, which is the full-width channel trends card and not the
           // narrow columns of the head-to-head. Measured on the block rather
           // than the window so a wide screen never splits a narrow column.
           <div className="grid gap-x-10 gap-y-2 @2xl:grid-cols-2">
@@ -176,18 +138,6 @@ export function PackagingAlignmentScore({
           </div>
         )}
       </div>
-    </Frame>
+    </EvidencePanel>
   )
-}
-
-// The no-frame stand-in for EvidencePanel: same slot, no border, tint or inset,
-// so the numbers sit directly on whatever card the caller already drew.
-function UnframedScore({
-  children,
-  className,
-}: {
-  children: ReactNode
-  className?: string
-}) {
-  return <div className={className}>{children}</div>
 }
