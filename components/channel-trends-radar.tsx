@@ -5,9 +5,10 @@ import {
 import { formatScore } from "@/components/channel-trends-shared"
 
 // The radar (spider) chart the Channel Trends page draws one taxonomy surface
-// with: every axis in a group as a spoke, and two bands of videos as two shapes
-// laid over each other. It exists for one question the bar lists answer slowly:
-// what shape do my best uploads have that my worst ones do not.
+// with: every axis in a group as a spoke, and three sets of videos as three
+// shapes laid over each other. It exists for one question the bar lists answer
+// slowly: what shape do my best uploads have that my worst ones do not, and
+// which of the two is the odd one out against the library they came from.
 //
 // Hand-drawn SVG rather than a charting library, because the page is
 // server-rendered end to end and a static two-series shape needs no client
@@ -50,9 +51,10 @@ const LABEL_WRAP_CHARS = 10
 export interface RadarAxis {
   // The taxonomy axis key, for its labels.
   key: string
-  // Both bands' means on the 0-10 scale.
+  // The three shapes' means on the 0-10 scale.
   topValue: number
   bottomValue: number
+  libraryValue: number
 }
 
 interface Point {
@@ -111,46 +113,89 @@ function anchorFor(cosine: number): "start" | "middle" | "end" {
   return "middle"
 }
 
-// One overlaid shape: the band's score on every axis, closed into a polygon.
-// The leading band is filled faintly and drawn solid; the trailing one is
-// hollow and dashed, so which is which survives a black and white print.
+// The three shapes, told apart without a single hue. The winners are the only
+// solid, filled and dotted-vertex shape, because they are the thing being read;
+// the losers are dashed and hollow; the library average is a fine dotted
+// outline with no vertices at all, because it is a baseline rather than a third
+// competitor. Weight and dash carry all of it, so a greyscale print or a
+// colour-blind reader loses nothing.
+export type RadarBand = "top" | "bottom" | "library"
+
+const BAND_STYLE: Record<
+  RadarBand,
+  {
+    tone: string
+    fillOpacity: number
+    strokeOpacity: number
+    strokeWidth: number
+    dash?: string
+    vertexRadius: number
+  }
+> = {
+  top: {
+    tone: "text-foreground",
+    fillOpacity: 0.12,
+    strokeOpacity: 0.8,
+    strokeWidth: 1.6,
+    vertexRadius: 2,
+  },
+  bottom: {
+    tone: "text-muted-foreground",
+    fillOpacity: 0,
+    strokeOpacity: 0.75,
+    strokeWidth: 1.2,
+    dash: "3.5 2.5",
+    vertexRadius: 1.8,
+  },
+  library: {
+    tone: "text-muted-foreground",
+    fillOpacity: 0,
+    strokeOpacity: 0.55,
+    strokeWidth: 1,
+    dash: "1 2.2",
+    vertexRadius: 0,
+  },
+}
+
 function BandShape({
   axes,
   read,
-  emphasis,
+  band,
 }: {
   axes: RadarAxis[]
   read: (axis: RadarAxis) => number
-  emphasis: boolean
+  band: RadarBand
 }) {
+  const style = BAND_STYLE[band]
   const points = axes.map((axis, index) =>
     pointAt(index, axes.length, radiusFor(read(axis))),
   )
   return (
-    <g className={emphasis ? "text-foreground" : "text-muted-foreground"}>
+    <g className={style.tone}>
       <polygon
         points={path(points)}
-        fill={emphasis ? "currentColor" : "none"}
-        fillOpacity={emphasis ? 0.12 : 0}
+        fill={style.fillOpacity > 0 ? "currentColor" : "none"}
+        fillOpacity={style.fillOpacity}
         stroke="currentColor"
-        strokeOpacity={emphasis ? 0.8 : 0.75}
-        strokeWidth={emphasis ? 1.6 : 1.2}
-        strokeDasharray={emphasis ? undefined : "3.5 2.5"}
+        strokeOpacity={style.strokeOpacity}
+        strokeWidth={style.strokeWidth}
+        strokeDasharray={style.dash}
         strokeLinejoin="round"
       />
-      {points.map((point, index) => (
-        <circle
-          key={axes[index].key}
-          cx={point.x}
-          cy={point.y}
-          r={emphasis ? 2 : 1.8}
-          fill={emphasis ? "currentColor" : "var(--card)"}
-          fillOpacity={emphasis ? 0.85 : 1}
-          stroke="currentColor"
-          strokeOpacity={0.8}
-          strokeWidth={emphasis ? 0 : 1.1}
-        />
-      ))}
+      {style.vertexRadius > 0 &&
+        points.map((point, index) => (
+          <circle
+            key={axes[index].key}
+            cx={point.x}
+            cy={point.y}
+            r={style.vertexRadius}
+            fill={band === "top" ? "currentColor" : "var(--card)"}
+            fillOpacity={band === "top" ? 0.85 : 1}
+            stroke="currentColor"
+            strokeOpacity={0.8}
+            strokeWidth={band === "top" ? 0 : 1.1}
+          />
+        ))}
     </g>
   )
 }
@@ -159,25 +204,26 @@ export function TaxonomyRadar({
   axes,
   topLabel,
   bottomLabel,
+  libraryLabel,
   groupLabel,
 }: {
   // Three or more, in the order they should run clockwise from the top.
   axes: RadarAxis[]
-  // What the two bands are called, in the reader's terms.
+  // What the three shapes are called, in the reader's terms.
   topLabel: string
   bottomLabel: string
+  libraryLabel: string
   // The surface these axes belong to, for the chart's own description.
   groupLabel: string
 }) {
   if (axes.length < RADAR_MIN_AXES) return null
 
+  const readout = (axis: RadarAxis) =>
+    `${topLabel} ${formatScore(axis.topValue)}, ${bottomLabel} ${formatScore(
+      axis.bottomValue,
+    )}, ${libraryLabel} ${formatScore(axis.libraryValue)}`
   const summary = axes
-    .map(
-      (axis) =>
-        `${taxonomyAxisCopy(axis.key).name}: ${topLabel} ${formatScore(
-          axis.topValue,
-        )}, ${bottomLabel} ${formatScore(axis.bottomValue)}`,
-    )
+    .map((axis) => `${taxonomyAxisCopy(axis.key).name}: ${readout(axis)}`)
     .join(". ")
 
   return (
@@ -219,15 +265,17 @@ export function TaxonomyRadar({
         })}
       </g>
 
-      <BandShape axes={axes} read={(axis) => axis.bottomValue} emphasis={false} />
-      <BandShape axes={axes} read={(axis) => axis.topValue} emphasis />
+      {/* Drawn baseline first, winners last, so the shape being read is never
+          crossed out by the two under it. */}
+      <BandShape axes={axes} read={(axis) => axis.libraryValue} band="library" />
+      <BandShape axes={axes} read={(axis) => axis.bottomValue} band="bottom" />
+      <BandShape axes={axes} read={(axis) => axis.topValue} band="top" />
 
       {axes.map((axis, index) => {
         const angle = -Math.PI / 2 + (index / axes.length) * Math.PI * 2
         const anchor = anchorFor(Math.cos(angle))
         const label = pointAt(index, axes.length, RADIUS + LABEL_GAP)
         const lines = wrapLabel(taxonomyAxisShortLabel(axis.key))
-        const copy = taxonomyAxisCopy(axis.key)
         return (
           <text
             key={axis.key}
@@ -238,7 +286,7 @@ export function TaxonomyRadar({
             className="fill-current text-muted-foreground"
           >
             <title>
-              {`${copy.name}: ${topLabel} ${formatScore(axis.topValue)}, ${bottomLabel} ${formatScore(axis.bottomValue)}`}
+              {`${taxonomyAxisCopy(axis.key).name}: ${readout(axis)}`}
             </title>
             {lines.map((line, lineIndex) => (
               <tspan
@@ -260,46 +308,50 @@ export function TaxonomyRadar({
   )
 }
 
+// One entry in the key: the exact line the chart draws that band with, at the
+// size a line of text can carry.
+function LegendSwatch({ band }: { band: RadarBand }) {
+  const style = BAND_STYLE[band]
+  return (
+    <svg viewBox="0 0 20 8" className={`h-2 w-5 ${style.tone}`} aria-hidden="true">
+      <line
+        x1="0"
+        y1="4"
+        x2="20"
+        y2="4"
+        stroke="currentColor"
+        strokeOpacity={style.strokeOpacity}
+        strokeWidth={2}
+        strokeDasharray={band === "top" ? undefined : band === "bottom" ? "4 3" : "1.5 2.5"}
+      />
+    </svg>
+  )
+}
+
 // The key the radars share, stated once above the grid of them rather than
 // repeated on every chart.
 export function RadarLegend({
   topLabel,
   bottomLabel,
+  libraryLabel,
 }: {
   topLabel: string
   bottomLabel: string
+  libraryLabel: string
 }) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
       <span className="flex items-center gap-1.5">
-        <svg viewBox="0 0 20 8" className="h-2 w-5" aria-hidden="true">
-          <line
-            x1="0"
-            y1="4"
-            x2="20"
-            y2="4"
-            stroke="currentColor"
-            strokeOpacity={0.8}
-            strokeWidth={2}
-            className="text-foreground"
-          />
-        </svg>
+        <LegendSwatch band="top" />
         {topLabel}
       </span>
       <span className="flex items-center gap-1.5">
-        <svg viewBox="0 0 20 8" className="h-2 w-5" aria-hidden="true">
-          <line
-            x1="0"
-            y1="4"
-            x2="20"
-            y2="4"
-            stroke="currentColor"
-            strokeOpacity={0.75}
-            strokeWidth={2}
-            strokeDasharray="4 3"
-          />
-        </svg>
+        <LegendSwatch band="bottom" />
         {bottomLabel}
+      </span>
+      <span className="flex items-center gap-1.5">
+        <LegendSwatch band="library" />
+        {libraryLabel}
       </span>
       <span>Each spoke is a 0-10 score, centre 0, rim 10.</span>
     </div>

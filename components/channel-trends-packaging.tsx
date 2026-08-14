@@ -491,9 +491,10 @@ export function PackagingPanel({ data }: { data: ChannelTrendsData }) {
           profile={data.packagingExtremes}
           icon={RadarIcon}
           title="Your best and worst uploads, side by side"
-          description="The same 0-10 axes, scored on the three uploads that reached furthest and the three that reached least. One shape per surface: where the solid shape sits outside the dashed one, your winners packaged themselves harder on that axis."
+          description="The same 0-10 axes, scored on the three uploads that reached furthest, the three that reached least, and your whole library as a baseline. One shape per surface: where the solid shape sits outside the dashed one, your winners packaged themselves harder on that axis, and the dotted line says whether that is unusual for you."
           topLabel="top 3 by reach"
           bottomLabel="bottom 3 by reach"
+          libraryLabel="library average"
           formatOutcome={(value) => `${formatRate(value)}/day`}
           emptyNote="Your best and worst uploads score alike on every axis so far. When the two ends of your library start packaging themselves differently, the gap lands here."
         />
