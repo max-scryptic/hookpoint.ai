@@ -104,7 +104,7 @@ function cleanProse(text: string): string {
 }
 
 // A video's own written alignment read, held to the same two sentences the
-// Alignment Summary card on that video's own report shows it at, so the pair of
+// Summary card on that video's own report shows it at, so the pair of
 // columns stays a glance rather than two paragraphs. It is about one video
 // rather than the pair, so it never runs through cleanProse: there are no bare
 // side letters in it to expand.
@@ -128,7 +128,7 @@ function SideDot({ side }: { side: Side }) {
 // so this renders from JSON with no call at view time.
 
 // The one-paragraph read of which video packaged itself better, in the summary
-// box that heads the section, the same box the Alignment Summary sits in on a
+// box that heads the section, the same box the Summary sits in on a
 // single video's report. The badges and confidence label it used to carry are
 // restated by the per-surface panels below. Capped at two sentences like every
 // other summary card: the surface tabs below carry the detail.

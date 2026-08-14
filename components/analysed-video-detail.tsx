@@ -20,6 +20,7 @@ import {
 import { HookIcon } from "@/components/hook-icon"
 import {
   alignmentReadout,
+  type AlignmentReadout,
   PackagingAlignmentScore,
 } from "@/components/packaging-alignment-score"
 import {
@@ -1021,23 +1022,17 @@ function PackagingAlignmentSection({
   // How tightly this video's three surfaces promise one thing, scored on the
   // video alone at analysis time and shown here in the same block the packaging
   // head-to-head puts in each of its columns. Absent only for a video whose
-  // stored read predates the taxonomy, in which case the card is the written
-  // summary alone, exactly as it was before.
+  // stored read predates the taxonomy, in which case the tab strip is the three
+  // surfaces alone, exactly as it was before.
   const readout = alignmentReadout(alignment.taxonomy)
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 rounded-xl border bg-card p-4">
-        <h3 className="text-sm font-medium">Alignment Summary</h3>
-        {readout && (
-          <PackagingAlignmentScore
-            score={readout.score}
-            parts={readout.parts}
-          />
-        )}
+        <h3 className="text-sm font-medium">Summary</h3>
         <p className="text-sm text-muted-foreground">
           {/* Two sentences at most, like every other summary card: the
-              per-component tabs under it carry the detail. */}
+              per-surface tabs under it carry the detail. */}
           {limitSentences(cleanCopy(alignment.overall))}
         </p>
       </div>
@@ -1046,23 +1041,34 @@ function PackagingAlignmentSection({
         <PackagingComponentTabs
           components={alignment.components}
           hookQuote={hookQuote}
+          readout={readout}
         />
       ) : (
         // Older alignments were stored before the per-component breakdown
-        // existed, so fall back to the flat two-column layout for them.
-        <div className="grid gap-3 sm:grid-cols-2">
-          <PointsCard
-            title="What worked well"
-            tone="good"
-            points={(alignment.whatWorked ?? []).slice(0, 3)}
-          />
-          <PointsCard
-            title="What could be improved"
-            tone="warn"
-            points={prioritizePackagingImprovements(
-              alignment.whatCouldBeBetter ?? [],
-            ).slice(0, 3)}
-          />
+        // existed, so fall back to the flat two-column layout for them. There
+        // is no tab strip to hang the alignment numbers off in that case, so
+        // they lead the fallback instead of being dropped.
+        <div className="flex flex-col gap-3">
+          {readout && (
+            <PackagingAlignmentScore
+              score={readout.score}
+              parts={readout.parts}
+            />
+          )}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <PointsCard
+              title="What worked well"
+              tone="good"
+              points={(alignment.whatWorked ?? []).slice(0, 3)}
+            />
+            <PointsCard
+              title="What could be improved"
+              tone="warn"
+              points={prioritizePackagingImprovements(
+                alignment.whatCouldBeBetter ?? [],
+              ).slice(0, 3)}
+            />
+          </div>
         </div>
       )}
     </div>
@@ -1103,12 +1109,21 @@ const PACKAGING_COMPONENT_ORDER: PackagingComponentKey[] = [
   "hook",
 ]
 
+// The three surfaces a viewer meets, then how tightly those three fit
+// together, in the same reading order and behind the same four tabs as the
+// packaging head-to-head (components/packaging-comparison.tsx). The fourth tab
+// is about the other three rather than a surface of its own, so it carries the
+// alignment numbers where the surface tabs carry the model's read. It is left
+// out entirely for a video whose stored read predates the taxonomy, since there
+// are no numbers to show.
 function PackagingComponentTabs({
   components,
   hookQuote = null,
+  readout = null,
 }: {
   components: NonNullable<PackagingAlignment["components"]>
   hookQuote?: string | null
+  readout?: AlignmentReadout | null
 }) {
   return (
     <Tabs defaultValue="title" className="w-full">
@@ -1122,6 +1137,12 @@ function PackagingComponentTabs({
             </TabsTrigger>
           )
         })}
+        {readout && (
+          <TabsTrigger value="alignment">
+            <AlignHorizontalJustifyCenterIcon className="text-muted-foreground" />
+            Alignment
+          </TabsTrigger>
+        )}
       </TabsList>
 
       {PACKAGING_COMPONENT_ORDER.map((key) => (
@@ -1133,6 +1154,17 @@ function PackagingComponentTabs({
           />
         </TabsContent>
       ))}
+
+      {readout && (
+        <TabsContent value="alignment" className="w-full">
+          <div className="flex w-full flex-col gap-4 rounded-xl border bg-card p-4">
+            <PackagingAlignmentScore
+              score={readout.score}
+              parts={readout.parts}
+            />
+          </div>
+        </TabsContent>
+      )}
     </Tabs>
   )
 }
