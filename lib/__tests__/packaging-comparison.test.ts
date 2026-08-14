@@ -219,6 +219,8 @@ const cryptoInput = {
   views: 3515,
   transcript: cryptoCues,
   taxonomy: cryptoTaxonomy,
+  alignmentSummary:
+    "Your packaging lines up: the title, the thumbnail and your opening all promise the same confession.",
 }
 
 const stopInput = {
@@ -228,6 +230,7 @@ const stopInput = {
   views: 131,
   transcript: stopCues,
   taxonomy: stopChartsTaxonomy,
+  alignmentSummary: "   ",
 }
 
 describe("buildPackagingComparison", () => {
@@ -302,6 +305,19 @@ describe("buildPackagingComparison", () => {
     // seconds is carried whole rather than cut mid-sentence.
     expect(result?.a.hookTranscript).not.toContain("start with the numbers")
     expect(result?.b.hookTranscript).not.toContain("charts have been wild")
+  })
+
+  it("carries each video's own alignment summary, blank ones dropped", () => {
+    const result = buildPackagingComparison(cryptoInput, stopInput)
+    expect(result?.a.alignmentSummary).toContain("the same confession")
+    // Whitespace only, and a video that never had one at all, both read as
+    // absent rather than as an empty paragraph on the report.
+    expect(result?.b.alignmentSummary).toBeNull()
+    const missing = buildPackagingComparison(
+      { ...cryptoInput, alignmentSummary: undefined },
+      stopInput,
+    )
+    expect(missing?.a.alignmentSummary).toBeNull()
   })
 
   it("leaves the opening unset when the video has no transcript", () => {

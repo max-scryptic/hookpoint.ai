@@ -36,6 +36,7 @@ const CHANNEL_TRENDS_SOURCE_FILES = [
   "components/comparison-processing.tsx",
   "components/comparison-report-tabs.tsx",
   "components/event-type-badge.tsx",
+  "components/packaging-alignment-score.tsx",
   "components/packaging-comparison.tsx",
   "components/previous-comparisons.tsx",
   "components/retention-comparison.tsx",

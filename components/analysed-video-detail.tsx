@@ -19,6 +19,10 @@ import {
 
 import { HookIcon } from "@/components/hook-icon"
 import {
+  alignmentReadout,
+  PackagingAlignmentScore,
+} from "@/components/packaging-alignment-score"
+import {
   createFirstSaying,
   dedupePacingTips,
   dedupeSectionTips,
@@ -1014,11 +1018,24 @@ function PackagingAlignmentSection({
     )
   }
 
+  // How tightly this video's three surfaces promise one thing, scored on the
+  // video alone at analysis time and shown here in the same block the packaging
+  // head-to-head puts in each of its columns. Absent only for a video whose
+  // stored read predates the taxonomy, in which case the card is the written
+  // summary alone, exactly as it was before.
+  const readout = alignmentReadout(alignment.taxonomy)
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-xl border bg-card p-4">
+      <div className="flex flex-col gap-3 rounded-xl border bg-card p-4">
         <h3 className="text-sm font-medium">Alignment Summary</h3>
-        <p className="mt-2 text-sm text-muted-foreground">
+        {readout && (
+          <PackagingAlignmentScore
+            score={readout.score}
+            parts={readout.parts}
+          />
+        )}
+        <p className="text-sm text-muted-foreground">
           {/* Two sentences at most, like every other summary card: the
               per-component tabs under it carry the detail. */}
           {limitSentences(cleanCopy(alignment.overall))}

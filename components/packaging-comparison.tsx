@@ -8,6 +8,11 @@ import {
 } from "lucide-react"
 
 import { HookIcon } from "@/components/hook-icon"
+import {
+  ALIGNMENT_PART_LABEL,
+  EvidencePanel,
+  PackagingAlignmentScore,
+} from "@/components/packaging-alignment-score"
 import { VideoThumbnail } from "@/components/video-thumbnail"
 import { ComparisonReportTabs } from "@/components/comparison-report-tabs"
 import { TryCallout } from "@/components/try-callout"
@@ -40,7 +45,10 @@ import {
 // the field-by-field taxonomy diff are all held back, because the material and
 // the comparison paragraph already carry the argument. The comparison is still
 // read for the verbatim spans the surface tabs quote, and for the alignment
-// scores the fourth tab shows in place of a surface of its own. Purely
+// scores and per-video alignment summaries the fourth tab shows in place of a
+// surface of its own. Both of those were generated for each video on its own in
+// its initial analysis, so that tab is two stored reads set side by side and
+// costs nothing to show. Purely
 // presentational; all the maths live in lib/packaging-comparison.ts.
 //
 // COPY GUARDRAIL: no em or en dashes (U+2014 / U+2013), ever, in any text in
@@ -93,6 +101,15 @@ function clean(text: string): string {
 // verbatim titles and transcript quotes that must not be touched.
 function cleanProse(text: string): string {
   return nameVideoSides(clean(text))
+}
+
+// A video's own written alignment read, held to the same two sentences the
+// Alignment Summary card on that video's own report shows it at, so the pair of
+// columns stays a glance rather than two paragraphs. It is about one video
+// rather than the pair, so it never runs through cleanProse: there are no bare
+// side letters in it to expand.
+function alignmentSummary(text: string): string {
+  return limitSentences(clean(text))
 }
 
 function SideDot({ side }: { side: Side }) {
@@ -165,72 +182,40 @@ const ALIGNMENT_SCORE_KEY = "overall.alignment"
 
 // The two links the headline score is made of, shown under it so the number is
 // legible rather than bare. Both come off the enriched taxonomy, so a video
-// analysed before that existed simply shows the headline score alone.
+// analysed before that existed simply shows the headline score alone. The
+// labels are the shared ones, so the pair of columns here reads word for word
+// like the block on a single video's packaging card.
 const ALIGNMENT_PART_AXES: Array<{ key: string; label: string }> = [
-  { key: "cross.titleThumbnailMatch", label: "Title and thumbnail match" },
-  { key: "cross.hookDeliversPromise", label: "Opening delivers the promise" },
+  {
+    key: "cross.titleThumbnailMatch",
+    label: ALIGNMENT_PART_LABEL.titleThumbnailMatch,
+  },
+  {
+    key: "cross.hookDeliversPromise",
+    label: ALIGNMENT_PART_LABEL.hookDeliversPromise,
+  },
 ]
-
-// A 0-10 read drawn as a bar, tinted to the side it belongs to so each column
-// carries its own video's colour.
-function ScoreBar({
-  value,
-  side,
-  className,
-}: {
-  value: number
-  side: Side
-  className?: string
-}) {
-  return (
-    <div className={cn("h-1.5 overflow-hidden rounded-full bg-muted", className)}>
-      <div
-        className="h-full rounded-full"
-        style={{
-          width: `${Math.min(100, Math.max(0, value * 10))}%`,
-          backgroundColor: SIDE_META[side].dot,
-        }}
-      />
-    </div>
-  )
-}
 
 // The frame every piece of per-side material sits in: the video's own words,
 // its real thumbnail, or its alignment numbers, tinted and ruled off so they
 // read as that video's own material rather than as more of the report. Every
 // surface tab uses it, so the thumbnail pair is framed the same way the title
-// and the opening are. The written read below the columns is plain foreground
-// text now, matching the detail line on a single video's packaging card, so
-// this panel is what sets the material apart without dimming the words
+// and the opening are. Shared with a single video's packaging card, which
+// frames its own alignment block identically. The written read below the
+// columns is plain foreground text now, matching the detail line on that card,
+// so this panel is what sets the material apart without dimming the words
 // themselves.
-function EvidenceQuote({
-  children,
-  // The thumbnail is a picture rather than words, so it asks for an even inset
-  // all round instead of the roomier sides text reads better with. Everything
-  // else about the panel stays fixed, so the four tabs still frame their
-  // material identically.
-  className,
-}: {
-  children: ReactNode
-  className?: string
-}) {
-  return (
-    <div
-      className={cn(
-        "rounded-md border-l-2 border-muted-foreground/30 bg-muted/40 py-2 pr-3 pl-3",
-        className,
-      )}
-    >
-      {children}
-    </div>
-  )
-}
+const EvidenceQuote = EvidencePanel
 
-// One video's alignment score, in place of the surface material the other three
+// One video's alignment read, in place of the surface material the other three
 // tabs quote: there is no single artefact to show for alignment, so the tab
-// shows how well that video's three artefacts agree instead. It sits in the same
-// panel the other tabs quote their extracts in, so the fourth tab reads as one
-// more pair of columns rather than as a different kind of thing.
+// shows how well that video's three artefacts agree instead. Both halves of it
+// were produced for that video on its own at analysis time: the score comes off
+// its stored taxonomy, and the summary is the prose alignment written beside
+// it, so the two columns are two independent reads set next to each other
+// rather than anything this comparison had to write. It sits in the same panel
+// the other tabs quote their extracts in, so the fourth tab reads as one more
+// pair of columns rather than as a different kind of thing.
 function AlignmentScore({
   side,
   comparison,
@@ -239,12 +224,23 @@ function AlignmentScore({
   comparison: PackagingComparison
 }) {
   const score = ordinalValue(comparison, ALIGNMENT_SCORE_KEY, side)
+  const summary = comparison[side].alignmentSummary
+
   if (score == null) {
+    // A video with no taxonomy can still carry the prose alignment, so the
+    // summary alone is worth showing; only a video with neither has nothing.
+    if (summary == null) {
+      return (
+        <p className="text-sm text-muted-foreground">
+          No packaging read is stored for this video, so it has no alignment
+          score.
+        </p>
+      )
+    }
     return (
-      <p className="text-sm text-muted-foreground">
-        No packaging read is stored for this video, so it has no alignment
-        score.
-      </p>
+      <EvidenceQuote>
+        <p className="text-sm leading-relaxed">{alignmentSummary(summary)}</p>
+      </EvidenceQuote>
     )
   }
 
@@ -256,37 +252,12 @@ function AlignmentScore({
   )
 
   return (
-    <EvidenceQuote>
-      <div className="flex flex-col gap-3">
-        <div>
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-3xl leading-none font-semibold tabular-nums">
-              {score}
-            </span>
-            <span className="text-sm text-muted-foreground">/ 10</span>
-          </div>
-          <p className="mt-1.5 text-xs text-muted-foreground">
-            How tightly the title, thumbnail and opening promise one thing.
-          </p>
-        </div>
-        <ScoreBar value={score} side={side} />
-        {parts.length > 0 && (
-          <div className="flex flex-col gap-2">
-            {parts.map((part) => (
-              <div key={part.label} className="flex items-center gap-3">
-                <span className="flex-1 text-xs text-muted-foreground">
-                  {part.label}
-                </span>
-                <ScoreBar value={part.value} side={side} className="w-16" />
-                <span className="w-8 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
-                  {part.value}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </EvidenceQuote>
+    <PackagingAlignmentScore
+      score={score}
+      parts={parts}
+      color={SIDE_META[side].dot}
+      summary={summary == null ? null : alignmentSummary(summary)}
+    />
   )
 }
 
