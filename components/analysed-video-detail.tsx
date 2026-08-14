@@ -1158,14 +1158,28 @@ function PackagingComponentTabs({
       {readout && (
         <TabsContent value="alignment" className="w-full">
           <div className="flex w-full flex-col gap-4 rounded-xl border bg-card p-4">
+            {/* Headed like the three surface tabs, so the fourth reads as one
+                more card in the strip rather than as a different kind of
+                thing. */}
+            <PackagingComponentBadge label="Alignment" />
             <PackagingAlignmentScore
               score={readout.score}
               parts={readout.parts}
+              framed={false}
             />
           </div>
         </TabsContent>
       )}
     </Tabs>
+  )
+}
+
+// The purple name every packaging tab opens with.
+function PackagingComponentBadge({ label }: { label: string }) {
+  return (
+    <span className="w-fit rounded-md border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-sm font-semibold text-purple-700 dark:text-purple-300">
+      {label}
+    </span>
   )
 }
 
@@ -1185,9 +1199,7 @@ function PackagingComponentCard({
     <div className="flex w-full flex-col gap-4 rounded-xl border bg-card p-4">
       <div className="flex flex-col gap-1">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="rounded-md border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-sm font-semibold text-purple-700 dark:text-purple-300">
-            {label}
-          </span>
+          <PackagingComponentBadge label={label} />
           {quote && (
             <Tooltip>
               <TooltipTrigger
