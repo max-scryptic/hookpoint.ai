@@ -212,7 +212,7 @@ export function AnalysisProcessing({
         <p className="text-xs text-muted-foreground">
           {isDone
             ? "All done. Opening your report."
-            : "This can take a moment. You'll be taken to your report automatically. Leaving stops it and puts the analysis back in your allowance."}
+            : "This can take a moment. You'll be taken to your report automatically."}
         </p>
       </div>
     </div>
