@@ -45,10 +45,9 @@ import {
 // the field-by-field taxonomy diff are all held back, because the material and
 // the comparison paragraph already carry the argument. The comparison is still
 // read for the verbatim spans the surface tabs quote, and for the alignment
-// scores and per-video alignment summaries the fourth tab shows in place of a
-// surface of its own. Both of those were generated for each video on its own in
-// its initial analysis, so that tab is two stored reads set side by side and
-// costs nothing to show. Purely
+// scores the fourth tab shows in place of a surface of its own. Those were
+// scored for each video on its own in its initial analysis, so that tab is two
+// stored reads set side by side and costs nothing to show. Purely
 // presentational; all the maths live in lib/packaging-comparison.ts.
 //
 // COPY GUARDRAIL: no em or en dashes (U+2014 / U+2013), ever, in any text in
@@ -101,15 +100,6 @@ function clean(text: string): string {
 // verbatim titles and transcript quotes that must not be touched.
 function cleanProse(text: string): string {
   return nameVideoSides(clean(text))
-}
-
-// A video's own written alignment read, held to the same two sentences the
-// Summary card on that video's own report shows it at, so the pair of
-// columns stays a glance rather than two paragraphs. It is about one video
-// rather than the pair, so it never runs through cleanProse: there are no bare
-// side letters in it to expand.
-function alignmentSummary(text: string): string {
-  return limitSentences(clean(text))
 }
 
 function SideDot({ side }: { side: Side }) {
@@ -209,13 +199,13 @@ const EvidenceQuote = EvidencePanel
 
 // One video's alignment read, in place of the surface material the other three
 // tabs quote: there is no single artefact to show for alignment, so the tab
-// shows how well that video's three artefacts agree instead. Both halves of it
-// were produced for that video on its own at analysis time: the score comes off
-// its stored taxonomy, and the summary is the prose alignment written beside
-// it, so the two columns are two independent reads set next to each other
-// rather than anything this comparison had to write. It sits in the same panel
-// the other tabs quote their extracts in, so the fourth tab reads as one more
-// pair of columns rather than as a different kind of thing.
+// shows how well that video's three artefacts agree instead. The score comes
+// off that video's own stored taxonomy, so the two columns are two independent
+// reads set next to each other rather than anything this comparison had to
+// write. It is numbers only: the paragraph weighing the two sides against each
+// other sits below the columns like it does on every other tab. It sits in the
+// same panel the other tabs quote their extracts in, so the fourth tab reads as
+// one more pair of columns rather than as a different kind of thing.
 function AlignmentScore({
   side,
   comparison,
@@ -224,23 +214,13 @@ function AlignmentScore({
   comparison: PackagingComparison
 }) {
   const score = ordinalValue(comparison, ALIGNMENT_SCORE_KEY, side)
-  const summary = comparison[side].alignmentSummary
 
   if (score == null) {
-    // A video with no taxonomy can still carry the prose alignment, so the
-    // summary alone is worth showing; only a video with neither has nothing.
-    if (summary == null) {
-      return (
-        <p className="text-sm text-muted-foreground">
-          No packaging read is stored for this video, so it has no alignment
-          score.
-        </p>
-      )
-    }
     return (
-      <EvidenceQuote>
-        <p className="text-sm leading-relaxed">{alignmentSummary(summary)}</p>
-      </EvidenceQuote>
+      <p className="text-sm text-muted-foreground">
+        No packaging read is stored for this video, so it has no alignment
+        score.
+      </p>
     )
   }
 
@@ -256,7 +236,6 @@ function AlignmentScore({
       score={score}
       parts={parts}
       color={SIDE_META[side].dot}
-      summary={summary == null ? null : alignmentSummary(summary)}
     />
   )
 }

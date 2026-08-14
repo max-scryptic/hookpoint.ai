@@ -119,16 +119,13 @@ export function ScoreBar({
   )
 }
 
-// One video's alignment score, its caption, its bar and its two parts, with the
-// video's own written read of its packaging below them when there is one. The
-// summary is generated per video in the initial analysis
-// (lib/packaging-alignment.ts), so it is that video's own material and belongs
-// inside the frame with its numbers rather than beside them.
+// One video's alignment score, its caption, its bar and its two parts. The
+// numbers speak for themselves, so nothing written sits under them: the prose
+// read of a video's packaging lives on that video's own report, not here.
 export function PackagingAlignmentScore({
   score,
   parts,
   color,
-  summary = null,
   // The head-to-head sets one of these beside three tabs of quoted material, so
   // there it wears the evidence frame like everything else in a column. A single
   // video's Alignment tab has no other material to sit next to and is already in
@@ -139,7 +136,6 @@ export function PackagingAlignmentScore({
   score: number
   parts: AlignmentScorePart[]
   color?: string
-  summary?: string | null
   framed?: boolean
   className?: string
 }) {
@@ -174,11 +170,6 @@ export function PackagingAlignmentScore({
               </div>
             ))}
           </div>
-        )}
-        {summary != null && summary.length > 0 && (
-          <p className="border-t border-muted-foreground/20 pt-3 text-sm leading-relaxed">
-            {summary}
-          </p>
         )}
       </div>
     </Frame>
