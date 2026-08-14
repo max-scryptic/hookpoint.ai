@@ -129,16 +129,24 @@ export function PackagingAlignmentScore({
   parts,
   color,
   summary = null,
+  // The head-to-head sets one of these beside three tabs of quoted material, so
+  // there it wears the evidence frame like everything else in a column. A single
+  // video's Alignment tab has no other material to sit next to and is already in
+  // a card of its own, so it drops the frame and shows the numbers plainly.
+  framed = true,
   className,
 }: {
   score: number
   parts: AlignmentScorePart[]
   color?: string
   summary?: string | null
+  framed?: boolean
   className?: string
 }) {
+  const Frame = framed ? EvidencePanel : UnframedScore
+
   return (
-    <EvidencePanel className={className}>
+    <Frame className={className}>
       <div className="flex flex-col gap-3">
         <div>
           <div className="flex items-baseline gap-1.5">
@@ -173,6 +181,18 @@ export function PackagingAlignmentScore({
           </p>
         )}
       </div>
-    </EvidencePanel>
+    </Frame>
   )
+}
+
+// The no-frame stand-in for EvidencePanel: same slot, no border, tint or inset,
+// so the numbers sit directly on whatever card the caller already drew.
+function UnframedScore({
+  children,
+  className,
+}: {
+  children: ReactNode
+  className?: string
+}) {
+  return <div className={className}>{children}</div>
 }
