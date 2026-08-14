@@ -1,4 +1,5 @@
 import {
+  CrosshairIcon,
   ImageIcon,
   ShapesIcon,
   SlidersHorizontalIcon,
@@ -23,6 +24,11 @@ import {
   StyleProfileCard,
 } from "@/components/channel-trends-taxonomy"
 import { EventTypeBadge } from "@/components/event-type-badge"
+import {
+  ALIGNMENT_PART_LABEL,
+  PackagingAlignmentScore,
+} from "@/components/packaging-alignment-score"
+import type { ChannelAlignmentAverage } from "@/lib/channel-taxonomy-trends"
 import type {
   ChannelPackagingPatterns,
   ChannelSubscriberConversion,
@@ -36,8 +42,9 @@ import type {
 
 // The Packaging tab: what your uploads promise, and what that promise earns.
 // Reach first (which uploads travel, and what their packaging has in common),
-// then the enriched 0-10 read of the same packaging, then the categorical
-// fingerprint, then subscriber conversion.
+// then the enriched 0-10 read of the same packaging (the library's average
+// alignment, then the axes that separate its reach halves), then the
+// categorical fingerprint, then subscriber conversion.
 //
 // Reach is views per day at snapshot time, because raw views cannot compare a
 // two-week-old upload with a two-year-old one. Every comparison here is
@@ -247,6 +254,43 @@ function PackagingFeaturesCard({
   )
 }
 
+// --- Average alignment -------------------------------------------------------
+
+// The alignment readout, averaged across the library. Deliberately the same
+// block a single video's report and the packaging head-to-head render
+// (components/packaging-alignment-score.tsx), tint included, so the number a
+// creator already knows from one video reads as the same number here. It is the
+// one tinted block among this page's neutral bars, and that is the point: it is
+// one object shown in three places, not a fourth chart.
+function AverageAlignmentCard({
+  alignment,
+}: {
+  alignment: ChannelAlignmentAverage
+}) {
+  const over = `Averaged across ${plural(alignment.videoCount, "analysed video")}.`
+  return (
+    <TrendCard
+      icon={CrosshairIcon}
+      title="Your average alignment"
+      description="The alignment score off every video report, averaged across your library. Each video was scored on its own at analysis time, so this is what your packaging typically does rather than a ranking of it."
+      footer={
+        alignment.partVideoCount > 0 &&
+        alignment.partVideoCount < alignment.videoCount
+          ? `${over} The two rows under the score cover the ${alignment.partVideoCount} carrying an enriched packaging read.`
+          : over
+      }
+    >
+      <PackagingAlignmentScore
+        score={alignment.score}
+        parts={alignment.parts.map((part) => ({
+          label: ALIGNMENT_PART_LABEL[part.key],
+          value: part.value,
+        }))}
+      />
+    </TrendCard>
+  )
+}
+
 // --- Subscriber conversion ---------------------------------------------------
 
 const SUBSCRIBER_OUTCOME_BADGE = {
@@ -424,6 +468,9 @@ export function PackagingPanel({ data }: { data: ChannelTrendsData }) {
           <PackagingReachCard packaging={data.packaging} />
           <PackagingFeaturesCard packaging={data.packaging} />
         </>
+      )}
+      {data.packagingAlignment != null && (
+        <AverageAlignmentCard alignment={data.packagingAlignment} />
       )}
       {data.packagingAxes != null && (
         <AxisContrastCard

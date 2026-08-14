@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  buildChannelAlignmentAverage,
   buildChannelAxisProfile,
   buildChannelStyleProfile,
   videoTopics,
@@ -15,6 +16,8 @@ function packagingDetail(
     titleCuriosityGap?: number
     faceProminence?: number
     payoffSpeed?: number
+    titleThumbnailMatch?: number
+    hookDeliversPromise?: number
     archetype?: PackagingDetail["drivers"]["archetype"]
     primaryDriver?: PackagingDetail["drivers"]["primaryDriver"]
   } = {},
@@ -57,8 +60,8 @@ function packagingDetail(
       firstSentence: "",
     },
     cross: {
-      titleThumbnailMatch: 5,
-      hookDeliversPromise: 5,
+      titleThumbnailMatch: overrides.titleThumbnailMatch ?? 5,
+      hookDeliversPromise: overrides.hookDeliversPromise ?? 5,
       singleClearPromise: "",
       contradiction: false,
       contradictionNote: "",
@@ -78,6 +81,7 @@ function packaging(
     detail?: false
     topics?: string[]
     titleStyles?: PackagingTaxonomy["titleStyles"]
+    alignmentScore?: number
   } = {},
 ): PackagingTaxonomy {
   return {
@@ -87,7 +91,7 @@ function packaging(
     thumbnailTextWordCount: 2,
     promiseType: "how_to",
     hookDelivery: "direct",
-    alignmentScore: 0.8,
+    alignmentScore: overrides.alignmentScore ?? 0.8,
     topics: overrides.topics ?? ["editing"],
     detail: overrides.detail === false ? undefined : packagingDetail(overrides),
     schemaVersion: 3,
@@ -309,6 +313,95 @@ describe("buildChannelAxisProfile", () => {
     expect(profile!.source).toBe("script")
     expect(profile!.contrasts[0].key).toBe("substance.concreteness")
     expect(profile!.contrasts[0].delta).toBe(7)
+  })
+})
+
+describe("buildChannelAlignmentAverage", () => {
+  it("returns null until enough videos carry a packaging read", () => {
+    expect(
+      buildChannelAlignmentAverage([
+        video("a", 10, { packaging: packaging() }),
+        video("b", 5, { packaging: packaging() }),
+      ]),
+    ).toBeNull()
+  })
+
+  it("averages the headline onto the 0-10 scale a video report prints", () => {
+    const average = buildChannelAlignmentAverage([
+      video("a", 10, { packaging: packaging({ alignmentScore: 0.9 }) }),
+      video("b", 5, { packaging: packaging({ alignmentScore: 0.6 }) }),
+      video("c", 1, { packaging: packaging({ alignmentScore: 0.3 }) }),
+      // No packaging read yet, so it is not part of the average.
+      video("d", 8),
+    ])
+
+    expect(average).not.toBeNull()
+    expect(average!.score).toBe(6)
+    expect(average!.videoCount).toBe(3)
+  })
+
+  it("rounds a mean that lands between the integers to one decimal", () => {
+    const average = buildChannelAlignmentAverage([
+      video("a", 10, { packaging: packaging({ alignmentScore: 0.9 }) }),
+      video("b", 5, { packaging: packaging({ alignmentScore: 0.9 }) }),
+      video("c", 1, { packaging: packaging({ alignmentScore: 0.4 }) }),
+    ])
+
+    expect(average!.score).toBe(7.3)
+  })
+
+  it("averages the two cross axes the headline is made of", () => {
+    const average = buildChannelAlignmentAverage([
+      video("a", 10, {
+        packaging: packaging({ titleThumbnailMatch: 9, hookDeliversPromise: 4 }),
+      }),
+      video("b", 5, {
+        packaging: packaging({ titleThumbnailMatch: 8, hookDeliversPromise: 3 }),
+      }),
+      video("c", 1, {
+        packaging: packaging({ titleThumbnailMatch: 7, hookDeliversPromise: 2 }),
+      }),
+    ])
+
+    expect(average!.parts).toEqual([
+      { key: "titleThumbnailMatch", value: 8 },
+      { key: "hookDeliversPromise", value: 3 },
+    ])
+    expect(average!.partVideoCount).toBe(3)
+  })
+
+  it("still reports the headline when no video carries an enriched read", () => {
+    const average = buildChannelAlignmentAverage([
+      video("a", 10, {
+        packaging: packaging({ detail: false, alignmentScore: 0.5 }),
+      }),
+      video("b", 5, {
+        packaging: packaging({ detail: false, alignmentScore: 0.5 }),
+      }),
+      video("c", 1, {
+        packaging: packaging({ detail: false, alignmentScore: 0.5 }),
+      }),
+    ])
+
+    expect(average!.score).toBe(5)
+    expect(average!.parts).toEqual([])
+    expect(average!.partVideoCount).toBe(0)
+  })
+
+  // A library part way through the enriched rollout: the headline covers every
+  // read video, the two parts only the ones carrying a detail block.
+  it("counts the parts over the enriched videos alone", () => {
+    const average = buildChannelAlignmentAverage([
+      video("a", 10, { packaging: packaging({ titleThumbnailMatch: 8 }) }),
+      video("b", 5, { packaging: packaging({ titleThumbnailMatch: 6 }) }),
+      video("c", 1, { packaging: packaging({ detail: false }) }),
+    ])
+
+    expect(average!.videoCount).toBe(3)
+    expect(average!.partVideoCount).toBe(2)
+    expect(
+      average!.parts.find((part) => part.key === "titleThumbnailMatch")?.value,
+    ).toBe(7)
   })
 })
 

@@ -24,8 +24,9 @@ import { stripEmDashes } from "@/lib/copy-guardrails"
 // The page deliberately carries no colour of its own. Meaning is written, and
 // evidence is ranked, so nothing here depends on a hue to be read: bars are one
 // neutral tone, headings are foreground, supporting copy is muted, and the only
-// colour on the page comes from the shared EventTypeBadge and the tab glyphs,
-// both of which mean the same thing everywhere else in the product.
+// colour on the page comes from the shared EventTypeBadge, the tab glyphs and
+// the shared alignment readout, all of which mean the same thing everywhere
+// else in the product.
 //
 // COPY GUARDRAIL: no em dashes (U+2014) or en dashes (U+2013), ever, in any
 // text in this file. Hyphens are fine. See lib/copy-guardrails.ts; enforced by
