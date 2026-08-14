@@ -272,7 +272,7 @@ function AverageAlignmentCard({
     <TrendCard
       icon={CrosshairIcon}
       title="Your average alignment"
-      description="The alignment score off every video report, averaged across your library. Each video was scored on its own at analysis time, so this is what your packaging typically does rather than a ranking of it."
+      description="The alignment score off every video report, averaged across your library."
       footer={
         alignment.partVideoCount > 0 &&
         alignment.partVideoCount < alignment.videoCount
