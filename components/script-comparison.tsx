@@ -2,7 +2,11 @@ import { QuoteIcon, TrophyIcon } from "lucide-react"
 
 import { ComparisonReportTabs } from "@/components/comparison-report-tabs"
 import { TryCallout } from "@/components/try-callout"
-import { nameVideoSides, stripEmDashes } from "@/lib/copy-guardrails"
+import {
+  limitSentences,
+  nameVideoSides,
+  stripEmDashes,
+} from "@/lib/copy-guardrails"
 import { cn } from "@/lib/utils"
 import type {
   ScriptComparisonReport,
@@ -63,14 +67,15 @@ function cleanProse(text: string): string {
 }
 
 // The overall verdict on the two scripts, in the summary box that heads the
-// section, matching the box the packaging head-to-head opens on.
+// section, matching the box the packaging head-to-head opens on. Capped at two
+// sentences like every other summary card: the tabs below carry the detail.
 function ReportSummary({ summary }: { summary: string }) {
   if (!summary) return null
   return (
     <div className="rounded-xl border bg-card p-4">
       <h3 className="text-sm font-medium">Summary</h3>
       <p className="mt-2 text-sm text-muted-foreground">
-        {cleanProse(summary)}
+        {limitSentences(cleanProse(summary))}
       </p>
     </div>
   )

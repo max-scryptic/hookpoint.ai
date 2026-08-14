@@ -120,6 +120,9 @@ export type ReportSide = "a" | "b"
 // Which video the packaging favours overall, and the headline reason.
 export interface PackagingReportVerdict {
   strongerSide: ReportSide | "neither"
+  // The headline reason, in two sentences at most. Capped again at render time
+  // (limitSentences in lib/copy-guardrails.ts), which is what settles the
+  // longer verdicts stored before the prompt asked for two.
   summary: string
   confidence: number
 }
@@ -316,7 +319,7 @@ const INSTRUCTIONS = [
   "Whoever is heard speaking may be the uploader, a co-host, a guest or a voiceover, so never pin what is said on a specific or gendered person (he, she, the creator). Address the uploader as you, about their own videos, and name the videos as Video A and Video B.",
   "Write the name in full every time: Video A and Video B, never a bare A or B on its own, in any sentence and any field. 'Video B makes the promise legible, Video A leads with a face' is right; 'B makes the promise legible, A leads with a face' is not. The same holds for the possessive, so write Video A's thumbnail rather than A's thumbnail.",
   "Views are one number about two videos, so treat every link between a packaging trait and performance as correlation worth acting on, never as proof. Thumbnails and titles are judged on click appeal, the opening ten seconds on whether it holds the promise those two made.",
-  "verdict: strongerSide is the video whose packaging is the stronger play (or neither when they are genuinely close), summary is two to three sentences on why, and confidence is 0 to 1 in how strongly the evidence supports that verdict. This is a judgement of the packaging itself, so it stays answerable in every mode; what changes is what stands behind it. Lower the confidence when the two are close, when evidence is thin on one side, and whenever comparability.anchor is not 'anchored', since no performance figure is backing you there.",
+  "verdict: strongerSide is the video whose packaging is the stronger play (or neither when they are genuinely close), summary is the verdict itself in two sentences at most, about 45 words, and never a third sentence, and confidence is 0 to 1 in how strongly the evidence supports that verdict. This is a judgement of the packaging itself, so it stays answerable in every mode; what changes is what stands behind it. Lower the confidence when the two are close, when evidence is thin on one side, and whenever comparability.anchor is not 'anchored', since no performance figure is backing you there.",
   "surfaces: one entry for each of thumbnail, title, hook and alignment that you have evidence for. aRead and bRead describe what that video's surface actually does, concretely (what is in the frame, what the title claims, what the opening says and shows). whyItMatters explains in one or two sentences why that difference would move clicks or hold the opening. Use surface 'alignment' for whether the title, thumbnail and opening promise one thing or pull apart.",
   "drivers: the ranked reasons the stronger video is stronger, most important first, one to six of them. label is a short phrase (for example 'Thumbnail is doing three things at once'). detail is one or two sentences. evidence is up to four short pointers back to the supplied inputs, quoting the real thing where possible (a verbatim title fragment, the thumbnail's overlaid words, 'frame at 0:04 is a wide shot with no face', 'one cut in the first ten seconds versus eleven per minute across the video'). Only emit a driver where the evidence genuinely supports it.",
   `The tips in this report are its advice, so every one of them is written under the rules that follow. ${TIP_VOICE_PROMPT}`,
