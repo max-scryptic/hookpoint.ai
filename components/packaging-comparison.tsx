@@ -16,7 +16,11 @@ import {
 import { VideoThumbnail } from "@/components/video-thumbnail"
 import { ComparisonReportTabs } from "@/components/comparison-report-tabs"
 import { TryCallout } from "@/components/try-callout"
-import { nameVideoSides, stripEmDashes } from "@/lib/copy-guardrails"
+import {
+  limitSentences,
+  nameVideoSides,
+  stripEmDashes,
+} from "@/lib/copy-guardrails"
 import { cn } from "@/lib/utils"
 import {
   PACKAGING_REPORT_SURFACE_TAB_LABEL,
@@ -99,6 +103,15 @@ function cleanProse(text: string): string {
   return nameVideoSides(clean(text))
 }
 
+// A video's own written alignment read, held to the same two sentences the
+// Alignment Summary card on that video's own report shows it at, so the pair of
+// columns stays a glance rather than two paragraphs. It is about one video
+// rather than the pair, so it never runs through cleanProse: there are no bare
+// side letters in it to expand.
+function alignmentSummary(text: string): string {
+  return limitSentences(clean(text))
+}
+
 function SideDot({ side }: { side: Side }) {
   return (
     <span
@@ -117,7 +130,8 @@ function SideDot({ side }: { side: Side }) {
 // The one-paragraph read of which video packaged itself better, in the summary
 // box that heads the section, the same box the Alignment Summary sits in on a
 // single video's report. The badges and confidence label it used to carry are
-// restated by the per-surface panels below.
+// restated by the per-surface panels below. Capped at two sentences like every
+// other summary card: the surface tabs below carry the detail.
 function ReportVerdict({
   verdict,
 }: {
@@ -128,7 +142,7 @@ function ReportVerdict({
     <div className="rounded-xl border bg-card p-4">
       <h3 className="text-sm font-medium">Summary</h3>
       <p className="mt-2 text-sm text-muted-foreground">
-        {cleanProse(verdict.summary)}
+        {limitSentences(cleanProse(verdict.summary))}
       </p>
     </div>
   )
@@ -225,7 +239,7 @@ function AlignmentScore({
     }
     return (
       <EvidenceQuote>
-        <p className="text-sm leading-relaxed">{clean(summary)}</p>
+        <p className="text-sm leading-relaxed">{alignmentSummary(summary)}</p>
       </EvidenceQuote>
     )
   }
@@ -242,7 +256,7 @@ function AlignmentScore({
       score={score}
       parts={parts}
       color={SIDE_META[side].dot}
-      summary={summary == null ? null : clean(summary)}
+      summary={summary == null ? null : alignmentSummary(summary)}
     />
   )
 }

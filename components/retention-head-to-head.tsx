@@ -3,7 +3,11 @@ import { AreaChartIcon } from "lucide-react"
 
 import { ComparisonReportTabs } from "@/components/comparison-report-tabs"
 import { TryCallout } from "@/components/try-callout"
-import { nameVideoSides, stripEmDashes } from "@/lib/copy-guardrails"
+import {
+  limitSentences,
+  nameVideoSides,
+  stripEmDashes,
+} from "@/lib/copy-guardrails"
 import type {
   RetentionComparisonReport,
   RetentionComparisonReportSection,
@@ -40,14 +44,15 @@ function cleanProse(text: string): string {
 }
 
 // The overall verdict on the two curves, in the summary box that heads the
-// section, matching the box the other two head-to-heads open on.
+// section, matching the box the other two head-to-heads open on. Capped at two
+// sentences like every other summary card: the tabs below carry the detail.
 function ReportSummary({ summary }: { summary: string }) {
   if (!summary) return null
   return (
     <div className="rounded-xl border bg-card p-4">
       <h3 className="text-sm font-medium">Summary</h3>
       <p className="mt-2 text-sm text-muted-foreground">
-        {cleanProse(summary)}
+        {limitSentences(cleanProse(summary))}
       </p>
     </div>
   )

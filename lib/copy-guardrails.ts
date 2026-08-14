@@ -180,6 +180,87 @@ export function nameVideoSides(text: string): string {
   )
 }
 
+// =============================================================================
+// SUMMARY LENGTH
+//
+// Every summary card in the app (the alignment summary on a single video's
+// report, and the summary box heading each of the three head-to-heads) is a
+// glance, not a read: the sections under it carry the detail. Two sentences is
+// the whole budget. Every prompt that writes one asks for two, but a model that
+// has one more thing to say writes three or four often enough that summaries
+// drift back to a paragraph, so the limit is also enforced here, at render
+// time. That settles the reports already stored as well, which no prompt can
+// reach.
+//
+// The extra sentences are dropped rather than rewritten: the prompts put the
+// verdict first, so the sentences that survive are the ones carrying it.
+// =============================================================================
+
+/** How many sentences a summary card may show. */
+export const SUMMARY_SENTENCE_LIMIT = 2
+
+// Abbreviations whose trailing period does not end a sentence. Only the ones
+// that plausibly turn up in a report summary and can be followed by a capital
+// ("Video A vs. Video B"); anything else is a real break.
+const NON_TERMINAL_ABBREVIATIONS = new Set([
+  "approx",
+  "avg",
+  "e.g",
+  "etc",
+  "fig",
+  "i.e",
+  "vs",
+])
+
+// A sentence ends on . ! or ?, plus any closing quote or bracket riding on it,
+// where a new sentence visibly starts after the space. Requiring the space is
+// what keeps a decimal out of it, so "held 42.1% of its audience" is one
+// sentence; requiring the capital (or an opening quote, or a figure) keeps
+// "0:04 vs. the 1.5x" style fragments together.
+const SENTENCE_BREAK = /[.!?]+["'’”)\]]*\s+(?=[\p{Lu}\p{N}"“'‘(])/gu
+
+// The last word before a terminator, dots included, so "e.g." arrives whole.
+function tokenBefore(body: string): string {
+  return (body.match(/[\p{L}\p{N}.]+$/u)?.[0] ?? "").toLowerCase()
+}
+
+/**
+ * Splits model-written prose into sentences, each keeping its own terminator.
+ * Conservative by design: anything it cannot confidently call a break stays
+ * part of the sentence it is in, so a summary is only ever cut where a reader
+ * would agree one sentence ended and the next began.
+ */
+function splitSentences(text: string): string[] {
+  const sentences: string[] = []
+  let start = 0
+  for (const match of text.matchAll(SENTENCE_BREAK)) {
+    const body = text.slice(start, match.index)
+    if (NON_TERMINAL_ABBREVIATIONS.has(tokenBefore(body))) continue
+    sentences.push(text.slice(start, match.index + match[0].length).trim())
+    start = match.index + match[0].length
+  }
+  const tail = text.slice(start).trim()
+  if (tail.length > 0) sentences.push(tail)
+  return sentences
+}
+
+/**
+ * Caps one piece of model-written prose at the given number of sentences,
+ * keeping the first ones and dropping the rest. Text already inside the limit
+ * comes back untouched apart from surrounding whitespace. Apply it where a
+ * summary is rendered, after cleanCopy or stripEmDashes, so stored copy written
+ * before the cap existed is shortened too.
+ */
+export function limitSentences(
+  text: string,
+  limit: number = SUMMARY_SENTENCE_LIMIT,
+): string {
+  if (limit < 1) return ""
+  const sentences = splitSentences(text)
+  if (sentences.length <= limit) return text.trim()
+  return sentences.slice(0, limit).join(" ")
+}
+
 // Model-written copy occasionally leaks the JSON structure it was generated
 // inside back into the text itself, so a tip can arrive reading
 // `...Reaching Arena 16."]},` with a stray `]},` clinging to the end. These
