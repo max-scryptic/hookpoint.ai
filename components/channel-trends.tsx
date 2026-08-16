@@ -292,7 +292,7 @@ function BuildingCard() {
 }
 
 // A one-line caveat shown above early-stage trends so a three-video pattern
-// never reads with ten-video authority.
+// never reads with full-library authority.
 function EarlySignalNote({ data }: { data: ChannelTrendsData }) {
   if (data.stage !== "early") return null
   return (
