@@ -463,6 +463,7 @@ export function ExtremesRadarCard({
   libraryLabel,
   formatOutcome,
   emptyNote,
+  bare = false,
 }: {
   profile: ChannelExtremesProfile
   // One surface of the taxonomy, when the card belongs to a surface's own tab:
@@ -483,6 +484,14 @@ export function ExtremesRadarCard({
   formatOutcome?: (value: number) => string
   // What to say when the two bands scored alike on every axis.
   emptyNote: string
+  // Drops the prose around the chart: no callout under it, no caveat under the
+  // card, just the shape and the axis rows behind their disclosure. What a
+  // caller sets when the tab bar above these cards already carries the reading
+  // notes once, rather than repeating them on every surface. Only bites on a
+  // card that actually drew a chart, so a group too small to enclose a shape
+  // (the alignment pair, drawn as bars) keeps the callout that is the only
+  // reading it gets.
+  bare?: boolean
 }) {
   // One surface's axes, or every surface's, as the same list of groups either
   // way, so the drawing below does not care which of the two it was handed.
@@ -504,12 +513,18 @@ export function ExtremesRadarCard({
   // A single surface is named by the card's own heading, so its chart and rows
   // do not repeat the name above themselves.
   const showGroupLabels = group == null
+  // The prose only comes off a card that drew something to read without it.
+  const strip = bare && drawable.length > 0
   return (
     <TrendCard
       icon={icon}
       title={title}
       description={description}
-      footer={`Your ${profile.bandSize} best and ${profile.bandSize} worst of the ${plural(profile.rankedVideoCount, "video")} carrying both a ${profile.source} read and the numbers to rank; the average covers all ${plural(profile.libraryVideoCount, "read video")}, ranked or not. Correlation, not proof: ${profile.bandSize} uploads a side is a lead worth testing, not a law.`}
+      footer={
+        strip
+          ? undefined
+          : `Your ${profile.bandSize} best and ${profile.bandSize} worst of the ${plural(profile.rankedVideoCount, "video")} carrying both a ${profile.source} read and the numbers to rank; the average covers all ${plural(profile.libraryVideoCount, "read video")}, ranked or not. Correlation, not proof: ${profile.bandSize} uploads a side is a lead worth testing, not a law.`
+      }
     >
       {formatOutcome != null && (
         <ExtremeBands
@@ -579,7 +594,7 @@ export function ExtremesRadarCard({
         </div>
       ))}
 
-      {lead ? (
+      {strip ? null : lead ? (
         <div className="flex flex-col gap-2 rounded-r-md border-l-2 border-muted-foreground/30 bg-muted/40 px-3 py-2.5">
           <div>
             <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
@@ -617,10 +632,15 @@ export function ExtremesRadarCard({
         <Collapsible className="rounded-lg border">
           <CollapsibleTrigger className="group flex w-full items-center gap-2 p-3 text-left text-sm font-medium">
             <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[panel-open]:rotate-180" />
-            Every axis, written out
-            <span className="ml-auto text-xs font-normal text-muted-foreground">
-              the numbers behind the shapes
-            </span>
+            {/* A stripped card has nothing else on it below the chart, so the
+                disclosure is named for what it holds rather than sold as the
+                extra reading it is on a card that carries prose too. */}
+            {strip ? "Axis detail" : "Every axis, written out"}
+            {!strip && (
+              <span className="ml-auto text-xs font-normal text-muted-foreground">
+                the numbers behind the shapes
+              </span>
+            )}
           </CollapsibleTrigger>
           <CollapsibleContent className="flex flex-col gap-4 border-t p-3">
             {(showGroupLabels ? groups : drawable).map((entry) => (
