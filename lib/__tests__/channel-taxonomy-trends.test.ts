@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  axisGroupContrasts,
+  axisGroupRows,
   buildChannelAlignmentAverage,
   buildChannelAxisProfile,
   buildChannelExtremesProfile,
   buildChannelStyleProfile,
+  extremeGroupAxes,
+  extremeGroupContrasts,
   videoTopics,
   type TaxonomyProfileVideo,
 } from "@/lib/channel-taxonomy-trends"
@@ -479,6 +483,122 @@ describe("buildChannelExtremesProfile", () => {
     expect(profile!.source).toBe("script")
     expect(profile!.contrasts[0].key).toBe("substance.concreteness")
     expect(profile!.contrasts[0].delta).toBe(8)
+  })
+})
+
+// The Packaging tab reads a profile one surface at a time, so each surface has
+// to be able to ask its own question of a profile built over all of them.
+describe("reading one surface out of a profile", () => {
+  // A read whose every title axis moves together, so a test can fill the
+  // profile's shared contrast cap with one surface and still ask about another.
+  const loud = (title: number, alignment: number): PackagingTaxonomy => {
+    const base = packaging({
+      titleThumbnailMatch: alignment,
+      hookDeliversPromise: alignment,
+    })
+    return {
+      ...base,
+      detail: {
+        ...base.detail!,
+        title: {
+          ...base.detail!.title,
+          specificity: title,
+          curiosityGap: title,
+          emotionalCharge: title,
+          stakes: title,
+          relatability: title,
+          novelty: title,
+          clarity: title,
+        },
+      },
+    }
+  }
+
+  const axisProfile = () =>
+    buildChannelAxisProfile({
+      videos: [
+        video("a", 100, { packaging: loud(9, 8) }),
+        video("b", 90, { packaging: loud(9, 8) }),
+        video("c", 10, { packaging: loud(1, 5) }),
+        video("d", 5, { packaging: loud(1, 5) }),
+      ],
+      source: "packaging",
+      outcome: "reach",
+      outcomeOf: reachOf,
+    })!
+
+  const extremesProfile = () =>
+    buildChannelExtremesProfile({
+      videos: [
+        video("a", 100, { packaging: loud(9, 8) }),
+        video("b", 90, { packaging: loud(9, 8) }),
+        video("c", 80, { packaging: loud(9, 8) }),
+        video("d", 30, { packaging: loud(1, 5) }),
+        video("e", 20, { packaging: loud(1, 5) }),
+        video("f", 10, { packaging: loud(1, 5) }),
+      ],
+      source: "packaging",
+      outcome: "reach",
+      outcomeOf: reachOf,
+    })!
+
+  it("hands a surface its own axes and nothing else", () => {
+    const profile = axisProfile()
+    expect(
+      axisGroupRows(profile, "thumbnail").every((row) =>
+        row.key.startsWith("thumbnail."),
+      ),
+    ).toBe(true)
+    expect(axisGroupRows(profile, "alignment").map((row) => row.key)).toEqual([
+      "cross.titleThumbnailMatch",
+      "cross.hookDeliversPromise",
+    ])
+  })
+
+  it("re-derives a surface's contrasts rather than filtering the capped list", () => {
+    const profile = axisProfile()
+    // The profile's own list is capped across every surface at once, and a
+    // louder surface has taken all of it.
+    expect(profile.contrasts).toHaveLength(5)
+    expect(profile.contrasts.every((row) => row.group === "title")).toBe(true)
+    expect(
+      profile.contrasts.some((row) => row.key === "cross.titleThumbnailMatch"),
+    ).toBe(false)
+
+    // The alignment surface still reports its own separation, and the title
+    // surface reports every axis it separated on rather than the capped five.
+    // Both cross axes moved by the same amount, so they tie and sort by key.
+    expect(axisGroupContrasts(profile, "alignment").map((row) => row.key)).toEqual([
+      "cross.hookDeliversPromise",
+      "cross.titleThumbnailMatch",
+    ])
+    expect(axisGroupContrasts(profile, "title")).toHaveLength(7)
+  })
+
+  it("says nothing separated on a surface whose halves scored alike", () => {
+    expect(axisGroupContrasts(axisProfile(), "thumbnail")).toEqual([])
+  })
+
+  it("reads the extremes one surface at a time the same way", () => {
+    const profile = extremesProfile()
+    expect(
+      extremeGroupAxes(profile, "opening").every((row) =>
+        row.key.startsWith("hook."),
+      ),
+    ).toBe(true)
+
+    expect(profile.contrasts).toHaveLength(3)
+    expect(profile.contrasts.every((row) => row.group === "title")).toBe(true)
+    expect(
+      extremeGroupContrasts(profile, "alignment").map((row) => row.key),
+    ).toEqual(["cross.hookDeliversPromise", "cross.titleThumbnailMatch"])
+    expect(extremeGroupContrasts(profile, "title")).toHaveLength(7)
+    expect(extremeGroupContrasts(profile, "thumbnail")).toEqual([])
+  })
+
+  it("returns nothing for a surface the profile carries no axes on", () => {
+    expect(axisGroupRows(axisProfile(), "substance")).toEqual([])
+    expect(extremeGroupAxes(extremesProfile(), "substance")).toEqual([])
   })
 })
 

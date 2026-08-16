@@ -14,7 +14,10 @@ import {
 
 import { playbookCopy } from "@/components/channel-trends-copy"
 import { ContentPanel } from "@/components/channel-trends-content"
-import { PackagingPanel } from "@/components/channel-trends-packaging"
+import {
+  PackagingPanel,
+  packagingPanelHasContent,
+} from "@/components/channel-trends-packaging"
 import { RetentionPanel } from "@/components/channel-trends-retention"
 import { ScriptPanel } from "@/components/channel-trends-script"
 import {
@@ -53,7 +56,8 @@ import {
 //
 //   Retention  what keeps viewers and what loses them, from the accumulated
 //              event library (components/channel-trends-retention.tsx)
-//   Packaging  what your uploads promise and what that earns
+//   Packaging  what your uploads promise, read one surface at a time across its
+//              own Hook, Title, Thumbnail and Alignment sub-tabs
 //              (components/channel-trends-packaging.tsx)
 //   Script     what your videos say, against how much of them gets watched
 //              (components/channel-trends-script.tsx)
@@ -335,11 +339,7 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
     data.gains != null ||
     data.holds != null ||
     data.hooks != null
-  const hasPackaging =
-    data.packaging != null ||
-    data.subscribers != null ||
-    data.packagingAxes != null ||
-    data.packagingStyle != null
+  const hasPackaging = packagingPanelHasContent(data)
   const hasScript =
     data.scriptAxes != null ||
     data.scriptExtremes != null ||
@@ -363,7 +363,7 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
             }
             packaging={
               hasPackaging ? (
-                <TrendsPanel description="How your titles, thumbnails and promises translate into reach and subscribers.">
+                <TrendsPanel description="What your packaging promises, surface by surface: your openings, your titles, your thumbnails, and how tightly the three of them agree.">
                   <PackagingPanel data={data} />
                 </TrendsPanel>
               ) : undefined

@@ -464,6 +464,55 @@ export function buildChannelExtremesProfile<
   }
 }
 
+// --- reading one surface out of a profile ------------------------------------
+
+// The Packaging tab reads its profiles one surface at a time, because it splits
+// into a Hook, Title, Thumbnail and Alignment sub-tab and each of those is only
+// ever about its own axes. Both profiles above cap their contrast lists across
+// every group at once, so a surface cannot simply filter that list: it would
+// report "nothing separated" whenever noisier surfaces happened to fill the cap.
+// These re-derive the same rule per group instead, uncapped, because one
+// surface carries a handful of axes rather than the whole taxonomy.
+
+export function axisGroupRows(
+  profile: ChannelAxisProfile,
+  group: TaxonomyAxisGroup,
+): ChannelAxisRow[] {
+  return profile.axes.filter((row) => row.group === group)
+}
+
+export function axisGroupContrasts(
+  profile: ChannelAxisProfile,
+  group: TaxonomyAxisGroup,
+): ChannelAxisRow[] {
+  return axisGroupRows(profile, group)
+    .filter((row) => row.delta != null && Math.abs(row.delta) >= AXIS_MIN_DELTA)
+    .sort(
+      (a, b) =>
+        Math.abs(b.delta ?? 0) - Math.abs(a.delta ?? 0) ||
+        a.key.localeCompare(b.key),
+    )
+}
+
+export function extremeGroupAxes(
+  profile: ChannelExtremesProfile,
+  group: TaxonomyAxisGroup,
+): ChannelExtremeAxisRow[] {
+  return profile.groups.find((entry) => entry.group === group)?.axes ?? []
+}
+
+export function extremeGroupContrasts(
+  profile: ChannelExtremesProfile,
+  group: TaxonomyAxisGroup,
+): ChannelExtremeAxisRow[] {
+  return extremeGroupAxes(profile, group)
+    .filter((row) => Math.abs(row.delta) >= AXIS_MIN_DELTA)
+    .sort(
+      (a, b) =>
+        Math.abs(b.delta) - Math.abs(a.delta) || a.key.localeCompare(b.key),
+    )
+}
+
 // --- alignment average -------------------------------------------------------
 
 // Which of the two cross axes a part row carries, so the page can name it with

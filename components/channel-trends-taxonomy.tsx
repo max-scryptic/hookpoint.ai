@@ -26,15 +26,21 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import {
+  axisGroupContrasts,
+  axisGroupRows,
   axisIsDescriptor,
   axisLowerIsBetter,
+  extremeGroupAxes,
+  extremeGroupContrasts,
   type ChannelAxisProfile,
   type ChannelAxisRow,
   type ChannelExtremeAxisRow,
+  type ChannelExtremeGroup,
   type ChannelExtremeVideo,
   type ChannelExtremesProfile,
   type ChannelStyleDimension,
   type ChannelStyleProfile,
+  type TaxonomyAxisGroup,
 } from "@/lib/channel-taxonomy-trends"
 
 // The two views that render a taxonomy at channel level, shared by the
@@ -51,6 +57,12 @@ import {
 //                     one shape per surface
 //   StyleProfileCard  what the channel repeats on each categorical dimension,
 //                     and which of its choices performs unusually well
+//
+// Every card takes an optional `group`. Without one it reads the whole taxonomy
+// at once, which is how the Script tab uses them; with one it reads a single
+// surface, which is how the Packaging tab's Hook, Title, Thumbnail and
+// Alignment sub-tabs use them. A card whose surface carries nothing renders
+// nothing, so a sub-tab is never a frame around an empty card.
 //
 // Everything here is correlation. A library is a handful of videos made by one
 // person, so a gap between its halves, or between its two ends, is a lead worth
@@ -169,16 +181,25 @@ function AxisContrastRow({
   )
 }
 
-// The channel's own median on every axis, grouped by surface. Folded away by
-// default: it is a reference profile rather than a finding, and the contrast
-// above it is what a reader came for.
-function AxisProfileFold({ profile }: { profile: ChannelAxisProfile }) {
-  const groups = [...new Set(profile.axes.map((axis) => axis.group))]
+// The channel's own median on every axis it was asked for, grouped by surface.
+// Folded away by default: it is a reference profile rather than a finding, and
+// the contrast above it is what a reader came for. One surface's fold drops the
+// group headings, because the card it sits in already names the surface.
+function AxisProfileFold({
+  profile,
+  axes,
+  label,
+}: {
+  profile: ChannelAxisProfile
+  axes: ChannelAxisRow[]
+  label: string
+}) {
+  const groups = [...new Set(axes.map((axis) => axis.group))]
   return (
     <Collapsible className="rounded-lg border">
       <CollapsibleTrigger className="group flex w-full items-center gap-2 p-3 text-left text-sm font-medium">
         <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[panel-open]:rotate-180" />
-        Your channel profile
+        {label}
         <span className="ml-auto text-xs font-normal text-muted-foreground">
           every axis, median across {plural(profile.taxonomyVideoCount, "video")}
         </span>
@@ -186,10 +207,12 @@ function AxisProfileFold({ profile }: { profile: ChannelAxisProfile }) {
       <CollapsibleContent className="flex flex-col gap-4 border-t p-3">
         {groups.map((group) => (
           <div key={group} className="flex flex-col gap-2">
-            <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              {taxonomyAxisGroupLabel(group)}
-            </span>
-            {profile.axes
+            {groups.length > 1 && (
+              <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                {taxonomyAxisGroupLabel(group)}
+              </span>
+            )}
+            {axes
               .filter((axis) => axis.group === group)
               .map((axis) => (
                 <div
@@ -217,6 +240,7 @@ function AxisProfileFold({ profile }: { profile: ChannelAxisProfile }) {
 
 export function AxisContrastCard({
   profile,
+  group,
   icon,
   title,
   description,
@@ -225,6 +249,9 @@ export function AxisContrastCard({
   emptyNote,
 }: {
   profile: ChannelAxisProfile
+  // One surface of the taxonomy, when the card belongs to a surface's own tab.
+  // Absent reads every axis the profile carries.
+  group?: TaxonomyAxisGroup
   icon: ComponentType<{ className?: string }>
   title: string
   description: string
@@ -234,6 +261,11 @@ export function AxisContrastCard({
   // What to say when the two halves scored alike on every axis.
   emptyNote: string
 }) {
+  const axes = group == null ? profile.axes : axisGroupRows(profile, group)
+  const contrasts =
+    group == null ? profile.contrasts : axisGroupContrasts(profile, group)
+  if (axes.length === 0) return null
+
   return (
     <TrendCard
       icon={icon}
@@ -245,9 +277,9 @@ export function AxisContrastCard({
           : `Read across ${plural(profile.taxonomyVideoCount, "video")}. A few more uploads with view counts and this splits into a high and a low half to compare.`
       }
     >
-      {profile.contrasts.length > 0 ? (
+      {contrasts.length > 0 ? (
         <div className="divide-y">
-          {profile.contrasts.map((row) => (
+          {contrasts.map((row) => (
             <AxisContrastRow
               key={row.key}
               row={row}
@@ -259,7 +291,15 @@ export function AxisContrastCard({
       ) : (
         <CoverageNote>{emptyNote}</CoverageNote>
       )}
-      <AxisProfileFold profile={profile} />
+      <AxisProfileFold
+        profile={profile}
+        axes={axes}
+        label={
+          group == null
+            ? "Your channel profile"
+            : `Your ${taxonomyAxisGroupLabel(group).toLowerCase()} profile`
+        }
+      />
     </TrendCard>
   )
 }
@@ -341,6 +381,7 @@ function ExtremeAxisRows({
 // channel scores that way.
 export function ExtremesRadarCard({
   profile,
+  group,
   icon,
   title,
   description,
@@ -351,6 +392,9 @@ export function ExtremesRadarCard({
   emptyNote,
 }: {
   profile: ChannelExtremesProfile
+  // One surface of the taxonomy, when the card belongs to a surface's own tab:
+  // one chart rather than the grid of them. Absent draws every surface.
+  group?: TaxonomyAxisGroup
   icon: ComponentType<{ className?: string }>
   title: string
   description: string
@@ -364,13 +408,26 @@ export function ExtremesRadarCard({
   // What to say when the two bands scored alike on every axis.
   emptyNote: string
 }) {
-  const lead = profile.contrasts[0]
-  const drawable = profile.groups.filter(
-    (group) => group.axes.length >= RADAR_MIN_AXES,
+  // One surface's axes, or every surface's, as the same list of groups either
+  // way, so the drawing below does not care which of the two it was handed.
+  const groups: ChannelExtremeGroup[] =
+    group == null
+      ? profile.groups
+      : extremeGroupAxes(profile, group).length > 0
+        ? [{ group, axes: extremeGroupAxes(profile, group) }]
+        : []
+  if (groups.length === 0) return null
+
+  const contrasts =
+    group == null ? profile.contrasts : extremeGroupContrasts(profile, group)
+  const lead = contrasts[0]
+  const drawable = groups.filter((entry) => entry.axes.length >= RADAR_MIN_AXES)
+  const tooSmallToDraw = groups.filter(
+    (entry) => entry.axes.length < RADAR_MIN_AXES,
   )
-  const tooSmallToDraw = profile.groups.filter(
-    (group) => group.axes.length < RADAR_MIN_AXES,
-  )
+  // A single surface is named by the card's own heading, so its chart and rows
+  // do not repeat the name above themselves.
+  const showGroupLabels = group == null
   return (
     <TrendCard
       icon={icon}
@@ -391,44 +448,58 @@ export function ExtremesRadarCard({
         />
       </div>
 
-      <RadarLegend
-        topLabel={topLabel}
-        bottomLabel={bottomLabel}
-        libraryLabel={libraryLabel}
-      />
+      {drawable.length > 0 && (
+        <RadarLegend
+          topLabel={topLabel}
+          bottomLabel={bottomLabel}
+          libraryLabel={libraryLabel}
+        />
+      )}
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        {drawable.map((group) => (
-          <div key={group.group} className="flex flex-col gap-1">
-            <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              {taxonomyAxisGroupLabel(group.group)}
-            </span>
-            <TaxonomyRadar
-              axes={group.axes.map((axis) => ({
-                key: axis.key,
-                topValue: axis.topMean,
-                bottomValue: axis.bottomMean,
-                libraryValue: axis.libraryMean,
-              }))}
-              topLabel={topLabel}
-              bottomLabel={bottomLabel}
-              libraryLabel={libraryLabel}
-              groupLabel={taxonomyAxisGroupLabel(group.group)}
-            />
-          </div>
-        ))}
-      </div>
+      {drawable.length > 0 && (
+        <div
+          className={
+            showGroupLabels
+              ? "grid gap-4 sm:grid-cols-2"
+              : "mx-auto w-full max-w-sm"
+          }
+        >
+          {drawable.map((entry) => (
+            <div key={entry.group} className="flex flex-col gap-1">
+              {showGroupLabels && (
+                <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                  {taxonomyAxisGroupLabel(entry.group)}
+                </span>
+              )}
+              <TaxonomyRadar
+                axes={entry.axes.map((axis) => ({
+                  key: axis.key,
+                  topValue: axis.topMean,
+                  bottomValue: axis.bottomMean,
+                  libraryValue: axis.libraryMean,
+                }))}
+                topLabel={topLabel}
+                bottomLabel={bottomLabel}
+                libraryLabel={libraryLabel}
+                groupLabel={taxonomyAxisGroupLabel(entry.group)}
+              />
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Two axes cannot enclose a shape, so a group that small (the alignment
           pair) runs full width underneath as the bars it would have been
           anyway, rather than leaving a hole in the grid of charts. */}
-      {tooSmallToDraw.map((group) => (
-        <div key={group.group} className="flex flex-col">
-          <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            {taxonomyAxisGroupLabel(group.group)}
-          </span>
+      {tooSmallToDraw.map((entry) => (
+        <div key={entry.group} className="flex flex-col">
+          {showGroupLabels && (
+            <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              {taxonomyAxisGroupLabel(entry.group)}
+            </span>
+          )}
           <ExtremeAxisRows
-            axes={group.axes}
+            axes={entry.axes}
             topLabel={topLabel}
             bottomLabel={bottomLabel}
             libraryLabel={libraryLabel}
@@ -455,41 +526,49 @@ export function ExtremesRadarCard({
               .
             </p>
           </div>
-          <ExtremeAxisRows
-            axes={profile.contrasts}
-            topLabel={topLabel}
-            bottomLabel={bottomLabel}
-            libraryLabel={libraryLabel}
-          />
+          {/* A surface small enough to be drawn as bars already has these rows
+              on the card, so the callout there is the sentence alone. */}
+          {drawable.length > 0 && (
+            <ExtremeAxisRows
+              axes={contrasts}
+              topLabel={topLabel}
+              bottomLabel={bottomLabel}
+              libraryLabel={libraryLabel}
+            />
+          )}
         </div>
       ) : (
         <CoverageNote>{emptyNote}</CoverageNote>
       )}
 
-      <Collapsible className="rounded-lg border">
-        <CollapsibleTrigger className="group flex w-full items-center gap-2 p-3 text-left text-sm font-medium">
-          <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[panel-open]:rotate-180" />
-          Every axis, written out
-          <span className="ml-auto text-xs font-normal text-muted-foreground">
-            the numbers behind the shapes
-          </span>
-        </CollapsibleTrigger>
-        <CollapsibleContent className="flex flex-col gap-4 border-t p-3">
-          {profile.groups.map((group) => (
-            <div key={group.group} className="flex flex-col">
-              <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                {taxonomyAxisGroupLabel(group.group)}
-              </span>
-              <ExtremeAxisRows
-                axes={group.axes}
-                topLabel={topLabel}
-                bottomLabel={bottomLabel}
-                libraryLabel={libraryLabel}
-              />
-            </div>
-          ))}
-        </CollapsibleContent>
-      </Collapsible>
+      {drawable.length > 0 && (
+        <Collapsible className="rounded-lg border">
+          <CollapsibleTrigger className="group flex w-full items-center gap-2 p-3 text-left text-sm font-medium">
+            <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[panel-open]:rotate-180" />
+            Every axis, written out
+            <span className="ml-auto text-xs font-normal text-muted-foreground">
+              the numbers behind the shapes
+            </span>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="flex flex-col gap-4 border-t p-3">
+            {(showGroupLabels ? groups : drawable).map((entry) => (
+              <div key={entry.group} className="flex flex-col">
+                {showGroupLabels && (
+                  <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                    {taxonomyAxisGroupLabel(entry.group)}
+                  </span>
+                )}
+                <ExtremeAxisRows
+                  axes={entry.axes}
+                  topLabel={topLabel}
+                  bottomLabel={bottomLabel}
+                  libraryLabel={libraryLabel}
+                />
+              </div>
+            ))}
+          </CollapsibleContent>
+        </Collapsible>
+      )}
     </TrendCard>
   )
 }
@@ -571,6 +650,7 @@ function StyleDimensionRow({
 
 export function StyleProfileCard({
   profile,
+  dimensionKeys,
   icon,
   title,
   description,
@@ -578,11 +658,22 @@ export function StyleProfileCard({
   outcomeNoun,
 }: {
   profile: ChannelStyleProfile
+  // The dimensions this card is about, when it belongs to a surface's own tab.
+  // Absent reads every dimension the profile carries.
+  dimensionKeys?: string[]
   icon: ComponentType<{ className?: string }>
   title: string
   description: string
   outcomeNoun: string
 }) {
+  const dimensions =
+    dimensionKeys == null
+      ? profile.dimensions
+      : profile.dimensions.filter((dimension) =>
+          dimensionKeys.includes(dimension.key),
+        )
+  if (dimensions.length === 0) return null
+
   return (
     <TrendCard
       icon={icon}
@@ -595,14 +686,14 @@ export function StyleProfileCard({
       }
     >
       <div className="flex flex-wrap gap-1.5">
-        {profile.dimensions.map((dimension) => (
+        {dimensions.map((dimension) => (
           <Chip key={dimension.key}>
             {taxonomyCategoryLabel(dimension.key, dimension.rows[0].value)}
           </Chip>
         ))}
       </div>
       <div className="divide-y">
-        {profile.dimensions.map((dimension) => (
+        {dimensions.map((dimension) => (
           <StyleDimensionRow
             key={dimension.key}
             dimension={dimension}
