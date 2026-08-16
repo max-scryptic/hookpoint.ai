@@ -33,6 +33,7 @@ import {
   type RetentionChartInsight,
 } from "@/components/retention-chart"
 import { RecommendationCallout } from "@/components/recommendation-callout"
+import { RetentionEventsInfo } from "@/components/retention-events-info"
 import {
   SourceVideoPlayer,
   SourceVideoThumbnail,
@@ -1699,38 +1700,44 @@ export function AnalysedVideoDetail({
                 value={retentionTab ?? defaultRetentionTab}
                 onValueChange={(value) => setRetentionTab(value as string)}
               >
-              <TabsList>
-                {hookWindows.length > 0 && (
-                  <TabsTrigger value="hook">
-                    <HookIcon className="text-yellow-500 dark:text-yellow-400" />
-                    Hook
-                  </TabsTrigger>
-                )}
-                {drops.length > 0 && (
-                  <TabsTrigger value="drop-offs">
-                    <TrendingDownIcon className="text-destructive" />
-                    Drop-offs
-                  </TabsTrigger>
-                )}
-                {gains.length > 0 && (
-                  <TabsTrigger value="gains">
-                    <TrendingUpIcon className="text-emerald-600 dark:text-emerald-400" />
-                    Gains
-                  </TabsTrigger>
-                )}
-                {holds.length > 0 && (
-                  <TabsTrigger value="holds">
-                    <MinusIcon className="text-teal-600 dark:text-teal-400" />
-                    Holds
-                  </TabsTrigger>
-                )}
-                {pacingStretches.length > 0 && (
-                  <TabsTrigger value="pacing">
-                    <GaugeIcon className="text-blue-600 dark:text-blue-400" />
-                    Pacing
-                  </TabsTrigger>
-                )}
-              </TabsList>
+              {/* The info affordance sits inline to the right of the tabs, so
+                  the explanation of what each window is (and why some carry no
+                  tip) is one click from the list it describes. */}
+              <div className="flex items-center gap-1">
+                <TabsList>
+                  {hookWindows.length > 0 && (
+                    <TabsTrigger value="hook">
+                      <HookIcon className="text-yellow-500 dark:text-yellow-400" />
+                      Hook
+                    </TabsTrigger>
+                  )}
+                  {drops.length > 0 && (
+                    <TabsTrigger value="drop-offs">
+                      <TrendingDownIcon className="text-destructive" />
+                      Drop-offs
+                    </TabsTrigger>
+                  )}
+                  {gains.length > 0 && (
+                    <TabsTrigger value="gains">
+                      <TrendingUpIcon className="text-emerald-600 dark:text-emerald-400" />
+                      Gains
+                    </TabsTrigger>
+                  )}
+                  {holds.length > 0 && (
+                    <TabsTrigger value="holds">
+                      <MinusIcon className="text-teal-600 dark:text-teal-400" />
+                      Holds
+                    </TabsTrigger>
+                  )}
+                  {pacingStretches.length > 0 && (
+                    <TabsTrigger value="pacing">
+                      <GaugeIcon className="text-blue-600 dark:text-blue-400" />
+                      Pacing
+                    </TabsTrigger>
+                  )}
+                </TabsList>
+                <RetentionEventsInfo />
+              </div>
 
               {hookWindows.length > 0 && (
                 <TabsContent value="hook">
