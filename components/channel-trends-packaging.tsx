@@ -1,22 +1,18 @@
+import type { ComponentType } from "react"
 import {
+  AlignHorizontalJustifyCenterIcon,
   CrosshairIcon,
   ImageIcon,
   RadarIcon,
   ShapesIcon,
   SlidersHorizontalIcon,
-  TagsIcon,
-  UserPlusIcon,
+  TypeIcon,
 } from "lucide-react"
 
 import { packagingFeatureLabel } from "@/components/channel-trends-copy"
+import { PackagingSurfaceTabs } from "@/components/channel-trends-packaging-tabs"
 import {
-  CoverageNote,
-  EventReceipt,
-  OutcomeBadge,
-  RANK_BAR_MAX_PERCENT,
-  RankBar,
   TrendCard,
-  formatCompactNumber,
   formatRate,
   plural,
 } from "@/components/channel-trends-shared"
@@ -25,97 +21,45 @@ import {
   ExtremesRadarCard,
   StyleProfileCard,
 } from "@/components/channel-trends-taxonomy"
-import { EventTypeBadge } from "@/components/event-type-badge"
+import { HookIcon } from "@/components/hook-icon"
 import {
   ALIGNMENT_PART_LABEL,
   PackagingAlignmentScore,
 } from "@/components/packaging-alignment-score"
-import type { ChannelAlignmentAverage } from "@/lib/channel-taxonomy-trends"
+import {
+  axisGroupRows,
+  extremeGroupAxes,
+  type ChannelAlignmentAverage,
+  type PackagingAxisGroup,
+} from "@/lib/channel-taxonomy-trends"
 import type {
-  ChannelPackagingPatterns,
-  ChannelSubscriberConversion,
   ChannelTrendsData,
   PackagingFeatureContrast,
-  PackagingReachVideo,
-  PackagingTopicReach,
-  SubscriberPattern,
-  SubscriberVideoRow,
 } from "@/lib/channel-trends"
 
-// The Packaging tab: what your uploads promise, and what that promise earns.
-// Reach first (which uploads travel, and what their packaging has in common),
-// then the enriched 0-10 read of the same packaging (the library's average
-// alignment, then the axes that separate its reach halves, then the same axes
-// at the two ends of the ranking as shapes), then the categorical fingerprint,
-// then subscriber conversion.
+// The Packaging tab: what your uploads promise, and what that promise earns,
+// read one surface at a time. It splits into the same four surfaces a single
+// video's packaging report and the packaging head-to-head use, in the order a
+// viewer meets them:
 //
-// Reach is views per day at snapshot time, because raw views cannot compare a
-// two-week-old upload with a two-year-old one. Every comparison here is
-// correlational by construction and the copy says so: what reached furthest is
-// also topic, timing and who YouTube showed it to.
+//   Hook       your first ten seconds, and whether they cash the promise
+//   Title      the words that make the click
+//   Thumbnail  the image that makes it
+//   Alignment  how tightly those three promise the same one thing
+//
+// Every surface reads the same three ways: where its axes separate the halves
+// of your library, the same axes drawn as one shape per band at the two ends of
+// it, and the categorical fingerprint of what you repeat. Alignment opens on
+// the library's average alignment score, the one number a creator already knows
+// from a single video's report.
+//
+// Everything here is correlational by construction and the copy says so: reach
+// is also topic, timing and who YouTube showed a video to, and a library is a
+// handful of uploads made by one person.
 //
 // COPY GUARDRAIL: no em dashes (U+2014) or en dashes (U+2013), ever, in any
 // text in this file. Hyphens are fine. Enforced by
 // lib/__tests__/copy-guardrails.test.ts.
-
-const REACH_BAND_LABEL = {
-  high: "high reach",
-  low: "low reach",
-  middle: null,
-} as const
-
-function reachRowTitle(row: PackagingReachVideo): string {
-  const title = row.title ?? "Untitled video"
-  const share =
-    row.browseSuggestedShare == null
-      ? ""
-      : ` · ${Math.round(row.browseSuggestedShare * 100)}% from Browse & Suggested`
-  const pending = row.hasTaxonomy ? "" : " · packaging read pending"
-  return `${title} - ${formatCompactNumber(row.views)} views in ${plural(row.ageDays, "day")} (${formatRate(row.viewsPerDay)}/day)${share}${pending}`
-}
-
-function ReachRow({
-  row,
-  maxRate,
-  medianRate,
-}: {
-  row: PackagingReachVideo
-  maxRate: number
-  medianRate: number
-}) {
-  const badge = REACH_BAND_LABEL[row.band]
-  const scale = (rate: number) =>
-    maxRate > 0 ? (rate / maxRate) * RANK_BAR_MAX_PERCENT : 0
-  return (
-    <div
-      className="grid grid-cols-[minmax(6.5rem,13rem)_1fr_5.5rem] items-center gap-x-3 py-1.5"
-      title={reachRowTitle(row)}
-    >
-      <div className="flex min-w-0 flex-col items-start gap-0.5">
-        <span className="w-full truncate text-sm">
-          {row.title ?? "Untitled video"}
-        </span>
-        {badge && <OutcomeBadge>{badge}</OutcomeBadge>}
-      </div>
-      <RankBar
-        fillPercent={scale(row.viewsPerDay)}
-        medianPercent={scale(medianRate)}
-      />
-      <div className="flex flex-col items-end">
-        <span className="text-sm font-medium tabular-nums">
-          {formatCompactNumber(row.views)}
-          <span className="text-xs font-normal text-muted-foreground">
-            {" "}
-            views
-          </span>
-        </span>
-        <span className="text-[10px] tabular-nums text-muted-foreground">
-          in {plural(row.ageDays, "day")}
-        </span>
-      </div>
-    </div>
-  )
-}
 
 // One packaging trait that splits the two reach bands: how many videos in each
 // half carried it. Both counts are shown, because "4 of 5 against 1 of 5" is
@@ -152,115 +96,32 @@ function FeatureContrastRow({ row }: { row: PackagingFeatureContrast }) {
   )
 }
 
-function TopicRow({ row }: { row: PackagingTopicReach }) {
-  const direction = row.ratio >= 1 ? "above" : "below"
-  const magnitude =
-    row.ratio >= 1
-      ? `${row.ratio.toFixed(1)}x`
-      : `${(1 / row.ratio).toFixed(1)}x below`
-  return (
-    <div className="grid grid-cols-[minmax(6rem,12rem)_1fr_auto] items-center gap-x-3 py-1.5">
-      <span className="truncate text-sm">{row.topic}</span>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-        <div
-          className="h-full rounded-full bg-muted-foreground/50"
-          // Half the track is the channel's typical reach, so a topic at twice
-          // the median fills the bar and one at half of it fills a quarter.
-          style={{ width: `${Math.min(100, (row.ratio / 2) * 100)}%` }}
-        />
-      </div>
-      <span className="text-xs whitespace-nowrap text-muted-foreground">
-        {plural(row.videoCount, "video")} ·{" "}
-        {row.ratio >= 1 ? `${magnitude} ${direction}` : magnitude} your typical
-        reach
-      </span>
-    </div>
-  )
-}
-
-function PackagingReachCard({
-  packaging,
+function FeatureContrastCard({
+  features,
+  title,
+  description,
 }: {
-  packaging: ChannelPackagingPatterns
+  features: PackagingFeatureContrast[]
+  title: string
+  description: string
 }) {
-  const maxRate = Math.max(
-    packaging.medianViewsPerDay,
-    ...packaging.videos.map((row) => row.viewsPerDay),
-  )
-  const pendingCount =
-    packaging.coveredVideoCount - packaging.taxonomyVideoCount
-
+  if (features.length === 0) return null
   return (
-    <TrendCard
-      icon={ImageIcon}
-      title="Which uploads earn reach"
-      description="Every upload ranked by views per day since publish, measured at its analytics snapshot so a new video and an old one compare fairly. The dashed line is your channel median. Hover a row for the raw numbers."
-      footer={
-        pendingCount > 0
-          ? `${plural(pendingCount, "video")} here has no packaging read yet, so it counts in the ranking but not in the comparisons below.`
-          : undefined
-      }
-    >
-      <div>
-        {packaging.videos.map((row) => (
-          <ReachRow
-            key={row.id}
-            row={row}
-            maxRate={maxRate}
-            medianRate={packaging.medianViewsPerDay}
-          />
+    <TrendCard icon={ShapesIcon} title={title} description={description}>
+      <div className="divide-y">
+        {features.map((row) => (
+          <FeatureContrastRow key={row.feature} row={row} />
         ))}
       </div>
     </TrendCard>
   )
 }
 
-function PackagingFeaturesCard({
-  packaging,
-}: {
-  packaging: ChannelPackagingPatterns
-}) {
-  if (packaging.features.length === 0 && packaging.topics.length === 0) {
-    return null
-  }
-  return (
-    <TrendCard
-      icon={ShapesIcon}
-      title="What separates your high-reach half"
-      description="Packaging choices common in the half of your library that travels furthest and rare in the half that does not, plus the subjects that over or under-perform your typical reach. Correlation, not proof: reach is also topic, timing and who YouTube showed it to."
-    >
-      {packaging.features.length > 0 && (
-        <div className="divide-y">
-          {packaging.features.map((row) => (
-            <FeatureContrastRow key={row.feature} row={row} />
-          ))}
-        </div>
-      )}
-      {packaging.features.length === 0 && (
-        <CoverageNote>
-          Your two reach halves package themselves alike so far. When a choice
-          starts showing up in one and not the other, it lands here.
-        </CoverageNote>
-      )}
-      {packaging.topics.length > 0 && (
-        <div className="flex flex-col gap-1 border-t pt-3">
-          <div className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            <TagsIcon className="size-3.5" />
-            Subjects that move the needle
-          </div>
-          {packaging.topics.map((row) => (
-            <TopicRow key={row.topic} row={row} />
-          ))}
-        </div>
-      )}
-    </TrendCard>
-  )
-}
-
 // --- Average alignment -------------------------------------------------------
 
-// The alignment readout, averaged across the library. Deliberately the same
-// block a single video's report and the packaging head-to-head render
+// The alignment readout, averaged across the library, and the first thing the
+// Alignment surface says. Deliberately the same block a single video's report
+// and the packaging head-to-head render
 // (components/packaging-alignment-score.tsx), tint included, so the number a
 // creator already knows from one video reads as the same number here. It is the
 // one tinted block among this page's neutral bars, and that is the point: it is
@@ -294,223 +155,240 @@ function AverageAlignmentCard({
   )
 }
 
-// --- Subscriber conversion ---------------------------------------------------
+// --- The four surfaces -------------------------------------------------------
 
-const SUBSCRIBER_OUTCOME_BADGE = {
-  magnet: "subscriber magnet",
-  leak: "net loss",
-  typical: null,
-} as const
+export type PackagingSurface = "hook" | "title" | "thumbnail" | "alignment"
 
-function conversionRowTitle(row: SubscriberVideoRow): string {
-  const title = row.title ?? "Untitled video"
-  const net =
-    row.netGained == null
-      ? ""
-      : ` (${row.netGained >= 0 ? "+" : "-"}${Math.abs(row.netGained)} net)`
-  return `${title} - +${row.subscribersGained} subscribers from ${formatCompactNumber(row.views)} views, ${formatRate(row.ratePer1k)} per 1k${net}`
+interface SurfaceConfig {
+  // The taxonomy axis group this surface is scored on. The opening's axes are
+  // grouped as "opening" in the taxonomy and called the hook everywhere a
+  // creator meets them, which is what the tab is named.
+  group: PackagingAxisGroup
+  // The categorical dimensions that describe this surface.
+  dimensionKeys: string[]
+  // The prefixes of the flat feature flags that belong to it. A v1 packaging
+  // read carries no axes, so these flags are all an early library has.
+  featurePrefixes: string[]
+  icon: ComponentType<{ className?: string }>
+  axisTitle: string
+  axisDescription: string
+  axisEmptyNote: string
+  extremesTitle: string
+  extremesDescription: string
+  extremesEmptyNote: string
+  featuresTitle: string
+  featuresDescription: string
+  styleTitle: string
+  styleDescription: string
 }
 
-// The row KPI: net subscribers gained per 100 views, falling back to gross
-// gains when the snapshot never reported losses.
-function formatNetSubscriberRatePer100(row: SubscriberVideoRow): string {
-  const gained = row.netGained ?? row.subscribersGained
-  const rate = row.views > 0 ? (gained / row.views) * 100 : 0
-  return rate >= 0 ? `+${formatRate(rate)}` : `-${formatRate(Math.abs(rate))}`
+const SURFACE_ORDER: PackagingSurface[] = [
+  "hook",
+  "title",
+  "thumbnail",
+  "alignment",
+]
+
+const AXIS_DESCRIPTION_TAIL =
+  "each video judged on its own. These are the axes where your high-reach half and your low-reach half genuinely separate."
+
+const EXTREMES_DESCRIPTION_TAIL =
+  "scored on the three uploads that reached furthest, the three that reached least, and your whole library as a baseline. Where the solid shape sits outside the dashed one, your winners pushed harder on that axis, and the dotted line says whether that is unusual for you."
+
+const FEATURES_DESCRIPTION_TAIL =
+  "Correlation, not proof: reach is also topic, timing and who YouTube showed it to."
+
+const STYLE_DESCRIPTION_TAIL =
+  "Repetition is not a fault: a recognisable channel is built on it. What matters is whether the thing you repeat is the thing that reaches."
+
+const SURFACE_CONFIG: Record<PackagingSurface, SurfaceConfig> = {
+  hook: {
+    group: "opening",
+    dimensionKeys: ["packaging.openingType"],
+    featurePrefixes: ["hook"],
+    icon: HookIcon,
+    axisTitle: "How your openings score",
+    axisDescription: `Every first ten seconds is scored on the same 0-10 axes, ${AXIS_DESCRIPTION_TAIL}`,
+    axisEmptyNote:
+      "Your two reach halves open alike on every axis so far. Open the profile below to see where your openings sit overall.",
+    extremesTitle: "Your best and worst openings, side by side",
+    extremesDescription: `The opening axes, ${EXTREMES_DESCRIPTION_TAIL}`,
+    extremesEmptyNote:
+      "Your best and worst uploads open alike on every axis so far. When the two ends of your library start opening differently, the gap lands here.",
+    featuresTitle: "What your high-reach openings do differently",
+    featuresDescription: `How quickly the opening reaches the promise in the half of your library that travels furthest, against the half that does not. ${FEATURES_DESCRIPTION_TAIL}`,
+    styleTitle: "Your opening fingerprint",
+    styleDescription: `How you open, and how each way performed. ${STYLE_DESCRIPTION_TAIL}`,
+  },
+  title: {
+    group: "title",
+    dimensionKeys: ["packaging.titleStyle"],
+    featurePrefixes: ["title"],
+    icon: TypeIcon,
+    axisTitle: "How your titles score",
+    axisDescription: `Every title is scored on the same 0-10 axes, ${AXIS_DESCRIPTION_TAIL}`,
+    axisEmptyNote:
+      "Your two reach halves title alike on every axis so far. Open the profile below to see where your titles sit overall.",
+    extremesTitle: "Your best and worst titles, side by side",
+    extremesDescription: `The title axes, ${EXTREMES_DESCRIPTION_TAIL}`,
+    extremesEmptyNote:
+      "Your best and worst uploads title alike on every axis so far. When the two ends of your library start writing titles differently, the gap lands here.",
+    featuresTitle: "What your high-reach titles do differently",
+    featuresDescription: `The title shapes common in the half of your library that travels furthest and rare in the half that does not. ${FEATURES_DESCRIPTION_TAIL}`,
+    styleTitle: "Your title fingerprint",
+    styleDescription: `The title shapes you reach for, and how each one performed. ${STYLE_DESCRIPTION_TAIL}`,
+  },
+  thumbnail: {
+    group: "thumbnail",
+    dimensionKeys: ["packaging.thumbnailMood"],
+    featurePrefixes: ["thumb"],
+    icon: ImageIcon,
+    axisTitle: "How your thumbnails score",
+    axisDescription: `Every thumbnail is scored on the same 0-10 axes, ${AXIS_DESCRIPTION_TAIL}`,
+    axisEmptyNote:
+      "Your two reach halves shoot thumbnails alike on every axis so far. Open the profile below to see where your thumbnails sit overall.",
+    extremesTitle: "Your best and worst thumbnails, side by side",
+    extremesDescription: `The thumbnail axes, ${EXTREMES_DESCRIPTION_TAIL}`,
+    extremesEmptyNote:
+      "Your best and worst uploads shoot thumbnails alike on every axis so far. When the two ends of your library start looking different, the gap lands here.",
+    featuresTitle: "What your high-reach thumbnails do differently",
+    featuresDescription: `The thumbnail choices common in the half of your library that travels furthest and rare in the half that does not. ${FEATURES_DESCRIPTION_TAIL}`,
+    styleTitle: "Your thumbnail fingerprint",
+    styleDescription: `The mood you keep shooting, and how each one performed. ${STYLE_DESCRIPTION_TAIL}`,
+  },
+  alignment: {
+    group: "alignment",
+    dimensionKeys: ["packaging.archetype", "packaging.primaryDriver"],
+    featurePrefixes: ["alignment", "promise"],
+    icon: AlignHorizontalJustifyCenterIcon,
+    axisTitle: "How tightly your packaging aligns",
+    axisDescription:
+      "The two cross-surface axes, scored on every video: whether the title and thumbnail promise the same one thing, and whether the opening cashes it. These are the axes where your high-reach half and your low-reach half genuinely separate.",
+    axisEmptyNote:
+      "Your two reach halves align alike on both axes so far. Open the profile below to see where your packaging sits overall.",
+    extremesTitle: "Your best and worst uploads on alignment",
+    extremesDescription:
+      "The two cross-surface axes, scored on the three uploads that reached furthest, the three that reached least, and your whole library as a baseline.",
+    extremesEmptyNote:
+      "Your best and worst uploads align alike on both axes so far. When the two ends of your library start promising differently, the gap lands here.",
+    featuresTitle: "What your high-reach packaging promises differently",
+    featuresDescription: `The promises and the alignment bands common in the half of your library that travels furthest and rare in the half that does not. ${FEATURES_DESCRIPTION_TAIL}`,
+    styleTitle: "Your packaging fingerprint",
+    styleDescription: `The kind of promise you make across all three surfaces, and what earns the click, with how each one performed. ${STYLE_DESCRIPTION_TAIL}`,
+  },
 }
 
-function ConversionRow({
-  row,
-  maxRate,
-  medianRate,
+function surfaceFeatures(
+  data: ChannelTrendsData,
+  surface: PackagingSurface,
+): PackagingFeatureContrast[] {
+  const prefixes = SURFACE_CONFIG[surface].featurePrefixes
+  return (data.packaging?.features ?? []).filter((row) =>
+    prefixes.includes(row.feature.split(":")[0]),
+  )
+}
+
+// Whether a surface has anything at all to show. Checked before the tab bar is
+// built, so an empty surface is dropped rather than rendered as a heading over
+// nothing.
+function surfaceHasContent(
+  data: ChannelTrendsData,
+  surface: PackagingSurface,
+): boolean {
+  const config = SURFACE_CONFIG[surface]
+  return (
+    (surface === "alignment" && data.packagingAlignment != null) ||
+    (data.packagingAxes != null &&
+      axisGroupRows(data.packagingAxes, config.group).length > 0) ||
+    (data.packagingExtremes != null &&
+      extremeGroupAxes(data.packagingExtremes, config.group).length > 0) ||
+    (data.packagingStyle?.dimensions ?? []).some((dimension) =>
+      config.dimensionKeys.includes(dimension.key),
+    ) ||
+    surfaceFeatures(data, surface).length > 0
+  )
+}
+
+// What the outer tab bar asks before it offers a Packaging tab at all.
+export function packagingPanelHasContent(data: ChannelTrendsData): boolean {
+  return SURFACE_ORDER.some((surface) => surfaceHasContent(data, surface))
+}
+
+function SurfacePanel({
+  data,
+  surface,
 }: {
-  row: SubscriberVideoRow
-  maxRate: number
-  medianRate: number
+  data: ChannelTrendsData
+  surface: PackagingSurface
 }) {
-  const badge = SUBSCRIBER_OUTCOME_BADGE[row.outcome]
-  const scale = (rate: number) =>
-    maxRate > 0 ? (rate / maxRate) * RANK_BAR_MAX_PERCENT : 0
+  const config = SURFACE_CONFIG[surface]
   return (
-    <div
-      className="grid grid-cols-[minmax(6.5rem,13rem)_1fr_7rem] items-center gap-x-3 py-1.5"
-      title={conversionRowTitle(row)}
-    >
-      <div className="flex min-w-0 flex-col items-start gap-0.5">
-        <span className="w-full truncate text-sm">
-          {row.title ?? "Untitled video"}
-        </span>
-        {badge && <OutcomeBadge>{badge}</OutcomeBadge>}
-      </div>
-      <RankBar
-        fillPercent={scale(row.ratePer1k)}
-        medianPercent={scale(medianRate)}
-      />
-      <div className="flex flex-col items-end">
-        <span className="text-sm font-medium tabular-nums">
-          {formatNetSubscriberRatePer100(row)}
-          <span className="text-xs font-normal text-muted-foreground">
-            {" "}
-            {row.netGained == null ? "subs" : "net subs"} / 100 views
-          </span>
-        </span>
-        <span className="text-[10px] tabular-nums text-muted-foreground">
-          {formatCompactNumber(row.views)} views
-        </span>
-      </div>
-    </div>
-  )
-}
-
-function SubscriberPatternRow({ pattern }: { pattern: SubscriberPattern }) {
-  const where =
-    pattern.side === "hook" ? "in the opening" : "in retention gains"
-  const magnets =
-    pattern.magnetVideoCount === 1
-      ? "your magnet video"
-      : `all ${pattern.magnetVideoCount} magnet videos`
-  const others =
-    pattern.otherVideoCount === 0
-      ? `none of your ${plural(pattern.otherTotal, "other video")}`
-      : `only ${pattern.otherVideoCount} of your ${plural(pattern.otherTotal, "other video")}`
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <EventTypeBadge eventType={pattern.eventType} />
-        <span className="text-xs text-muted-foreground">
-          {where} - in {magnets}, {others}
-        </span>
-      </div>
-      {pattern.events.map((event, index) => (
-        <EventReceipt
-          key={`${event.videoTitle ?? ""}:${event.narrative}:${index}`}
-          narrative={event.narrative}
-          videoTitle={event.videoTitle}
-        />
-      ))}
-    </div>
-  )
-}
-
-function SubscriberConversionCard({
-  conversion,
-}: {
-  conversion: ChannelSubscriberConversion
-}) {
-  const maxRate = Math.max(
-    conversion.medianRatePer1k,
-    ...conversion.rows.map((row) => row.ratePer1k),
-  )
-  const leaks = conversion.rows.filter((row) => row.outcome === "leak")
-  const hasOutliers = conversion.magnetCount > 0 || conversion.leakCount > 0
-
-  return (
-    <TrendCard
-      icon={UserPlusIcon}
-      title="Subscriber conversion"
-      description="Which uploads turn viewers into subscribers. Bars rank each upload by subscribers gained per 1,000 views so a small video and a big one compare fairly; the dashed line is your channel median. Hover a row for the raw numbers."
-      footer={
-        conversion.coveredVideoCount < conversion.libraryVideoCount
-          ? `Based on the ${conversion.coveredVideoCount} of your ${plural(conversion.libraryVideoCount, "library video")} with subscriber data. Older analyses pick theirs up the next time you open them.`
-          : undefined
-      }
-    >
-      <div>
-        {conversion.rows.map((row) => (
-          <ConversionRow
-            key={row.id}
-            row={row}
-            maxRate={maxRate}
-            medianRate={conversion.medianRatePer1k}
-          />
-        ))}
-      </div>
-      {!hasOutliers && (
-        <CoverageNote>
-          No outliers yet - your uploads convert at a similar rate. When one
-          breaks away from the median, it gets flagged here.
-        </CoverageNote>
-      )}
-      {conversion.patterns.length > 0 && (
-        <div className="flex flex-col gap-3 rounded-r-md border-l-2 border-muted-foreground/30 bg-muted/40 px-3 py-2.5">
-          <div>
-            <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              What your subscriber magnets did differently
-            </span>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Patterns in every magnet&apos;s openings or retention gains that
-              are rare across the rest of your library. Correlation, not proof,
-              but the first place to look.
-            </p>
-          </div>
-          {conversion.patterns.map((pattern) => (
-            <SubscriberPatternRow
-              key={`${pattern.side}:${pattern.eventType}`}
-              pattern={pattern}
-            />
-          ))}
-        </div>
-      )}
-      {leaks.map((row) => (
-        <p key={row.id} className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
-          <span className="font-medium">Net loss:</span>{" "}
-          {row.title ?? "An untitled video"} lost more subscribers than it
-          gained ({row.netGained} net). Worth re-watching what its title and
-          thumbnail promised against what the video delivered.
-        </p>
-      ))}
-    </TrendCard>
-  )
-}
-
-export function PackagingPanel({ data }: { data: ChannelTrendsData }) {
-  return (
-    <>
-      {data.packaging != null && (
-        <>
-          <PackagingReachCard packaging={data.packaging} />
-          <PackagingFeaturesCard packaging={data.packaging} />
-        </>
-      )}
-      {data.packagingAlignment != null && (
+    <div className="flex flex-col gap-3">
+      {surface === "alignment" && data.packagingAlignment != null && (
         <AverageAlignmentCard alignment={data.packagingAlignment} />
       )}
       {data.packagingAxes != null && (
         <AxisContrastCard
           profile={data.packagingAxes}
+          group={config.group}
           icon={SlidersHorizontalIcon}
-          title="How your packaging scores"
-          description="Every title, thumbnail and opening is scored on the same 0-10 axes, each video judged on its own. These are the axes where your high-reach half and your low-reach half genuinely separate."
+          title={config.axisTitle}
+          description={config.axisDescription}
           topLabel="high reach"
           bottomLabel="low reach"
-          emptyNote="Your two reach halves score alike on every axis so far. Open your channel profile below to see where your packaging sits overall."
+          emptyNote={config.axisEmptyNote}
         />
       )}
       {data.packagingExtremes != null && (
         <ExtremesRadarCard
           profile={data.packagingExtremes}
+          group={config.group}
           icon={RadarIcon}
-          title="Your best and worst uploads, side by side"
-          description="The same 0-10 axes, scored on the three uploads that reached furthest, the three that reached least, and your whole library as a baseline. One shape per surface: where the solid shape sits outside the dashed one, your winners packaged themselves harder on that axis, and the dotted line says whether that is unusual for you."
+          title={config.extremesTitle}
+          description={config.extremesDescription}
           topLabel="top 3 by reach"
           bottomLabel="bottom 3 by reach"
           libraryLabel="library average"
           formatOutcome={(value) => `${formatRate(value)}/day`}
-          emptyNote="Your best and worst uploads score alike on every axis so far. When the two ends of your library start packaging themselves differently, the gap lands here."
+          emptyNote={config.extremesEmptyNote}
         />
       )}
+      <FeatureContrastCard
+        features={surfaceFeatures(data, surface)}
+        title={config.featuresTitle}
+        description={config.featuresDescription}
+      />
       {data.packagingStyle != null && (
         <StyleProfileCard
           profile={data.packagingStyle}
-          icon={ShapesIcon}
-          title="Your packaging fingerprint"
-          description="The packaging choices you repeat, and how each one performed. Repetition is not a fault: a recognisable channel is built on it. What matters is whether the thing you repeat is the thing that reaches."
+          dimensionKeys={config.dimensionKeys}
+          icon={config.icon}
+          title={config.styleTitle}
+          description={config.styleDescription}
           outcomeNoun="reach"
         />
       )}
-      {data.subscribers != null && (
-        <SubscriberConversionCard conversion={data.subscribers} />
-      )}
-    </>
+    </div>
+  )
+}
+
+export function PackagingPanel({ data }: { data: ChannelTrendsData }) {
+  const body = (surface: PackagingSurface) =>
+    surfaceHasContent(data, surface) ? (
+      <SurfacePanel data={data} surface={surface} />
+    ) : undefined
+
+  // The tab this panel fills is offered on the same question, so an empty
+  // library never reaches here. Guarded anyway, so the panel can never render
+  // as a bare tab bar over nothing.
+  if (!packagingPanelHasContent(data)) return null
+
+  return (
+    <PackagingSurfaceTabs
+      hook={body("hook")}
+      title={body("title")}
+      thumbnail={body("thumbnail")}
+      alignment={body("alignment")}
+    />
   )
 }
