@@ -1,6 +1,7 @@
 import {
   taxonomyAxisCopy,
   taxonomyAxisShortLabel,
+  taxonomyAxisTooltip,
 } from "@/components/channel-trends-copy"
 import { formatScore } from "@/components/channel-trends-shared"
 
@@ -47,6 +48,13 @@ const MAX_SCORE = 10
 // A label longer than this is worth breaking over two lines; below it, a break
 // costs more than it saves.
 const LABEL_WRAP_CHARS = 10
+// Rim labels are clipped names, so each one carries its full name and meaning
+// on hover. The glyphs alone are a miserable target - the gaps between letters
+// are not part of them - so the tooltip hangs on an invisible box sized to the
+// text instead. A rough average advance per character is enough for a hit area;
+// it never has to match the rendered text to the pixel.
+const LABEL_CHAR_WIDTH = 0.55 * LABEL_FONT_SIZE
+const LABEL_HIT_PADDING = 1.5
 
 export interface RadarAxis {
   // The taxonomy axis key, for its labels.
@@ -276,32 +284,50 @@ export function TaxonomyRadar({
         const anchor = anchorFor(Math.cos(angle))
         const label = pointAt(index, axes.length, RADIUS + LABEL_GAP)
         const lines = wrapLabel(taxonomyAxisShortLabel(axis.key))
+        const hitWidth =
+          Math.max(...lines.map((line) => line.length)) * LABEL_CHAR_WIDTH +
+          LABEL_HIT_PADDING * 2
+        const hitHeight = lines.length * LABEL_LINE_HEIGHT + LABEL_HIT_PADDING
+        // The box hangs off the label the way the text does: from its left edge
+        // when the text runs right, from its right edge when it runs left.
+        const hitX =
+          anchor === "start"
+            ? label.x - LABEL_HIT_PADDING
+            : anchor === "end"
+              ? label.x + LABEL_HIT_PADDING - hitWidth
+              : label.x - hitWidth / 2
         return (
-          <text
-            key={axis.key}
-            x={label.x}
-            y={label.y}
-            textAnchor={anchor}
-            fontSize={LABEL_FONT_SIZE}
-            className="fill-current text-muted-foreground"
-          >
-            <title>
-              {`${taxonomyAxisCopy(axis.key).name}: ${readout(axis)}`}
-            </title>
-            {lines.map((line, lineIndex) => (
-              <tspan
-                key={line}
-                x={label.x}
-                y={
-                  label.y +
-                  (lineIndex - (lines.length - 1) / 2) * LABEL_LINE_HEIGHT
-                }
-                dominantBaseline="middle"
-              >
-                {line}
-              </tspan>
-            ))}
-          </text>
+          <g key={axis.key} className="text-muted-foreground">
+            <title>{taxonomyAxisTooltip(axis.key)}</title>
+            <rect
+              x={hitX}
+              y={label.y - hitHeight / 2}
+              width={hitWidth}
+              height={hitHeight}
+              fill="transparent"
+            />
+            <text
+              x={label.x}
+              y={label.y}
+              textAnchor={anchor}
+              fontSize={LABEL_FONT_SIZE}
+              className="fill-current"
+            >
+              {lines.map((line, lineIndex) => (
+                <tspan
+                  key={line}
+                  x={label.x}
+                  y={
+                    label.y +
+                    (lineIndex - (lines.length - 1) / 2) * LABEL_LINE_HEIGHT
+                  }
+                  dominantBaseline="middle"
+                >
+                  {line}
+                </tspan>
+              ))}
+            </text>
+          </g>
         )
       })}
     </svg>
