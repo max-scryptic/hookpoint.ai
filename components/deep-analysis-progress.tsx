@@ -85,6 +85,12 @@ const STAGE_LABELS: {
 // "Source file ready" row covers steady state. Bump `restartToken` to start a
 // fresh poll after a manual retry.
 //
+// `initialProgress` is the server's own read of the same thing, taken in the
+// render that produced the page. Seeding the first reading with it means the
+// card is right in the first paint — a video that is analysing shows its
+// spinner immediately instead of a poll interval later, and one that isn't
+// never flashes a spinner it has to take back.
+//
 // When a run finishes while the page is open it also refreshes the route once.
 // Everything else about a finished deep analysis is server-rendered and gated on
 // the pipeline having settled — most visibly the report's deep-analysis
@@ -94,6 +100,7 @@ const STAGE_LABELS: {
 function useDeepAnalysisProgress(
   videoId: string,
   restartToken = 0,
+  initialProgress: DeepAnalysisProgressResponse | null = null,
 ): DeepAnalysisStatus {
   const router = useRouter()
   // The poll's readings are stamped with the run they belong to, so a restart
@@ -102,13 +109,20 @@ function useDeepAnalysisProgress(
   const [reading, setReading] = useState<PollReading>(() => ({
     videoId,
     restartToken,
-    progress: null,
+    progress: initialProgress,
     unreachable: false,
   }))
-  const stale =
-    reading.videoId !== videoId || reading.restartToken !== restartToken
-  const progress = stale ? null : reading.progress
-  const unreachable = stale ? false : reading.unreachable
+  const sameRun =
+    reading.videoId === videoId && reading.restartToken === restartToken
+  const progress = sameRun ? reading.progress : null
+  const unreachable = sameRun ? reading.unreachable : false
+  // A restart — a manual "retry deep analysis", or an upload that just landed
+  // — is this page kicking off a run itself, so we know one is in flight before
+  // any poll comes back to say so. Treat that gap as analysing rather than
+  // leaving the card blank until the first reading arrives (or, if the endpoint
+  // is briefly unreachable, for as long as it stays down).
+  const awaitingRestartedRun =
+    reading.videoId === videoId && restartToken > 0 && progress == null
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -173,16 +187,23 @@ function useDeepAnalysisProgress(
   const pipelineRun = progress?.pipelineRun ?? null
   const failed = pipelineRun?.status === "failed"
 
-  // Analysing whenever a run is genuinely in flight, the endpoint gave a
-  // degraded read, or we simply can't reach it yet — anything but a confirmed
-  // settled state — and never while we're showing a failure to retry.
+  // Analysing whenever a run is genuinely in flight, one has just been kicked
+  // off from this page, or the endpoint gave a degraded read (or stopped
+  // answering after a reading we did get) — anything but a confirmed settled
+  // state — and never while we're showing a failure to retry.
+  //
+  // With no reading at all and no restart behind us we say nothing rather than
+  // guess: the server seeds the first reading, so "unknown" now only means a
+  // page whose seed couldn't be computed, and claiming that as analysing would
+  // flash a spinner onto every report that was never analysing to begin with.
   const analysing =
     !failed &&
-    (progress == null ||
-      progress.degraded === true ||
-      (progress.active && !progress.complete) ||
-      unreachable ||
-      pipelineRun?.status === "running")
+    (awaitingRestartedRun ||
+      (progress != null &&
+        (progress.degraded === true ||
+          (progress.active && !progress.complete) ||
+          unreachable ||
+          pipelineRun?.status === "running")))
 
   return useMemo(
     () => ({ analysing, failed, progress }),
@@ -217,13 +238,18 @@ const DeepAnalysisStatusContext =
 // refresh when a run landed.
 export function DeepAnalysisStatusProvider({
   videoId,
+  initialProgress = null,
   children,
 }: {
   videoId: string
+  // The page's own server-side read of where this video's deep analysis
+  // stands, so the first paint already knows the answer instead of waiting a
+  // round-trip to find out. See useDeepAnalysisProgress.
+  initialProgress?: DeepAnalysisProgressResponse | null
   children: React.ReactNode
 }) {
   const [restartToken, setRestartToken] = useState(0)
-  const status = useDeepAnalysisProgress(videoId, restartToken)
+  const status = useDeepAnalysisProgress(videoId, restartToken, initialProgress)
   const restart = useCallback(() => setRestartToken((token) => token + 1), [])
   const value = useMemo(() => ({ ...status, restart }), [status, restart])
 

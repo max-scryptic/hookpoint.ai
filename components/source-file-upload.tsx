@@ -547,6 +547,12 @@ export function SourceFileUpload({
       setClient({ phase: "idle" })
       setShowUploadedDialog(true)
       notifySourceFileReady(videoId)
+      // Completing the upload kicks the deep-analysis pipeline off. The poll
+      // had already stopped — before this upload there was no file to analyse,
+      // so its first reading settled and it had no reason to keep asking — so
+      // restart it here. Without this the card behind the dialog shows a ready
+      // file with no sign that anything is running until the page is reloaded.
+      restartDeepAnalysisPoll()
     } catch (error) {
       setClient({
         phase: "error",
@@ -926,10 +932,10 @@ function Body({
 // after early returns, where a hook can't live). Shows a compact file row plus,
 // when the last run didn't finish, a note prompting a retry.
 //
-// A run still in flight shows as a single "Processing…" badge beside the file's
-// duration — deliberately not a spinner line and an eight-stage checklist,
-// which would change the card's size under the reader for as long as the
-// pipeline ran.
+// A run still in flight shows as a single "Processing…" badge alongside the
+// card's actions — deliberately not a spinner line and an eight-stage
+// checklist, which would change the card's size under the reader for as long
+// as the pipeline ran.
 function ReadySourceFileCard({
   sourceFile,
   isBusy,
@@ -946,12 +952,11 @@ function ReadySourceFileCard({
   retryState: { busy: boolean; error: string | null }
 }) {
   // Whether the footage-based half of the analysis is still running for this
-  // video, shown as a "Processing…" badge beside the file's duration. Only once
-  // a poll has actually landed (progress != null): the status reads as
-  // analysing while the very first request is still in flight, which would
-  // otherwise flash the badge on every report, deeply analysed or not.
-  const { failed, analysing, progress } = useDeepAnalysisStatus()
-  const processing = analysing && progress != null
+  // video, shown as a "Processing…" badge beside the card's actions. The
+  // provider seeds its first reading from the server render, so this is right
+  // from the first paint — no waiting on a poll, and no badge flashed onto a
+  // report that was never analysing.
+  const { failed, analysing: processing } = useDeepAnalysisStatus()
 
   return (
     <div className="flex flex-col">
@@ -962,29 +967,37 @@ function ReadySourceFileCard({
           subtitle={sourceFile.originalFilename}
         />
 
-        <Meta sourceFile={sourceFile} processing={processing} />
+        <Meta sourceFile={sourceFile} />
 
-        <div className="flex gap-2 sm:ml-auto">
-          <Button
-            variant="outline"
-            onClick={onRetryDeepAnalysis}
-            disabled={isBusy || retryState.busy}
-          >
-            {retryState.busy ? (
-              <Loader2Icon className="size-4 animate-spin" />
-            ) : (
-              <RefreshCwIcon className="size-4" />
-            )}
-            Retry deep analysis
-          </Button>
-          <Button variant="outline" onClick={onPick} disabled={isBusy}>
-            <UploadIcon className="size-4" />
-            Replace
-          </Button>
-          <Button variant="outline" onClick={onDelete} disabled={isBusy}>
-            <TrashIcon className="size-4" />
-            Remove
-          </Button>
+        {/* The badge travels with the actions rather than the file's own
+            facts: it's the one live thing on the card, and reading it against
+            the buttons' centre line keeps it clear of the label-over-value
+            metadata it would otherwise sit crookedly beside. */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 sm:ml-auto">
+          {processing && <DeepAnalysisProcessingBadge />}
+
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={onRetryDeepAnalysis}
+              disabled={isBusy || retryState.busy}
+            >
+              {retryState.busy ? (
+                <Loader2Icon className="size-4 animate-spin" />
+              ) : (
+                <RefreshCwIcon className="size-4" />
+              )}
+              Retry deep analysis
+            </Button>
+            <Button variant="outline" onClick={onPick} disabled={isBusy}>
+              <UploadIcon className="size-4" />
+              Replace
+            </Button>
+            <Button variant="outline" onClick={onDelete} disabled={isBusy}>
+              <TrashIcon className="size-4" />
+              Remove
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -1033,13 +1046,7 @@ function StatusRow({
   )
 }
 
-function Meta({
-  sourceFile,
-  processing = false,
-}: {
-  sourceFile: SerialisedSourceFile
-  processing?: boolean
-}) {
+function Meta({ sourceFile }: { sourceFile: SerialisedSourceFile }) {
   return (
     <dl className="flex flex-wrap items-end gap-x-8 gap-y-2 text-sm">
       <Field label="File size" value={formatBytes(sourceFile.fileSizeBytes)} />
@@ -1047,15 +1054,6 @@ function Meta({
         label="Duration"
         value={formatDuration(sourceFile.uploadedDurationSeconds)}
       />
-      {/* Sits to the right of the file's own facts, so the one live thing about
-          the report reads alongside the footage it's working through rather
-          than at the top of the page. Wrapped so the list holds only the
-          <div>s a <dl> allows between its groups. */}
-      {processing && (
-        <div className="flex flex-col justify-end">
-          <DeepAnalysisProcessingBadge />
-        </div>
-      )}
     </dl>
   )
 }
