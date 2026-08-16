@@ -1,12 +1,8 @@
-import type { ComponentType } from "react"
 import {
-  AlignHorizontalJustifyCenterIcon,
   CrosshairIcon,
-  ImageIcon,
   RadarIcon,
   ShapesIcon,
-  SlidersHorizontalIcon,
-  TypeIcon,
+  TrophyIcon,
 } from "lucide-react"
 
 import { packagingFeatureLabel } from "@/components/channel-trends-copy"
@@ -17,17 +13,14 @@ import {
   plural,
 } from "@/components/channel-trends-shared"
 import {
-  AxisContrastCard,
+  ExtremeBandsCard,
   ExtremesRadarCard,
-  StyleProfileCard,
 } from "@/components/channel-trends-taxonomy"
-import { HookIcon } from "@/components/hook-icon"
 import {
   ALIGNMENT_PART_LABEL,
   PackagingAlignmentScore,
 } from "@/components/packaging-alignment-score"
 import {
-  axisGroupRows,
   extremeGroupAxes,
   type ChannelAlignmentAverage,
   type PackagingAxisGroup,
@@ -47,11 +40,13 @@ import type {
 //   Thumbnail  the image that makes it
 //   Alignment  how tightly those three promise the same one thing
 //
-// Every surface reads the same three ways: where its axes separate the halves
-// of your library, the same axes drawn as one shape per band at the two ends of
-// it, and the categorical fingerprint of what you repeat. Alignment opens on
-// the library's average alignment score, the one number a creator already knows
-// from a single video's report.
+// The two bands every surface is read against are the same three uploads at
+// each end of the library whichever tab is open, so they are named once above
+// the tab bar rather than restated on all four charts. Under the bar, each
+// surface draws its own axes as one shape per band, then lists what its
+// high-reach half does differently. Alignment opens on the library's average
+// alignment score, the one number a creator already knows from a single video's
+// report.
 //
 // Everything here is correlational by construction and the copy says so: reach
 // is also topic, timing and who YouTube showed a video to, and a library is a
@@ -164,22 +159,14 @@ interface SurfaceConfig {
   // grouped as "opening" in the taxonomy and called the hook everywhere a
   // creator meets them, which is what the tab is named.
   group: PackagingAxisGroup
-  // The categorical dimensions that describe this surface.
-  dimensionKeys: string[]
   // The prefixes of the flat feature flags that belong to it. A v1 packaging
   // read carries no axes, so these flags are all an early library has.
   featurePrefixes: string[]
-  icon: ComponentType<{ className?: string }>
-  axisTitle: string
-  axisDescription: string
-  axisEmptyNote: string
   extremesTitle: string
   extremesDescription: string
   extremesEmptyNote: string
   featuresTitle: string
   featuresDescription: string
-  styleTitle: string
-  styleDescription: string
 }
 
 const SURFACE_ORDER: PackagingSurface[] = [
@@ -189,8 +176,11 @@ const SURFACE_ORDER: PackagingSurface[] = [
   "alignment",
 ]
 
-const AXIS_DESCRIPTION_TAIL =
-  "each video judged on its own. These are the axes where your high-reach half and your low-reach half genuinely separate."
+// What the two ends of the library are called, on the card that names them and
+// on every chart drawn off them, so the legend under a radar reads as the list
+// above the tab bar rather than as a second pair of bands.
+const EXTREMES_TOP_LABEL = "top 3 by reach"
+const EXTREMES_BOTTOM_LABEL = "bottom 3 by reach"
 
 const EXTREMES_DESCRIPTION_TAIL =
   "scored on the three uploads that reached furthest, the three that reached least, and your whole library as a baseline. Where the solid shape sits outside the dashed one, your winners pushed harder on that axis, and the dotted line says whether that is unusual for you."
@@ -198,74 +188,40 @@ const EXTREMES_DESCRIPTION_TAIL =
 const FEATURES_DESCRIPTION_TAIL =
   "Correlation, not proof: reach is also topic, timing and who YouTube showed it to."
 
-const STYLE_DESCRIPTION_TAIL =
-  "Repetition is not a fault: a recognisable channel is built on it. What matters is whether the thing you repeat is the thing that reaches."
-
 const SURFACE_CONFIG: Record<PackagingSurface, SurfaceConfig> = {
   hook: {
     group: "opening",
-    dimensionKeys: ["packaging.openingType"],
     featurePrefixes: ["hook"],
-    icon: HookIcon,
-    axisTitle: "How your openings score",
-    axisDescription: `Every first ten seconds is scored on the same 0-10 axes, ${AXIS_DESCRIPTION_TAIL}`,
-    axisEmptyNote:
-      "Your two reach halves open alike on every axis so far. Open the profile below to see where your openings sit overall.",
     extremesTitle: "Your best and worst openings, side by side",
     extremesDescription: `The opening axes, ${EXTREMES_DESCRIPTION_TAIL}`,
     extremesEmptyNote:
       "Your best and worst uploads open alike on every axis so far. When the two ends of your library start opening differently, the gap lands here.",
     featuresTitle: "What your high-reach openings do differently",
     featuresDescription: `How quickly the opening reaches the promise in the half of your library that travels furthest, against the half that does not. ${FEATURES_DESCRIPTION_TAIL}`,
-    styleTitle: "Your opening fingerprint",
-    styleDescription: `How you open, and how each way performed. ${STYLE_DESCRIPTION_TAIL}`,
   },
   title: {
     group: "title",
-    dimensionKeys: ["packaging.titleStyle"],
     featurePrefixes: ["title"],
-    icon: TypeIcon,
-    axisTitle: "How your titles score",
-    axisDescription: `Every title is scored on the same 0-10 axes, ${AXIS_DESCRIPTION_TAIL}`,
-    axisEmptyNote:
-      "Your two reach halves title alike on every axis so far. Open the profile below to see where your titles sit overall.",
     extremesTitle: "Your best and worst titles, side by side",
     extremesDescription: `The title axes, ${EXTREMES_DESCRIPTION_TAIL}`,
     extremesEmptyNote:
       "Your best and worst uploads title alike on every axis so far. When the two ends of your library start writing titles differently, the gap lands here.",
     featuresTitle: "What your high-reach titles do differently",
     featuresDescription: `The title shapes common in the half of your library that travels furthest and rare in the half that does not. ${FEATURES_DESCRIPTION_TAIL}`,
-    styleTitle: "Your title fingerprint",
-    styleDescription: `The title shapes you reach for, and how each one performed. ${STYLE_DESCRIPTION_TAIL}`,
   },
   thumbnail: {
     group: "thumbnail",
-    dimensionKeys: ["packaging.thumbnailMood"],
     featurePrefixes: ["thumb"],
-    icon: ImageIcon,
-    axisTitle: "How your thumbnails score",
-    axisDescription: `Every thumbnail is scored on the same 0-10 axes, ${AXIS_DESCRIPTION_TAIL}`,
-    axisEmptyNote:
-      "Your two reach halves shoot thumbnails alike on every axis so far. Open the profile below to see where your thumbnails sit overall.",
     extremesTitle: "Your best and worst thumbnails, side by side",
     extremesDescription: `The thumbnail axes, ${EXTREMES_DESCRIPTION_TAIL}`,
     extremesEmptyNote:
       "Your best and worst uploads shoot thumbnails alike on every axis so far. When the two ends of your library start looking different, the gap lands here.",
     featuresTitle: "What your high-reach thumbnails do differently",
     featuresDescription: `The thumbnail choices common in the half of your library that travels furthest and rare in the half that does not. ${FEATURES_DESCRIPTION_TAIL}`,
-    styleTitle: "Your thumbnail fingerprint",
-    styleDescription: `The mood you keep shooting, and how each one performed. ${STYLE_DESCRIPTION_TAIL}`,
   },
   alignment: {
     group: "alignment",
-    dimensionKeys: ["packaging.archetype", "packaging.primaryDriver"],
     featurePrefixes: ["alignment", "promise"],
-    icon: AlignHorizontalJustifyCenterIcon,
-    axisTitle: "How tightly your packaging aligns",
-    axisDescription:
-      "The two cross-surface axes, scored on every video: whether the title and thumbnail promise the same one thing, and whether the opening cashes it. These are the axes where your high-reach half and your low-reach half genuinely separate.",
-    axisEmptyNote:
-      "Your two reach halves align alike on both axes so far. Open the profile below to see where your packaging sits overall.",
     extremesTitle: "Your best and worst uploads on alignment",
     extremesDescription:
       "The two cross-surface axes, scored on the three uploads that reached furthest, the three that reached least, and your whole library as a baseline.",
@@ -273,8 +229,6 @@ const SURFACE_CONFIG: Record<PackagingSurface, SurfaceConfig> = {
       "Your best and worst uploads align alike on both axes so far. When the two ends of your library start promising differently, the gap lands here.",
     featuresTitle: "What your high-reach packaging promises differently",
     featuresDescription: `The promises and the alignment bands common in the half of your library that travels furthest and rare in the half that does not. ${FEATURES_DESCRIPTION_TAIL}`,
-    styleTitle: "Your packaging fingerprint",
-    styleDescription: `The kind of promise you make across all three surfaces, and what earns the click, with how each one performed. ${STYLE_DESCRIPTION_TAIL}`,
   },
 }
 
@@ -298,13 +252,8 @@ function surfaceHasContent(
   const config = SURFACE_CONFIG[surface]
   return (
     (surface === "alignment" && data.packagingAlignment != null) ||
-    (data.packagingAxes != null &&
-      axisGroupRows(data.packagingAxes, config.group).length > 0) ||
     (data.packagingExtremes != null &&
       extremeGroupAxes(data.packagingExtremes, config.group).length > 0) ||
-    (data.packagingStyle?.dimensions ?? []).some((dimension) =>
-      config.dimensionKeys.includes(dimension.key),
-    ) ||
     surfaceFeatures(data, surface).length > 0
   )
 }
@@ -327,18 +276,6 @@ function SurfacePanel({
       {surface === "alignment" && data.packagingAlignment != null && (
         <AverageAlignmentCard alignment={data.packagingAlignment} />
       )}
-      {data.packagingAxes != null && (
-        <AxisContrastCard
-          profile={data.packagingAxes}
-          group={config.group}
-          icon={SlidersHorizontalIcon}
-          title={config.axisTitle}
-          description={config.axisDescription}
-          topLabel="high reach"
-          bottomLabel="low reach"
-          emptyNote={config.axisEmptyNote}
-        />
-      )}
       {data.packagingExtremes != null && (
         <ExtremesRadarCard
           profile={data.packagingExtremes}
@@ -346,10 +283,9 @@ function SurfacePanel({
           icon={RadarIcon}
           title={config.extremesTitle}
           description={config.extremesDescription}
-          topLabel="top 3 by reach"
-          bottomLabel="bottom 3 by reach"
+          topLabel={EXTREMES_TOP_LABEL}
+          bottomLabel={EXTREMES_BOTTOM_LABEL}
           libraryLabel="library average"
-          formatOutcome={(value) => `${formatRate(value)}/day`}
           emptyNote={config.extremesEmptyNote}
         />
       )}
@@ -358,16 +294,6 @@ function SurfacePanel({
         title={config.featuresTitle}
         description={config.featuresDescription}
       />
-      {data.packagingStyle != null && (
-        <StyleProfileCard
-          profile={data.packagingStyle}
-          dimensionKeys={config.dimensionKeys}
-          icon={config.icon}
-          title={config.styleTitle}
-          description={config.styleDescription}
-          outcomeNoun="reach"
-        />
-      )}
     </div>
   )
 }
@@ -383,12 +309,41 @@ export function PackagingPanel({ data }: { data: ChannelTrendsData }) {
   // as a bare tab bar over nothing.
   if (!packagingPanelHasContent(data)) return null
 
+  // Only worth naming the bands above the bar when at least one surface below
+  // it is actually scored on them, so a library read only on its feature flags
+  // never gets a heading pointing at charts that are not there.
+  const profile = data.packagingExtremes
+  const extremes =
+    profile != null &&
+    SURFACE_ORDER.some(
+      (surface) =>
+        extremeGroupAxes(profile, SURFACE_CONFIG[surface].group).length > 0,
+    )
+      ? profile
+      : null
   return (
-    <PackagingSurfaceTabs
-      hook={body("hook")}
-      title={body("title")}
-      thumbnail={body("thumbnail")}
-      alignment={body("alignment")}
-    />
+    <div className="flex flex-col gap-3">
+      {/* The two bands are picked once, off reach, and every chart under the
+          tab bar is scored on them, so they are named here rather than four
+          times over. */}
+      {extremes != null && (
+        <ExtremeBandsCard
+          profile={extremes}
+          icon={TrophyIcon}
+          title="The uploads every chart below compares"
+          description="Your three uploads that reached furthest and your three that reached least, ranked on views per day. Each tab below scores this same pair of bands on its own axes."
+          topLabel={EXTREMES_TOP_LABEL}
+          bottomLabel={EXTREMES_BOTTOM_LABEL}
+          formatOutcome={(value) => `${formatRate(value)}/day`}
+          footer={`Picked out of the ${plural(extremes.rankedVideoCount, "video")} carrying both a packaging read and the numbers to rank. Correlation, not proof: ${extremes.bandSize} uploads a side is a lead worth testing, not a law.`}
+        />
+      )}
+      <PackagingSurfaceTabs
+        hook={body("hook")}
+        title={body("title")}
+        thumbnail={body("thumbnail")}
+        alignment={body("alignment")}
+      />
+    </div>
   )
 }

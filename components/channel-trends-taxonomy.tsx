@@ -55,6 +55,9 @@ import {
 //   ExtremesRadarCard the same axes at the ends of the library rather than its
 //                     halves: the best few uploads against the worst few, drawn
 //                     one shape per surface
+//   ExtremeBandsCard  only the two named bands behind those shapes, for callers
+//                     that draw several ExtremesRadarCards off one profile and
+//                     want the video lists stated once above them
 //   StyleProfileCard  what the channel repeats on each categorical dimension,
 //                     and which of its choices performs unusually well
 //
@@ -342,6 +345,76 @@ function ExtremeBandList({
   )
 }
 
+// The two bands, side by side. Split out of ExtremesRadarCard for callers that
+// draw more than one chart off a single profile: the bands are a property of the
+// library and its ranking, not of the axes being drawn, so repeating the lists
+// over every chart would state the same two lists several times over.
+function ExtremeBands({
+  profile,
+  topLabel,
+  bottomLabel,
+  formatOutcome,
+}: {
+  profile: ChannelExtremesProfile
+  topLabel: string
+  bottomLabel: string
+  formatOutcome: (value: number) => string
+}) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <ExtremeBandList
+        label={topLabel}
+        videos={profile.top}
+        formatOutcome={formatOutcome}
+      />
+      <ExtremeBandList
+        label={bottomLabel}
+        videos={profile.bottom}
+        formatOutcome={formatOutcome}
+      />
+    </div>
+  )
+}
+
+// The two bands as a card of their own, for a caller that hoists them above a
+// set of ExtremesRadarCards built from the same profile.
+export function ExtremeBandsCard({
+  profile,
+  icon,
+  title,
+  description,
+  topLabel,
+  bottomLabel,
+  formatOutcome,
+  footer,
+}: {
+  profile: ChannelExtremesProfile
+  icon: ComponentType<{ className?: string }>
+  title: string
+  description: string
+  topLabel: string
+  bottomLabel: string
+  formatOutcome: (value: number) => string
+  footer?: string
+}) {
+  if (profile.top.length === 0 && profile.bottom.length === 0) return null
+  return (
+    <TrendCard
+      icon={icon}
+      title={title}
+      description={description}
+      footer={footer}
+    >
+      <ExtremeBands
+        profile={profile}
+        topLabel={topLabel}
+        bottomLabel={bottomLabel}
+        formatOutcome={formatOutcome}
+      />
+    </TrendCard>
+  )
+}
+
 // A run of axes written out as bars: the three sets on every axis, in the order
 // the legend names them. Used wherever the shapes are not enough on their own,
 // which is the alignment pair, the biggest separations, and the fold.
@@ -403,8 +476,11 @@ export function ExtremesRadarCard({
   bottomLabel: string
   // What the whole-library average is called.
   libraryLabel: string
-  // Prints the metric the bands were ranked on, next to each video.
-  formatOutcome: (value: number) => string
+  // Prints the metric the bands were ranked on, next to each video. Absent
+  // drops the two band lists from this card, which is what a caller drawing
+  // several of these off one profile does once it has stated the lists above
+  // them as an ExtremeBandsCard.
+  formatOutcome?: (value: number) => string
   // What to say when the two bands scored alike on every axis.
   emptyNote: string
 }) {
@@ -435,18 +511,14 @@ export function ExtremesRadarCard({
       description={description}
       footer={`Your ${profile.bandSize} best and ${profile.bandSize} worst of the ${plural(profile.rankedVideoCount, "video")} carrying both a ${profile.source} read and the numbers to rank; the average covers all ${plural(profile.libraryVideoCount, "read video")}, ranked or not. Correlation, not proof: ${profile.bandSize} uploads a side is a lead worth testing, not a law.`}
     >
-      <div className="grid gap-3 sm:grid-cols-2">
-        <ExtremeBandList
-          label={topLabel}
-          videos={profile.top}
+      {formatOutcome != null && (
+        <ExtremeBands
+          profile={profile}
+          topLabel={topLabel}
+          bottomLabel={bottomLabel}
           formatOutcome={formatOutcome}
         />
-        <ExtremeBandList
-          label={bottomLabel}
-          videos={profile.bottom}
-          formatOutcome={formatOutcome}
-        />
-      </div>
+      )}
 
       {drawable.length > 0 && (
         <RadarLegend
