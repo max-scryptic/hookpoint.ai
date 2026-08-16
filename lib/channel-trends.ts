@@ -49,9 +49,12 @@ import type { ScriptTaxonomy } from "@/lib/script-taxonomy"
 // the library filling up; from EARLY trends appear labelled as early signals;
 // from ESTABLISHED they're presented at full strength. EARLY deliberately sits
 // just above the synthesizer's own two-video minimum — a pattern needs a few
-// videos before a page dedicated to it reads as credible.
+// videos before a page dedicated to it reads as credible. ESTABLISHED is six
+// because that is where the band-split views stop being a rounding exercise:
+// six covered videos put three above the median and three below it, so the
+// top band, the bottom band and the middle line each have real shape.
 export const EARLY_TRENDS_VIDEO_THRESHOLD = 3
-export const ESTABLISHED_TRENDS_VIDEO_THRESHOLD = 10
+export const ESTABLISHED_TRENDS_VIDEO_THRESHOLD = 6
 
 export type ChannelTrendsStage = "empty" | "building" | "early" | "established"
 
