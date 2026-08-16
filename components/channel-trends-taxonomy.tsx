@@ -320,18 +320,23 @@ function ExtremeBandList({
   videos: ChannelExtremeVideo[]
   formatOutcome: (value: number) => string
 }) {
+  // Set in a panel of its own rather than as loose text, so the ranked pair
+  // reads as the table it is and lifts off the prose either side of it.
   return (
-    <div className="flex flex-col gap-1">
+    <div className="rounded-lg border bg-muted/40 px-3 py-2.5">
       <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
         {label}
       </span>
-      <ul className="flex flex-col gap-0.5">
-        {videos.map((video) => (
+      <ol className="mt-1.5 flex flex-col divide-y">
+        {videos.map((video, index) => (
           <li
             key={video.id}
-            className="grid grid-cols-[1fr_auto] items-baseline gap-x-2"
+            className="grid grid-cols-[1rem_1fr_auto] items-baseline gap-x-2 py-1.5 first:pt-0 last:pb-0"
             title={video.title ?? undefined}
           >
+            <span className="text-xs tabular-nums text-muted-foreground/60">
+              {index + 1}
+            </span>
             <span className="truncate text-sm">
               {video.title ?? "Untitled video"}
             </span>
@@ -340,7 +345,7 @@ function ExtremeBandList({
             </span>
           </li>
         ))}
-      </ul>
+      </ol>
     </div>
   )
 }
