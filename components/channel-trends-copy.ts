@@ -1,3 +1,7 @@
+import {
+  axisIsDescriptor,
+  axisLowerIsBetter,
+} from "@/lib/channel-taxonomy-trends"
 import type {
   ChannelInsightKind,
   ChannelPlaybookKind,
@@ -421,7 +425,9 @@ export function taxonomyAxisCopy(key: string): AxisCopy {
 // Rim labels for the radars, where a full axis name would run into its
 // neighbours. Each one is a clipped version of the name above, never a
 // different idea, and the chart keeps the full name one hover away. Axes whose
-// name is already short enough are absent and fall back to it.
+// name is already short enough are absent and fall back to it. What a clipped
+// label costs the reader is bought back by taxonomyAxisTooltip below, which the
+// chart hangs on every rim label.
 const AXIS_SHORT_LABELS: Record<string, string> = {
   "title.curiosityGap": "Curiosity",
   "title.emotionalCharge": "Emotion",
@@ -448,6 +454,25 @@ const AXIS_SHORT_LABELS: Record<string, string> = {
 
 export function taxonomyAxisShortLabel(key: string): string {
   return AXIS_SHORT_LABELS[key] ?? taxonomyAxisCopy(key).name
+}
+
+// The hover a clipped rim label owes its reader: the full name it was cut down
+// from, then what a 10 on that axis would mean. One line, because it is a
+// tooltip and not a paragraph. Axes with no meaning written yet give the name
+// alone rather than a trailing empty sentence.
+//
+// The two qualifiers ride along because a radar reads a bigger shape as a
+// better one by default, and on these axes that is wrong: the same note the bar
+// lists print under the name is the note that stops a reader misreading the
+// chart.
+export function taxonomyAxisTooltip(key: string): string {
+  const { name, meaning } = taxonomyAxisCopy(key)
+  const qualifier = axisLowerIsBetter(key)
+    ? " (less is more)"
+    : axisIsDescriptor(key)
+      ? " (a descriptor, not a grade)"
+      : ""
+  return meaning ? `${name}. 10 = ${meaning}${qualifier}` : `${name}${qualifier}`
 }
 
 const AXIS_GROUP_LABELS: Record<string, string> = {
