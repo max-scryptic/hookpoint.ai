@@ -1,5 +1,8 @@
 import { AnalysedVideoDetail } from "@/components/analysed-video-detail"
-import { DeepAnalysisStatusProvider } from "@/components/deep-analysis-progress"
+import {
+  DeepAnalysisStatusProvider,
+  type DeepAnalysisProgressResponse,
+} from "@/components/deep-analysis-progress"
 import { SourceFileUpload } from "@/components/source-file-upload"
 import { UnlockFullReportCta } from "@/components/unlock-full-report-cta"
 import { getDeepAnalysisEvidence } from "@/lib/deep-analysis-evidence"
@@ -48,6 +51,7 @@ import {
   isStaleSourceFile,
 } from "@/lib/source-files/upload-service"
 import { getDeepAnalysisProgress } from "@/lib/retention-window-media-progress"
+import { getLatestDeepAnalysisPipelineRun } from "@/lib/deep-analysis-pipeline-runs"
 import { getStorageProvider } from "@/lib/storage/provider"
 import { serialiseSourceFile } from "@/lib/source-files/serialise"
 import {
@@ -464,15 +468,30 @@ export default async function Page({
   let deepAnalysisEvidence: Awaited<
     ReturnType<typeof getDeepAnalysisEvidence>
   > | null = null
+  // The same read handed to the client provider below, so the source-file
+  // card's "Processing…" badge is correct in the first paint rather than
+  // appearing a poll later. Mirrors what /api/videos/:id/analysis-progress
+  // returns, including the idle answer for a video with no ready file yet.
+  let initialDeepAnalysisProgress: DeepAnalysisProgressResponse | null = null
   if (result.status === "ok" && result.analysedVideoId && readySourceFile) {
     try {
       const supabase = await createClient()
-      const progress = await getDeepAnalysisProgress(
-        supabase,
-        user.id,
-        result.analysedVideoId,
-        readySourceFile,
-      )
+      const [progress, pipelineRun] = await Promise.all([
+        getDeepAnalysisProgress(
+          supabase,
+          user.id,
+          result.analysedVideoId,
+          readySourceFile,
+        ),
+        // The card's failure signal. Best-effort, exactly as the poll endpoint
+        // treats it: a run we can't read shouldn't cost us the stage snapshot.
+        getLatestDeepAnalysisPipelineRun(
+          supabase,
+          user.id,
+          result.analysedVideoId,
+        ).catch(() => null),
+      ])
+      initialDeepAnalysisProgress = { ...progress, pipelineRun }
       if (progress.complete) {
         // Only charge transcoding when the source was actually transcoded by
         // Qencode; when normalisation was skipped/disabled the original is used
@@ -491,6 +510,10 @@ export default async function Page({
     } catch (error) {
       console.error("Failed to load deep analysis evidence", error)
     }
+  } else if (result.status === "ok") {
+    // No fully-uploaded source file, so there is nothing to analyse yet — the
+    // idle reading the progress endpoint gives for exactly this case.
+    initialDeepAnalysisProgress = { active: false, complete: true, stages: null }
   }
 
   return (
@@ -529,7 +552,10 @@ export default async function Page({
           // header reads it for its "Processing…" badge while a run is in
           // flight, and the source-file card below reads it to prompt a retry
           // when the last run failed.
-          <DeepAnalysisStatusProvider videoId={videoId}>
+          <DeepAnalysisStatusProvider
+            videoId={videoId}
+            initialProgress={initialDeepAnalysisProgress}
+          >
             <AnalysedVideoDetail
               video={result.video}
               retention={result.retention}
