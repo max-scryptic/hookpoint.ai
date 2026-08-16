@@ -1,9 +1,16 @@
+"use client"
+
 import {
   taxonomyAxisCopy,
   taxonomyAxisShortLabel,
   taxonomyAxisTooltip,
 } from "@/components/channel-trends-copy"
 import { formatScore } from "@/components/channel-trends-shared"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 // The radar (spider) chart the Channel Trends page draws one taxonomy surface
 // with: every axis in a group as a spoke, and three sets of videos as three
@@ -11,11 +18,19 @@ import { formatScore } from "@/components/channel-trends-shared"
 // slowly: what shape do my best uploads have that my worst ones do not, and
 // which of the two is the odd one out against the library they came from.
 //
-// Hand-drawn SVG rather than a charting library, because the page is
-// server-rendered end to end and a static two-series shape needs no client
-// runtime to draw. It also keeps the page's rule: no colour of its own. The two
-// bands separate by weight and dash, not by hue, so the chart survives
-// greyscale, colour blindness and dark mode without a legend key to memorise.
+// Hand-drawn SVG rather than a charting library, because a static three-series
+// shape needs no charting runtime to draw. It also keeps the page's rule: no
+// colour of its own. The two bands separate by weight and dash, not by hue, so
+// the chart survives greyscale, colour blindness and dark mode without a legend
+// key to memorise.
+//
+// The shape itself is inert, but the rim labels are clipped names and have to
+// be able to say what they mean, so the file is a client component for the sake
+// of one thing: the app's own tooltip on each label. The browser's native SVG
+// <title> was tried first and is not good enough - it waits about a second,
+// renders as an OS tooltip rather than as this app, and never appears on a
+// touch device - so the labels use the same Tooltip every other explained term
+// in the product uses.
 //
 // The chart is never the only place its numbers live. Every value it draws is
 // also written out in the fold under it, so nothing here is load-bearing for a
@@ -297,37 +312,46 @@ export function TaxonomyRadar({
               ? label.x + LABEL_HIT_PADDING - hitWidth
               : label.x - hitWidth / 2
         return (
-          <g key={axis.key} className="text-muted-foreground">
-            <title>{taxonomyAxisTooltip(axis.key)}</title>
-            <rect
-              x={hitX}
-              y={label.y - hitHeight / 2}
-              width={hitWidth}
-              height={hitHeight}
-              fill="transparent"
-            />
-            <text
-              x={label.x}
-              y={label.y}
-              textAnchor={anchor}
-              fontSize={LABEL_FONT_SIZE}
-              className="fill-current"
+          <Tooltip key={axis.key}>
+            <TooltipTrigger
+              // The label brightens under the cursor and takes the help
+              // pointer, so a reader can see there is something to hover
+              // before they hover it.
+              render={
+                <g className="cursor-help text-muted-foreground transition-colors hover:text-foreground" />
+              }
             >
-              {lines.map((line, lineIndex) => (
-                <tspan
-                  key={line}
-                  x={label.x}
-                  y={
-                    label.y +
-                    (lineIndex - (lines.length - 1) / 2) * LABEL_LINE_HEIGHT
-                  }
-                  dominantBaseline="middle"
-                >
-                  {line}
-                </tspan>
-              ))}
-            </text>
-          </g>
+              <rect
+                x={hitX}
+                y={label.y - hitHeight / 2}
+                width={hitWidth}
+                height={hitHeight}
+                fill="transparent"
+              />
+              <text
+                x={label.x}
+                y={label.y}
+                textAnchor={anchor}
+                fontSize={LABEL_FONT_SIZE}
+                className="fill-current"
+              >
+                {lines.map((line, lineIndex) => (
+                  <tspan
+                    key={line}
+                    x={label.x}
+                    y={
+                      label.y +
+                      (lineIndex - (lines.length - 1) / 2) * LABEL_LINE_HEIGHT
+                    }
+                    dominantBaseline="middle"
+                  >
+                    {line}
+                  </tspan>
+                ))}
+              </text>
+            </TooltipTrigger>
+            <TooltipContent>{taxonomyAxisTooltip(axis.key)}</TooltipContent>
+          </Tooltip>
         )
       })}
     </svg>
