@@ -59,7 +59,7 @@ const SIDE_META = {
 } as const
 
 // The report's four surfaces, in the order their tabs read: the three things a
-// viewer meets (title, thumbnail, opening) and then how tightly those three
+// viewer meets (title, thumbnail, hook) and then how tightly those three
 // fit together.
 const SURFACE_TAB_ORDER: PackagingReportSurface[] = [
   "title",
@@ -74,7 +74,7 @@ const SURFACE_TAB_ORDER: PackagingReportSurface[] = [
 // about the other three rather than about a surface of its own, so none of
 // them appear here. The hook entry is only a fallback: that tab quotes the
 // whole spoken first ten seconds when the comparison carries it, and drops
-// back to the taxonomy's opening line when it does not.
+// back to the taxonomy's single stored hook line when it does not.
 const SURFACE_SPAN_KEY: Partial<Record<PackagingReportSurface, string>> = {
   hook: "hook.firstSentence",
 }
@@ -166,7 +166,7 @@ function ordinalValue(
 }
 
 // The headline number on the alignment tab: how tightly one video's title,
-// thumbnail and opening promise the same thing, scored on that video alone at
+// thumbnail and hook promise the same thing, scored on that video alone at
 // analysis time and scaled to 0-10 by the diff.
 const ALIGNMENT_SCORE_KEY = "overall.alignment"
 
@@ -190,7 +190,7 @@ const ALIGNMENT_PART_AXES: Array<{ key: string; label: string }> = [
 // its real thumbnail, or its alignment numbers, tinted and ruled off so they
 // read as that video's own material rather than as more of the report. Every
 // surface tab uses it, so the thumbnail pair is framed the same way the title
-// and the opening are. Shared with a single video's packaging card, which
+// and the hook are. Shared with a single video's packaging card, which
 // frames its own alignment block identically. The written read below the
 // columns is plain foreground text now, matching the detail line on that card,
 // so this panel is what sets the material apart without dimming the words
@@ -281,7 +281,7 @@ function SurfaceEvidence({
 
   if (surface === "hook") {
     // The hook IS the first ten seconds, so quote all of it. The taxonomy's
-    // single opening line only stands in for a video whose transcript never
+    // single stored hook line only stands in for a video whose transcript never
     // reached the comparison, and says so when it does.
     const transcript = (video.hookTranscript ?? "").trim()
     const firstSentence = spanText(comparison, SURFACE_SPAN_KEY.hook ?? "", side)
@@ -289,7 +289,7 @@ function SurfaceEvidence({
     if (text.length === 0) {
       return (
         <p className="text-sm text-muted-foreground">
-          No opening captured for this video.
+          No hook captured for this video.
         </p>
       )
     }
@@ -300,7 +300,7 @@ function SurfaceEvidence({
         </EvidenceQuote>
         {transcript.length === 0 && (
           <p className="text-xs text-muted-foreground">
-            Opening line only; no transcript is stored for this video&apos;s
+            Hook line only; no transcript is stored for this video&apos;s
             first 10 seconds.
           </p>
         )}
@@ -520,7 +520,7 @@ export function PackagingComparison({
         </div>
         <p className="mt-0.5 text-xs text-muted-foreground">
           Why one of these earned the click and the other did not: a written
-          read of both thumbnails, both titles and both openings. Observations
+          read of both thumbnails, both titles and both hooks. Observations
           are correlation, not proof.
         </p>
       </div>

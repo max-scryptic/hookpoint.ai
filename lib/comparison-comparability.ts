@@ -648,7 +648,7 @@ export const COMPARABILITY_RULES: readonly string[] = [
 
   // 9. Within-video evidence is still fair game, and saying so keeps the
   //    reports from throwing away the good half of their evidence.
-  "One thing this limit never touches: how a single video behaved against itself. Where a video loses its own audience, which of its own stretches held and which shed viewers, and how its opening did against the rest of it are all measured inside that one video, so they stay usable in full, in every mode, and they are the strongest evidence available for a pair with no performance anchor.",
+  "One thing this limit never touches: how a single video behaved against itself. Where a video loses its own audience, which of its own stretches held and which shed viewers, and how its hook did against the rest of it are all measured inside that one video, so they stay usable in full, in every mode, and they are the strongest evidence available for a pair with no performance anchor.",
 ]
 
 /**

@@ -363,7 +363,7 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
             }
             packaging={
               hasPackaging ? (
-                <TrendsPanel description="What your packaging promises, surface by surface: your openings, your titles, your thumbnails, and how tightly the three of them agree.">
+                <TrendsPanel description="What your packaging promises, surface by surface: your hooks, your titles, your thumbnails, and how tightly the three of them agree.">
                   <PackagingPanel data={data} />
                 </TrendsPanel>
               ) : undefined

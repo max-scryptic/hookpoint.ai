@@ -178,7 +178,7 @@ export default async function AdminUserComparisonDetailPage({
           ) : (
             <MissingReportCard>
               No packaging read is stored for these two videos. It is written
-              from both thumbnails, titles and openings when the comparison is
+              from both thumbnails, titles and hooks when the comparison is
               generated, so this pair either predates that report or its
               generation failed.
             </MissingReportCard>

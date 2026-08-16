@@ -155,9 +155,9 @@ function AverageAlignmentCard({
 export type PackagingSurface = "hook" | "title" | "thumbnail" | "alignment"
 
 interface SurfaceConfig {
-  // The taxonomy axis group this surface is scored on. The opening's axes are
-  // grouped as "opening" in the taxonomy and called the hook everywhere a
-  // creator meets them, which is what the tab is named.
+  // The taxonomy axis group this surface is scored on. The hook's axes are
+  // still keyed as "opening" in the taxonomy, but the hook is called the hook
+  // everywhere a creator meets it, which is what the tab is named.
   group: PackagingAxisGroup
   // The prefixes of the flat feature flags that belong to it. A v1 packaging
   // read carries no axes, so these flags are all an early library has.
@@ -192,12 +192,12 @@ const SURFACE_CONFIG: Record<PackagingSurface, SurfaceConfig> = {
   hook: {
     group: "opening",
     featurePrefixes: ["hook"],
-    extremesTitle: "Your best and worst openings, side by side",
-    extremesDescription: `The opening axes, ${EXTREMES_DESCRIPTION_TAIL}`,
+    extremesTitle: "Your best and worst hooks, side by side",
+    extremesDescription: `The hook axes, ${EXTREMES_DESCRIPTION_TAIL}`,
     extremesEmptyNote:
-      "Your best and worst uploads open alike on every axis so far. When the two ends of your library start opening differently, the gap lands here.",
-    featuresTitle: "What your high-reach openings do differently",
-    featuresDescription: `How quickly the opening reaches the promise in the half of your library that travels furthest, against the half that does not. ${FEATURES_DESCRIPTION_TAIL}`,
+      "Your best and worst uploads hook alike on every axis so far. When the two ends of your library start writing different hooks, the gap lands here.",
+    featuresTitle: "What your high-reach hooks do differently",
+    featuresDescription: `How quickly the hook reaches the promise in the half of your library that travels furthest, against the half that does not. ${FEATURES_DESCRIPTION_TAIL}`,
   },
   title: {
     group: "title",

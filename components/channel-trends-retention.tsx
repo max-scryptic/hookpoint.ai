@@ -71,7 +71,7 @@ const INSIGHT_KIND_META = {
   },
   hook: {
     label: "Your hook pattern",
-    actionTitle: "Study your openings",
+    actionTitle: "Study your hooks",
     Icon: HookIcon,
   },
 } as const
@@ -453,7 +453,7 @@ function FullBreakdown({ data }: { data: ChannelTrendsData }) {
       value: "hooks",
       label: "Hook patterns",
       description:
-        "What your openings have in common when viewers stay or slip away.",
+        "What your hooks have in common when viewers stay or slip away.",
       kind: data.hooks,
     },
   ].filter(
