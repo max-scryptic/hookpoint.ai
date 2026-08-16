@@ -183,7 +183,7 @@ const EXTREMES_TOP_LABEL = "top 3 by reach"
 const EXTREMES_BOTTOM_LABEL = "bottom 3 by reach"
 
 const EXTREMES_DESCRIPTION_TAIL =
-  "scored on the three uploads that reached furthest, the three that reached least, and your whole library as a baseline. Where the solid shape sits outside the dashed one, your winners pushed harder on that axis, and the dotted line says whether that is unusual for you."
+  "scored on the three uploads that reached furthest, the three that reached least, and your whole library as a baseline."
 
 const FEATURES_DESCRIPTION_TAIL =
   "Correlation, not proof: reach is also topic, timing and who YouTube showed it to."
