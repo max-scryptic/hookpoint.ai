@@ -449,7 +449,7 @@ function ExtremeAxisRows({
 
 // The best few uploads against the worst few against the library they came
 // from, one shape per surface. The same three sets are drawn on every chart, so
-// a reader compares them across title, thumbnail and opening in one pass, and
+// a reader compares them across title, thumbnail and hook in one pass, and
 // the library baseline is what stops a band being called unusual when the whole
 // channel scores that way.
 export function ExtremesRadarCard({

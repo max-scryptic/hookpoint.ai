@@ -2,7 +2,7 @@ import type { ReactNode } from "react"
 
 import { cn } from "@/lib/utils"
 
-// The alignment readout: how tightly one video's title, thumbnail and opening
+// The alignment readout: how tightly one video's title, thumbnail and hook
 // promise the same thing, drawn as a headline score, the bar behind it and the
 // two links the score is made of. Every number here was scored on a video alone
 // at analysis time (lib/packaging-taxonomy.ts), so nothing in this file is
@@ -19,14 +19,14 @@ import { cn } from "@/lib/utils"
 
 // What the headline number means, in one line, wherever it is shown.
 export const ALIGNMENT_SCORE_CAPTION =
-  "How tightly the title, thumbnail and opening promise one thing."
+  "How tightly the title, thumbnail and hook promise one thing."
 
 // The two links the headline score is made of. Both come off the enriched
 // taxonomy, so a video analysed before that existed shows the headline score
 // alone.
 export const ALIGNMENT_PART_LABEL = {
   titleThumbnailMatch: "Title and thumbnail match",
-  hookDeliversPromise: "Opening delivers the promise",
+  hookDeliversPromise: "Hook delivers the promise",
 } as const
 
 // The bar colour when the caller has no side of its own to tint it with. The

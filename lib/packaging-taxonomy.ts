@@ -29,7 +29,7 @@ import {
 } from "@/lib/youtube/youtube"
 
 // Mirrors the alignment's hook window: packaging is judged on what the
-// opening communicates, not on retention behaviour.
+// hook communicates, not on retention behaviour.
 const HOOK_WINDOW_SECONDS = 30
 
 // Bumped whenever `detail`'s shape changes. A stored taxonomy whose version is
@@ -77,7 +77,7 @@ export const PROMISE_TYPES = [
 export type PromiseType = (typeof PROMISE_TYPES)[number]
 
 export const HOOK_DELIVERIES = ["direct", "delayed", "absent"] as const
-// Whether the spoken opening picks up the promise the title and thumbnail
+// Whether the spoken hook picks up the promise the title and thumbnail
 // made: immediately, eventually within the hook window, or not at all.
 export type HookDelivery = (typeof HOOK_DELIVERIES)[number]
 
@@ -167,7 +167,7 @@ export type PackagingArchetype = (typeof PACKAGING_ARCHETYPES)[number]
 
 // Per-surface enriched read. Every ordinal is an integer 0-10 scored on the
 // video in isolation; every span is a short verbatim quote from the real
-// title / thumbnail text / opening line (or "" when there is nothing to
+// title / thumbnail text / hook line (or "" when there is nothing to
 // quote). Comparison is a pure diff over these (lib/packaging-comparison.ts).
 export interface PackagingTitleDetail {
   // 0 = abstract and generic; 10 = names concrete numbers, people, stakes.
@@ -219,7 +219,7 @@ export interface PackagingHookDetail {
   // 0 = never reaches the title's promise inside the window; 10 = delivers it
   // in the first breath.
   payoffSpeed: number
-  // 0 = the opening ignores the title's promise; 10 = it restates it head-on.
+  // 0 = the hook ignores the title's promise; 10 = it restates it head-on.
   restatesPromise: number
   // 0 = no tension set up; 10 = vivid stakes established immediately.
   stakesEstablished: number
@@ -229,7 +229,7 @@ export interface PackagingHookDetail {
   specificity: number
   // "hey guys, welcome back, before we start..." style throat-clearing.
   genericFiller: boolean
-  // The literal opening line; "" when the hook transcript is empty.
+  // The hook's literal first line; "" when the hook transcript is empty.
   firstSentence: string
 }
 
@@ -237,7 +237,7 @@ export interface PackagingCrossDetail {
   // 0 = title and thumbnail promise unrelated things; 10 = they promise the
   // same one thing.
   titleThumbnailMatch: number
-  // 0 = the opening never cashes the title's promise; 10 = it delivers it fully.
+  // 0 = the hook never cashes the title's promise; 10 = it delivers it fully.
   hookDeliversPromise: number
   // The single promise all three surfaces make; "" when they do not agree.
   singleClearPromise: string
@@ -721,14 +721,14 @@ export async function generatePackagingTaxonomy(
                 "titleStyles: the one or two styles the title leans on, dominant first. curiosity_gap withholds the payoff; how_to promises instruction; number_list leads with a count; question is phrased as one; negative_warning warns or leads with a mistake; result_claim states a concrete achieved result; challenge frames a constraint or dare; personal_story signals a first-person narrative; direct_label plainly names the content.",
                 "thumbnailHasFace: whether a human face is clearly visible. thumbnailEmotion: the dominant facial expression, or \"none\" when there is no face. thumbnailTextWordCount: count the words of overlaid text readable on the thumbnail image itself (0 when it carries none).",
                 "promiseType: the single promise the title and thumbnail together make to the viewer, choosing the closest fit.",
-                "hookDelivery: whether the spoken hook picks up that promise: direct when the opening words immediately address it, delayed when it arrives later within the hook, absent when the hook never touches it (or there is no transcript).",
+                "hookDelivery: whether the spoken hook picks up that promise: direct when the hook's first words immediately address it, delayed when it arrives later within the hook, absent when the hook never touches it (or there is no transcript).",
                 "alignmentScore: 0 to 1, how tightly title, thumbnail and hook communicate one consistent promise (1.0 = all three say the same thing; 0.0 = they promise unrelated things).",
                 "topics: 1 to 3 short lowercase content tags naming what the video is about (e.g. \"gear reviews\", \"video editing\", \"productivity\"). Prefer stable, reusable nouns a channel would repeat across uploads over one-off phrases.",
                 "Then fill the `detail` object. Score every 0-10 field on THIS video alone, never in comparison to any other video, and never think about how many views it got. Anchor the scale: 0 means the quality is absent, 5 means it is moderately present, 10 means it is as strong as this element could plausibly be. Be willing to use the full range and to give low scores; most videos are not 8s.",
                 "detail.title: specificity (0 abstract and generic, 10 names concrete numbers, people or stakes); curiosityGap (0 tells everything, 10 withholds the payoff and opens a loop); emotionalCharge (0 flat, 10 intense pull) and emotionalValence (the dominant feeling: fear, desire, shock, anger, curiosity, or neutral); stakes (0 nothing on the line, 10 high vivid stakes); personalFraming (first_person_confession like 'I did X', second_person_command like 'STOP doing X', third_person_story, or impersonal); relatability (0 no viewer sees themselves, 10 a target viewer clearly does); novelty (0 familiar and well-worn, 10 contrarian or pattern-breaking); clarity (0 you cannot tell what you'll get, 10 the payoff is unmistakable); targetIdentity (who it is for in the title's own words, or \"\"); concreteAnchors (the literal specific tokens that carry the specificity: numbers, ages, names, dollar amounts, distinctive nouns; empty when none); powerDevices (mechanics literally present: number, negativity, all_caps, taboo, superlative, question; report [\"none\"] when there are none); characterLength (the title's length in characters).",
                 "detail.thumbnail: faceProminence (0 no or tiny face, 10 a face filling the frame); eyeContact (is the subject looking at the viewer); emotionIntensity (0 neutral, 10 extreme expression); sceneType (talking_head_indoor, outdoor, screen_or_charts, graphic, b_roll, other); mood (serious, celebratory, alarming, casual, mysterious, other); colorContrast (0 flat and muddy, 10 high-contrast and thumbstopping); visualComplexity (0 clean single-subject, 10 busy and crowded; this is a descriptor, neither end is better); textVerbatim (the overlaid words read off the image, or \"\"); impliedPromise (what the image alone would lead a viewer to expect, before the title).",
-                "detail.hook: openingType (cold_open_story, bold_claim, question, context_setup, meta_intro); payoffSpeed (0 the opening never reaches the title's promise inside the window, 10 it delivers it in the first breath); restatesPromise (0 the opening ignores the title's promise, 10 it restates it head-on); stakesEstablished (0 no tension set up, 10 vivid stakes immediately); personalDisclosure (0 impersonal, 10 candid first-person disclosure); specificity (0 vague setup, 10 concrete detail up front); genericFiller (true if it opens with throat-clearing like 'hey guys welcome back, before we start'); firstSentence (the literal opening line, or \"\" when there is no transcript).",
-                "detail.cross: titleThumbnailMatch (0 title and thumbnail promise unrelated things, 10 they promise the same one thing); hookDeliversPromise (0 the opening never cashes the title's promise, 10 it delivers it fully); singleClearPromise (the one promise all three surfaces make, or \"\" when they do not agree); contradiction (true when two surfaces actively fight, e.g. a warning title over a celebratory thumbnail) and contradictionNote (what contradicts, or \"\").",
+                "detail.hook: openingType (cold_open_story, bold_claim, question, context_setup, meta_intro); payoffSpeed (0 the hook never reaches the title's promise inside the window, 10 it delivers it in the first breath); restatesPromise (0 the hook ignores the title's promise, 10 it restates it head-on); stakesEstablished (0 no tension set up, 10 vivid stakes immediately); personalDisclosure (0 impersonal, 10 candid first-person disclosure); specificity (0 vague setup, 10 concrete detail up front); genericFiller (true if it opens with throat-clearing like 'hey guys welcome back, before we start'); firstSentence (the hook's literal first line, or \"\" when there is no transcript).",
+                "detail.cross: titleThumbnailMatch (0 title and thumbnail promise unrelated things, 10 they promise the same one thing); hookDeliversPromise (0 the hook never cashes the title's promise, 10 it delivers it fully); singleClearPromise (the one promise all three surfaces make, or \"\" when they do not agree); contradiction (true when two surfaces actively fight, e.g. a warning title over a celebratory thumbnail) and contradictionNote (what contradicts, or \"\").",
                 "detail.drivers: clickDrivers (1 to 4 of curiosity, specificity, emotion, identity, authority, novelty, controversy that are doing the pulling, dominant first); primaryDriver (the single dominant one); archetype (personal_stakes_confession, warning, tutorial, listicle, hype, story, opinion, other); trendRelevance (0 the topic is evergreen and timeless, owing nothing to the moment; 10 the topic is clearly riding a current trend, meme, news cycle or seasonal wave, so some of the pull is timeliness rather than the packaging; judge only the topic's tie to a current wave, not how good the video is, and when unsure lean lower); trendRelevanceConfidence (0 to 10, how sure you are of that trendRelevance score; you have no way to know when this video was published or what is trending now, so judge trends only from your own memory and report low confidence, roughly 0 to 3, whenever the topic could be timeless or its wave uncertain, reserving high confidence for topics that are unmistakably tied to a specific moment).",
                 "If the hook transcript is empty, score the hook and cross fields from the title and thumbnail alone rather than inventing what was said.",
               ].join(" "),

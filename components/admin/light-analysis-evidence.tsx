@@ -397,7 +397,7 @@ const THUMBNAIL_FIELDS: DetailField[] = [
 ]
 
 const HOOK_FIELDS: DetailField[] = [
-  { key: "openingType", label: "Opening type", kind: "label" },
+  { key: "openingType", label: "Hook type", kind: "label" },
   { key: "payoffSpeed", label: "Payoff speed", kind: "score" },
   { key: "restatesPromise", label: "Restates promise", kind: "score" },
   { key: "stakesEstablished", label: "Stakes established", kind: "score" },

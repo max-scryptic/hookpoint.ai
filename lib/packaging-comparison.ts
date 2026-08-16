@@ -51,7 +51,7 @@ export type ComparisonSurface =
 export const SURFACE_LABEL: Record<ComparisonSurface, string> = {
   title: "Title",
   thumbnail: "Thumbnail",
-  hook: "Opening / hook",
+  hook: "Hook",
   cross: "Cross-surface",
   drivers: "What pulls the click",
   overall: "Overall",
@@ -69,7 +69,7 @@ export interface PackagingComparisonSide {
   views: number | null
   // Everything spoken in the first ten seconds, verbatim, cut out of the
   // video's stored transcript. This is the hook itself, so the report's hook
-  // surface quotes it in full rather than the taxonomy's single opening line.
+  // surface quotes it in full rather than the taxonomy's single hook line.
   // Null when the video has no transcript, or none of it lands in the window.
   hookTranscript: string | null
   // The written read of this video's own packaging, generated per video in the
@@ -317,7 +317,7 @@ const ORDINAL_AXES: OrdinalDescriptor[] = [
   },
   {
     key: "hook.specificity",
-    label: "Opening specificity",
+    label: "Hook specificity",
     surface: "hook",
     direction: "higher",
     get: (t) => t.detail?.hook.specificity ?? null,
@@ -413,7 +413,7 @@ const CATEGORICAL_AXES: CategoricalDescriptor[] = [
   },
   {
     key: "hook.openingType",
-    label: "Opening type",
+    label: "Hook type",
     surface: "hook",
     get: (t) => (t.detail ? [t.detail.hook.openingType] : null),
   },
@@ -467,7 +467,7 @@ const FLAG_AXES: FlagDescriptor[] = [
   },
   {
     key: "hook.genericFiller",
-    label: "Generic filler opening",
+    label: "Generic filler hook",
     surface: "hook",
     get: (t) => t.detail?.hook.genericFiller ?? null,
     goodValue: false,
@@ -521,7 +521,7 @@ const SPAN_AXES: SpanDescriptor[] = [
   },
   {
     key: "hook.firstSentence",
-    label: "Opening line",
+    label: "Hook line",
     surface: "hook",
     get: (t) => t.detail?.hook.firstSentence ?? null,
   },

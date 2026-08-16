@@ -108,35 +108,35 @@ const STRENGTH_COPY: Record<RetentionWindowEventType, InsightCopy> = {
 // Hook windows carry no drop/gain polarity, so hook headlines describe the
 // habit and the action points at the evidence instead of prescribing.
 const HOOK_ACTION =
-  "Open the events below and compare them against each video's hook window - repeat what your strongest openings did in the first fifteen seconds."
+  "Open the events below and compare them against each video's hook window - repeat what your strongest hooks did in the first fifteen seconds."
 
 const HOOK_COPY: Record<RetentionWindowEventType, InsightCopy> = {
   pacing_change: {
-    headline: "Your openings live and die by pace.",
+    headline: "Your hooks live and die by pace.",
     action: HOOK_ACTION,
   },
   scene_cut: {
-    headline: "Fast cutting defines your openings.",
+    headline: "Fast cutting defines your hooks.",
     action: HOOK_ACTION,
   },
   topic_shift: {
-    headline: "Your openings move through ideas quickly.",
+    headline: "Your hooks move through ideas quickly.",
     action: HOOK_ACTION,
   },
   visual_change: {
-    headline: "Your openings lean on visual variety.",
+    headline: "Your hooks lean on visual variety.",
     action: HOOK_ACTION,
   },
   audio_change: {
-    headline: "Sound sets up your openings.",
+    headline: "Sound sets up your hooks.",
     action: HOOK_ACTION,
   },
   on_screen_text_change: {
-    headline: "Text overlays carry your openings.",
+    headline: "Text overlays carry your hooks.",
     action: HOOK_ACTION,
   },
   other: {
-    headline: "Your openings share a recurring pattern.",
+    headline: "Your hooks share a recurring pattern.",
     action: HOOK_ACTION,
   },
 }
@@ -326,30 +326,30 @@ const AXIS_COPY: Record<string, AxisCopy> = {
   },
   "hook.payoffSpeed": {
     name: "Payoff speed",
-    meaning: "the opening delivers the title's promise in the first breath",
+    meaning: "the hook delivers the title's promise in the first breath",
   },
   "hook.restatesPromise": {
     name: "Restates the promise",
-    meaning: "the opening says the title's promise back, head-on",
+    meaning: "the hook says the title's promise back, head-on",
   },
   "hook.stakesEstablished": {
     name: "Stakes established",
     meaning: "vivid tension is set up immediately",
   },
   "hook.specificity": {
-    name: "Opening specificity",
+    name: "Hook specificity",
     meaning: "concrete detail up front rather than a vague setup",
   },
   "hook.personalDisclosure": {
     name: "Personal disclosure",
-    meaning: "candid first-person opening rather than an impersonal one",
+    meaning: "a candid first-person hook rather than an impersonal one",
   },
   "cross.titleThumbnailMatch": {
     name: "Title and thumbnail match",
     meaning: "both promise the same one thing",
   },
   "cross.hookDeliversPromise": {
-    name: "Opening delivers the promise",
+    name: "Hook delivers the promise",
     meaning: "the first words cash what the packaging sold",
   },
   "substance.substanceDensity": {
@@ -441,7 +441,7 @@ const AXIS_SHORT_LABELS: Record<string, string> = {
   "hook.specificity": "Specificity",
   "hook.personalDisclosure": "Personal",
   "cross.titleThumbnailMatch": "Title/thumb",
-  "cross.hookDeliversPromise": "Opening",
+  "cross.hookDeliversPromise": "Hook",
   "substance.substanceDensity": "Substance",
   "substance.noveltyOfIdeas": "Novelty",
   "substance.educationalValue": "Educational",
@@ -478,7 +478,7 @@ export function taxonomyAxisTooltip(key: string): string {
 const AXIS_GROUP_LABELS: Record<string, string> = {
   title: "Title",
   thumbnail: "Thumbnail",
-  opening: "Opening",
+  opening: "Hook",
   alignment: "Alignment",
   substance: "Substance",
   structure: "Structure",

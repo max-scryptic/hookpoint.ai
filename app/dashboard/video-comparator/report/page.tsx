@@ -257,7 +257,7 @@ function PackagingComparisonSection({
   return (
     <MissingReportCard>
       No packaging read is stored for these two videos. It is written from both
-      thumbnails, titles and openings when the comparison is generated, so
+      thumbnails, titles and hooks when the comparison is generated, so
       re-open this pair from the Video Comparator to fill it in. Re-opening a
       pair you have already paid for is free.
     </MissingReportCard>
