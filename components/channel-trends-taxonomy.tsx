@@ -8,6 +8,7 @@ import {
   taxonomyDimensionLabel,
 } from "@/components/channel-trends-copy"
 import {
+  RadarHighlightGroup,
   RadarLegend,
   TaxonomyRadar,
 } from "@/components/channel-trends-radar"
@@ -532,48 +533,52 @@ export function ExtremesRadarCard({
         />
       )}
 
+      {/* The key and the charts it speaks for are one group, so pointing at a
+          band in the key pulls that band to the front of every chart below it.
+          The group draws no element of its own, so the two stay siblings in the
+          card's own column. */}
       {drawable.length > 0 && (
-        <RadarLegend
-          topLabel={topLabel}
-          bottomLabel={bottomLabel}
-          libraryLabel={libraryLabel}
-        />
-      )}
+        <RadarHighlightGroup>
+          <RadarLegend
+            topLabel={topLabel}
+            bottomLabel={bottomLabel}
+            libraryLabel={libraryLabel}
+          />
 
-      {drawable.length > 0 && (
-        <div
-          className={
-            showGroupLabels
-              ? "grid gap-4 sm:grid-cols-2"
-              // A single chart is centred under its own heading and capped, so
-              // it never stretches to the full width of a desktop card. The cap
-              // is what sets how big the shape draws: the chart scales to the
-              // width it is given, so widening this widens the spider.
-              : "mx-auto w-full max-w-md"
-          }
-        >
-          {drawable.map((entry) => (
-            <div key={entry.group} className="flex flex-col gap-1">
-              {showGroupLabels && (
-                <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                  {taxonomyAxisGroupLabel(entry.group)}
-                </span>
-              )}
-              <TaxonomyRadar
-                axes={entry.axes.map((axis) => ({
-                  key: axis.key,
-                  topValue: axis.topMean,
-                  bottomValue: axis.bottomMean,
-                  libraryValue: axis.libraryMean,
-                }))}
-                topLabel={topLabel}
-                bottomLabel={bottomLabel}
-                libraryLabel={libraryLabel}
-                groupLabel={taxonomyAxisGroupLabel(entry.group)}
-              />
-            </div>
-          ))}
-        </div>
+          <div
+            className={
+              showGroupLabels
+                ? "grid gap-4 sm:grid-cols-2"
+                // A single chart is centred under its own heading and capped, so
+                // it never stretches to the full width of a desktop card. The
+                // cap is what sets how big the shape draws: the chart scales to
+                // the width it is given, so widening this widens the spider.
+                : "mx-auto w-full max-w-md"
+            }
+          >
+            {drawable.map((entry) => (
+              <div key={entry.group} className="flex flex-col gap-1">
+                {showGroupLabels && (
+                  <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                    {taxonomyAxisGroupLabel(entry.group)}
+                  </span>
+                )}
+                <TaxonomyRadar
+                  axes={entry.axes.map((axis) => ({
+                    key: axis.key,
+                    topValue: axis.topMean,
+                    bottomValue: axis.bottomMean,
+                    libraryValue: axis.libraryMean,
+                  }))}
+                  topLabel={topLabel}
+                  bottomLabel={bottomLabel}
+                  libraryLabel={libraryLabel}
+                  groupLabel={taxonomyAxisGroupLabel(entry.group)}
+                />
+              </div>
+            ))}
+          </div>
+        </RadarHighlightGroup>
       )}
 
       {/* Two axes cannot enclose a shape, so a group that small (the alignment
