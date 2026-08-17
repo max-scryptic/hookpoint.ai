@@ -1,7 +1,4 @@
-import {
-  axisIsDescriptor,
-  axisLowerIsBetter,
-} from "@/lib/channel-taxonomy-trends"
+import { axisLowerIsBetter } from "@/lib/channel-taxonomy-trends"
 import type {
   ChannelInsightKind,
   ChannelPlaybookKind,
@@ -461,17 +458,13 @@ export function taxonomyAxisShortLabel(key: string): string {
 // tooltip and not a paragraph. Axes with no meaning written yet give the name
 // alone rather than a trailing empty sentence.
 //
-// The two qualifiers ride along because a radar reads a bigger shape as a
-// better one by default, and on these axes that is wrong: the same note the bar
-// lists print under the name is the note that stops a reader misreading the
+// The qualifier rides along because a radar reads a bigger shape as a better
+// one by default, and on a less-is-more axis that is wrong: the same note the
+// bar lists print under the name is the note that stops a reader misreading the
 // chart.
 export function taxonomyAxisTooltip(key: string): string {
   const { name, meaning } = taxonomyAxisCopy(key)
-  const qualifier = axisLowerIsBetter(key)
-    ? " (less is more)"
-    : axisIsDescriptor(key)
-      ? " (a descriptor, not a grade)"
-      : ""
+  const qualifier = axisLowerIsBetter(key) ? " (less is more)" : ""
   return meaning ? `${name}. 10 = ${meaning}${qualifier}` : `${name}${qualifier}`
 }
 
