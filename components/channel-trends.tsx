@@ -322,7 +322,7 @@ function TrendsPanel({
   return (
     <section className="flex flex-col gap-3">
       {description && (
-        <p className="max-w-3xl text-sm text-muted-foreground">{description}</p>
+        <p className="text-sm text-muted-foreground">{description}</p>
       )}
       {children}
     </section>
