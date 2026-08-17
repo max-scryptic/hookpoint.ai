@@ -509,20 +509,12 @@ export function PackagingComparison({
 }) {
   // A section rather than a card, so the summary box and the per-surface panels
   // are the cards here, the same way the Packaging section of a single video's
-  // report is laid out. The retention tab beside this one already stacks bare
-  // cards on the page, so nothing here is nested in a card of its own.
+  // report is laid out. Nothing here is nested in a card of its own.
   return (
     <section className="flex flex-col gap-3">
-      <div>
-        <div className="flex items-center gap-1.5">
-          <LayersIcon className="size-4 text-muted-foreground" />
-          <h2 className="text-sm font-medium">Packaging head-to-head</h2>
-        </div>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          Why one of these earned the click and the other did not: a written
-          read of both thumbnails, both titles and both hooks. Observations
-          are correlation, not proof.
-        </p>
+      <div className="flex items-center gap-1.5">
+        <LayersIcon className="size-4 text-muted-foreground" />
+        <h2 className="text-sm font-medium">Packaging head-to-head</h2>
       </div>
 
       {report ? (

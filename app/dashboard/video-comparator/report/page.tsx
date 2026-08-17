@@ -4,11 +4,7 @@ import { ArrowLeftIcon, LockIcon } from "lucide-react"
 
 import { PackagingComparison } from "@/components/packaging-comparison"
 import { ScriptComparison } from "@/components/script-comparison"
-import { RetentionHeadToHead } from "@/components/retention-head-to-head"
-import {
-  RetentionCurvesCard,
-  RetentionComparisonVideos,
-} from "@/components/retention-comparison"
+import { RetentionComparisonVideos } from "@/components/retention-comparison"
 import { VideoComparisonTabs } from "@/components/video-comparison-tabs"
 import { buttonVariants } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -20,7 +16,6 @@ import {
   type PackagingComparison as PackagingComparisonData,
 } from "@/lib/packaging-comparison"
 import type { PackagingComparisonReport } from "@/lib/packaging-comparison-report"
-import type { RetentionComparisonReport } from "@/lib/retention-comparison-report"
 import type { ScriptComparisonReport } from "@/lib/script-comparison-report"
 import {
   getRetentionComparison,
@@ -72,7 +67,6 @@ type ActiveComparison = {
   packaging: PackagingComparisonData | null
   packagingReport: PackagingComparisonReport | null
   scriptReport: ScriptComparisonReport | null
-  retentionReport: RetentionComparisonReport | null
 }
 
 type ReportResult =
@@ -131,11 +125,13 @@ async function loadActiveComparison(
     analysedVideoIds: [sideA, sideB],
   })
 
-  // Every read here is a stored read: the three written head-to-heads come back
-  // as JSON from the comparison row, and the packaging and retention diffs are
-  // derived from each video's stored analysis. The script tab is the written
-  // report alone, so nothing is derived for it. Packaging is best-effort, since
-  // a failure or gap in it must never cost the user the retention comparison.
+  // Every read here is a stored read: the written head-to-heads come back as
+  // JSON from the comparison row, and the packaging diff is derived from each
+  // video's stored analysis. The script tab is the written report alone, so
+  // nothing is derived for it. The retention comparison is still loaded because
+  // the video cards above the tabs and the page heading are built from it, but
+  // it no longer has a tab of its own. Packaging is best-effort, since a failure
+  // or gap in it must never cost the user the rest of the report.
   const [data, packaging, reports] = await Promise.all([
     getRetentionComparison(supabase, userId, sideA, sideB),
     getPackagingComparison(supabase, userId, sideA, sideB).catch((error) => {
@@ -156,7 +152,6 @@ async function loadActiveComparison(
     packaging,
     packagingReport: reports.packaging,
     scriptReport: reports.script,
-    retentionReport: reports.retention,
   }
 }
 
@@ -206,38 +201,6 @@ function ScriptComparisonSection({
       pair from the Video Comparator to fill it in. Re-opening a pair you have
       already paid for is free.
     </MissingReportCard>
-  )
-}
-
-// The Retention tab body: the written head-to-head, rendered straight from what
-// is stored, with the overlaid curves stacked between its summary and its tabs.
-// Nothing is generated here. The curve card is derived on every open, so a pair
-// with no stored read still gets the chart, under a note where the writing would
-// be.
-function RetentionSection({
-  data,
-  report,
-}: {
-  data: RetentionComparisonData
-  report: RetentionComparisonReport | null
-}) {
-  const chart = <RetentionCurvesCard data={data} />
-  if (report) {
-    return <RetentionHeadToHead report={report} chart={chart} />
-  }
-
-  return (
-    <div className="flex flex-col gap-4">
-      <MissingReportCard>
-        No written retention read is stored for these two videos. It is written
-        from both curves, both videos&apos; notable stretches and what was said
-        where the curves separated, when the comparison is generated, so re-open
-        this pair from the Video Comparator to fill it in. Re-opening a pair you
-        have already paid for is free. The curve below is derived on every open,
-        so it is up to date either way.
-      </MissingReportCard>
-      {chart}
-    </div>
   )
 }
 
@@ -357,8 +320,8 @@ export default async function Page({
               : "Comparison Report"}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Where these two videos&apos; retention curves diverge, how their
-            hooks compare, and the evidence behind each stretch.
+            How these two videos&apos; packaging compares, and what each script
+            does differently.
           </p>
         </div>
 
@@ -366,12 +329,6 @@ export default async function Page({
           <>
             <RetentionComparisonVideos data={result.active.data} />
             <VideoComparisonTabs
-              retention={
-                <RetentionSection
-                  data={result.active.data}
-                  report={result.active.retentionReport}
-                />
-              }
               packaging={
                 <PackagingComparisonSection
                   packaging={result.active.packaging}
