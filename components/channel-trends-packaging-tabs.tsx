@@ -6,7 +6,7 @@ import { AlignHorizontalJustifyCenterIcon, ImageIcon, TypeIcon } from "lucide-re
 import { HookIcon } from "@/components/hook-icon"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
-// The Hook / Title / Thumbnail / Alignment strip inside the Packaging tab. The
+// The Title / Thumbnail / Hook / Alignment strip inside the Packaging tab. The
 // page is a server component and these bodies are server-rendered, so they
 // arrive as props and this thin client wrapper only owns the tab state, exactly
 // as the outer tab bar does (components/channel-trends-tabs.tsx).
@@ -34,9 +34,9 @@ export function PackagingSurfaceTabs({
   alignment?: ReactNode
 }) {
   const tabs = [
-    { value: "hook", label: "Hook", Icon: HookIcon, body: hook },
     { value: "title", label: "Title", Icon: TypeIcon, body: title },
     { value: "thumbnail", label: "Thumbnail", Icon: ImageIcon, body: thumbnail },
+    { value: "hook", label: "Hook", Icon: HookIcon, body: hook },
     {
       value: "alignment",
       label: "Alignment",

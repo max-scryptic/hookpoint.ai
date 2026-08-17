@@ -152,7 +152,7 @@ function AverageAlignmentCard({
 
 // --- The four surfaces -------------------------------------------------------
 
-export type PackagingSurface = "hook" | "title" | "thumbnail" | "alignment"
+export type PackagingSurface = "title" | "thumbnail" | "hook" | "alignment"
 
 interface SurfaceConfig {
   // The taxonomy axis group this surface is scored on. The hook's axes are
@@ -169,10 +169,15 @@ interface SurfaceConfig {
   featuresDescription: string
 }
 
+// The tabs read in the order a viewer meets the three surfaces (title,
+// thumbnail, hook), with alignment last because it is about the other three
+// rather than a surface of its own. Same order as the packaging head-to-head
+// (components/packaging-comparison.tsx) and a single video's report
+// (components/analysed-video-detail.tsx).
 const SURFACE_ORDER: PackagingSurface[] = [
-  "hook",
   "title",
   "thumbnail",
+  "hook",
   "alignment",
 ]
 
@@ -189,16 +194,6 @@ const FEATURES_DESCRIPTION_TAIL =
   "Correlation, not proof: reach is also topic, timing and who YouTube showed it to."
 
 const SURFACE_CONFIG: Record<PackagingSurface, SurfaceConfig> = {
-  hook: {
-    group: "opening",
-    featurePrefixes: ["hook"],
-    extremesTitle: "Your best and worst hooks, side by side",
-    extremesDescription: `The hook axes, ${EXTREMES_DESCRIPTION_TAIL}`,
-    extremesEmptyNote:
-      "Your best and worst uploads hook alike on every axis so far. When the two ends of your library start writing different hooks, the gap lands here.",
-    featuresTitle: "What your high-reach hooks do differently",
-    featuresDescription: `How quickly the hook reaches the promise in the half of your library that travels furthest, against the half that does not. ${FEATURES_DESCRIPTION_TAIL}`,
-  },
   title: {
     group: "title",
     featurePrefixes: ["title"],
@@ -218,6 +213,16 @@ const SURFACE_CONFIG: Record<PackagingSurface, SurfaceConfig> = {
       "Your best and worst uploads shoot thumbnails alike on every axis so far. When the two ends of your library start looking different, the gap lands here.",
     featuresTitle: "What your high-reach thumbnails do differently",
     featuresDescription: `The thumbnail choices common in the half of your library that travels furthest and rare in the half that does not. ${FEATURES_DESCRIPTION_TAIL}`,
+  },
+  hook: {
+    group: "opening",
+    featurePrefixes: ["hook"],
+    extremesTitle: "Your best and worst hooks, side by side",
+    extremesDescription: `The hook axes, ${EXTREMES_DESCRIPTION_TAIL}`,
+    extremesEmptyNote:
+      "Your best and worst uploads hook alike on every axis so far. When the two ends of your library start writing different hooks, the gap lands here.",
+    featuresTitle: "What your high-reach hooks do differently",
+    featuresDescription: `How quickly the hook reaches the promise in the half of your library that travels furthest, against the half that does not. ${FEATURES_DESCRIPTION_TAIL}`,
   },
   alignment: {
     group: "alignment",
@@ -344,9 +349,9 @@ export function PackagingPanel({ data }: { data: ChannelTrendsData }) {
         />
       )}
       <PackagingSurfaceTabs
-        hook={body("hook")}
         title={body("title")}
         thumbnail={body("thumbnail")}
+        hook={body("hook")}
         alignment={body("alignment")}
       />
     </div>
