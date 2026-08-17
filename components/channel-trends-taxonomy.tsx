@@ -545,7 +545,11 @@ export function ExtremesRadarCard({
           className={
             showGroupLabels
               ? "grid gap-4 sm:grid-cols-2"
-              : "mx-auto w-full max-w-sm"
+              // A single chart is centred under its own heading and capped, so
+              // it never stretches to the full width of a desktop card. The cap
+              // is what sets how big the shape draws: the chart scales to the
+              // width it is given, so widening this widens the spider.
+              : "mx-auto w-full max-w-md"
           }
         >
           {drawable.map((entry) => (
