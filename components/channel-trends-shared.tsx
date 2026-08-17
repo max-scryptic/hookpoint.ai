@@ -246,43 +246,6 @@ export function EvidenceDisclosure({
   )
 }
 
-// A bar in a ranked list of videos: one neutral fill against a dashed median
-// line, so the reader compares positions rather than decoding colours.
-export function RankBar({
-  fillPercent,
-  medianPercent,
-}: {
-  fillPercent: number
-  medianPercent: number
-}) {
-  return (
-    <div className="relative h-4">
-      <div
-        className="absolute inset-y-0 left-0 rounded-r-sm bg-muted-foreground/50"
-        style={{ width: `${fillPercent}%` }}
-      />
-      <div
-        className="absolute inset-y-0 border-l border-dashed border-foreground/40"
-        style={{ left: `${medianPercent}%` }}
-      />
-    </div>
-  )
-}
-
-// Bars scale so the largest fills this much of the track; the remainder keeps
-// the median line legible even when the median sits near the maximum.
-export const RANK_BAR_MAX_PERCENT = 92
-
-// The neutral outcome badge used on ranked rows (high reach, subscriber magnet,
-// net loss). Outlined rather than tinted, so no row depends on colour.
-export function OutcomeBadge({ children }: { children: ReactNode }) {
-  return (
-    <span className="rounded-full border px-1.5 py-px text-[10px] font-medium whitespace-nowrap text-muted-foreground">
-      {children}
-    </span>
-  )
-}
-
 // A single 0-10 taxonomy score as a bar. Used for the channel's own profile,
 // where there is one number per axis rather than two to compare.
 export function ScoreBar({ value }: { value: number }) {

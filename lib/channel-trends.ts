@@ -454,75 +454,6 @@ export interface ChannelPackagingPatterns {
   libraryVideoCount: number
 }
 
-// --- Retention ranking: which uploads hold viewers --------------------------
-
-// The Content tab's anchor, and the outcome its script contrast is split on.
-// Average view percentage is already normalised (a share of the video watched),
-// so unlike views it can be ranked across a library directly. It still favours
-// short uploads, which the UI says out loud by printing each video's length
-// alongside it where it has one.
-export const RETENTION_RANKING_MIN_VIDEOS = 3
-
-export interface RetentionRankingRow {
-  id: string
-  title: string | null
-  // 0..100.
-  retentionPercent: number
-  views: number | null
-  band: ReachBand
-  hasScript: boolean
-}
-
-export interface ChannelRetentionRanking {
-  // Best-retaining first.
-  rows: RetentionRankingRow[]
-  medianRetentionPercent: number
-  coveredVideoCount: number
-  scriptVideoCount: number
-  libraryVideoCount: number
-}
-
-export function buildRetentionRanking(
-  videos: ChannelVideo[],
-  libraryVideoCount: number,
-): ChannelRetentionRanking | null {
-  const covered = videos.filter(
-    (video) =>
-      video.averageViewPercentage != null && video.averageViewPercentage > 0,
-  )
-  if (covered.length < RETENTION_RANKING_MIN_VIDEOS) return null
-
-  const sorted = [...covered].sort(
-    (a, b) =>
-      (b.averageViewPercentage ?? 0) - (a.averageViewPercentage ?? 0) ||
-      a.id.localeCompare(b.id),
-  )
-  const bandSize = Math.floor(sorted.length / 2)
-  const bandFor = (index: number): ReachBand =>
-    index < bandSize
-      ? "high"
-      : index >= sorted.length - bandSize
-        ? "low"
-        : "middle"
-
-  return {
-    rows: sorted.map((video, index) => ({
-      id: video.id,
-      title: video.title,
-      retentionPercent: video.averageViewPercentage!,
-      views: video.views,
-      band: bandFor(index),
-      hasScript: video.script != null,
-    })),
-    medianRetentionPercent: median(
-      covered.map((video) => video.averageViewPercentage!),
-    ),
-    coveredVideoCount: covered.length,
-    scriptVideoCount: covered.filter((video) => video.script != null).length,
-    libraryVideoCount,
-  }
-}
-
 // --- Channel snapshot: the library's headline numbers ----------------------
 
 // Medians rather than averages, because a single breakout upload would drag
@@ -640,8 +571,6 @@ export interface ChannelTrendsData {
   // an average view percentage.
   scriptExtremes: ChannelExtremesProfile | null
   scriptStyle: ChannelStyleProfile | null
-  // Uploads ranked by the share of them that gets watched.
-  retentionRanking: ChannelRetentionRanking | null
 }
 
 function kindTrends(
@@ -1540,7 +1469,6 @@ export function buildChannelTrends(params: {
       outcome: "retention",
       outcomeOf: (video) => video.averageViewPercentage,
     }),
-    retentionRanking: buildRetentionRanking(videos, libraryVideoCount),
   }
 }
 

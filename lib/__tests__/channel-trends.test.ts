@@ -9,7 +9,6 @@ import {
   buildChannelSnapshot,
   buildChannelTrends,
   buildPackagingPatterns,
-  buildRetentionRanking,
   buildSubscriberConversion,
   channelTrendsStage,
   packagingFeatures,
@@ -968,65 +967,6 @@ describe("buildPackagingPatterns", () => {
           }),
         ],
         4,
-      ),
-    ).toBeNull()
-  })
-})
-
-describe("buildRetentionRanking", () => {
-  const retentionVideos = [
-    video("t-1", "Best held", null, {
-      averageViewPercentage: 62,
-      views: 4000,
-      script: null,
-    }),
-    video("t-2", "Middling", null, { averageViewPercentage: 41, views: 2000 }),
-    video("t-3", "Weakest", null, { averageViewPercentage: 18, views: 900 }),
-    video("t-4", "Also weak", null, { averageViewPercentage: 12, views: 500 }),
-  ]
-
-  it("ranks covered videos best first and bands the two halves", () => {
-    const ranking = buildRetentionRanking(retentionVideos, 6)
-
-    expect(ranking?.rows.map((row) => row.id)).toEqual([
-      "t-1",
-      "t-2",
-      "t-3",
-      "t-4",
-    ])
-    expect(ranking?.rows.map((row) => row.band)).toEqual([
-      "high",
-      "high",
-      "low",
-      "low",
-    ])
-    expect(ranking?.medianRetentionPercent).toBe(29.5)
-    expect(ranking?.coveredVideoCount).toBe(4)
-    expect(ranking?.libraryVideoCount).toBe(6)
-  })
-
-  it("leaves an odd middle video unbanded", () => {
-    const ranking = buildRetentionRanking(retentionVideos.slice(0, 3), 3)
-    expect(ranking?.rows.map((row) => row.band)).toEqual([
-      "high",
-      "middle",
-      "low",
-    ])
-  })
-
-  it("counts how many ranked videos still have no script read", () => {
-    const ranking = buildRetentionRanking(retentionVideos, 4)
-    expect(ranking?.scriptVideoCount).toBe(0)
-  })
-
-  it("needs three videos with a retention figure", () => {
-    expect(
-      buildRetentionRanking(
-        [
-          ...retentionVideos.slice(0, 2),
-          video("t-9", "No analytics", null, { views: 100 }),
-        ],
-        3,
       ),
     ).toBeNull()
   })
