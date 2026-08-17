@@ -19,7 +19,10 @@ import {
   packagingPanelHasContent,
 } from "@/components/channel-trends-packaging"
 import { RetentionPanel } from "@/components/channel-trends-retention"
-import { ScriptPanel } from "@/components/channel-trends-script"
+import {
+  ScriptPanel,
+  scriptPanelHasContent,
+} from "@/components/channel-trends-script"
 import {
   CalloutBlock,
   CardEyebrow,
@@ -59,7 +62,9 @@ import {
 //   Packaging  what your uploads promise, read one surface at a time across its
 //              own Hook, Title, Thumbnail and Alignment sub-tabs
 //              (components/channel-trends-packaging.tsx)
-//   Script     what your videos say, against how much of them gets watched
+//   Script     what your videos say against how much of them gets watched,
+//              read one surface at a time across its own Substance, Structure,
+//              Emotion and Rhetoric sub-tabs
 //              (components/channel-trends-script.tsx)
 //   Content    which uploads hold viewers, ranked
 //              (components/channel-trends-content.tsx)
@@ -340,10 +345,7 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
     data.holds != null ||
     data.hooks != null
   const hasPackaging = packagingPanelHasContent(data)
-  const hasScript =
-    data.scriptAxes != null ||
-    data.scriptExtremes != null ||
-    data.scriptStyle != null
+  const hasScript = scriptPanelHasContent(data)
   const hasContent = data.retentionRanking != null
 
   return (
