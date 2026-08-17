@@ -32,6 +32,19 @@ import { stripEmDashes } from "@/lib/copy-guardrails"
 // text in this file. Hyphens are fine. See lib/copy-guardrails.ts; enforced by
 // lib/__tests__/copy-guardrails.test.ts.
 
+// A radar needs three spokes to enclose an area; two would draw a line, so a
+// group smaller than this is written out as paired bars instead.
+//
+// It lives here rather than beside the chart it constrains because the callers
+// that branch on it are server components while
+// components/channel-trends-radar.tsx is a client module. A value exported from
+// a client module does not reach a server component as the value: it arrives as
+// a client reference, so both `axes.length >= RADAR_MIN_AXES` and
+// `axes.length < RADAR_MIN_AXES` quietly evaluate false and every chart and
+// every fallback bar drops off the page at once, with no error to show for it.
+// Keep this constant in a module with no "use client" at the top.
+export const RADAR_MIN_AXES = 3
+
 export function plural(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? "" : "s"}`
 }

@@ -5,7 +5,10 @@ import {
   taxonomyAxisShortLabel,
   taxonomyAxisTooltip,
 } from "@/components/channel-trends-copy"
-import { formatScore } from "@/components/channel-trends-shared"
+import {
+  RADAR_MIN_AXES,
+  formatScore,
+} from "@/components/channel-trends-shared"
 import {
   Tooltip,
   TooltipContent,
@@ -39,10 +42,6 @@ import {
 // COPY GUARDRAIL: no em dashes (U+2014) or en dashes (U+2013), ever, in any
 // text in this file. Hyphens are fine. Enforced by
 // lib/__tests__/copy-guardrails.test.ts.
-
-// A radar needs three spokes to enclose an area; two would draw a line. Groups
-// smaller than this are rendered as paired bars by the caller instead.
-export const RADAR_MIN_AXES = 3
 
 // Drawn in an unitless viewBox and scaled to whatever width the card gives it,
 // so one set of numbers holds at every card size.

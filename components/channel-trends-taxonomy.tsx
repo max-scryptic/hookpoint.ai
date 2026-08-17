@@ -8,13 +8,13 @@ import {
   taxonomyDimensionLabel,
 } from "@/components/channel-trends-copy"
 import {
-  RADAR_MIN_AXES,
   RadarLegend,
   TaxonomyRadar,
 } from "@/components/channel-trends-radar"
 import {
   Chip,
   CoverageNote,
+  RADAR_MIN_AXES,
   ScoreBar,
   TrendCard,
   formatScore,
