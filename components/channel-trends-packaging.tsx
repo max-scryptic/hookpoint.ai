@@ -289,9 +289,9 @@ function SurfacePanel({
           emptyNote={config.extremesEmptyNote}
           // The bands and the caveat behind them are stated once above the tab
           // bar, so a surface card here is its heading, its chart and the axis
-          // rows behind them, with no prose in between. The alignment pair, too
-          // small to draw as a shape, keeps the callout that is its only
-          // reading.
+          // rows behind them, with no prose in between. That holds for the
+          // alignment pair too: two axes are drawn as bars rather than a shape,
+          // and the three bands on each bar are the reading.
           bare
         />
       )}
