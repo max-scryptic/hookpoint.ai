@@ -341,7 +341,6 @@ export function PackagingPanel({ data }: { data: ChannelTrendsData }) {
           topLabel={EXTREMES_TOP_LABEL}
           bottomLabel={EXTREMES_BOTTOM_LABEL}
           formatOutcome={(value) => `${formatRate(value)}/day`}
-          footer={`Picked out of the ${plural(extremes.rankedVideoCount, "video")} carrying both a packaging read and the numbers to rank. Correlation, not proof: ${extremes.bandSize} uploads a side is a lead worth testing, not a law.`}
         />
       )}
       <PackagingSurfaceTabs
