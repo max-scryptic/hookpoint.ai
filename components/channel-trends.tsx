@@ -4,38 +4,25 @@ import {
   GaugeIcon,
   LockIcon,
   MousePointerClickIcon,
-  RefreshCwIcon,
-  ShieldCheckIcon,
   TrendingUpIcon,
   UserPlusIcon,
   VideoIcon,
-  WrenchIcon,
 } from "lucide-react"
 
-import { playbookCopy } from "@/components/channel-trends-copy"
 import {
   PackagingPanel,
   packagingPanelHasContent,
 } from "@/components/channel-trends-packaging"
-import { RetentionPanel } from "@/components/channel-trends-retention"
 import {
   ScriptPanel,
   scriptPanelHasContent,
 } from "@/components/channel-trends-script"
 import {
-  CalloutBlock,
-  CardEyebrow,
-  Chip,
-  EventReceipt,
-  EvidenceDisclosure,
-  SignalMeter,
   formatCompactNumber,
   formatRate,
-  percent,
   plural,
 } from "@/components/channel-trends-shared"
 import { ChannelTrendsTabs } from "@/components/channel-trends-tabs"
-import { EventTypeBadge } from "@/components/event-type-badge"
 import { buttonVariants } from "@/components/ui/button"
 import {
   Card,
@@ -47,17 +34,13 @@ import {
 import {
   EARLY_TRENDS_VIDEO_THRESHOLD,
   ESTABLISHED_TRENDS_VIDEO_THRESHOLD,
-  SIGNAL_STRONG_THRESHOLD,
-  type ChannelPlaybookRule,
   type ChannelSnapshot,
   type ChannelTrendsData,
 } from "@/lib/channel-trends"
 
 // The Channel Trends page body: the unlock meter, the library's headline
-// numbers, then four tabs.
+// numbers, then two tabs.
 //
-//   Retention  what keeps viewers and what loses them, from the accumulated
-//              event library (components/channel-trends-retention.tsx)
 //   Packaging  what your uploads promise, read one surface at a time across its
 //              own Hook, Title, Thumbnail and Alignment sub-tabs
 //              (components/channel-trends-packaging.tsx)
@@ -65,7 +48,6 @@ import {
 //              read one surface at a time across its own Substance, Structure,
 //              Emotion and Rhetoric sub-tabs
 //              (components/channel-trends-script.tsx)
-//   Playbook   the next-video keep, fix and recover rules, below
 //
 // The page carries no colour of its own: every verdict is written out, so a
 // card never depends on a red or green edge to be read. The only colour is the
@@ -183,93 +165,6 @@ function ChannelSnapshotCards({ snapshot }: { snapshot: ChannelSnapshot }) {
   )
 }
 
-// --- The playbook -----------------------------------------------------------
-
-const PLAYBOOK_KIND_META = {
-  keep: {
-    label: "Keep doing this",
-    comparison: "audience holds vs drop-offs",
-    Icon: ShieldCheckIcon,
-  },
-  fix: {
-    label: "Fix this next",
-    comparison: "drop-offs vs audience holds",
-    Icon: WrenchIcon,
-  },
-  recover: {
-    label: "Recover attention",
-    comparison: "retention gains vs audience holds",
-    Icon: RefreshCwIcon,
-  },
-} as const
-
-function PlaybookRuleCard({ rule }: { rule: ChannelPlaybookRule }) {
-  const meta = PLAYBOOK_KIND_META[rule.kind]
-  const copy = playbookCopy(rule.kind, rule.eventType)
-
-  return (
-    <Card>
-      <CardContent className="flex flex-col gap-3">
-        <CardEyebrow icon={meta.Icon}>{meta.label}</CardEyebrow>
-        <div>
-          <EventTypeBadge eventType={rule.eventType} />
-          <h3 className="mt-2 font-heading text-base leading-snug font-medium">
-            {copy.headline}
-          </h3>
-        </div>
-        <p className="text-sm text-muted-foreground">{copy.action}</p>
-        <CalloutBlock label="Next-video rule">{copy.whenToUse}</CalloutBlock>
-        <div className="flex flex-wrap gap-1.5">
-          <Chip>
-            {rule.evidenceVideoCount}/{rule.targetCoveredVideoCount} target
-            videos
-          </Chip>
-          <Chip>
-            {rule.controlVideoCount}/{rule.controlCoveredVideoCount} control
-            videos
-          </Chip>
-          <Chip>avg confidence {rule.meanConfidence.toFixed(2)}</Chip>
-        </div>
-        <div className="text-xs text-muted-foreground">
-          <span className="font-medium text-foreground">
-            {percent(rule.targetRate)} vs {percent(rule.controlRate)}
-          </span>{" "}
-          across {meta.comparison}
-        </div>
-        <SignalMeter
-          signal={rule.signal}
-          strongThreshold={SIGNAL_STRONG_THRESHOLD}
-        />
-        {rule.receipts.length > 0 && (
-          <EvidenceDisclosure
-            label={`Open evidence from ${plural(rule.receipts.length, "video")}`}
-          >
-            {rule.receipts.map((receipt) => (
-              <EventReceipt
-                key={`${receipt.analysedVideoId}:${receipt.timestampSeconds ?? "unknown"}`}
-                narrative={receipt.narrative}
-                videoTitle={receipt.videoTitle}
-                analysedVideoId={receipt.analysedVideoId}
-                timestampSeconds={receipt.timestampSeconds}
-              />
-            ))}
-          </EvidenceDisclosure>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-function PlaybookPanel({ rules }: { rules: ChannelPlaybookRule[] }) {
-  return (
-    <div className="grid gap-3 lg:grid-cols-3">
-      {rules.map((rule) => (
-        <PlaybookRuleCard key={rule.kind} rule={rule} />
-      ))}
-    </div>
-  )
-}
-
 // --- Page states ------------------------------------------------------------
 
 function BuildingCard() {
@@ -312,8 +207,7 @@ function EarlySignalNote({ data }: { data: ChannelTrendsData }) {
 
 // One tab's body. The tab bar already names and illustrates the section, so the
 // panel opens with the standfirst that would otherwise sit under a heading,
-// then the cards. The playbook passes no description: the tab label carries the
-// name and its cards say the rest.
+// then the cards.
 function TrendsPanel({
   description,
   children,
@@ -333,14 +227,6 @@ function TrendsPanel({
 
 export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
   const showTrends = data.stage === "early" || data.stage === "established"
-  const hasRetention =
-    data.insights.length > 0 ||
-    data.signature != null ||
-    data.recurrence != null ||
-    data.dropOffs != null ||
-    data.gains != null ||
-    data.holds != null ||
-    data.hooks != null
   const hasPackaging = packagingPanelHasContent(data)
   const hasScript = scriptPanelHasContent(data)
 
@@ -352,13 +238,6 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
           <ChannelSnapshotCards snapshot={data.snapshot} />
           <EarlySignalNote data={data} />
           <ChannelTrendsTabs
-            retention={
-              hasRetention ? (
-                <TrendsPanel description="What keeps viewers watching and where they leave, across every deeply analysed upload.">
-                  <RetentionPanel data={data} />
-                </TrendsPanel>
-              ) : undefined
-            }
             packaging={
               hasPackaging ? (
                 <TrendsPanel description="What your packaging promises, surface by surface: your hooks, your titles, your thumbnails, and how tightly the three of them agree.">
@@ -370,13 +249,6 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
               hasScript ? (
                 <TrendsPanel description="What your videos actually say, measured against how much of them gets watched.">
                   <ScriptPanel data={data} />
-                </TrendsPanel>
-              ) : undefined
-            }
-            playbook={
-              data.playbook.length > 0 ? (
-                <TrendsPanel>
-                  <PlaybookPanel rules={data.playbook} />
                 </TrendsPanel>
               ) : undefined
             }
