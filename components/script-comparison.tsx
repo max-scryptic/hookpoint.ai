@@ -256,16 +256,9 @@ export function ScriptComparison({
   // out.
   return (
     <section className="flex flex-col gap-3">
-      <div>
-        <div className="flex items-center gap-1.5">
-          <QuoteIcon className="size-4 text-muted-foreground" />
-          <h2 className="text-sm font-medium">Script head-to-head</h2>
-        </div>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          How these two scripts differ in what they say and how they feel: a
-          written read of both full transcripts, with each video&apos;s
-          packaging as context. Observations are correlation, not proof.
-        </p>
+      <div className="flex items-center gap-1.5">
+        <QuoteIcon className="size-4 text-muted-foreground" />
+        <h2 className="text-sm font-medium">Script head-to-head</h2>
       </div>
 
       <div className="flex flex-col gap-4">

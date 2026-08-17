@@ -6,11 +6,7 @@ import { ArrowLeftIcon } from "lucide-react"
 
 import { AdminBreadcrumbLabel } from "@/components/admin/admin-breadcrumb-label"
 import { PackagingComparison } from "@/components/packaging-comparison"
-import {
-  RetentionCurvesCard,
-  RetentionComparisonVideos,
-} from "@/components/retention-comparison"
-import { RetentionHeadToHead } from "@/components/retention-head-to-head"
+import { RetentionComparisonVideos } from "@/components/retention-comparison"
 import { ScriptComparison } from "@/components/script-comparison"
 import { VideoComparisonTabs } from "@/components/video-comparison-tabs"
 import { Card } from "@/components/ui/card"
@@ -25,9 +21,8 @@ import { getComparisonReports } from "@/lib/video-comparisons"
 // Admin comparison detail: the full head-to-head for one pair a user has
 // generated, rendered from exactly the same components the creator's own report
 // page uses. Read-only, and nothing here generates: the two written reports come
-// back as stored JSON and the retention and packaging diffs are derived from
-// each video's stored analysis, so opening this page costs nothing and calls no
-// model.
+// back as stored JSON and the packaging diff is derived from each video's stored
+// analysis, so opening this page costs nothing and calls no model.
 //
 // Everything is loaded server-side with the service-role client (behind the
 // admin auth check) and scoped to the owning user, so a mistyped or foreign id
@@ -79,8 +74,10 @@ export default async function AdminUserComparisonDetailPage({
   // creator's report reads it: the written head-to-heads talk about "Video A"
   // and "Video B" throughout, so the tables underneath them have to be oriented
   // the way they were generated. Packaging is best-effort, since a failure or a
-  // gap in it must not cost the retention comparison. The script tab is the
-  // written report alone, so nothing is derived for it.
+  // gap in it must not cost the rest of the report. The script tab is the
+  // written report alone, so nothing is derived for it. The retention
+  // comparison is still loaded for the video cards above the tabs, but it no
+  // longer has a tab of its own.
   const [data, packaging, reports] = await Promise.all([
     getRetentionComparison(supabase, userId, comparison.a.id, comparison.b.id),
     getPackagingComparison(
@@ -125,8 +122,8 @@ export default async function AdminUserComparisonDetailPage({
           <h1 className="text-2xl font-semibold tracking-normal">{heading}</h1>
           <p className="text-sm text-muted-foreground">
             Compared {formatDate(comparison.createdAt)}. The report this user
-            sees: where the two curves diverge, how the packaging stacks up, and
-            what each script does differently.
+            sees: how the packaging stacks up, and what each script does
+            differently.
           </p>
         </div>
       </div>
@@ -136,38 +133,6 @@ export default async function AdminUserComparisonDetailPage({
       )}
 
       <VideoComparisonTabs
-        retention={
-          data != null ? (
-            reports.retention != null ? (
-              // Tips here belong to the creator whose comparison this is, so
-              // the keep and flag controls are left off the admin's read of it.
-              <RetentionHeadToHead
-                report={reports.retention}
-                chart={<RetentionCurvesCard data={data} />}
-                tipActions={false}
-              />
-            ) : (
-              <div className="flex flex-col gap-4">
-                <MissingReportCard>
-                  No written retention read is stored for these two videos. It
-                  is written from both curves, both videos&apos; notable
-                  stretches and what was said where the curves separated, when
-                  the comparison is generated, so this pair either predates that
-                  report or its generation failed. The curve below is derived on
-                  every open.
-                </MissingReportCard>
-                <RetentionCurvesCard data={data} />
-              </div>
-            )
-          ) : (
-            <MissingReportCard>
-              The retention comparison could not be rebuilt for this pair. It is
-              derived from both videos&apos; stored analysis on every open, so
-              one of the two videos has most likely been removed since the
-              comparison was generated.
-            </MissingReportCard>
-          )
-        }
         packaging={
           packaging != null ? (
             <PackagingComparison
