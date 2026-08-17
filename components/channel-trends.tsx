@@ -13,7 +13,6 @@ import {
 } from "lucide-react"
 
 import { playbookCopy } from "@/components/channel-trends-copy"
-import { ContentPanel } from "@/components/channel-trends-content"
 import {
   PackagingPanel,
   packagingPanelHasContent,
@@ -55,7 +54,7 @@ import {
 } from "@/lib/channel-trends"
 
 // The Channel Trends page body: the unlock meter, the library's headline
-// numbers, then five tabs.
+// numbers, then four tabs.
 //
 //   Retention  what keeps viewers and what loses them, from the accumulated
 //              event library (components/channel-trends-retention.tsx)
@@ -66,8 +65,6 @@ import {
 //              read one surface at a time across its own Substance, Structure,
 //              Emotion and Rhetoric sub-tabs
 //              (components/channel-trends-script.tsx)
-//   Content    which uploads hold viewers, ranked
-//              (components/channel-trends-content.tsx)
 //   Playbook   the next-video keep, fix and recover rules, below
 //
 // The page carries no colour of its own: every verdict is written out, so a
@@ -346,7 +343,6 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
     data.hooks != null
   const hasPackaging = packagingPanelHasContent(data)
   const hasScript = scriptPanelHasContent(data)
-  const hasContent = data.retentionRanking != null
 
   return (
     <div className="flex flex-col gap-6">
@@ -374,13 +370,6 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
               hasScript ? (
                 <TrendsPanel description="What your videos actually say, measured against how much of them gets watched.">
                   <ScriptPanel data={data} />
-                </TrendsPanel>
-              ) : undefined
-            }
-            content={
-              hasContent ? (
-                <TrendsPanel description="How much of each upload gets watched, ranked across your library.">
-                  <ContentPanel data={data} />
                 </TrendsPanel>
               ) : undefined
             }

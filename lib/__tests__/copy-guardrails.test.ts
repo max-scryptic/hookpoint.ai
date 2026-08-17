@@ -26,7 +26,6 @@ const CHANNEL_TRENDS_SOURCE_FILES = [
   "app/dashboard/video-comparator/report/page.tsx",
   "components/admin/admin-tip-feedback-table.tsx",
   "components/channel-trends.tsx",
-  "components/channel-trends-content.tsx",
   "components/channel-trends-copy.ts",
   "components/channel-trends-packaging.tsx",
   "components/channel-trends-packaging-tabs.tsx",

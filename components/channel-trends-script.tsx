@@ -34,9 +34,9 @@ import type { ChannelTrendsData } from "@/lib/channel-trends"
 // surface is its heading, its shape and the axis rows behind a disclosure, with
 // no prose in between.
 //
-// The ranking those bands are picked on lives on the Content tab next door: it
-// is an outcome, not a script read, and the card above the tab bar already
-// names the videos at both ends of it.
+// The bands are picked on retention alone, which is an outcome rather than a
+// script read, and the card above the tab bar already names the videos at both
+// ends of it.
 //
 // COPY GUARDRAIL: no em dashes (U+2014) or en dashes (U+2013), ever, in any
 // text in this file. Hyphens are fine. Enforced by
