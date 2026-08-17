@@ -219,11 +219,12 @@ function bandStyleFor(
   if (highlighted !== band) {
     return {
       ...style,
-      fillOpacity: style.fillOpacity * 0.2,
-      // Faded to a trace rather than to nothing. Dark mode sets the floor here:
-      // these bands are already the dim tone on a dim ground, so anything much
-      // under this takes them off the chart entirely.
-      strokeOpacity: style.strokeOpacity * 0.34,
+      fillOpacity: style.fillOpacity * 0.1,
+      // Faded to a trace rather than to nothing. The floor is what keeps the
+      // library baseline - the faintest of the three before any of this, and
+      // dotted - from leaving the chart altogether in dark mode, where these
+      // bands are already the dim tone on a dim ground.
+      strokeOpacity: Math.max(style.strokeOpacity * 0.18, 0.12),
     }
   }
   return {
@@ -327,9 +328,9 @@ function BandShape({
             // The vertices are the loudest part of a band, so a faded one drops
             // them further than its outline: they are what makes a shape the
             // reader did not ask for read as a shape.
-            strokeOpacity={faded ? 0.18 : 0.8}
+            strokeOpacity={faded ? 0.12 : 0.8}
             strokeWidth={band === "top" ? 0 : 1.1}
-            opacity={faded ? 0.25 : 1}
+            opacity={faded ? 0.14 : 1}
             className={SHAPE_TRANSITION}
           />
         ))}
