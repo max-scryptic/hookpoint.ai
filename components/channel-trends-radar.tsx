@@ -1,6 +1,15 @@
 "use client"
 
 import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react"
+
+import {
   taxonomyAxisCopy,
   taxonomyAxisShortLabel,
   taxonomyAxisTooltip,
@@ -27,13 +36,19 @@ import {
 // the chart survives greyscale, colour blindness and dark mode without a legend
 // key to memorise.
 //
-// The shape itself is inert, but the rim labels are clipped names and have to
-// be able to say what they mean, so the file is a client component for the sake
-// of one thing: the app's own tooltip on each label. The browser's native SVG
-// <title> was tried first and is not good enough - it waits about a second,
-// renders as an OS tooltip rather than as this app, and never appears on a
-// touch device - so the labels use the same Tooltip every other explained term
-// in the product uses.
+// The file is a client component for two things. The rim labels are clipped
+// names and have to be able to say what they mean, so each carries the app's own
+// tooltip. The browser's native SVG <title> was tried first and is not good
+// enough - it waits about a second, renders as an OS tooltip rather than as this
+// app, and never appears on a touch device - so the labels use the same Tooltip
+// every other explained term in the product uses.
+//
+// The second is the key above the charts. Three shapes over one another means
+// some of a shape runs underneath the others, so pointing at a band in the key
+// pulls that band to the front across every chart under that key and fades the
+// bands it was hiding behind. Hover, keyboard focus and a tap all do it; a click
+// or tap pins the choice so it survives the pointer leaving, which is the only
+// way to hold it on a touch screen. See RadarHighlightGroup.
 //
 // The chart is never the only place its numbers live. Every value it draws is
 // also written out in the fold under it, so nothing here is load-bearing for a
@@ -179,21 +194,115 @@ const BAND_STYLE: Record<
   },
 }
 
+// Back to front when nothing is picked out: baseline first, winners last, so the
+// shape being read is never crossed out by the two under it.
+const BAND_DRAW_ORDER: RadarBand[] = ["library", "bottom", "top"]
+
+const BAND_VALUE: Record<RadarBand, (axis: RadarAxis) => number> = {
+  top: (axis) => axis.topValue,
+  bottom: (axis) => axis.bottomValue,
+  library: (axis) => axis.libraryValue,
+}
+
+// What a band draws as while one of the three is being pointed at. The picked
+// band goes up to full contrast and gains a wash of fill so it reads as a shape
+// rather than an outline; the other two drop to a ghost of themselves. Nothing
+// is hidden outright, because the point of the chart is the comparison: the
+// reader still needs to see where the faded shapes sit relative to the one they
+// asked for.
+function bandStyleFor(
+  band: RadarBand,
+  highlighted: RadarBand | null,
+): (typeof BAND_STYLE)[RadarBand] {
+  const style = BAND_STYLE[band]
+  if (highlighted == null) return style
+  if (highlighted !== band) {
+    return {
+      ...style,
+      fillOpacity: style.fillOpacity * 0.2,
+      // Faded to a trace rather than to nothing. Dark mode sets the floor here:
+      // these bands are already the dim tone on a dim ground, so anything much
+      // under this takes them off the chart entirely.
+      strokeOpacity: style.strokeOpacity * 0.34,
+    }
+  }
+  return {
+    ...style,
+    tone: "text-foreground",
+    fillOpacity: Math.max(style.fillOpacity, 0.07),
+    strokeOpacity: 1,
+    strokeWidth: style.strokeWidth + 0.5,
+  }
+}
+
+interface RadarHighlight {
+  // The band currently pulled to the front, from either a pointer or a pin.
+  highlighted: RadarBand | null
+  // The band held by a click or tap, which is the only kind that outlives the
+  // pointer leaving the key.
+  pinned: RadarBand | null
+  setHovered: (band: RadarBand | null) => void
+  togglePinned: (band: RadarBand) => void
+}
+
+// Outside a group there is nothing to highlight and nothing to tell, so the
+// chart draws flat and the key is inert. That keeps TaxonomyRadar usable on its
+// own rather than only under a key.
+const INERT_HIGHLIGHT: RadarHighlight = {
+  highlighted: null,
+  pinned: null,
+  setHovered: () => {},
+  togglePinned: () => {},
+}
+
+const RadarHighlightContext = createContext<RadarHighlight>(INERT_HIGHLIGHT)
+
+// Wraps one key and the charts it speaks for, so pointing at a band in the key
+// reaches every chart underneath it. It draws no element of its own: the key and
+// the charts sit in a column their parent lays out, and a wrapper here would
+// take them out of it.
+export function RadarHighlightGroup({ children }: { children: ReactNode }) {
+  const [hovered, setHovered] = useState<RadarBand | null>(null)
+  const [pinned, setPinned] = useState<RadarBand | null>(null)
+  const togglePinned = useCallback((band: RadarBand) => {
+    setPinned((current) => (current === band ? null : band))
+  }, [])
+  const value = useMemo<RadarHighlight>(
+    // A pointer beats a pin while it is on the key, so hovering the other two
+    // entries still previews them without having to unpin first.
+    () => ({ highlighted: hovered ?? pinned, pinned, setHovered, togglePinned }),
+    [hovered, pinned, togglePinned],
+  )
+  return (
+    <RadarHighlightContext.Provider value={value}>
+      {children}
+    </RadarHighlightContext.Provider>
+  )
+}
+
+// Presentation attributes are ordinary CSS properties, so the shapes ease
+// between the two states instead of snapping. Honours a reduced-motion setting.
+const SHAPE_TRANSITION =
+  "transition-all duration-200 ease-out motion-reduce:transition-none"
+
 function BandShape({
   axes,
   read,
   band,
+  highlighted,
 }: {
   axes: RadarAxis[]
   read: (axis: RadarAxis) => number
   band: RadarBand
+  highlighted: RadarBand | null
 }) {
-  const style = BAND_STYLE[band]
+  const style = bandStyleFor(band, highlighted)
+  const faded = highlighted != null && highlighted !== band
   const points = axes.map((axis, index) =>
     pointAt(index, axes.length, radiusFor(read(axis))),
   )
   return (
-    <g className={style.tone}>
+    <g className={`${style.tone} ${SHAPE_TRANSITION}`}>
       <polygon
         points={path(points)}
         fill={style.fillOpacity > 0 ? "currentColor" : "none"}
@@ -203,6 +312,7 @@ function BandShape({
         strokeWidth={style.strokeWidth}
         strokeDasharray={style.dash}
         strokeLinejoin="round"
+        className={SHAPE_TRANSITION}
       />
       {style.vertexRadius > 0 &&
         points.map((point, index) => (
@@ -214,8 +324,13 @@ function BandShape({
             fill={band === "top" ? "currentColor" : "var(--card)"}
             fillOpacity={band === "top" ? 0.85 : 1}
             stroke="currentColor"
-            strokeOpacity={0.8}
+            // The vertices are the loudest part of a band, so a faded one drops
+            // them further than its outline: they are what makes a shape the
+            // reader did not ask for read as a shape.
+            strokeOpacity={faded ? 0.18 : 0.8}
             strokeWidth={band === "top" ? 0 : 1.1}
+            opacity={faded ? 0.25 : 1}
+            className={SHAPE_TRANSITION}
           />
         ))}
     </g>
@@ -238,7 +353,14 @@ export function TaxonomyRadar({
   // The surface these axes belong to, for the chart's own description.
   groupLabel: string
 }) {
+  const { highlighted } = useContext(RadarHighlightContext)
   if (axes.length < RADAR_MIN_AXES) return null
+
+  // The picked band draws last so it sits over the two it was competing with.
+  const drawOrder =
+    highlighted == null
+      ? BAND_DRAW_ORDER
+      : [...BAND_DRAW_ORDER.filter((band) => band !== highlighted), highlighted]
 
   const readout = (axis: RadarAxis) =>
     `${topLabel} ${formatScore(axis.topValue)}, ${bottomLabel} ${formatScore(
@@ -287,11 +409,15 @@ export function TaxonomyRadar({
         })}
       </g>
 
-      {/* Drawn baseline first, winners last, so the shape being read is never
-          crossed out by the two under it. */}
-      <BandShape axes={axes} read={(axis) => axis.libraryValue} band="library" />
-      <BandShape axes={axes} read={(axis) => axis.bottomValue} band="bottom" />
-      <BandShape axes={axes} read={(axis) => axis.topValue} band="top" />
+      {drawOrder.map((band) => (
+        <BandShape
+          key={band}
+          axes={axes}
+          read={BAND_VALUE[band]}
+          band={band}
+          highlighted={highlighted}
+        />
+      ))}
 
       {axes.map((axis, index) => {
         const angle = -Math.PI / 2 + (index / axes.length) * Math.PI * 2
@@ -359,10 +485,20 @@ export function TaxonomyRadar({
 
 // One entry in the key: the exact line the chart draws that band with, at the
 // size a line of text can carry.
-function LegendSwatch({ band }: { band: RadarBand }) {
-  const style = BAND_STYLE[band]
+function LegendSwatch({
+  band,
+  highlighted,
+}: {
+  band: RadarBand
+  highlighted: RadarBand | null
+}) {
+  const style = bandStyleFor(band, highlighted)
   return (
-    <svg viewBox="0 0 20 8" className={`h-2 w-5 ${style.tone}`} aria-hidden="true">
+    <svg
+      viewBox="0 0 20 8"
+      className={`h-2 w-5 shrink-0 ${style.tone} ${SHAPE_TRANSITION}`}
+      aria-hidden="true"
+    >
       <line
         x1="0"
         y1="4"
@@ -372,13 +508,46 @@ function LegendSwatch({ band }: { band: RadarBand }) {
         strokeOpacity={style.strokeOpacity}
         strokeWidth={2}
         strokeDasharray={band === "top" ? undefined : band === "bottom" ? "4 3" : "1.5 2.5"}
+        className={SHAPE_TRANSITION}
       />
     </svg>
   )
 }
 
+// A band's entry in the key, and the handle for picking that band out of the
+// charts below. A button rather than a span, so the same thing a mouse does is
+// reachable from the keyboard and from a touch screen: focus previews a band the
+// way hovering does, and a click or tap pins it until it is picked again.
+function LegendItem({ band, label }: { band: RadarBand; label: string }) {
+  const { highlighted, pinned, setHovered, togglePinned } =
+    useContext(RadarHighlightContext)
+  const faded = highlighted != null && highlighted !== band
+  return (
+    <button
+      type="button"
+      onPointerEnter={() => setHovered(band)}
+      onPointerLeave={() => setHovered(null)}
+      onFocus={() => setHovered(band)}
+      onBlur={() => setHovered(null)}
+      onClick={() => togglePinned(band)}
+      aria-pressed={pinned === band}
+      className={`-mx-1 flex items-center gap-1.5 rounded-sm px-1 text-left transition-colors duration-200 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none ${
+        highlighted === band
+          ? "text-foreground"
+          : faded
+            ? "text-muted-foreground/45"
+            : "hover:text-foreground"
+      }`}
+    >
+      <LegendSwatch band={band} highlighted={highlighted} />
+      {label}
+    </button>
+  )
+}
+
 // The key the radars share, stated once above the grid of them rather than
-// repeated on every chart.
+// repeated on every chart. Inside a RadarHighlightGroup it is also the control
+// for them: see LegendItem.
 export function RadarLegend({
   topLabel,
   bottomLabel,
@@ -390,18 +559,9 @@ export function RadarLegend({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-      <span className="flex items-center gap-1.5">
-        <LegendSwatch band="top" />
-        {topLabel}
-      </span>
-      <span className="flex items-center gap-1.5">
-        <LegendSwatch band="bottom" />
-        {bottomLabel}
-      </span>
-      <span className="flex items-center gap-1.5">
-        <LegendSwatch band="library" />
-        {libraryLabel}
-      </span>
+      <LegendItem band="top" label={topLabel} />
+      <LegendItem band="bottom" label={bottomLabel} />
+      <LegendItem band="library" label={libraryLabel} />
       <span>Each spoke is a 0-10 score, centre 0, rim 10.</span>
     </div>
   )
