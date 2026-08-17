@@ -96,8 +96,10 @@ interface AxisDefinition<T> {
   key: string
   group: TaxonomyAxisGroup
   // True for axes where neither end is better (visual complexity, where the
-  // payoff sits). The page labels these as descriptors so a low number is never
-  // read as a failing grade.
+  // payoff sits): the score says what kind of video this is, not how well it
+  // was made. The page draws them like any other axis and leaves the reading to
+  // the reader; the flag is here so that judgement stays recorded next to the
+  // axis rather than in someone's head.
   descriptor?: boolean
   read: (taxonomy: T) => number | null
 }

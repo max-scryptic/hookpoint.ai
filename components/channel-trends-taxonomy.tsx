@@ -28,7 +28,6 @@ import {
 import {
   axisGroupContrasts,
   axisGroupRows,
-  axisIsDescriptor,
   axisLowerIsBetter,
   extremeGroupAxes,
   extremeGroupContrasts,
@@ -106,7 +105,7 @@ function BandBar({
 }
 
 // The name of an axis and what a 10 on it would mean, so a bar is never a bare
-// number the reader has to interpret, plus the notes that say when a high score
+// number the reader has to interpret, plus the note that says when a high score
 // is not simply a good one.
 function AxisCaption({ axisKey }: { axisKey: string }) {
   const copy = taxonomyAxisCopy(axisKey)
@@ -114,11 +113,6 @@ function AxisCaption({ axisKey }: { axisKey: string }) {
     <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
       <span className="text-sm font-medium">{copy.name}</span>
       <span className="text-xs text-muted-foreground">10 = {copy.meaning}</span>
-      {axisIsDescriptor(axisKey) && (
-        <span className="text-xs text-muted-foreground">
-          (a descriptor, not a grade)
-        </span>
-      )}
       {axisLowerIsBetter(axisKey) && (
         <span className="text-xs text-muted-foreground">(less is more)</span>
       )}
