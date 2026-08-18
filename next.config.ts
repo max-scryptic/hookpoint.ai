@@ -4,7 +4,7 @@ const nextConfig: NextConfig = {
   // The /dashboard prefix is gone: every screen that lived under it now sits at
   // the top level (/dashboard/analysed-videos → /analysed-videos) and the
   // dashboard index page itself no longer exists, so /dashboard sends people to
-  // Analyse Video instead. These keep old links — a bookmark, an open tab, a
+  // Analyse a Video instead. These keep old links — a bookmark, an open tab, a
   // link mailed out before the move — landing on the right screen.
   //
   // Order matters: the two specific rules have to be matched before the

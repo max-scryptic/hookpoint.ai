@@ -13,7 +13,7 @@ import {
 
 // POST /api/validate-video  { url: string }
 // Confirms a pasted YouTube URL resolves to a real video that belongs to the
-// channel the signed-in user connected. Used by the Analyse Video form before
+// channel the signed-in user connected. Used by the Analyse a Video form before
 // it sends the user through to the analysis view.
 export async function POST(request: NextRequest) {
   const supabase = await createClient()

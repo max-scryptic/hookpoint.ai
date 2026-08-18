@@ -23,14 +23,23 @@ import {
 } from "lucide-react"
 
 const navSections = [
+  // "Analyse a Video" is the one item that starts work rather than reviewing it,
+  // so it sits in its own section above the rest. It used to head the Analysis
+  // group as "Analyse Video", one letter away from the "Analysed Videos" archive
+  // directly beneath it, where the two read as near-duplicates at a glance.
   {
-    label: "Analysis",
+    label: "Start",
     items: [
       {
-        title: "Analyse Video",
+        title: "Analyse a Video",
         url: "/analyse-video",
         icon: <VideoIcon />,
       },
+    ],
+  },
+  {
+    label: "Analysis",
+    items: [
       {
         title: "Analysed Videos",
         url: "/analysed-videos",

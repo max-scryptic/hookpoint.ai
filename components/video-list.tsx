@@ -119,7 +119,7 @@ function VideoActions({
   video: RecentVideo
   isAnalysed: boolean
 }) {
-  // On the Analyse Video page the launcher drives the "analysing your video"
+  // On the Analyse a Video page the launcher drives the "analysing your video"
   // popup and the redirect once it's done. Already-analysed videos (and any
   // render outside the launcher) just link straight to the cached report.
   const launcher = useAnalysisLauncher()
@@ -185,8 +185,8 @@ export function VideoList({
   videos: RecentVideo[]
   // IDs of videos the user has already analysed.
   analysedIds?: Set<string>
-  // Whether to render the "Analysed" column. Off by default: the Analyse Video
-  // page hides analysed uploads, so the column only appears when the user opts
+  // Whether to render the "Analysed" column. Off by default: the Analyse a
+  // Video page hides analysed uploads, so the column only appears when the user opts
   // to show them.
   showAnalysedColumn?: boolean
 }) {

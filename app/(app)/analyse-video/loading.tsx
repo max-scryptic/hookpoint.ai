@@ -28,7 +28,7 @@ export default function Loading() {
           <Breadcrumb>
             <BreadcrumbList>
               <BreadcrumbItem>
-                <BreadcrumbPage>Analyse Video</BreadcrumbPage>
+                <BreadcrumbPage>Analyse a Video</BreadcrumbPage>
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
@@ -37,7 +37,7 @@ export default function Loading() {
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <div>
           <h1 className="text-2xl font-semibold tracking-normal">
-            Analyse Video
+            Analyse a Video
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Paste a video URL from your channel, or pick one of your recent

@@ -40,7 +40,7 @@ const INITIAL_PROGRESS = 4
 // into the next stage's slice.
 const STAGE_EASE_DECAY = 2.4
 
-// Full-screen backdrop + centred popup. Shown from the Analyse Video form the
+// Full-screen backdrop + centred popup. Shown from the Analyse a Video form the
 // moment the user presses "Analyse Video" and kept up while the analysis runs,
 // so the user waits on a clear "analysing your video" spinner rather than an
 // empty page, and is taken to the report only once it's ready.
@@ -139,7 +139,7 @@ export function AnalysisProcessing({
   const displayProgress = isDone ? 100 : progress
 
   // The analysis request failed: swap the spinner for a warning and let the user
-  // dismiss the popup to return to the Analyse Video page and try again.
+  // dismiss the popup to return to the Analyse a Video page and try again.
   if (isError) {
     return (
       <div

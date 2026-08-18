@@ -8,7 +8,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
-// Placeholder for the video tables (Analyse Video + Analysed Videos) shown while
+// Placeholder for the video tables (Analyse a Video + Analysed Videos) shown while
 // the list data loads. It mirrors the real filter bar + table layout so a route's
 // loading.tsx can render the page's static chrome immediately and leave only this
 // region as a skeleton — when the data lands the populated table drops straight in
