@@ -13,8 +13,19 @@ export interface DeepAnalysisPipelineRun {
   stages: Record<string, unknown>
 }
 
+// 'paused' is a pass that ran out of invocation budget and handed the rest of
+// the work to a fresh invocation (see lib/deep-analysis-continuation.ts). It's a
+// settled run — it holds no lease — but unlike 'failed' it means the analysis is
+// still on its way, so the report keeps showing its processing badge rather than
+// a retry prompt.
+export type DeepAnalysisPipelineRunStatus =
+  | "running"
+  | "ready"
+  | "paused"
+  | "failed"
+
 export interface DeepAnalysisPipelineRunSummary {
-  status: "running" | "ready" | "failed"
+  status: DeepAnalysisPipelineRunStatus
   currentStage: string | null
   stages: Record<string, unknown>
   error: string | null
@@ -39,7 +50,7 @@ export interface DeepAnalysisPipelineRunSummary {
 // that can't finish a stage in one invocation crawled forward one invocation
 // per 15 minutes, indistinguishable from permanently stuck. With the heartbeat
 // proving liveness, this can sit just above the invocation budget.
-const STALE_RUN_MS = 3 * 60 * 1000
+export const DEEP_ANALYSIS_STALE_RUN_MS = 3 * 60 * 1000
 
 // A running stage bumps its lease this often so the staleness sweep above can
 // tell a live long-running stage (a large file's extraction) from a dead
@@ -51,7 +62,9 @@ export async function claimDeepAnalysisPipelineRun(
   userId: string,
   analysedVideoId: string,
 ): Promise<DeepAnalysisPipelineRun | null> {
-  const staleBefore = new Date(Date.now() - STALE_RUN_MS).toISOString()
+  const staleBefore = new Date(
+    Date.now() - DEEP_ANALYSIS_STALE_RUN_MS,
+  ).toISOString()
   await admin
     .from("deep_analysis_pipeline_runs")
     .update({
@@ -185,21 +198,85 @@ export async function abandonInFlightDeepAnalysisPipelineRun(
   }
 }
 
+// Ends a run and releases its lease. `unsettledAfter` is how much deep-analysis
+// work this pass left behind (null when the pass couldn't measure it) — the
+// watchdog reads consecutive runs' readings to tell a video that's still
+// inching forward from one that's stuck and should be given up on, so record it
+// whenever it's known.
 export async function finishDeepAnalysisPipelineRun(
   admin: SupabaseClient,
   run: DeepAnalysisPipelineRun,
-  outcome: { status: "ready" } | { status: "failed"; error: string },
+  outcome:
+    | { status: "ready" | "paused" }
+    | { status: "failed"; error: string },
+  unsettledAfter: number | null = null,
 ): Promise<void> {
   const now = new Date().toISOString()
-  const { error } = await admin.from("deep_analysis_pipeline_runs").update({
-    status: outcome.status,
+  const base = {
     current_stage: null,
     stages: run.stages,
     error: outcome.status === "failed" ? outcome.error : null,
     finished_at: now,
     updated_at: now,
-  }).eq("id", run.id)
-  if (error) throw new Error(`Failed to finish deep analysis pipeline: ${error.message}`)
+  }
+  const { error } = await admin
+    .from("deep_analysis_pipeline_runs")
+    .update({ ...base, status: outcome.status, unsettled_after: unsettledAfter })
+    .eq("id", run.id)
+  if (!error) return
+
+  // The 'paused' status and the unsettled_after column arrive with the
+  // autonomous-completion migration. Code and schema don't deploy in lockstep,
+  // so on the older schema (an unknown column, or a status the check constraint
+  // rejects) fall back to what it does understand: a paused pass is recorded
+  // the way partial passes always were, as a finished one. The continuation and
+  // the watchdog both key off the video's pending rows rather than this status,
+  // so the analysis still finishes — it just can't be told apart in the run
+  // history until the migration lands. Any other failure is real and rethrown.
+  if (error.code !== "PGRST204" && error.code !== "23514") {
+    throw new Error(`Failed to finish deep analysis pipeline: ${error.message}`)
+  }
+  const { error: fallbackError } = await admin
+    .from("deep_analysis_pipeline_runs")
+    .update({
+      ...base,
+      status: outcome.status === "failed" ? "failed" : "ready",
+    })
+    .eq("id", run.id)
+  if (fallbackError) {
+    throw new Error(
+      `Failed to finish deep analysis pipeline: ${fallbackError.message}`,
+    )
+  }
+}
+
+// Records a run the watchdog gave up on: a video whose last few passes each
+// left the same work behind, which no further pass is going to shift. Written
+// as a failed run of its own rather than by editing history, so the report page
+// shows its retry prompt (a spinner that will never resolve is worse than an
+// honest failure) and the owner's explicit retry is what starts the pipeline
+// again.
+export async function recordAbandonedDeepAnalysisRun(
+  admin: SupabaseClient,
+  userId: string,
+  analysedVideoId: string,
+  errorMessage: string,
+): Promise<void> {
+  const now = new Date().toISOString()
+  const { error } = await admin.from("deep_analysis_pipeline_runs").insert({
+    user_id: userId,
+    analysed_video_id: analysedVideoId,
+    pipeline_version: DEEP_ANALYSIS_PIPELINE_VERSION,
+    status: "failed",
+    error: errorMessage,
+    finished_at: now,
+    updated_at: now,
+  })
+  if (error) {
+    throw new Error(
+      `Failed to record abandoned deep analysis run: ${error.message}`,
+    )
+  }
 }
 
 export async function getLatestDeepAnalysisPipelineRun(

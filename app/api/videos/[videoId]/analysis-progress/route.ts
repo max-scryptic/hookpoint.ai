@@ -91,9 +91,11 @@ export async function GET(
     // The original pipeline kickoff is a long best-effort after() callback.
     // Large source files can exhaust that invocation partway through — stalling
     // at extraction (snapshots/audio), AI analysis, or the final event
-    // synthesis — and leave the remaining rows 'pending' with nothing left to
-    // pick them up. The browser is already polling here, so use that heartbeat
-    // to resume whatever stage the pipeline stalled on. Re-triggering is
+    // synthesis. The server finishes those on its own now (the pass hands over
+    // to a fresh invocation, and the watchdog sweep catches whatever stalls
+    // anyway), so this is no longer what rescues an analysis — it's the fast
+    // path for the reader who happens to be watching, resuming within seconds
+    // of a stall instead of on the sweep's cadence. Re-triggering is
     // idempotent: the pipeline-run lease makes an overlapping kick a no-op
     // while a run is genuinely in flight, and every stage only claims rows that
     // are still pending, so overlapping polls are harmless. See

@@ -411,6 +411,31 @@ export async function getSourceFileByNormalisationTaskToken(
   return data ? mapSourceFileRow(data as SourceFileRow) : null
 }
 
+// Fetches the source file belonging to an analysed video (one per video),
+// without an owner to scope by. Used by the server-to-server deep-analysis
+// endpoints — the continuation worker and the watchdog sweep — which act on
+// videos whose owner isn't present to authenticate, and therefore run through
+// the service-role admin client (RLS would otherwise hide the row). Every other
+// caller should scope by user: prefer getSourceFileForVideo.
+export async function getSourceFileForAnalysedVideo(
+  admin: SupabaseClient,
+  analysedVideoId: string,
+): Promise<SourceFile | null> {
+  const { data, error } = await admin
+    .from("source_files")
+    .select(COLUMNS)
+    .eq("analysed_video_id", analysedVideoId)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(
+      `Failed to load source file for analysed video: ${error.message}`,
+    )
+  }
+
+  return data ? mapSourceFileRow(data as SourceFileRow) : null
+}
+
 // Partial update mapped from camelCase fields to snake_case columns. Only the
 // provided fields are written.
 export interface UpdateSourceFileInput {
