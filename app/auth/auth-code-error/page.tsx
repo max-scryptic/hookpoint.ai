@@ -18,16 +18,19 @@ export default function AuthCodeErrorPage() {
           Hookpoint.ai
         </Link>
         <Card>
+          {/* Reached from both /auth/callback (Google sign-in) and
+              /auth/confirm (email links), so the copy has to fit either.
+              Signing in again is the fix in both cases. */}
           <CardHeader className="text-center">
-            <CardTitle className="text-xl">Confirmation link invalid</CardTitle>
+            <CardTitle className="text-xl">Sign-in didn&rsquo;t complete</CardTitle>
             <CardDescription>
-              This link may have expired or already been used. Please sign in, or
-              request a new confirmation email by signing up again.
+              We couldn&rsquo;t finish signing you in. The link may have expired
+              or already been used. Please try signing in again.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <Link href="/login" className={buttonVariants()}>
-              Go to login
+              Try signing in again
             </Link>
             <Link href="/signup" className={buttonVariants({ variant: "outline" })}>
               Back to sign up
