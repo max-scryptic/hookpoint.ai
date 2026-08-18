@@ -169,23 +169,26 @@ function isStageSettled(status: DeepAnalysisStageStatus): boolean {
 // Whether the deep-analysis pipeline should be re-kicked from the browser's
 // progress-poll heartbeat.
 //
-// The pipeline's original kickoff is a single best-effort after() callback
-// (see lib/retention-window-media-trigger.ts). A large source file can exhaust
+// The pipeline's kickoff is a single best-effort after() callback (see
+// lib/retention-window-media-trigger.ts), and a large source file can exhaust
 // that invocation partway through — stalling at extraction (snapshots/audio),
-// media analysis, or the final event synthesis — and leave the remaining rows
-// 'pending' with nothing left to pick them up, so the checklist sits on a
-// spinner (e.g. "Fetching snapshots") indefinitely. The browser polls
-// analysis-progress on a heartbeat while any stage is still unsettled, so that
-// heartbeat is used to resume a stalled pipeline: re-trigger it whenever it's
-// active but not yet complete, not only when the cheap final synthesis stage
-// is the one left hanging.
+// media analysis, or the final event synthesis. Two server-side mechanisms
+// finish it from there: the pass hands its leftovers to a fresh invocation
+// before its budget runs out, and the watchdog sweep
+// (lib/deep-analysis-watchdog.ts) resumes whatever stalled anyway. Neither
+// needs a browser — an analysis no longer waits for its owner to come back.
+//
+// This poll stays a resume trigger all the same, because it's the one that
+// fires within seconds rather than on the sweep's cadence: for the user who IS
+// watching, it's the difference between the report filling in now and filling
+// in at the next tick.
 //
 // Re-triggering is idempotent and safe to fire on every poll: the pipeline-run
 // lease (claimDeepAnalysisPipelineRun) makes an overlapping kick a no-op while
-// a run is genuinely still in flight, its 15-minute staleness sweep reclaims a
-// run whose invocation died, and every stage only ever claims rows that are
-// still pending — so a repeated kick resumes a stalled run's leftover work
-// without redoing anything that already settled.
+// a run is genuinely still in flight, its staleness sweep reclaims a run whose
+// invocation died, and every stage only ever claims rows that are still
+// pending — so a repeated kick resumes a stalled run's leftover work without
+// redoing anything that already settled.
 export function shouldResumeDeepAnalysis(progress: DeepAnalysisProgress): boolean {
   return progress.active && progress.stages != null && !progress.complete
 }

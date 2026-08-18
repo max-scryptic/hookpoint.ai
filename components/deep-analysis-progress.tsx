@@ -196,6 +196,11 @@ function useDeepAnalysisProgress(
   // guess: the server seeds the first reading, so "unknown" now only means a
   // page whose seed couldn't be computed, and claiming that as analysing would
   // flash a spinner onto every report that was never analysing to begin with.
+  //
+  // 'paused' counts as analysing for the same reason 'running' does: a pass
+  // that handed its remaining work to a fresh invocation is still an analysis
+  // on its way, and the badge should stay put across the hand-over rather than
+  // blink off between passes.
   const analysing =
     !failed &&
     (awaitingRestartedRun ||
@@ -203,7 +208,8 @@ function useDeepAnalysisProgress(
         (progress.degraded === true ||
           (progress.active && !progress.complete) ||
           unreachable ||
-          pipelineRun?.status === "running")))
+          pipelineRun?.status === "running" ||
+          pipelineRun?.status === "paused")))
 
   return useMemo(
     () => ({ analysing, failed, progress }),
