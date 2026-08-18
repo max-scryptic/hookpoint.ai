@@ -84,9 +84,10 @@ export function RetentionEventsInfo() {
           <p className="font-medium text-foreground">When you get a tip</p>
           <p className="text-muted-foreground">
             Light analysis reads the transcript alone, so a window only earns a
-            tip when the words themselves explain the moment. Deep analysis also
-            reads the frames, audio, cuts and pacing, so it can explain moments
-            the script cannot and leaves fewer windows silent.
+            tip when the words themselves explain the moment. Deep analysis —
+            when a raw source file is uploaded and analysed — also reads the
+            frames, audio, cuts and pacing, so it can explain moments the script
+            cannot and leaves fewer windows silent.
           </p>
         </div>
       </PopoverContent>
