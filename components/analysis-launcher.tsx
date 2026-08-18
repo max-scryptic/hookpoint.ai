@@ -53,14 +53,15 @@ const AnalysisLauncherContext = createContext<AnalysisLauncherValue | null>(null
 
 // Returns the launcher when rendered inside a provider, or null otherwise so
 // consumers (e.g. the video list) can fall back to plain navigation when used
-// outside the Analyse Video page.
+// outside the Analyse a Video page.
 export function useAnalysisLauncher(): AnalysisLauncherValue | null {
   return useContext(AnalysisLauncherContext)
 }
 
-// Owns the "analysing your video" popup for the whole Analyse Video page so both
-// the URL form and the recent-uploads list trigger the same experience: paste a
-// URL or hit "Analyse video" → spinner popup while /api/analyze runs → confetti
+// Owns the "analysing your video" popup for the whole Analyse a Video page so
+// both the URL form and the recent-uploads list trigger the same experience:
+// paste a URL or hit "Analyse video" → spinner popup while /api/analyze runs
+// → confetti
 // → redirect to the finished report, instead of landing on an empty page that
 // analyses in the background.
 export function AnalysisLauncherProvider({
