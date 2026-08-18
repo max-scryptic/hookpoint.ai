@@ -4,5 +4,5 @@ import { getAuthenticatedUser } from "@/lib/auth"
 export default async function Home() {
   const user = await getAuthenticatedUser()
 
-  redirect(user ? "/dashboard" : "/login")
+  redirect(user ? "/analyse-video" : "/login")
 }

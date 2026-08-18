@@ -210,7 +210,7 @@ export function EventReceipt({
       <p className="text-muted-foreground">{stripEmDashes(narrative)}</p>
       {sourceLabel && analysedVideoId && (
         <Link
-          href={`/dashboard/analysed-video/${analysedVideoId}`}
+          href={`/analysed-video/${analysedVideoId}`}
           className="inline-flex items-center gap-1 text-muted-foreground/80 underline-offset-2 hover:text-foreground hover:underline"
         >
           {timestampSeconds != null && <Clock3Icon className="size-3" />}

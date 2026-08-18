@@ -101,7 +101,7 @@ export default async function PricingPage() {
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="/dashboard">Hookpoint.ai</BreadcrumbLink>
+                  <BreadcrumbLink href="/">Hookpoint.ai</BreadcrumbLink>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator className="hidden md:block" />
                 <BreadcrumbItem>

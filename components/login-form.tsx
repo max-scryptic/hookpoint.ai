@@ -29,7 +29,7 @@ export function LoginForm({
     setIsLoading(true)
     setError(null)
 
-    const { error: googleError } = await signInWithGoogle("/dashboard")
+    const { error: googleError } = await signInWithGoogle("/analyse-video")
 
     if (googleError) {
       setError(googleError.message)

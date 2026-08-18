@@ -107,7 +107,7 @@ function optionLabel(video: ComparableVideo): string {
 }
 
 function reportHref(a: string, b: string): string {
-  return `/dashboard/video-comparator/report?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`
+  return `/video-comparator/report?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`
 }
 
 export function RetentionComparePicker({

@@ -28,7 +28,7 @@ export type VideosByDayPoint = {
 
 // Upload states where the raw bytes have genuinely landed in storage, i.e. a
 // source file was really uploaded for deep analysis. Mirrors the constant in
-// lib/admin/users.ts / lib/dashboard/kpis.ts.
+// lib/admin/users.ts.
 const DEEP_ANALYSIS_UPLOAD_STATES = ["uploaded", "processing", "ready"]
 
 // The UTC calendar day (YYYY-MM-DD) a timestamp falls on.

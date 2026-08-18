@@ -266,7 +266,7 @@ export function TipMenu({
               {saved ? "Remove from checklist" : "Add to checklist"}
             </DropdownMenuItem>
             {saved && (
-              <DropdownMenuItem render={<a href="/dashboard/checklist" />}>
+              <DropdownMenuItem render={<a href="/checklist" />}>
                 <ListChecksIcon />
                 Open your checklist
               </DropdownMenuItem>

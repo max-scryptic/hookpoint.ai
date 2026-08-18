@@ -8,7 +8,7 @@ export default async function SignupPage() {
   const user = await getAuthenticatedUser()
 
   if (user) {
-    redirect("/dashboard")
+    redirect("/analyse-video")
   }
 
   return (

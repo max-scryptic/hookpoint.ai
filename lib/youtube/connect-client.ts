@@ -18,7 +18,7 @@ import { GOOGLE_SCOPES } from "@/lib/youtube/scopes"
 // seeing it on every sign-in. The refresh token they granted on first login is
 // already stored, so nothing is lost.
 export async function signInWithGoogle(
-  next = "/dashboard",
+  next = "/analyse-video",
   { forceConsent = false }: { forceConsent?: boolean } = {},
 ) {
   const supabase = createClient()

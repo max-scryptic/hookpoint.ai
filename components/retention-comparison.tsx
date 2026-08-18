@@ -132,7 +132,7 @@ function VideoHeaderCard({
               {summary.title ?? "Untitled video"}
             </h3>
             <Link
-              href={href ?? `/dashboard/analysed-video/${summary.videoId}`}
+              href={href ?? `/analysed-video/${summary.videoId}`}
               aria-label="Open full analysis"
               title="Open full analysis"
               className={buttonVariants({

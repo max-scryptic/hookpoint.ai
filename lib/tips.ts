@@ -65,8 +65,18 @@ export const TIP_SURFACE_LABELS: Record<TipSurface, string> = {
 // The surface is recovered from the path the tip was read on, which is the only
 // thing recorded that actually identifies the report. Prefixes, not exact
 // matches, since both surfaces carry an id or a query in the rest of the path.
+//
+// The /dashboard-prefixed variants are the paths these screens used to live at.
+// Rows recorded before the move still carry them, and they are never rewritten,
+// so both spellings have to keep resolving or historical tips would silently
+// report as "unknown".
 const TIP_SURFACE_PATH_PREFIXES: { prefix: string; surface: TipSurface }[] = [
+  { prefix: "/analysed-video/", surface: "video_analysis" },
   { prefix: "/dashboard/analysed-video/", surface: "video_analysis" },
+  {
+    prefix: "/video-comparator/report",
+    surface: "comparison_report",
+  },
   {
     prefix: "/dashboard/video-comparator/report",
     surface: "comparison_report",

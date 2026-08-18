@@ -286,7 +286,7 @@ export function PreviousComparisons({
                 </TableHeader>
                 <TableBody>
                   {sorted.map((comparison) => {
-                    const href = `/dashboard/video-comparator/report?a=${encodeURIComponent(
+                    const href = `/video-comparator/report?a=${encodeURIComponent(
                       comparison.videoAId,
                     )}&b=${encodeURIComponent(comparison.videoBId)}`
                     const aTitle = comparison.videoATitle ?? "Untitled video"

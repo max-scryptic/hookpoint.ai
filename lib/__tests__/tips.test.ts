@@ -53,12 +53,12 @@ describe("tipFingerprint", () => {
 
 describe("normaliseTipSourcePath", () => {
   it("keeps an in-app path", () => {
-    expect(normaliseTipSourcePath("/dashboard/analysed-video/abc")).toBe(
-      "/dashboard/analysed-video/abc",
+    expect(normaliseTipSourcePath("/analysed-video/abc")).toBe(
+      "/analysed-video/abc",
     )
     expect(
-      normaliseTipSourcePath("/dashboard/video-comparator/report?id=1"),
-    ).toBe("/dashboard/video-comparator/report?id=1")
+      normaliseTipSourcePath("/video-comparator/report?id=1"),
+    ).toBe("/video-comparator/report?id=1")
   })
 
   it("drops anything that could point off the site", () => {
@@ -77,9 +77,21 @@ describe("normaliseTipSourcePath", () => {
 
 describe("tipSurface", () => {
   it("reads the surface off the path the tip was flagged on", () => {
-    expect(tipSurface("/dashboard/analysed-video/Rk9YJK1sKek", "Packaging: Title")).toBe(
+    expect(tipSurface("/analysed-video/Rk9YJK1sKek", "Packaging: Title")).toBe(
       "video_analysis",
     )
+    expect(
+      tipSurface(
+        "/video-comparator/report?a=1&b=2",
+        "Packaging head-to-head: Title",
+      ),
+    ).toBe("comparison_report")
+  })
+
+  it("still reads tips recorded under the old /dashboard paths", () => {
+    expect(
+      tipSurface("/dashboard/analysed-video/Rk9YJK1sKek", "Packaging: Title"),
+    ).toBe("video_analysis")
     expect(
       tipSurface(
         "/dashboard/video-comparator/report?a=1&b=2",
@@ -89,6 +101,9 @@ describe("tipSurface", () => {
   })
 
   it("does not read the analysed video list as a report", () => {
+    expect(tipSurface("/analysed-videos", "Packaging: Title")).toBe(
+      "unknown",
+    )
     expect(tipSurface("/dashboard/analysed-videos", "Packaging: Title")).toBe(
       "unknown",
     )
@@ -105,7 +120,7 @@ describe("tipSurface", () => {
 
   it("says unknown rather than guessing at a pathless section", () => {
     expect(tipSurface(null, "Packaging: Title")).toBe("unknown")
-    expect(tipSurface("/dashboard/checklist", "Pacing")).toBe("unknown")
+    expect(tipSurface("/checklist", "Pacing")).toBe("unknown")
     expect(tipSurface(null, null)).toBe("unknown")
   })
 

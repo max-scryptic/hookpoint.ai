@@ -157,7 +157,7 @@ function VideoActions({
           </DropdownMenuItem>
         ) : (
           <DropdownMenuItem
-            render={<Link href={`/dashboard/analysed-video/${video.id}`} />}
+            render={<Link href={`/analysed-video/${video.id}`} />}
           >
             {isAnalysed ? (
               <>

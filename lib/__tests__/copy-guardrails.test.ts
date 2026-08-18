@@ -18,12 +18,12 @@ import {
 // period or colon. Do NOT delete or weaken this test.
 
 const CHANNEL_TRENDS_SOURCE_FILES = [
-  "app/dashboard/channel-trends/loading.tsx",
-  "app/dashboard/channel-trends/page.tsx",
-  "app/dashboard/checklist/loading.tsx",
-  "app/dashboard/checklist/page.tsx",
-  "app/dashboard/video-comparator/page.tsx",
-  "app/dashboard/video-comparator/report/page.tsx",
+  "app/(app)/channel-trends/loading.tsx",
+  "app/(app)/channel-trends/page.tsx",
+  "app/(app)/checklist/loading.tsx",
+  "app/(app)/checklist/page.tsx",
+  "app/(app)/video-comparator/page.tsx",
+  "app/(app)/video-comparator/report/page.tsx",
   "components/admin/admin-tip-feedback-table.tsx",
   "components/channel-trends.tsx",
   "components/channel-trends-copy.ts",
