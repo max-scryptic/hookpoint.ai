@@ -12,7 +12,7 @@ import { NextResponse, type NextRequest } from "next/server"
 //      the link works even when opened in a new tab, app, or different browser
 //      than the one used to sign up. Requires a custom email template whose
 //      link points here directly, e.g.
-//        {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/dashboard
+//        {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/analyse-video
 //
 //   2. code + exchangeCodeForSession — the fallback for the *default* email
 //      template, whose {{ .ConfirmationURL }} routes through Supabase's
@@ -27,8 +27,8 @@ export async function GET(request: NextRequest) {
   // Supabase appends ?error=... when it rejects the link (expired/used token or
   // a redirect target that isn't allow-listed).
   const authError = requestUrl.searchParams.get("error")
-  const next = requestUrl.searchParams.get("next") ?? "/dashboard"
-  const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard"
+  const next = requestUrl.searchParams.get("next") ?? "/analyse-video"
+  const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/analyse-video"
 
   if (!authError) {
     const supabase = await createClient()

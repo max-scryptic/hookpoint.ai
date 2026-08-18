@@ -17,7 +17,7 @@ export function ConnectYouTubeButton({
     setIsLoading(true)
     // Force the consent screen here: this button only appears when the stored
     // refresh token is missing or revoked, so we need Google to re-issue one.
-    const { error } = await signInWithGoogle("/dashboard", { forceConsent: true })
+    const { error } = await signInWithGoogle("/analyse-video", { forceConsent: true })
     // On success the browser redirects to Google, so we only reset on failure.
     if (error) setIsLoading(false)
   }

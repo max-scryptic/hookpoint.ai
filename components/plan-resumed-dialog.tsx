@@ -62,8 +62,8 @@ export function PlanResumedDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Close
           </Button>
-          <Button onClick={() => router.push("/dashboard")}>
-            Go to dashboard
+          <Button onClick={() => router.push("/analyse-video")}>
+            Analyse a video
           </Button>
         </DialogFooter>
       </DialogContent>

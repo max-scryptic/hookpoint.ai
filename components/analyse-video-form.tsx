@@ -111,7 +111,7 @@ export function AnalyseVideoForm() {
             {alreadyAnalysed.title ? ` “${alreadyAnalysed.title}”` : " this video"}.
           </span>
           <Link
-            href={`/dashboard/analysed-video/${alreadyAnalysed.videoId}`}
+            href={`/analysed-video/${alreadyAnalysed.videoId}`}
             className="font-medium text-emerald-600 underline underline-offset-4 dark:text-emerald-500"
           >
             View analysis

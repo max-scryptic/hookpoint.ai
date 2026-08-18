@@ -1,7 +1,7 @@
 import { ConnectYouTubeButton } from "@/components/connect-youtube-button"
 import {
   ConnectedYouTubeChannel,
-} from "@/components/connected-youtube-account-card"
+} from "@/components/connected-youtube-channel"
 import { ModeToggle } from "@/components/mode-toggle"
 import {
   Card,

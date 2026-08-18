@@ -19,13 +19,13 @@ const KIND_PRESENTATION = {
     linkLabel: "View analysis",
     href: (notification: AppNotification) =>
       notification.analysedVideoId
-        ? `/dashboard/analysed-video/${notification.analysedVideoId}`
+        ? `/analysed-video/${notification.analysedVideoId}`
         : null,
   },
   channel_trends_ready: {
     Icon: TrendingUpIcon,
     linkLabel: "Open Channel Trends",
-    href: () => "/dashboard/channel-trends",
+    href: () => "/channel-trends",
   },
 } as const
 

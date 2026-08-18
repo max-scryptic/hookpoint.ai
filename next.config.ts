@@ -1,13 +1,32 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // The tip checklist is now just "Checklist" and lives at /dashboard/checklist.
-  // Anyone holding the old link (a bookmark, an open tab) still lands on it.
+  // The /dashboard prefix is gone: every screen that lived under it now sits at
+  // the top level (/dashboard/analysed-videos → /analysed-videos) and the
+  // dashboard index page itself no longer exists, so /dashboard sends people to
+  // Analyse Video instead. These keep old links — a bookmark, an open tab, a
+  // link mailed out before the move — landing on the right screen.
+  //
+  // Order matters: the two specific rules have to be matched before the
+  // catch-all, which would otherwise rewrite /dashboard/tip-checklist to a
+  // /tip-checklist that has never existed. (That checklist was renamed from
+  // "Tip checklist" to just "Checklist" in an earlier move; it gets there in
+  // one hop.)
   async redirects() {
     return [
       {
         source: "/dashboard/tip-checklist",
-        destination: "/dashboard/checklist",
+        destination: "/checklist",
+        permanent: true,
+      },
+      {
+        source: "/dashboard",
+        destination: "/analyse-video",
+        permanent: true,
+      },
+      {
+        source: "/dashboard/:path*",
+        destination: "/:path*",
         permanent: true,
       },
     ]

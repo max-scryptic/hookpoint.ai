@@ -184,7 +184,7 @@ function BuildingCard() {
             viewers, what holds them, and how your hooks behave.
           </p>
         </div>
-        <Link href="/dashboard/analyse-video" className={buttonVariants()}>
+        <Link href="/analyse-video" className={buttonVariants()}>
           Analyse a video
         </Link>
       </CardContent>

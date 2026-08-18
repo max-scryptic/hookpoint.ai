@@ -178,7 +178,7 @@ export function AnalysisLauncherProvider({
         runRef.current = null
         setPhase("done")
         window.setTimeout(() => {
-          router.push(`/dashboard/analysed-video/${videoId}`)
+          router.push(`/analysed-video/${videoId}`)
         }, DONE_HOLD_MS)
       } catch {
         // Giving up on the run aborts this request on purpose, and the page is

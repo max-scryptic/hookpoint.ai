@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/sidebar"
 
 // Chrome for the authenticated admin area. Uses the same collapsible Sidebar
-// primitives as the main app (see AppSidebar / DashboardLayout) so the two
+// primitives as the main app (see AppSidebar / AppLayout) so the two
 // surfaces share one look and the icon-collapse behaviour. The sidebar owns the
 // admin nav and sign-out; the header carries the collapse trigger and the same
 // route breadcrumb the front-end shows above every dashboard page.

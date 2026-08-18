@@ -29,7 +29,7 @@ export interface PlanCancelledDetails {
 
 // Confirmation shown after a paid plan is scheduled to move to Free. Spells out
 // that access continues until the end of the current billing period and offers a
-// way to close or head to the dashboard. Replaces the old inline banner.
+// way to close or head back into the app. Replaces the old inline banner.
 export function PlanCancelledDialog({
   details,
   onOpenChange,
@@ -75,8 +75,8 @@ export function PlanCancelledDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Close
           </Button>
-          <Button onClick={() => router.push("/dashboard")}>
-            Go to dashboard
+          <Button onClick={() => router.push("/analyse-video")}>
+            Analyse a video
           </Button>
         </DialogFooter>
       </DialogContent>

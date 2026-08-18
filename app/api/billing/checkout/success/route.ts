@@ -8,7 +8,7 @@ import { isStripeEnabled } from "@/lib/stripe/config"
 // the subscription before the dashboard renders so the success modal can show
 // the actual paid features they just unlocked.
 export async function GET(request: NextRequest) {
-  const redirectUrl = new URL("/dashboard", request.url)
+  const redirectUrl = new URL("/analyse-video", request.url)
   redirectUrl.searchParams.set("checkout", "success")
 
   if (!isStripeEnabled()) {

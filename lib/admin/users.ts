@@ -210,7 +210,7 @@ export type AdminStats = {
 
 // Upload states where the raw bytes have genuinely landed in storage — i.e. a
 // source file was really uploaded for deep analysis. Mirrors
-// DEEP_ANALYSIS_UPLOAD_STATES in lib/dashboard/kpis.ts: "pending"/"uploading"
+// DEEP_ANALYSIS_UPLOAD_STATES in lib/admin/activity.ts: "pending"/"uploading"
 // haven't landed yet and "failed" never will, so none of those count.
 const DEEP_ANALYSIS_UPLOAD_STATES = ["uploaded", "processing", "ready"]
 

@@ -18,46 +18,35 @@ import {
   ClapperboardIcon,
   ListChecksIcon,
   ListVideoIcon,
-  TerminalSquareIcon,
   TrendingUpIcon,
   VideoIcon,
 } from "lucide-react"
 
 const navSections = [
   {
-    label: "Platform",
-    items: [
-      {
-        title: "Dashboard",
-        url: "/dashboard",
-        icon: <TerminalSquareIcon />,
-      },
-    ],
-  },
-  {
     label: "Analysis",
     items: [
       {
         title: "Analyse Video",
-        url: "/dashboard/analyse-video",
+        url: "/analyse-video",
         icon: <VideoIcon />,
       },
       {
         title: "Analysed Videos",
-        url: "/dashboard/analysed-videos",
+        url: "/analysed-videos",
         // Also light up while viewing a single analysed video at
-        // /dashboard/analysed-video/[videoId].
-        match: "/dashboard/analysed-video",
+        // /analysed-video/[videoId].
+        match: "/analysed-video",
         icon: <ListVideoIcon />,
       },
       {
         title: "Channel Trends",
-        url: "/dashboard/channel-trends",
+        url: "/channel-trends",
         icon: <TrendingUpIcon />,
       },
       {
         title: "Video Comparator",
-        url: "/dashboard/video-comparator",
+        url: "/video-comparator",
         icon: <ArrowLeftRightIcon />,
       },
     ],
@@ -67,12 +56,12 @@ const navSections = [
     items: [
       {
         title: "Checklist",
-        url: "/dashboard/checklist",
+        url: "/checklist",
         icon: <ListChecksIcon />,
       },
       {
         title: "Video Planner",
-        url: "/dashboard/video-planner",
+        url: "/video-planner",
         icon: <ClapperboardIcon />,
       },
     ],
@@ -115,11 +104,9 @@ export function AppSidebar({
       return {
         ...item,
         isActive:
-          item.url === "/dashboard"
-            ? pathname === "/dashboard"
-            : pathname === item.url ||
-              pathname.startsWith(`${item.url}/`) ||
-              (matchPrefix !== undefined && pathname.startsWith(matchPrefix)),
+          pathname === item.url ||
+          pathname.startsWith(`${item.url}/`) ||
+          (matchPrefix !== undefined && pathname.startsWith(matchPrefix)),
       }
     }),
   }))

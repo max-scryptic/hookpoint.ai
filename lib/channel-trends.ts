@@ -1,4 +1,4 @@
-// Data for the Channel Trends page (app/dashboard/channel-trends): the size
+// Data for the Channel Trends page (app/(app)/channel-trends): the size
 // of the user's accumulated cross-video event library plus per-kind trend
 // aggregations. Built over the same channel event records the synthesizer's
 // channelHistory summary uses (lib/channel-event-history.ts), but richer —

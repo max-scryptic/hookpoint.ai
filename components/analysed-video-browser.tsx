@@ -521,7 +521,7 @@ export function AnalysedVideoBrowser({
           <p className="text-sm text-muted-foreground">{emptyMessage}</p>
           {!hasActiveFilters && (
             <Link
-              href="/dashboard/analyse-video"
+              href="/analyse-video"
               className="text-sm font-medium underline underline-offset-4"
             >
               Analyse a video
@@ -558,7 +558,7 @@ export function AnalysedVideoBrowser({
             </TableHeader>
             <TableBody>
               {pageRows.map(({ video, dateAnalysed, privacyKnown }) => {
-                const href = `/dashboard/analysed-video/${video.id}`
+                const href = `/analysed-video/${video.id}`
                 const rawFileUploaded = rawFileIds.has(video.id)
                 const processing = processingIds.has(video.id)
                 return (

@@ -9,8 +9,8 @@ export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get("code")
   const error = requestUrl.searchParams.get("error")
-  const next = requestUrl.searchParams.get("next") ?? "/dashboard"
-  const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard"
+  const next = requestUrl.searchParams.get("next") ?? "/analyse-video"
+  const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/analyse-video"
 
   // Supabase appends ?error=... when it rejects the redirect (e.g. expired link
   // or a redirect target that isn't allow-listed).
