@@ -1293,7 +1293,7 @@ function MetadataHygieneSection({ video }: { video: VideoDetails }) {
       <p className="text-sm text-muted-foreground">
         Quick packaging basics you can fix in YouTube Studio.
       </p>
-      <ul className="grid gap-3 sm:grid-cols-2">
+      <ul className="grid gap-4 sm:grid-cols-2">
         {hygiene.checks.map((check) => {
           const {
             icon: Icon,
@@ -1304,22 +1304,29 @@ function MetadataHygieneSection({ video }: { video: VideoDetails }) {
           return (
             <li
               key={check.id}
-              className="flex items-start gap-3 rounded-xl border bg-card p-4"
+              // A grid rather than a flex row so the status pill sits in a row of
+              // its own making: the card's first row is as tall as the pill, and
+              // the row gap measures from the pill's bottom edge. Nested in the
+              // title's line box instead, the pill hung two pixels above the
+              // detail text — the detail's own margin was measured from the
+              // title, which is shorter than the pill, so the badge ate most of
+              // it and the text read as jammed under the badge.
+              //
+              // The detail still spans both content columns: given its own
+              // column it stopped short of the pill's edge on every line, which
+              // wrapped one-line details onto two for width nothing was using.
+              className="grid grid-cols-[auto_1fr_auto] items-start gap-x-3 gap-y-2 rounded-xl border bg-card p-4 sm:p-5"
             >
               <Icon className={`mt-0.5 size-4 shrink-0 ${tone}`} />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-medium">{check.label}</span>
-                  <span
-                    className={`ml-auto inline-flex h-5 shrink-0 items-center rounded-full px-2 text-xs leading-none font-medium ${pill}`}
-                  >
-                    {label}
-                  </span>
-                </div>
-                <p className="mt-0.5 text-sm text-muted-foreground">
-                  {check.detail}
-                </p>
-              </div>
+              <span className="min-w-0 text-sm font-medium">{check.label}</span>
+              <span
+                className={`inline-flex h-6 shrink-0 items-center rounded-full px-2.5 text-xs leading-none font-medium ${pill}`}
+              >
+                {label}
+              </span>
+              <p className="col-span-2 col-start-2 text-sm text-muted-foreground">
+                {check.detail}
+              </p>
             </li>
           )
         })}
