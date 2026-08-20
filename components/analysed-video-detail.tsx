@@ -1251,24 +1251,37 @@ function PointsCard({
 // deliberate "this is optional". Each status now carries a familiar icon *and*
 // a plain-language word, so colour is reinforcement rather than the only signal
 // (which also keeps it legible for colour-blind readers).
+//
+// The word sits in a tinted pill (the same badge idiom the comparison headers
+// use): as bare coloured text it floated in the card's top-right corner with
+// nothing anchoring it, reading like a stray label rather than the card's
+// verdict.
 const HYGIENE_STATUS_META: Record<
   HygieneStatus,
-  { icon: ComponentType<{ className?: string }>; label: string; tone: string }
+  {
+    icon: ComponentType<{ className?: string }>
+    label: string
+    tone: string
+    pill: string
+  }
 > = {
   good: {
     icon: CheckCircle2Icon,
     label: "Looks good",
     tone: "text-emerald-600 dark:text-emerald-500",
+    pill: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-500",
   },
   warn: {
     icon: TriangleAlertIcon,
     label: "Worth fixing",
     tone: "text-amber-600 dark:text-amber-500",
+    pill: "bg-amber-500/10 text-amber-600 dark:text-amber-500",
   },
   info: {
     icon: LightbulbIcon,
     label: "Optional",
     tone: "text-muted-foreground",
+    pill: "border bg-muted text-muted-foreground",
   },
 }
 
@@ -1282,7 +1295,12 @@ function MetadataHygieneSection({ video }: { video: VideoDetails }) {
       </p>
       <ul className="grid gap-3 sm:grid-cols-2">
         {hygiene.checks.map((check) => {
-          const { icon: Icon, label, tone } = HYGIENE_STATUS_META[check.status]
+          const {
+            icon: Icon,
+            label,
+            tone,
+            pill,
+          } = HYGIENE_STATUS_META[check.status]
           return (
             <li
               key={check.id}
@@ -1290,10 +1308,10 @@ function MetadataHygieneSection({ video }: { video: VideoDetails }) {
             >
               <Icon className={`mt-0.5 size-4 shrink-0 ${tone}`} />
               <div className="min-w-0 flex-1">
-                <div className="flex items-baseline gap-3">
+                <div className="flex items-center gap-3">
                   <span className="text-sm font-medium">{check.label}</span>
                   <span
-                    className={`ml-auto shrink-0 text-xs font-medium ${tone}`}
+                    className={`ml-auto inline-flex h-5 shrink-0 items-center rounded-full px-2 text-xs leading-none font-medium ${pill}`}
                   >
                     {label}
                   </span>
