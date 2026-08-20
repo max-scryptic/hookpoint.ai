@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  comparisonCreditCost,
+  comparisonRefundCredits,
   creditsForDurationSeconds,
   getPlan,
   isPaidPlanId,
   maxUploadBytesForPlan,
   PLAN_BY_ID,
   planIncludesUploads,
+  VIDEO_COMPARISON_CREDIT_COST,
 } from "@/lib/plans"
 import {
   getSubscriptionReturnUrl,
@@ -26,6 +29,39 @@ describe("creditsForDurationSeconds", () => {
     expect(creditsForDurationSeconds(-5)).toBe(0)
     expect(creditsForDurationSeconds(Number.NaN)).toBe(0)
     expect(creditsForDurationSeconds(Number.POSITIVE_INFINITY)).toBe(0)
+  })
+})
+
+describe("comparisonCreditCost", () => {
+  // The first head-to-head a paid creator generates is the one they cannot judge
+  // from the outside, so it does not ask them to spend anything to find out.
+  it("is free for a creator who has never generated one", () => {
+    expect(comparisonCreditCost(0)).toBe(0)
+  })
+
+  it("costs the flat price once they have one", () => {
+    expect(comparisonCreditCost(1)).toBe(VIDEO_COMPARISON_CREDIT_COST)
+    expect(comparisonCreditCost(12)).toBe(VIDEO_COMPARISON_CREDIT_COST)
+  })
+})
+
+describe("comparisonRefundCredits", () => {
+  it("hands back exactly what the row recorded", () => {
+    expect(comparisonRefundCredits(VIDEO_COMPARISON_CREDIT_COST)).toBe(
+      VIDEO_COMPARISON_CREDIT_COST,
+    )
+  })
+
+  // A recorded zero is the free first comparison. Undoing it must hand back
+  // nothing, or the button mints credits every time it is pressed and abandoned.
+  it("hands back nothing for a comparison that was free", () => {
+    expect(comparisonRefundCredits(0)).toBe(0)
+    expect(comparisonRefundCredits(-3)).toBe(0)
+  })
+
+  // Every pair generated before rows recorded a price was charged the flat cost.
+  it("falls back to the flat cost when the row recorded no price", () => {
+    expect(comparisonRefundCredits(null)).toBe(VIDEO_COMPARISON_CREDIT_COST)
   })
 })
 

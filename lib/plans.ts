@@ -125,6 +125,36 @@ export function getPlan(planId: string | null | undefined): Plan {
 // rather than derived from a duration.
 export const VIDEO_COMPARISON_CREDIT_COST = 5
 
+// What one comparison costs a paid creator, given how many head-to-heads they
+// have generated before it.
+//
+// The first one is on the house. A comparison is the one thing in the product
+// nobody can judge from the outside: until you have read one you do not know
+// whether a head-to-head tells you anything your two reports did not already,
+// and spending credits to find out is exactly the wager that stops a paying
+// creator from ever pressing the button. So the first press costs nothing, and
+// every press after it is priced normally.
+//
+// Free plans never reach this: they have no deep-dive budget at all, and the
+// generate endpoint turns them away before pricing anything.
+export function comparisonCreditCost(previousComparisons: number): number {
+  return previousComparisons > 0 ? VIDEO_COMPARISON_CREDIT_COST : 0
+}
+
+// What to hand back for a comparison that was rolled back, given the amount
+// recorded on the row (see video_comparisons.deep_credits_charged).
+//
+// A recorded amount is exact, including a recorded zero: the free comparison
+// cost nothing, so undoing it refunds nothing. Null means the row never recorded
+// one, which is every pair generated before that column existed, and all of
+// those were charged the flat cost.
+export function comparisonRefundCredits(
+  recordedCharge: number | null,
+): number {
+  if (recordedCharge == null) return VIDEO_COMPARISON_CREDIT_COST
+  return Math.max(0, recordedCharge)
+}
+
 // Converts a source-video runtime (seconds) into the deep-dive credits its deep
 // analysis costs: 1 credit = 1 minute, rounded up so any started minute counts.
 // A non-positive/garbage duration costs a single credit floor of 0 so it can

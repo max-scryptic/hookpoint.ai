@@ -71,12 +71,10 @@ describe("rollBackComparison", () => {
   it("deletes the run's own row and hands its credits back", async () => {
     const { supabase, calls } = makeSupabase([{ id: "comparison-1" }])
 
-    const rolledBack = await rollBackComparison(
-      supabase,
-      "user-1",
-      "comparison-1",
-      new Date("2026-08-05T10:00:00.000Z"),
-    )
+    const rolledBack = await rollBackComparison(supabase, "user-1", "comparison-1", {
+      at: new Date("2026-08-05T10:00:00.000Z"),
+      credits: VIDEO_COMPARISON_CREDIT_COST,
+    })
 
     expect(rolledBack).toBe(true)
     expect(calls[0].table).toBe("video_comparisons")
@@ -95,12 +93,10 @@ describe("rollBackComparison", () => {
   it("refunds nothing when the row is already gone", async () => {
     const { supabase } = makeSupabase([])
 
-    const rolledBack = await rollBackComparison(
-      supabase,
-      "user-1",
-      "comparison-1",
-      new Date("2026-08-05T10:00:00.000Z"),
-    )
+    const rolledBack = await rollBackComparison(supabase, "user-1", "comparison-1", {
+      at: new Date("2026-08-05T10:00:00.000Z"),
+      credits: VIDEO_COMPARISON_CREDIT_COST,
+    })
 
     expect(rolledBack).toBe(false)
     expect(refundUsage).not.toHaveBeenCalled()
@@ -114,6 +110,23 @@ describe("rollBackComparison", () => {
       "user-1",
       "comparison-1",
       null,
+    )
+
+    expect(rolledBack).toBe(true)
+    expect(refundUsage).not.toHaveBeenCalled()
+  })
+
+  // The free first comparison goes through this same rollback, and a run that
+  // spent nothing must get nothing back. Refunding the flat cost for it would
+  // mint credits: the row is deleted, so the next press is free again.
+  it("hands back nothing for a run that was free", async () => {
+    const { supabase } = makeSupabase([{ id: "comparison-1" }])
+
+    const rolledBack = await rollBackComparison(
+      supabase,
+      "user-1",
+      "comparison-1",
+      { at: new Date("2026-08-05T10:00:00.000Z"), credits: 0 },
     )
 
     expect(rolledBack).toBe(true)
@@ -152,6 +165,44 @@ describe("rollBackComparisonForPair", () => {
         .map((filter) => filter.column),
     ).toEqual(["script_report", "packaging_report", "retention_report"])
     expect(refundUsage).toHaveBeenCalledTimes(1)
+  })
+
+  // The browser reporting the abandonment was never told what the run cost, so
+  // the price comes off the row that was deleted. A free first comparison
+  // recorded a zero, and a zero refunds nothing.
+  it("hands back what the deleted row recorded, including nothing", async () => {
+    const { supabase } = makeSupabase([
+      { id: "comparison-1", deep_credits_charged: 0 },
+    ])
+
+    const rolledBack = await rollBackComparisonForPair(
+      supabase,
+      "user-1",
+      "video-a",
+      "video-b",
+      new Date("2026-08-05T10:00:00.000Z"),
+    )
+
+    expect(rolledBack).toBe(true)
+    expect(refundUsage).not.toHaveBeenCalled()
+  })
+
+  // A row that recorded no price at all predates the column, and every one of
+  // those was charged the flat cost.
+  it("falls back to the flat cost for a row that recorded no price", async () => {
+    const { supabase } = makeSupabase([{ id: "comparison-1" }])
+
+    await rollBackComparisonForPair(
+      supabase,
+      "user-1",
+      "video-a",
+      "video-b",
+      new Date("2026-08-05T10:00:00.000Z"),
+    )
+
+    expect(refundUsage).toHaveBeenCalledWith("user-1", periodStart, {
+      deepCredits: VIDEO_COMPARISON_CREDIT_COST,
+    })
   })
 
   it("leaves an older pair alone and refunds nothing", async () => {
@@ -194,6 +245,32 @@ describe("sweepAbandonedComparisons", () => {
       calls[0].filters.some((filter) => filter.op === "lt"),
     ).toBe(true)
     expect(refundUsage).toHaveBeenCalledTimes(2)
+  })
+
+  // The sweep is the last thing to catch an abandoned run, so it too refunds
+  // per row rather than a flat amount: a free comparison abandoned without
+  // notice cost nothing and gives nothing back.
+  it("refunds only the rows that were charged", async () => {
+    const { supabase } = makeSupabase([
+      {
+        id: "comparison-1",
+        created_at: "2026-08-05T10:00:00.000Z",
+        deep_credits_charged: 0,
+      },
+      {
+        id: "comparison-2",
+        created_at: "2026-08-06T10:00:00.000Z",
+        deep_credits_charged: VIDEO_COMPARISON_CREDIT_COST,
+      },
+    ])
+
+    const swept = await sweepAbandonedComparisons(supabase, "user-1")
+
+    expect(swept).toBe(2)
+    expect(refundUsage).toHaveBeenCalledTimes(1)
+    expect(refundUsage).toHaveBeenCalledWith("user-1", periodStart, {
+      deepCredits: VIDEO_COMPARISON_CREDIT_COST,
+    })
   })
 
   // A charge that landed in a usage window which has since rolled over is not

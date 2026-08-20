@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ArrowLeftRightIcon, LockIcon } from "lucide-react"
+import { ArrowLeftRightIcon, LockIcon, SparklesIcon } from "lucide-react"
 
 import { PreviousComparisons } from "@/components/previous-comparisons"
 import { RetentionComparePicker } from "@/components/retention-compare-picker"
@@ -38,13 +38,24 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 
 type CompareResult =
   | { status: "locked" }
-  | { status: "empty"; videoCount: number }
+  | { status: "empty"; videoCount: number; firstComparisonFree: boolean }
   | {
       status: "ok"
       videos: ComparableVideo[]
       comparisons: SavedComparison[]
+      firstComparisonFree: boolean
     }
   | { status: "error" }
+
+// Whether this page should be offering a free head-to-head. A paid creator who
+// has never generated one pays nothing for their first (see
+// comparisonCreditCost), and the history is the same list the server prices
+// from, so nothing extra has to be read to know it. The offer is announced
+// wherever they land: with two analysed videos it sits above a picker they can
+// use, and with fewer it is the reason to go and analyse another one.
+function isFirstComparisonFree(comparisons: SavedComparison[]): boolean {
+  return comparisons.length === 0
+}
 
 async function loadComparePage(userId: string): Promise<CompareResult> {
   try {
@@ -69,12 +80,13 @@ async function loadComparePage(userId: string): Promise<CompareResult> {
       listComparableVideos(supabase, userId),
       listSavedComparisons(supabase, userId),
     ])
+    const firstComparisonFree = isFirstComparisonFree(comparisons)
     // Two deeply analysed videos are the floor for comparing anything.
     if (videos.length < 2) {
-      return { status: "empty", videoCount: videos.length }
+      return { status: "empty", videoCount: videos.length, firstComparisonFree }
     }
 
-    return { status: "ok", videos, comparisons }
+    return { status: "ok", videos, comparisons, firstComparisonFree }
   } catch (error) {
     console.error("Failed to load retention comparison", error)
     return { status: "error" }
@@ -105,9 +117,18 @@ export default async function Page() {
       </header>
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <div>
-          <h1 className="text-2xl font-semibold tracking-normal">
-            Video Comparator
-          </h1>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <h1 className="text-2xl font-semibold tracking-normal">
+              Video Comparator
+            </h1>
+            {(result.status === "ok" || result.status === "empty") &&
+              result.firstComparisonFree && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+                  <SparklesIcon className="size-3.5" />
+                  First comparison report free
+                </span>
+              )}
+          </div>
           <p className="mt-1 text-sm text-muted-foreground">
             Put any two uploads head to head: where their retention curves
             diverge, how the hooks compare, and the evidence behind each
@@ -124,6 +145,7 @@ export default async function Page() {
                 b: comparison.videoBId,
                 reportsReady: comparison.reportsReady,
               }))}
+              firstComparisonFree={result.firstComparisonFree}
             />
             <PreviousComparisons comparisons={result.comparisons} />
           </>

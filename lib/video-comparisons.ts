@@ -1,7 +1,9 @@
 // Persistence for saved Video Comparator head-to-heads. Generating a comparison
-// costs deep-dive credits, so each generated pair is stored (see the
-// video_comparisons migration): it powers the "previous comparisons" list and
-// lets an already-paid-for pair be re-opened for free.
+// costs deep-dive credits (the first one a paid creator ever generates is free,
+// see comparisonCreditCost), so each generated pair is stored (see the
+// video_comparisons migration): it powers the "previous comparisons" list, lets
+// an already-paid-for pair be re-opened for free, and is what the count of a
+// creator's comparisons is taken from when the next one is priced.
 //
 // The three written head-to-heads (retention, script and packaging) are each one
 // model call, so they are generated once, when the creator presses the button,
@@ -207,6 +209,30 @@ export function isSamePair(
     (first.a === second.a && first.b === second.b) ||
     (first.a === second.b && first.b === second.a)
   )
+}
+
+// How many head-to-heads this creator has generated, ever. This is what prices
+// the next one: a paid creator's first comparison is free, and every one after
+// it costs credits (see comparisonCreditCost). Counted rather than listed
+// because the answer is a number and the rows are large.
+//
+// Rows that were rolled back are gone by the time this counts, which is the
+// point: a run that was abandoned or that fell over left the creator with
+// nothing, so it must not be the thing that used up their free one.
+export async function countSavedComparisons(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<number> {
+  const { count, error } = await supabase
+    .from("video_comparisons")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+
+  if (error) {
+    throw new Error(`Failed to count saved comparisons: ${error.message}`)
+  }
+
+  return count ?? 0
 }
 
 // The creator's saved comparisons, newest first, with each side's title joined
@@ -418,31 +444,83 @@ export async function saveRetentionComparisonReport(
   }
 }
 
+// The column each row records its price on (see the deep_credits_charged
+// migration), named once because the queries below have to recognise a database
+// that does not know it yet.
+const CHARGE_COLUMN = "deep_credits_charged"
+
+// Whether a failure is the database saying it has never heard of that column.
+// Migrations here are applied out of band from deploys, so this code can be live
+// for a window before the column exists, and every query that names it has to
+// survive that window. Anything else (a unique violation, a permissions error, a
+// dropped connection) is a real failure and is left to the caller: retrying
+// those without the column would only hide them.
+function isMissingChargeColumn(
+  error: { code?: string; message?: string } | null,
+): boolean {
+  if (!error) return false
+  // PGRST204 is PostgREST failing to find the column in its schema cache;
+  // 42703 is Postgres's own undefined_column.
+  if (error.code === "PGRST204" || error.code === "42703") return true
+  return (error.message ?? "").includes(CHARGE_COLUMN)
+}
+
 // How long after it was created a comparison carrying no written report at all
 // is treated as abandoned rather than as one still being written. The generate
 // endpoint is capped at 300 seconds (see its maxDuration), so anything older
 // than this cannot still be in flight, whichever tab or device started it.
 export const ABANDONED_COMPARISON_GRACE_MS = 15 * 60 * 1000
 
+// A saved pair plus what the row managed to record about its price. A number is
+// what the row now says it was charged, including a recorded zero for the free
+// first comparison. Null means the row could not record a price at all, which
+// only happens while the deep_credits_charged column is not there yet: the
+// caller charges the flat cost in that case, because that is what every refund
+// path will assume was spent.
+export interface CreatedComparison extends SavedComparison {
+  deepCreditsCharged: number | null
+}
+
 // Records a newly generated comparison for the pair, in the order the creator
-// picked them. The caller charges credits before inserting; the unique index on
-// the unordered pair is the backstop against a duplicate slipping through a
-// race.
+// picked them, along with the credits it is being charged. The caller charges
+// after inserting (and charges what comes back here, not what it asked for);
+// the unique index on the unordered pair is the backstop against a duplicate
+// slipping through a race.
+//
+// The price is written on the insert rather than stamped afterwards so a row can
+// never exist without one. Migrations here are applied out of band from deploys,
+// so this code can be live for a window before the column exists: an insert that
+// cannot record the price is retried without it and reports null, which prices
+// the comparison normally rather than taking the whole feature down.
 export async function createSavedComparison(
   supabase: SupabaseClient,
   userId: string,
   videoAId: string,
   videoBId: string,
-): Promise<SavedComparison> {
-  const { data, error } = await supabase
+  deepCreditsCharged: number,
+): Promise<CreatedComparison> {
+  const pair = {
+    user_id: userId,
+    video_a_id: videoAId,
+    video_b_id: videoBId,
+  }
+  const columns = "id, video_a_id, video_b_id, created_at"
+
+  let recorded: number | null = deepCreditsCharged
+  let { data, error } = await supabase
     .from("video_comparisons")
-    .insert({
-      user_id: userId,
-      video_a_id: videoAId,
-      video_b_id: videoBId,
-    })
-    .select("id, video_a_id, video_b_id, created_at")
+    .insert({ ...pair, [CHARGE_COLUMN]: deepCreditsCharged })
+    .select(columns)
     .single()
+
+  if (isMissingChargeColumn(error)) {
+    recorded = null
+    ;({ data, error } = await supabase
+      .from("video_comparisons")
+      .insert(pair)
+      .select(columns)
+      .single())
+  }
 
   if (error) {
     throw new Error(`Failed to save comparison: ${error.message}`)
@@ -453,6 +531,7 @@ export async function createSavedComparison(
     id: row.id,
     videoAId: row.video_a_id,
     videoBId: row.video_b_id,
+    deepCreditsCharged: recorded,
     videoATitle: null,
     videoBTitle: null,
     videoAThumbnailUrl: null,
@@ -548,6 +627,22 @@ export async function releaseComparisonRun(
   }
 }
 
+// A deleted row as the refund paths read it: what it carried as a recorded
+// price, where null means it carried none (see CreatedComparison).
+type ChargedRow = { id: string; deep_credits_charged?: number | null }
+
+export interface DeletedComparison {
+  deleted: boolean
+  deepCreditsCharged: number | null
+}
+
+// The price recorded on a deleted row, or null when there is nothing to read:
+// no row went away, or the row went away without a price on it.
+function readRecordedCharge(row: ChargedRow | undefined): number | null {
+  const charge = row?.deep_credits_charged
+  return typeof charge === "number" ? charge : null
+}
+
 // Removes a saved comparison, and reports whether it removed anything. Every
 // caller is undoing an abandoned run, and the credits only go back when a row
 // actually went away, so the answer matters: the same abandonment can be
@@ -592,25 +687,41 @@ export async function deleteComparisonCreatedSince(
   videoAId: string,
   videoBId: string,
   startedAt: Date,
-): Promise<boolean> {
-  const { data, error } = await supabase
-    .from("video_comparisons")
-    .delete()
-    .eq("user_id", userId)
-    .gte("created_at", startedAt.toISOString())
-    .is("script_report", null)
-    .is("packaging_report", null)
-    .is("retention_report", null)
-    .or(
-      `and(video_a_id.eq.${videoAId},video_b_id.eq.${videoBId}),and(video_a_id.eq.${videoBId},video_b_id.eq.${videoAId})`,
-    )
-    .select("id")
+): Promise<DeletedComparison> {
+  const remove = (columns: string) =>
+    supabase
+      .from("video_comparisons")
+      .delete()
+      .eq("user_id", userId)
+      .gte("created_at", startedAt.toISOString())
+      .is("script_report", null)
+      .is("packaging_report", null)
+      .is("retention_report", null)
+      .or(
+        `and(video_a_id.eq.${videoAId},video_b_id.eq.${videoBId}),and(video_a_id.eq.${videoBId},video_b_id.eq.${videoAId})`,
+      )
+      .select(columns)
+
+  let { data, error } = await remove(`id, ${CHARGE_COLUMN}`)
+  if (isMissingChargeColumn(error)) {
+    // A statement that could not name the column did not run at all, so nothing
+    // has been deleted and the delete is safe to repeat without it: the refund
+    // falls back to the flat cost, which is what every pair predating the column
+    // was charged.
+    ;({ data, error } = await remove("id, created_at"))
+  }
 
   if (error) {
     throw new Error(`Failed to delete abandoned comparison: ${error.message}`)
   }
 
-  return ((data ?? []) as Array<{ id: string }>).length > 0
+  // A select built from a variable column list comes back untyped, so the rows
+  // are named here rather than inferred.
+  const row = ((data ?? []) as unknown as ChargedRow[])[0]
+  return {
+    deleted: row != null,
+    deepCreditsCharged: readRecordedCharge(row),
+  }
 }
 
 // A comparison left behind by a run nobody ever reported the end of: the tab was
@@ -622,6 +733,9 @@ export async function deleteComparisonCreatedSince(
 export interface AbandonedComparison {
   id: string
   createdAt: string
+  // What the row recorded being charged, or null when it recorded nothing (see
+  // CreatedComparison). The sweep hands back exactly this.
+  deepCreditsCharged: number | null
 }
 
 // Deletes those rows for one creator and says which ones went, so the caller can
@@ -634,21 +748,34 @@ export async function deleteAbandonedComparisons(
   now: Date = new Date(),
 ): Promise<AbandonedComparison[]> {
   const cutoff = new Date(now.getTime() - ABANDONED_COMPARISON_GRACE_MS)
-  const { data, error } = await supabase
-    .from("video_comparisons")
-    .delete()
-    .eq("user_id", userId)
-    .lt("created_at", cutoff.toISOString())
-    .is("script_report", null)
-    .is("packaging_report", null)
-    .is("retention_report", null)
-    .select("id, created_at")
+  const remove = (columns: string) =>
+    supabase
+      .from("video_comparisons")
+      .delete()
+      .eq("user_id", userId)
+      .lt("created_at", cutoff.toISOString())
+      .is("script_report", null)
+      .is("packaging_report", null)
+      .is("retention_report", null)
+      .select(columns)
+
+  let { data, error } = await remove(`id, created_at, ${CHARGE_COLUMN}`)
+  if (isMissingChargeColumn(error)) {
+    // Same fallback as the pair rollback above: a statement that could not name
+    // the column never ran, so nothing has been deleted yet and the sweep can
+    // be repeated without it.
+    ;({ data, error } = await remove("id, created_at"))
+  }
 
   if (error) {
     throw new Error(`Failed to clear abandoned comparisons: ${error.message}`)
   }
 
-  return ((data ?? []) as Array<{ id: string; created_at: string }>).map(
-    (row) => ({ id: row.id, createdAt: row.created_at }),
-  )
+  return (
+    (data ?? []) as unknown as Array<ChargedRow & { created_at: string }>
+  ).map((row) => ({
+    id: row.id,
+    createdAt: row.created_at,
+    deepCreditsCharged: readRecordedCharge(row),
+  }))
 }

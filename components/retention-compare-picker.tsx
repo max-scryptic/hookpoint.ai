@@ -19,7 +19,9 @@ import { isSamePair } from "@/lib/video-comparisons"
 // empty, and picking a pair does not load anything on its own: a comparison
 // costs deep-dive credits, so the report is only generated when the creator
 // presses the button. A pair that was already generated (in either order)
-// re-opens for free, and the button says so.
+// re-opens for free, and the button says so. The very first comparison a paid
+// creator generates is free too (see comparisonCreditCost), and the line under
+// the button says that instead of quoting a price.
 //
 // This button is the one and only trigger for writing a report: the report page
 // is a pure read and never generates anything, so a saved pair that is missing
@@ -55,7 +57,7 @@ import { isSamePair } from "@/lib/video-comparisons"
 type Phase = "idle" | "generating" | "done" | "error"
 
 const LEAVE_WARNING =
-  "Your comparison report is still being generated. Leaving now stops it and undoes it: nothing is saved, and the credits go back."
+  "Your comparison report is still being generated. Leaving now stops it and undoes it: nothing is saved, and anything it charged goes back."
 
 const ABANDON_ENDPOINT = "/api/video-comparisons/abandon"
 
@@ -113,6 +115,7 @@ function reportHref(a: string, b: string): string {
 export function RetentionComparePicker({
   videos,
   savedPairs,
+  firstComparisonFree,
 }: {
   videos: ComparableVideo[]
   // The unordered pairs the creator has already generated, so the button can
@@ -120,6 +123,11 @@ export function RetentionComparePicker({
   // that pair's report is complete: a saved pair missing a written section is
   // still free, but it has to go through the endpoint to be finished.
   savedPairs: Array<{ a: string; b: string; reportsReady: boolean }>
+  // True when this creator has never generated a head-to-head, so the next one
+  // costs nothing (see comparisonCreditCost). Only ever a matter of what the
+  // line under the button promises: the price is the server's to decide, and it
+  // decides it again on the press.
+  firstComparisonFree: boolean
 }) {
   const router = useRouter()
   const [a, setA] = useState("")
@@ -237,6 +245,7 @@ export function RetentionComparePicker({
         error?: string
         reportsReady?: boolean
         charged?: number
+        created?: boolean
       } | null
       if (!response.ok) {
         runRef.current = null
@@ -252,10 +261,14 @@ export function RetentionComparePicker({
       // creator reads the done state so pressing through is instant.
       runRef.current = null
       setPartial(payload?.reportsReady === false)
-      // What the server charged is the only reliable answer to whether this
-      // press made something new: nothing is charged for a pair that already
-      // existed, whatever the pairs this page was rendered with happened to say.
-      setMode(payload?.charged === 0 ? "update" : "new")
+      // What the server did is the only reliable answer to whether this press
+      // made something new, whatever the pairs this page was rendered with
+      // happened to say. It says so outright: what it charged cannot answer it
+      // any more, since a creator's first comparison is new and free at once.
+      // (An older deploy that does not say falls back to the price, which was
+      // the answer while every new pair cost something.)
+      const createdPair = payload?.created ?? payload?.charged !== 0
+      setMode(createdPair ? "new" : "update")
       router.prefetch(reportHref(a, b))
       // Pull the history and the saved pairs back down now the run has landed,
       // rather than waiting for the creator to press through to the report. A
@@ -350,7 +363,17 @@ export function RetentionComparePicker({
         </Button>
       </div>
 
-      {!alreadyGenerated && (
+      {!alreadyGenerated && firstComparisonFree && (
+        <p className="text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">
+            Your first comparison report is free.
+          </span>{" "}
+          This one costs no deep-dive credits, and takes a couple of minutes to
+          write. After it, a comparison costs{" "}
+          {VIDEO_COMPARISON_CREDIT_COST} credits.
+        </p>
+      )}
+      {!alreadyGenerated && !firstComparisonFree && (
         <p className="text-xs text-muted-foreground">
           A comparison costs {VIDEO_COMPARISON_CREDIT_COST} deep-dive credits,
           and takes a couple of minutes to write.
