@@ -1,4 +1,5 @@
 import { BrandLogo } from "@/components/brand-logo"
+import { ArrowLeftIcon } from "lucide-react"
 import Link from "next/link"
 
 // Shared shell for the standalone legal pages (privacy policy, terms). They sit
@@ -19,6 +20,13 @@ export function LegalPage({
         <Link href="/" className="flex items-center gap-2 self-center font-medium">
           <BrandLogo className="size-10" priority />
           Hookpoint.ai
+        </Link>
+        <Link
+          href="/login"
+          className="inline-flex items-center gap-1.5 self-start text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeftIcon className="size-4" />
+          Back to login
         </Link>
         <div className="flex flex-col gap-8 rounded-lg border bg-card p-6 text-card-foreground md:p-10">
           <div className="flex flex-col gap-2">
