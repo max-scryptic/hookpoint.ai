@@ -5,8 +5,10 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import {
   AlignHorizontalJustifyCenterIcon,
   AreaChartIcon,
+  CheckCircle2Icon,
   GaugeIcon,
   ImageIcon,
+  LightbulbIcon,
   ListChecksIcon,
   MinusIcon,
   PackageIcon,
@@ -14,6 +16,7 @@ import {
   SparklesIcon,
   TrendingDownIcon,
   TrendingUpIcon,
+  TriangleAlertIcon,
   TypeIcon,
 } from "lucide-react"
 
@@ -63,7 +66,10 @@ import type {
   RetentionMomentAttribution,
   RetentionMomentKind,
 } from "@/lib/retention-attribution"
-import { computeMetadataHygiene } from "@/lib/metadata-hygiene"
+import {
+  computeMetadataHygiene,
+  type HygieneStatus,
+} from "@/lib/metadata-hygiene"
 import type { RetentionWindow } from "@/lib/retention-windows"
 import {
   netSubscribersGained,
@@ -1240,41 +1246,65 @@ function PointsCard({
 // Metadata hygiene (deterministic checks)
 // ---------------------------------------------------------------------------
 
+// A coloured dot alone left readers guessing — nothing on the card said what
+// green meant, and the muted "info" dot read as an absent status rather than a
+// deliberate "this is optional". Each status now carries a familiar icon *and*
+// a plain-language word, so colour is reinforcement rather than the only signal
+// (which also keeps it legible for colour-blind readers).
+const HYGIENE_STATUS_META: Record<
+  HygieneStatus,
+  { icon: ComponentType<{ className?: string }>; label: string; tone: string }
+> = {
+  good: {
+    icon: CheckCircle2Icon,
+    label: "Looks good",
+    tone: "text-emerald-600 dark:text-emerald-500",
+  },
+  warn: {
+    icon: TriangleAlertIcon,
+    label: "Worth fixing",
+    tone: "text-amber-600 dark:text-amber-500",
+  },
+  info: {
+    icon: LightbulbIcon,
+    label: "Optional",
+    tone: "text-muted-foreground",
+  },
+}
+
 function MetadataHygieneSection({ video }: { video: VideoDetails }) {
   const hygiene = useMemo(() => computeMetadataHygiene(video), [video])
 
-  const statusStyles: Record<
-    (typeof hygiene.checks)[number]["status"],
-    string
-  > = {
-    good: "bg-emerald-500 dark:bg-emerald-400",
-    warn: "bg-amber-500 dark:bg-amber-400",
-    info: "bg-muted-foreground/40",
-  }
-
   return (
     <div className="flex flex-col gap-3">
-      <div className="rounded-xl border bg-muted/30 p-4 text-sm text-muted-foreground">
-        {hygiene.goodCount} of {hygiene.scoredCount} metadata checks look
-        healthy. These are quick packaging basics you can fix in YouTube Studio.
-      </div>
+      <p className="text-sm text-muted-foreground">
+        Quick packaging basics you can fix in YouTube Studio.
+      </p>
       <ul className="grid gap-3 sm:grid-cols-2">
-        {hygiene.checks.map((check) => (
-          <li
-            key={check.id}
-            className="flex items-start gap-3 rounded-xl border bg-card p-4"
-          >
-            <span
-              className={`mt-1.5 size-2 shrink-0 rounded-full ${statusStyles[check.status]}`}
-            />
-            <div>
-              <div className="text-sm font-medium">{check.label}</div>
-              <p className="mt-0.5 text-sm text-muted-foreground">
-                {check.detail}
-              </p>
-            </div>
-          </li>
-        ))}
+        {hygiene.checks.map((check) => {
+          const { icon: Icon, label, tone } = HYGIENE_STATUS_META[check.status]
+          return (
+            <li
+              key={check.id}
+              className="flex items-start gap-3 rounded-xl border bg-card p-4"
+            >
+              <Icon className={`mt-0.5 size-4 shrink-0 ${tone}`} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline gap-3">
+                  <span className="text-sm font-medium">{check.label}</span>
+                  <span
+                    className={`ml-auto shrink-0 text-xs font-medium ${tone}`}
+                  >
+                    {label}
+                  </span>
+                </div>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  {check.detail}
+                </p>
+              </div>
+            </li>
+          )
+        })}
       </ul>
     </div>
   )
