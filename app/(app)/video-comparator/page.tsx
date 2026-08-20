@@ -38,7 +38,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 
 type CompareResult =
   | { status: "locked" }
-  | { status: "empty"; videoCount: number; firstComparisonFree: boolean }
+  | { status: "empty"; videoCount: number }
   | {
       status: "ok"
       videos: ComparableVideo[]
@@ -50,9 +50,10 @@ type CompareResult =
 // Whether this page should be offering a free head-to-head. A paid creator who
 // has never generated one pays nothing for their first (see
 // comparisonCreditCost), and the history is the same list the server prices
-// from, so nothing extra has to be read to know it. The offer is announced
-// wherever they land: with two analysed videos it sits above a picker they can
-// use, and with fewer it is the reason to go and analyse another one.
+// from, so nothing extra has to be read to know it. The offer is only announced
+// once it can be taken up, which means two analysed videos and a picker to use
+// them in: alongside the empty state it would be a promise about a page that
+// cannot compare anything yet.
 function isFirstComparisonFree(comparisons: SavedComparison[]): boolean {
   return comparisons.length === 0
 }
@@ -80,13 +81,17 @@ async function loadComparePage(userId: string): Promise<CompareResult> {
       listComparableVideos(supabase, userId),
       listSavedComparisons(supabase, userId),
     ])
-    const firstComparisonFree = isFirstComparisonFree(comparisons)
     // Two deeply analysed videos are the floor for comparing anything.
     if (videos.length < 2) {
-      return { status: "empty", videoCount: videos.length, firstComparisonFree }
+      return { status: "empty", videoCount: videos.length }
     }
 
-    return { status: "ok", videos, comparisons, firstComparisonFree }
+    return {
+      status: "ok",
+      videos,
+      comparisons,
+      firstComparisonFree: isFirstComparisonFree(comparisons),
+    }
   } catch (error) {
     console.error("Failed to load retention comparison", error)
     return { status: "error" }
@@ -121,13 +126,12 @@ export default async function Page() {
             <h1 className="text-2xl font-semibold tracking-normal">
               Video Comparator
             </h1>
-            {(result.status === "ok" || result.status === "empty") &&
-              result.firstComparisonFree && (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
-                  <SparklesIcon className="size-3.5" />
-                  First comparison report free
-                </span>
-              )}
+            {result.status === "ok" && result.firstComparisonFree && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+                <SparklesIcon className="size-3.5" />
+                Your first comparison report is free
+              </span>
+            )}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             Put any two uploads head to head: where their retention curves
