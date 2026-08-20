@@ -7,11 +7,15 @@ import {
   getUsageForWindow,
   incrementUsage,
 } from "@/lib/billing/entitlements"
-import { rollBackComparison } from "@/lib/comparison-cleanup"
+import {
+  rollBackComparison,
+  type ComparisonCharge,
+} from "@/lib/comparison-cleanup"
 import type { LlmLogContext } from "@/lib/llm-calls"
-import { VIDEO_COMPARISON_CREDIT_COST } from "@/lib/plans"
+import { comparisonCreditCost, VIDEO_COMPARISON_CREDIT_COST } from "@/lib/plans"
 import {
   claimComparisonRun,
+  countSavedComparisons,
   createSavedComparison,
   findSavedComparison,
   getComparisonReports,
@@ -37,7 +41,11 @@ export const maxDuration = 300
 // Generates (and pays for) one video-vs-video comparison report. A comparison
 // costs a flat VIDEO_COMPARISON_CREDIT_COST deep-dive credits, charged once per
 // unordered pair: re-generating a pair that already exists (in either order)
-// re-opens it for free. The request does not resolve until all three written
+// re-opens it for free. The exception is the first comparison a paid creator
+// ever generates, which is free (see comparisonCreditCost): nobody can tell from
+// the outside whether a head-to-head is worth credits, so the first one does not
+// ask them to bet any. The response says what it charged, and whether this press
+// created the pair. The request does not resolve until all three written
 // head-to-heads have been generated and stored, so the client can keep its
 // "generating" popup up for the whole run and only offer the way through to the
 // report once there is a finished report to open. The response carries
@@ -198,11 +206,13 @@ export async function POST(request: NextRequest) {
   // What this request created, so an ending that leaves the report unwritten can
   // undo exactly that and nothing else. Only ever set for a pair this request
   // saved itself: an existing pair being finished for free is not ours to
-  // delete. chargedAt stays null until the credits are actually taken, so a
-  // rollback never refunds a charge that did not land.
-  const run: { comparisonId: string | null; chargedAt: Date | null } = {
+  // delete. charge stays null until credits are actually taken (a free first
+  // comparison never sets it), so a rollback never refunds a charge that did not
+  // land, and when it is set it carries what was taken rather than a flat
+  // assumption.
+  const run: { comparisonId: string | null; charge: ComparisonCharge | null } = {
     comparisonId: null,
-    chargedAt: null,
+    charge: null,
   }
   // Set the moment we have an answer to send. Past this point the request is
   // over on our side, so a late abort (a client that hangs up while the response
@@ -220,7 +230,7 @@ export async function POST(request: NextRequest) {
       supabase,
       user.id,
       run.comparisonId,
-      run.chargedAt,
+      run.charge,
     ).then((rolledBack) => {
       if (rolledBack) {
         console.info("Rolled back an abandoned video comparison")
@@ -254,6 +264,7 @@ export async function POST(request: NextRequest) {
         return settle({
           id: existing.id,
           charged: 0,
+          created: false,
           reportsReady: true,
         })
       }
@@ -305,6 +316,7 @@ export async function POST(request: NextRequest) {
         return settle({
           id: existing.id,
           charged: 0,
+          created: false,
           reportsReady: allReportsReady(ready),
         })
       } finally {
@@ -331,19 +343,39 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const usage = await getUsageForWindow(user.id, entitlement.periodStart)
-    const remaining =
-      entitlement.plan.deepCreditsPerMonth - usage.deepCreditsUsed
-    if (remaining < VIDEO_COMPARISON_CREDIT_COST) {
-      return settle(
-        {
-          error: `A comparison costs ${VIDEO_COMPARISON_CREDIT_COST} deep-dive credits and you have ${Math.max(
-            0,
-            remaining,
-          )} left this period.`,
-        },
-        { status: 402 },
-      )
+    // The first head-to-head a paid creator generates is on the house, so what
+    // this one costs depends on how many they already have. A count we cannot
+    // read is priced as a normal comparison: being unable to prove this is their
+    // first is not the same as proving it is, and a comparison sold at the
+    // ordinary price is a far smaller wrong than one given away every time this
+    // query has a bad day.
+    const previousComparisons = await countSavedComparisons(
+      supabase,
+      user.id,
+    ).catch((error) => {
+      console.error("Failed to count previous comparisons", error)
+      return 1
+    })
+    const price = comparisonCreditCost(previousComparisons)
+
+    // Only a comparison that costs something has to be afforded. A creator who
+    // has spent this period's budget still gets their free first one, which is
+    // the whole point of it: it is what they try the feature on.
+    if (price > 0) {
+      const usage = await getUsageForWindow(user.id, entitlement.periodStart)
+      const remaining =
+        entitlement.plan.deepCreditsPerMonth - usage.deepCreditsUsed
+      if (remaining < price) {
+        return settle(
+          {
+            error: `A comparison costs ${price} deep-dive credits and you have ${Math.max(
+              0,
+              remaining,
+            )} left this period.`,
+          },
+          { status: 402 },
+        )
+      }
     }
 
     // Insert first so ownership (RLS) and the unordered-pair unique index are
@@ -356,6 +388,7 @@ export async function POST(request: NextRequest) {
         user.id,
         videoAId,
         videoBId,
+        price,
       )
     } catch (error) {
       const raced = await findSavedComparison(
@@ -370,6 +403,7 @@ export async function POST(request: NextRequest) {
         return settle({
           id: raced.id,
           charged: 0,
+          created: false,
           reportsReady: raced.reportsReady,
         })
       }
@@ -386,16 +420,27 @@ export async function POST(request: NextRequest) {
     const claim = await claimComparisonRun(supabase, user.id, saved.id)
     const claimedAt = claim.granted ? claim.claimedAt : null
 
+    // Charge what the row says it was charged, not what we asked for. The two
+    // only differ while the column recording the price does not exist yet, where
+    // the row comes back saying it recorded nothing: every path that refunds
+    // this pair will then assume the flat cost, so the flat cost is what has to
+    // be taken. See createSavedComparison.
+    const charged = saved.deepCreditsCharged ?? VIDEO_COMPARISON_CREDIT_COST
+
     // Charge for the freshly saved comparison. Best-effort, matching the upload
     // path: the saved row is the record that the pair was generated, and a
-    // metering hiccup must not strand a report the creator can already see.
-    try {
-      await incrementUsage(user.id, entitlement.periodStart, {
-        deepCredits: VIDEO_COMPARISON_CREDIT_COST,
-      })
-      run.chargedAt = new Date()
-    } catch (error) {
-      console.error("Failed to charge for video comparison", error)
+    // metering hiccup must not strand a report the creator can already see. A
+    // free comparison takes nothing and records no charge, so nothing is handed
+    // back if this run is later rolled back.
+    if (charged > 0) {
+      try {
+        await incrementUsage(user.id, entitlement.periodStart, {
+          deepCredits: charged,
+        })
+        run.charge = { at: new Date(), credits: charged }
+      } catch (error) {
+        console.error("Failed to charge for video comparison", error)
+      }
     }
 
     // Write all three head-to-heads now, before the response, so the report is
@@ -417,7 +462,8 @@ export async function POST(request: NextRequest) {
       // report it is about to open is complete.
       return settle({
         id: saved.id,
-        charged: VIDEO_COMPARISON_CREDIT_COST,
+        charged,
+        created: true,
         reportsReady: allReportsReady(ready),
       })
     } finally {
@@ -432,12 +478,7 @@ export async function POST(request: NextRequest) {
     // they started rather than leaving that in their history: a failed press
     // should cost them nothing and be safe to repeat.
     if (run.comparisonId) {
-      await rollBackComparison(
-        supabase,
-        user.id,
-        run.comparisonId,
-        run.chargedAt,
-      )
+      await rollBackComparison(supabase, user.id, run.comparisonId, run.charge)
     }
     return settle(
       { error: "We couldn't generate that comparison right now." },

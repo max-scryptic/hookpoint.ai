@@ -237,7 +237,7 @@ export function ComparisonProcessing({
                 // written has gone missing.
                 "All done. This pair was already in your history, so it has been updated where it is rather than added again."
               : "All done. Your report is saved, so you can re-open it any time."
-            : "This takes a couple of minutes. Keep this tab open and we'll show you the report the moment it's ready. Leaving stops it and puts your credits back."}
+            : "This takes a couple of minutes. Keep this tab open and we'll show you the report the moment it's ready. Leaving stops it and undoes it, so anything it charged goes back."}
         </p>
       </div>
 
