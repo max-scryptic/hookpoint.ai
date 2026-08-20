@@ -1247,41 +1247,34 @@ function PointsCard({
 // ---------------------------------------------------------------------------
 
 // A coloured dot alone left readers guessing — nothing on the card said what
-// green meant, and the muted "info" dot read as an absent status rather than a
-// deliberate "this is optional". Each status now carries a familiar icon *and*
-// a plain-language word, so colour is reinforcement rather than the only signal
-// (which also keeps it legible for colour-blind readers).
-//
-// The word sits in a tinted pill (the same badge idiom the comparison headers
-// use): as bare coloured text it floated in the card's top-right corner with
-// nothing anchoring it, reading like a stray label rather than the card's
-// verdict.
+// green meant. A familiar icon per status carries the verdict visually: a tick
+// for fine, a warning triangle for worth fixing, a bulb for optional. The
+// plain-language word stays as the icon's accessible name so colour and glyph
+// are reinforcement rather than the only signal (which keeps it legible for
+// colour-blind and screen-reader users) without a visible badge crowding the
+// card's top-right corner.
 const HYGIENE_STATUS_META: Record<
   HygieneStatus,
   {
     icon: ComponentType<{ className?: string }>
     label: string
     tone: string
-    pill: string
   }
 > = {
   good: {
     icon: CheckCircle2Icon,
     label: "Looks good",
     tone: "text-emerald-600 dark:text-emerald-500",
-    pill: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-500",
   },
   warn: {
     icon: TriangleAlertIcon,
     label: "Worth fixing",
     tone: "text-amber-600 dark:text-amber-500",
-    pill: "bg-amber-500/10 text-amber-600 dark:text-amber-500",
   },
   info: {
     icon: LightbulbIcon,
     label: "Optional",
     tone: "text-muted-foreground",
-    pill: "border bg-muted text-muted-foreground",
   },
 }
 
@@ -1295,36 +1288,21 @@ function MetadataHygieneSection({ video }: { video: VideoDetails }) {
       </p>
       <ul className="grid gap-4 sm:grid-cols-2">
         {hygiene.checks.map((check) => {
-          const {
-            icon: Icon,
-            label,
-            tone,
-            pill,
-          } = HYGIENE_STATUS_META[check.status]
+          const { icon: Icon, label, tone } = HYGIENE_STATUS_META[check.status]
           return (
             <li
               key={check.id}
-              // A grid rather than a flex row so the status pill sits in a row of
-              // its own making: the card's first row is as tall as the pill, and
-              // the row gap measures from the pill's bottom edge. Nested in the
-              // title's line box instead, the pill hung two pixels above the
-              // detail text — the detail's own margin was measured from the
-              // title, which is shorter than the pill, so the badge ate most of
-              // it and the text read as jammed under the badge.
-              //
-              // The detail still spans both content columns: given its own
-              // column it stopped short of the pill's edge on every line, which
-              // wrapped one-line details onto two for width nothing was using.
-              className="grid grid-cols-[auto_1fr_auto] items-start gap-x-3 gap-y-2 rounded-xl border bg-card p-4 sm:p-5"
+              // A grid rather than a flex row so the detail lines up under the
+              // title rather than under the icon: the icon owns the first
+              // column, and the detail starts in the second alongside it.
+              className="grid grid-cols-[auto_1fr] items-start gap-x-3 gap-y-2 rounded-xl border bg-card p-4"
             >
               <Icon className={`mt-0.5 size-4 shrink-0 ${tone}`} />
-              <span className="min-w-0 text-sm font-medium">{check.label}</span>
-              <span
-                className={`inline-flex h-6 shrink-0 items-center rounded-full px-2.5 text-xs leading-none font-medium ${pill}`}
-              >
-                {label}
+              <span className="min-w-0 text-sm font-medium">
+                {check.label}
+                <span className="sr-only"> — {label}</span>
               </span>
-              <p className="col-span-2 col-start-2 text-sm text-muted-foreground">
+              <p className="col-start-2 text-sm text-muted-foreground">
                 {check.detail}
               </p>
             </li>
