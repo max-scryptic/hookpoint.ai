@@ -1660,7 +1660,7 @@ export function AnalysedVideoDetail({
             {video.thumbnailUrl && (
               <div className="pointer-events-none absolute inset-0 z-20">
                 <div className="sticky top-4 flex justify-end px-5 pt-5">
-                  <div className="w-2/5 max-w-64">
+                  <div className="w-1/2 max-w-84">
                     <SourceVideoPlayer
                       videoId={video.id}
                       thumbnailUrl={video.thumbnailUrl}
