@@ -35,6 +35,10 @@ import {
   RetentionChart,
   type RetentionChartInsight,
 } from "@/components/retention-chart"
+import {
+  HintCallout,
+  useOnboardingHint,
+} from "@/components/onboarding-hints"
 import { RecommendationCallout } from "@/components/recommendation-callout"
 import { RetentionEventsInfo } from "@/components/retention-events-info"
 import {
@@ -625,6 +629,42 @@ function deepFeedbackCarriesTip(
   )
 }
 
+// Whether the window's transcript reading is worth a showing of its own — the
+// one that becomes the "Script" tab.
+function hasScriptFeedback(
+  attribution: RetentionMomentAttribution | undefined,
+): attribution is RetentionMomentAttribution {
+  return attribution != null && attribution.explanation !== ""
+}
+
+// Whether a window's feedback renders as a tab switcher rather than as a single
+// flat block — the same condition WindowFeedback branches on below, asked ahead
+// of the render. The footage-tabs hint needs it: there is no point offering to
+// explain tabs on a report that has none.
+function rendersFeedbackTabs(
+  attribution: RetentionMomentAttribution | undefined,
+  deepFeedback: DeepWindowFeedback[],
+): boolean {
+  const uniqueDeep = dedupeDeepFeedback(deepFeedback)
+  return hasScriptFeedback(attribution)
+    ? uniqueDeep.length > 0
+    : uniqueDeep.length > 1
+}
+
+// The mark a footage tab wears until the creator opens one: a small pulsing
+// dot, the same signal an unread item carries elsewhere. Paired with the
+// callout above the retention lists, which is what actually says what these
+// tabs are — a dot on its own can only draw the eye, not explain.
+function NewFootageTabDot({ shown }: { shown: boolean }) {
+  if (!shown) return null
+  return (
+    <span
+      aria-hidden="true"
+      className="size-1.5 animate-pulse rounded-full bg-primary"
+    />
+  )
+}
+
 // A window's feedback block, rendered together with the row's header so the
 // Script/deep tab switcher can sit inline on the top row (after the transcript
 // quote) rather than below it. `header` is given the tab list to place in that
@@ -650,27 +690,37 @@ function WindowFeedback({
   // "Hold"), so a tip kept from it says where it was read.
   section: string
 }) {
+  // Until the creator has opened one, the tabs the deeper analysis added are
+  // marked as new and any of them being opened is what retires that hint for
+  // good. See ONBOARDING_HINTS in lib/onboarding-hints.ts.
+  const footageTabsHint = useOnboardingHint("deep_analysis_window_tabs")
+  const onTabChange = (value: unknown) => {
+    if (typeof value === "string" && value.startsWith("deep-")) {
+      footageTabsHint.dismiss()
+    }
+  }
   const uniqueDeep = dedupeDeepFeedback(deepFeedback)
   const hasDeep = uniqueDeep.length > 0
   // The window's script feedback as it will actually be shown, or undefined when
   // there is none to show. A tip a deep tab already carries is dropped from it;
   // the explanation stays either way, so only the duplicated "Try:" line goes.
+  const scriptSource = hasScriptFeedback(attribution) ? attribution : undefined
   const script =
-    attribution == null || attribution.explanation === ""
-      ? undefined
-      : attribution.tip != null &&
-          deepFeedbackCarriesTip(uniqueDeep, attribution.tip)
-        ? { ...attribution, tip: null }
-        : attribution
+    scriptSource != null &&
+    scriptSource.tip != null &&
+    deepFeedbackCarriesTip(uniqueDeep, scriptSource.tip)
+      ? { ...scriptSource, tip: null }
+      : scriptSource
 
   if (script && hasDeep) {
     return (
-      <Tabs defaultValue="script" className="gap-2">
+      <Tabs defaultValue="script" className="gap-2" onValueChange={onTabChange}>
         {header(
           <TabsList>
             <TabsTrigger value="script">Script</TabsTrigger>
             {uniqueDeep.map(({ insight }, index) => (
               <TabsTrigger key={insight.id} value={`deep-${insight.id}`}>
+                <NewFootageTabDot shown={footageTabsHint.pending} />
                 {deepFeedbackTabLabel(insight, index, uniqueDeep)}
               </TabsTrigger>
             ))}
@@ -699,11 +749,16 @@ function WindowFeedback({
   if (!script && uniqueDeep.length > 1) {
     const defaultValue = `deep-${uniqueDeep[0].insight.id}`
     return (
-      <Tabs defaultValue={defaultValue} className="gap-2">
+      <Tabs
+        defaultValue={defaultValue}
+        className="gap-2"
+        onValueChange={onTabChange}
+      >
         {header(
           <TabsList>
             {uniqueDeep.map(({ insight }, index) => (
               <TabsTrigger key={insight.id} value={`deep-${insight.id}`}>
+                <NewFootageTabDot shown={footageTabsHint.pending} />
                 {deepFeedbackTabLabel(insight, index, uniqueDeep)}
               </TabsTrigger>
             ))}
@@ -1328,6 +1383,7 @@ export function AnalysedVideoDetail({
   analyticsSummary = null,
   deepAnalysisEvidence = null,
   showDeepRecommendations = true,
+  deepAnalysisComplete = false,
 }: {
   video: VideoDetails
   retention: RetentionPoint[]
@@ -1340,6 +1396,14 @@ export function AnalysedVideoDetail({
   analyticsSummary?: VideoAnalyticsSummary | null
   deepAnalysisEvidence?: DeepAnalysisEvidence | null
   showDeepRecommendations?: boolean
+  // Whether this video's uploaded footage has been through the deeper analysis
+  // and settled. Both coach marks below wait for it: that is the render where
+  // the report gains everything they point at, and it arrives on its own (the
+  // status poll refreshes the route when a run lands) while the creator is
+  // reading. Pointing at the tabs any earlier would point at nothing, and
+  // teaching playback while the analysis still ran would spend the one showing
+  // each hint gets on half the news.
+  deepAnalysisComplete?: boolean
 }) {
   const [previewTime, setPreviewTime] = useState<number | null>(null)
   const [playbackWindow, setPlaybackWindow] = useState<{
@@ -1348,6 +1412,13 @@ export function AnalysedVideoDetail({
     toSeconds: number
   } | null>(null)
   const insightAreaRef = useRef<HTMLDivElement | null>(null)
+
+  // The two things a finished analysis of an upload leaves behind that nothing
+  // on the page otherwise announces: highlights that play their moment back,
+  // and the tabs it adds to each window. Each is pointed at once and never
+  // again — see ONBOARDING_HINTS in lib/onboarding-hints.ts.
+  const playbackHint = useOnboardingHint("retention_insight_playback")
+  const footageTabsHint = useOnboardingHint("deep_analysis_window_tabs")
 
   // Dismiss the open insight (returning the video to its thumbnail) when the
   // user clicks anywhere outside the video/chart area — not just inside the
@@ -1463,6 +1534,21 @@ export function AnalysedVideoDetail({
     isFirstSaying,
   )
   const dedupedPacingAnalysis = dedupePacingTips(pacingAnalysis, isFirstSaying)
+
+  // Whether any window below actually renders a tab switcher. The footage tabs
+  // only appear where the deeper analysis reached distinct, actionable
+  // conclusions, so a report can have a finished analysis and still show none —
+  // and a callout explaining tabs that aren't there would be worse than silence.
+  const showFootageTabsHint =
+    footageTabsHint.pending &&
+    deepAnalysisComplete &&
+    [hookSection, dropSection, gainSection, holdSection].some(
+      ({ attribution, deepFeedback }) =>
+        [...deepFeedback.entries()].some(([windowIndex, feedback]) =>
+          rendersFeedbackTabs(attribution.get(windowIndex), feedback),
+        ),
+    )
+
   const chartInsights: RetentionChartInsight[] = [
     ...hookWindows
       .filter((window) => !window.outOfRange)
@@ -1711,6 +1797,28 @@ export function AnalysedVideoDetail({
               durationSeconds={video.durationSeconds}
               insights={chartInsights}
               selectedInsightId={playbackWindow?.id ?? null}
+              hint={
+                // Once the footage has been analysed, point at the first
+                // highlight on the curve: nothing else on the page says that
+                // clicking one now plays that moment back.
+                playbackHint.pending &&
+                deepAnalysisComplete &&
+                chartInsights.length > 0
+                  ? {
+                      insightId: chartInsights[0].id,
+                      render: (arrow) => (
+                        <HintCallout
+                          title="Your footage is in"
+                          arrow={arrow}
+                          onDismiss={playbackHint.dismiss}
+                        >
+                          Click a highlight to watch that exact moment back from
+                          the file you uploaded.
+                        </HintCallout>
+                      ),
+                    }
+                  : null
+              }
               onScrubTimeChange={setPreviewTime}
               onInsightSelect={(insight) => {
                 setPlaybackWindow(
@@ -1725,8 +1833,23 @@ export function AnalysedVideoDetail({
                 // Bring the tab holding this insight forward so its highlighted
                 // row is the one on show. Leave the tab as-is when clicking off.
                 if (insight) setRetentionTab(TAB_FOR_INSIGHT_KIND[insight.kind])
+                // Opening a highlight is the thing the hint was asking for, so
+                // it has served its purpose whether or not it was read.
+                if (insight) playbackHint.dismiss()
               }}
             />
+
+            {showFootageTabsHint && (
+              <HintCallout
+                title="New tabs, read from your footage"
+                onDismiss={footageTabsHint.dismiss}
+                className="max-w-2xl"
+              >
+                The windows below now carry a tab per conclusion the deeper
+                analysis drew from your frames and audio, alongside what the
+                script alone says. Open one to see its evidence.
+              </HintCallout>
+            )}
 
             {defaultRetentionTab && (
               <Tabs

@@ -2,6 +2,7 @@
 
 import { useId, useMemo, useState } from "react"
 
+import type { HintArrow } from "@/components/onboarding-hints"
 import type { RetentionPoint } from "@/lib/youtube/youtube"
 
 export type RetentionChartInsight = {
@@ -34,6 +35,29 @@ const PLOT_H = HEIGHT - PAD.top - PAD.bottom
 // the hook's 0:00 start — line up with the axis instead of poking past it.
 const WINDOW_EDGE_WIDTH = 1.5
 
+// A one-time coach mark drawn at one of the markers on the curve. `insightId`
+// names the marker it points at — that one pulses for as long as the hint
+// stands — and `render` draws the bubble, given the arrow placement the anchor
+// worked out, so the copy stays with whoever is teaching rather than here.
+export type RetentionChartHint = {
+  insightId: string
+  render: (arrow: HintArrow) => React.ReactNode
+}
+
+// How far the hint bubble is held clear of the marker it points at, in CSS
+// pixels: enough for the arrow plus the marker's own halo.
+const HINT_MARKER_GAP = 18
+
+// Where the arrow's tip sits relative to the bubble's aligned edge, matching
+// the offset HintCallout draws it at. Shifting the bubble by this much puts the
+// arrow directly over the marker.
+const HINT_ARROW_INSET = 25
+
+// A marker high on the curve — a hook window, most often, sitting at ~100%
+// retention — leaves no room above it, so the bubble drops below instead. Read
+// as a percentage of the chart's height.
+const HINT_FLIP_BELOW_PERCENT = 45
+
 function formatTimestamp(totalSeconds: number): string {
   const seconds = Math.max(0, Math.round(totalSeconds))
   const hrs = Math.floor(seconds / 3600)
@@ -49,6 +73,7 @@ export function RetentionChart({
   durationSeconds,
   insights = [],
   selectedInsightId = null,
+  hint = null,
   onScrubTimeChange,
   onInsightSelect,
 }: {
@@ -59,6 +84,7 @@ export function RetentionChart({
   // truth with anything else that needs to know an insight is open (e.g. an
   // outside-click handler that also covers the video player).
   selectedInsightId?: string | null
+  hint?: RetentionChartHint | null
   onScrubTimeChange?: (seconds: number | null) => void
   onInsightSelect?: (insight: RetentionChartInsight | null) => void
 }) {
@@ -161,6 +187,20 @@ export function RetentionChart({
     (insight) => insight.id === selectedInsightId,
   )
 
+  // Where an insight's marker sits: on the curve, at the midpoint of the window
+  // it describes.
+  function markerPoint(insight: RetentionChartInsight) {
+    const from = Math.max(0, Math.min(durationSeconds, insight.fromSeconds))
+    const to = Math.max(from, Math.min(durationSeconds, insight.toSeconds))
+    const midpoint = from + (to - from) / 2
+    const fraction = durationSeconds > 0 ? midpoint / durationSeconds : 0
+    return { midpoint, x: model.xFor(fraction), y: model.yAtFraction(fraction) }
+  }
+
+  const hintedInsight = hint
+    ? insights.find((insight) => insight.id === hint.insightId)
+    : undefined
+
   const insightTone = {
     hook: {
       band: "#facc15",
@@ -230,280 +270,333 @@ export function RetentionChart({
 
   return (
     <div className="relative rounded-xl border bg-card p-4">
-      <svg
-        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        className="w-full"
-        role="img"
-        aria-label="Audience retention curve"
-        onPointerMove={handleMove}
-        onPointerLeave={() => {
-          setHoverIndex(null)
-          setHoverX(null)
-        }}
-        onClick={clearSelectedInsight}
-      >
-        <defs>
-          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--chart-1)" stopOpacity="0.35" />
-            <stop offset="100%" stopColor="var(--chart-1)" stopOpacity="0.02" />
-          </linearGradient>
-          {/* Soft blur for the marker halo, so the hover/selection glow reads as
-              a gentle diffuse light rather than a hard-edged translucent disc. */}
-          <filter
-            id={haloFilterId}
-            x="-150%"
-            y="-150%"
-            width="400%"
-            height="400%"
-          >
-            <feGaussianBlur stdDeviation="2.5" />
-          </filter>
-          {/* Subtle elevation shadow so each marker reads as a small raised bead
-              sitting on the curve, rather than a flat dot. */}
-          <filter
-            id={markerShadowFilterId}
-            x="-100%"
-            y="-100%"
-            width="300%"
-            height="300%"
-          >
-            <feDropShadow
-              dx="0"
-              dy="1"
-              stdDeviation="1"
-              floodColor="#0f172a"
-              floodOpacity="0.35"
-            />
-          </filter>
-        </defs>
-
-        {/* Horizontal gridlines and y-axis percentage labels. */}
-        {model.yTicks.map((v) => {
-          const y = model.yFor(v)
-          return (
-            <g key={`y-${v}`}>
-              <line
-                x1={PAD.left}
-                y1={y}
-                x2={WIDTH - PAD.right}
-                y2={y}
-                stroke="var(--border)"
-                strokeWidth={1}
-                vectorEffect="non-scaling-stroke"
+      {/* The plot and the coach mark that can float over it share one box. The
+          SVG keeps its 1000×300 aspect at any width, so a marker's position in
+          the viewBox is the same percentage of this box — which is all the
+          bubble below needs to line itself up with one. */}
+      <div className="relative">
+        <svg
+          viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+          className="block w-full"
+          role="img"
+          aria-label="Audience retention curve"
+          onPointerMove={handleMove}
+          onPointerLeave={() => {
+            setHoverIndex(null)
+            setHoverX(null)
+          }}
+          onClick={clearSelectedInsight}
+        >
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--chart-1)" stopOpacity="0.35" />
+              <stop offset="100%" stopColor="var(--chart-1)" stopOpacity="0.02" />
+            </linearGradient>
+            {/* Soft blur for the marker halo, so the hover/selection glow reads as
+                a gentle diffuse light rather than a hard-edged translucent disc. */}
+            <filter
+              id={haloFilterId}
+              x="-150%"
+              y="-150%"
+              width="400%"
+              height="400%"
+            >
+              <feGaussianBlur stdDeviation="2.5" />
+            </filter>
+            {/* Subtle elevation shadow so each marker reads as a small raised bead
+                sitting on the curve, rather than a flat dot. */}
+            <filter
+              id={markerShadowFilterId}
+              x="-100%"
+              y="-100%"
+              width="300%"
+              height="300%"
+            >
+              <feDropShadow
+                dx="0"
+                dy="1"
+                stdDeviation="1"
+                floodColor="#0f172a"
+                floodOpacity="0.35"
               />
+            </filter>
+          </defs>
+
+          {/* Horizontal gridlines and y-axis percentage labels. */}
+          {model.yTicks.map((v) => {
+            const y = model.yFor(v)
+            return (
+              <g key={`y-${v}`}>
+                <line
+                  x1={PAD.left}
+                  y1={y}
+                  x2={WIDTH - PAD.right}
+                  y2={y}
+                  stroke="var(--border)"
+                  strokeWidth={1}
+                  vectorEffect="non-scaling-stroke"
+                />
+                <text
+                  x={PAD.left - 8}
+                  y={y}
+                  textAnchor="end"
+                  dominantBaseline="middle"
+                  fontSize={12}
+                  fill="var(--muted-foreground)"
+                >
+                  {Math.round(v * 100)}%
+                </text>
+              </g>
+            )
+          })}
+
+          {/* Vertical timestamp ticks along the bottom. */}
+          {model.xTicks.map((tick) => {
+            const x = model.xFor(tick.fraction)
+            return (
               <text
-                x={PAD.left - 8}
-                y={y}
-                textAnchor="end"
-                dominantBaseline="middle"
+                key={`x-${tick.fraction}`}
+                x={x}
+                y={HEIGHT - 8}
+                textAnchor={
+                  tick.fraction === 0
+                    ? "start"
+                    : tick.fraction === 1
+                      ? "end"
+                      : "middle"
+                }
                 fontSize={12}
                 fill="var(--muted-foreground)"
               >
-                {Math.round(v * 100)}%
+                {formatTimestamp(tick.seconds)}
               </text>
-            </g>
-          )
-        })}
+            )
+          })}
 
-        {/* Vertical timestamp ticks along the bottom. */}
-        {model.xTicks.map((tick) => {
-          const x = model.xFor(tick.fraction)
-          return (
-            <text
-              key={`x-${tick.fraction}`}
-              x={x}
-              y={HEIGHT - 8}
-              textAnchor={
-                tick.fraction === 0
-                  ? "start"
-                  : tick.fraction === 1
-                    ? "end"
-                    : "middle"
-              }
-              fontSize={12}
-              fill="var(--muted-foreground)"
-            >
-              {formatTimestamp(tick.seconds)}
-            </text>
-          )
-        })}
-
-        {/* The retention area. */}
-        <path d={model.areaPath} fill={`url(#${gradientId})`} />
-        <path
-          d={model.linePath}
-          fill="none"
-          stroke="var(--chart-1)"
-          strokeWidth={2}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-          vectorEffect="non-scaling-stroke"
-        />
-
-        {/* A subtle dotted guide that tracks the pointer along the timeline. */}
-        {hoverX != null && (
-          <line
-            x1={hoverX}
-            y1={PAD.top}
-            x2={hoverX}
-            y2={PAD.top + PLOT_H}
-            stroke="var(--muted-foreground)"
-            strokeWidth={1}
-            strokeDasharray="3 4"
-            strokeOpacity={0.25}
+          {/* The retention area. */}
+          <path d={model.areaPath} fill={`url(#${gradientId})`} />
+          <path
+            d={model.linePath}
+            fill="none"
+            stroke="var(--chart-1)"
+            strokeWidth={2}
+            strokeLinejoin="round"
+            strokeLinecap="round"
             vectorEffect="non-scaling-stroke"
-            pointerEvents="none"
           />
-        )}
 
-        {/* When an insight is selected, shade the whole window it refers to in a
-            light wash of its colour, bounded by vertical lines at the start and
-            end of the window, so the reader can see exactly which slice of the
-            video the insight describes. */}
-        {activeInsight &&
-          (() => {
-            const from = Math.max(
-              0,
-              Math.min(durationSeconds, activeInsight.fromSeconds),
-            )
-            const to = Math.max(
-              from,
-              Math.min(durationSeconds, activeInsight.toSeconds),
-            )
-            const x1 = model.xFor(durationSeconds > 0 ? from / durationSeconds : 0)
-            const x2 = model.xFor(durationSeconds > 0 ? to / durationSeconds : 0)
-            const tone = insightTone[activeInsight.kind]
+          {/* A subtle dotted guide that tracks the pointer along the timeline. */}
+          {hoverX != null && (
+            <line
+              x1={hoverX}
+              y1={PAD.top}
+              x2={hoverX}
+              y2={PAD.top + PLOT_H}
+              stroke="var(--muted-foreground)"
+              strokeWidth={1}
+              strokeDasharray="3 4"
+              strokeOpacity={0.25}
+              vectorEffect="non-scaling-stroke"
+              pointerEvents="none"
+            />
+          )}
+
+          {/* When an insight is selected, shade the whole window it refers to in a
+              light wash of its colour, bounded by vertical lines at the start and
+              end of the window, so the reader can see exactly which slice of the
+              video the insight describes. */}
+          {activeInsight &&
+            (() => {
+              const from = Math.max(
+                0,
+                Math.min(durationSeconds, activeInsight.fromSeconds),
+              )
+              const to = Math.max(
+                from,
+                Math.min(durationSeconds, activeInsight.toSeconds),
+              )
+              const x1 = model.xFor(durationSeconds > 0 ? from / durationSeconds : 0)
+              const x2 = model.xFor(durationSeconds > 0 ? to / durationSeconds : 0)
+              const tone = insightTone[activeInsight.kind]
+              return (
+                <g pointerEvents="none">
+                  <rect
+                    x={x1}
+                    y={PAD.top}
+                    width={Math.max(0, x2 - x1)}
+                    height={PLOT_H}
+                    fill={tone.band}
+                    fillOpacity={0.12}
+                  />
+                  {[x1, x2].map((x, i) => {
+                    // Keep the centred stroke fully within the plot so a boundary
+                    // edge (e.g. the hook's 0:00 start) renders flush with the
+                    // axis rather than half a stroke-width past it.
+                    const half = WINDOW_EDGE_WIDTH / 2
+                    const cx = Math.min(
+                      PAD.left + PLOT_W - half,
+                      Math.max(PAD.left + half, x),
+                    )
+                    return (
+                      <line
+                        key={`window-edge-${i}`}
+                        x1={cx}
+                        y1={PAD.top}
+                        x2={cx}
+                        y2={PAD.top + PLOT_H}
+                        stroke={tone.band}
+                        strokeWidth={WINDOW_EDGE_WIDTH}
+                        strokeOpacity={0.6}
+                      />
+                    )
+                  })}
+                </g>
+              )
+            })()}
+
+          {/* Each insight is represented by one clickable marker at the midpoint
+              of its source window, positioned directly on the retention curve. */}
+          {insights.map((insight) => {
+            const { midpoint, x, y } = markerPoint(insight)
+            const isActive = activeInsight?.id === insight.id
+            const isHinted = hintedInsight?.id === insight.id
+            const isHovered = hoveredInsightId === insight.id
+            const tone = insightTone[insight.kind]
+            // Scale up smoothly on hover, and further when selected. A gentle
+            // overshoot easing gives the growth a little life rather than a snap.
+            const scale = isActive ? 1.5 : isHovered ? 1.22 : 1
+            const haloScale = isActive ? 2.4 : isHovered ? 2 : 1.4
+            const haloOpacity = isActive ? 0.32 : isHovered ? 0.2 : 0
+            const grow = "cubic-bezier(0.34, 1.56, 0.64, 1)"
+            const transformOrigin = `${x}px ${y}px`
+
             return (
-              <g pointerEvents="none">
-                <rect
-                  x={x1}
-                  y={PAD.top}
-                  width={Math.max(0, x2 - x1)}
-                  height={PLOT_H}
-                  fill={tone.band}
-                  fillOpacity={0.12}
-                />
-                {[x1, x2].map((x, i) => {
-                  // Keep the centred stroke fully within the plot so a boundary
-                  // edge (e.g. the hook's 0:00 start) renders flush with the
-                  // axis rather than half a stroke-width past it.
-                  const half = WINDOW_EDGE_WIDTH / 2
-                  const cx = Math.min(
-                    PAD.left + PLOT_W - half,
-                    Math.max(PAD.left + half, x),
+              <g
+                key={insight.id}
+                className="cursor-pointer outline-none"
+                role="button"
+                tabIndex={0}
+                aria-label={`${tone.name}: ${insight.label}, at ${formatTimestamp(midpoint)}`}
+                onPointerEnter={() => setHoveredInsightId(insight.id)}
+                onPointerLeave={() =>
+                  setHoveredInsightId((current) =>
+                    current === insight.id ? null : current,
                   )
-                  return (
-                    <line
-                      key={`window-edge-${i}`}
-                      x1={cx}
-                      y1={PAD.top}
-                      x2={cx}
-                      y2={PAD.top + PLOT_H}
-                      stroke={tone.band}
-                      strokeWidth={WINDOW_EDGE_WIDTH}
-                      strokeOpacity={0.6}
-                    />
-                  )
-                })}
-              </g>
-            )
-          })()}
-
-        {/* Each insight is represented by one clickable marker at the midpoint
-            of its source window, positioned directly on the retention curve. */}
-        {insights.map((insight) => {
-          const from = Math.max(
-            0,
-            Math.min(durationSeconds, insight.fromSeconds),
-          )
-          const to = Math.max(from, Math.min(durationSeconds, insight.toSeconds))
-          const midpoint = from + (to - from) / 2
-          const fraction = durationSeconds > 0 ? midpoint / durationSeconds : 0
-          const x = model.xFor(fraction)
-          const y = model.yAtFraction(fraction)
-          const isActive = activeInsight?.id === insight.id
-          const isHovered = hoveredInsightId === insight.id
-          const tone = insightTone[insight.kind]
-          // Scale up smoothly on hover, and further when selected. A gentle
-          // overshoot easing gives the growth a little life rather than a snap.
-          const scale = isActive ? 1.5 : isHovered ? 1.22 : 1
-          const haloScale = isActive ? 2.4 : isHovered ? 2 : 1.4
-          const haloOpacity = isActive ? 0.32 : isHovered ? 0.2 : 0
-          const grow = "cubic-bezier(0.34, 1.56, 0.64, 1)"
-          const transformOrigin = `${x}px ${y}px`
-
-          return (
-            <g
-              key={insight.id}
-              className="cursor-pointer outline-none"
-              role="button"
-              tabIndex={0}
-              aria-label={`${tone.name}: ${insight.label}, at ${formatTimestamp(midpoint)}`}
-              onPointerEnter={() => setHoveredInsightId(insight.id)}
-              onPointerLeave={() =>
-                setHoveredInsightId((current) =>
-                  current === insight.id ? null : current,
-                )
-              }
-              onClick={(event) => {
-                event.stopPropagation()
-                toggleInsight(insight)
-              }}
-              onFocus={() => setHoveredInsightId(insight.id)}
-              onBlur={() =>
-                setHoveredInsightId((current) =>
-                  current === insight.id ? null : current,
-                )
-              }
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault()
+                }
+                onClick={(event) => {
                   event.stopPropagation()
                   toggleInsight(insight)
+                }}
+                onFocus={() => setHoveredInsightId(insight.id)}
+                onBlur={() =>
+                  setHoveredInsightId((current) =>
+                    current === insight.id ? null : current,
+                  )
                 }
-              }}
-            >
-              {/* Soft, blurred glow that fades and expands on hover / selection,
-                  in place of a hard-edged translucent disc. */}
-              <circle
-                cx={x}
-                cy={y}
-                r={6}
-                fill={tone.band}
-                pointerEvents="none"
-                filter={`url(#${haloFilterId})`}
-                style={{
-                  transformOrigin,
-                  transform: `scale(${haloScale})`,
-                  opacity: haloOpacity,
-                  transition: `transform 260ms ${grow}, opacity 260ms ease-out`,
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    toggleInsight(insight)
+                  }
                 }}
-              />
-              {/* The marker itself: a small raised bead with a ring matched to
-                  the card background so it reads as a distinct dot sitting on
-                  the curve, and a soft shadow for depth. */}
-              <circle
-                cx={x}
-                cy={y}
-                r={5.5}
-                fill={tone.band}
-                stroke="var(--card)"
-                strokeWidth={2}
-                pointerEvents="none"
-                vectorEffect="non-scaling-stroke"
-                filter={`url(#${markerShadowFilterId})`}
+              >
+                {/* While a coach mark points at this marker, a ring swells out of
+                    it and fades, so the eye finds the thing the bubble is talking
+                    about. Stops at the first click, with the hint. */}
+                {isHinted && (
+                  <circle
+                    cx={x}
+                    cy={y}
+                    r={7}
+                    fill="none"
+                    stroke={tone.band}
+                    strokeWidth={2}
+                    pointerEvents="none"
+                    vectorEffect="non-scaling-stroke"
+                    className="animate-hint-pulse"
+                    style={{ transformOrigin }}
+                  />
+                )}
+                {/* Soft, blurred glow that fades and expands on hover / selection,
+                    in place of a hard-edged translucent disc. */}
+                <circle
+                  cx={x}
+                  cy={y}
+                  r={6}
+                  fill={tone.band}
+                  pointerEvents="none"
+                  filter={`url(#${haloFilterId})`}
+                  style={{
+                    transformOrigin,
+                    transform: `scale(${haloScale})`,
+                    opacity: haloOpacity,
+                    transition: `transform 260ms ${grow}, opacity 260ms ease-out`,
+                  }}
+                />
+                {/* The marker itself: a small raised bead with a ring matched to
+                    the card background so it reads as a distinct dot sitting on
+                    the curve, and a soft shadow for depth. */}
+                <circle
+                  cx={x}
+                  cy={y}
+                  r={5.5}
+                  fill={tone.band}
+                  stroke="var(--card)"
+                  strokeWidth={2}
+                  pointerEvents="none"
+                  vectorEffect="non-scaling-stroke"
+                  filter={`url(#${markerShadowFilterId})`}
+                  style={{
+                    transformOrigin,
+                    transform: `scale(${scale})`,
+                    transition: `transform 220ms ${grow}`,
+                  }}
+                />
+                {/* Generous invisible hit target so the marker is easy to grab. */}
+                <circle cx={x} cy={y} r={18} fill="transparent" />
+              </g>
+            )
+          })}
+        </svg>
+
+        {/* The coach mark, hung off the marker it points at: below it when the
+            marker sits high on the curve (a hook window has no room above it),
+            above it otherwise, and shifted sideways so its arrow lands on the
+            marker rather than the bubble running off the edge of the card. */}
+        {hint &&
+          hintedInsight &&
+          (() => {
+            const { x, y } = markerPoint(hintedInsight)
+            const leftPercent = (x / WIDTH) * 100
+            const topPercent = (y / HEIGHT) * 100
+            const below = topPercent < HINT_FLIP_BELOW_PERCENT
+            const align =
+              leftPercent < 30 ? "start" : leftPercent > 70 ? "end" : "center"
+            const shiftX =
+              align === "start"
+                ? `-${HINT_ARROW_INSET}px`
+                : align === "end"
+                  ? `calc(-100% + ${HINT_ARROW_INSET}px)`
+                  : "-50%"
+            const shiftY = below
+              ? `${HINT_MARKER_GAP}px`
+              : `calc(-100% - ${HINT_MARKER_GAP}px)`
+
+            return (
+              <div
+                className="pointer-events-auto absolute z-10 w-max"
                 style={{
-                  transformOrigin,
-                  transform: `scale(${scale})`,
-                  transition: `transform 220ms ${grow}`,
+                  left: `${leftPercent}%`,
+                  top: `${topPercent}%`,
+                  transform: `translate(${shiftX}, ${shiftY})`,
                 }}
-              />
-              {/* Generous invisible hit target so the marker is easy to grab. */}
-              <circle cx={x} cy={y} r={18} fill="transparent" />
-            </g>
-          )
-        })}
-      </svg>
+              >
+                {hint.render({ side: below ? "top" : "bottom", align })}
+              </div>
+            )
+          })()}
+      </div>
 
       {/* Readout below the chart so it never clips at the SVG edges. */}
       <div className="mt-2 flex items-center justify-between text-sm">
