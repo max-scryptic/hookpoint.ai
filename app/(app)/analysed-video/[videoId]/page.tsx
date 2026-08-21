@@ -3,8 +3,13 @@ import {
   DeepAnalysisStatusProvider,
   type DeepAnalysisProgressResponse,
 } from "@/components/deep-analysis-progress"
+import { OnboardingHintsProvider } from "@/components/onboarding-hints"
 import { SourceFileUpload } from "@/components/source-file-upload"
 import { UnlockFullReportCta } from "@/components/unlock-full-report-cta"
+import {
+  getPendingOnboardingHints,
+  type OnboardingHint,
+} from "@/lib/onboarding-hints"
 import { getDeepAnalysisEvidence } from "@/lib/deep-analysis-evidence"
 import { getDeepAnalysisRollout } from "@/lib/deep-analysis-config"
 import { requireAuthenticatedUser } from "@/lib/auth"
@@ -460,6 +465,19 @@ export default async function Page({
   const showUnlockCta =
     result.status === "ok" && !reportUnlocked && !canUploadSourceFile
 
+  // The one-time coach marks this creator has still to meet, read here so the
+  // first paint already knows which — if any — to draw. Best-effort: a report
+  // is worth more than a hint, so a failed read simply shows none.
+  let pendingHints: OnboardingHint[] = []
+  if (result.status === "ok") {
+    try {
+      const supabase = await createClient()
+      pendingHints = await getPendingOnboardingHints(supabase, user.id)
+    } catch (error) {
+      console.error("Failed to load onboarding hints", error)
+    }
+  }
+
   // Only surface the deep-analysis evidence section once the pipeline has
   // fully settled for this video — every window's snapshots/audio have been
   // harvested and analysed, and events have been synthesized from all of it.
@@ -552,37 +570,43 @@ export default async function Page({
             videoId={videoId}
             initialProgress={initialDeepAnalysisProgress}
           >
-            <AnalysedVideoDetail
-              video={result.video}
-              retention={result.retention}
-              retentionWindows={result.retentionWindows}
-              transcript={result.transcript}
-              pacingAnalysis={result.pacingAnalysis}
-              retentionAttribution={result.retentionAttribution}
-              packagingAlignment={result.packagingAlignment}
-              scriptTaxonomy={result.scriptTaxonomy}
-              analyticsSummary={result.analyticsSummary}
-              deepAnalysisEvidence={
-                deepAnalysisRollout.insights ? deepAnalysisEvidence : null
-              }
-              showDeepRecommendations={deepAnalysisRollout.recommendations}
-            />
-            {/* The foot of the report is the one slot that leads to the
-                footage-based half of it. On a paid plan that is the upload
-                card; on Free, where uploading isn't available, the upgrade
-                prompt takes its place. */}
-            {showUnlockCta ? (
-              <UnlockFullReportCta />
-            ) : (
-              <SourceFileUpload
-                videoId={videoId}
-                videoTitle={result.video.title}
-                youtubeDurationSeconds={result.video.durationSeconds}
-                durationToleranceSeconds={getDurationToleranceSeconds()}
-                filenameSimilarityThreshold={getFilenameSimilarityThreshold()}
-                initialSourceFile={initialSourceFile}
+            {/* Wraps the report and the upload card together: the card is what
+                announces a file landing without a reload, and the coach marks
+                the report then draws are the answer to it. */}
+            <OnboardingHintsProvider pendingHints={pendingHints}>
+              <AnalysedVideoDetail
+                video={result.video}
+                retention={result.retention}
+                retentionWindows={result.retentionWindows}
+                transcript={result.transcript}
+                pacingAnalysis={result.pacingAnalysis}
+                retentionAttribution={result.retentionAttribution}
+                packagingAlignment={result.packagingAlignment}
+                scriptTaxonomy={result.scriptTaxonomy}
+                analyticsSummary={result.analyticsSummary}
+                deepAnalysisEvidence={
+                  deepAnalysisRollout.insights ? deepAnalysisEvidence : null
+                }
+                showDeepRecommendations={deepAnalysisRollout.recommendations}
+                hasSourceFile={readySourceFile != null}
               />
-            )}
+              {/* The foot of the report is the one slot that leads to the
+                  footage-based half of it. On a paid plan that is the upload
+                  card; on Free, where uploading isn't available, the upgrade
+                  prompt takes its place. */}
+              {showUnlockCta ? (
+                <UnlockFullReportCta />
+              ) : (
+                <SourceFileUpload
+                  videoId={videoId}
+                  videoTitle={result.video.title}
+                  youtubeDurationSeconds={result.video.durationSeconds}
+                  durationToleranceSeconds={getDurationToleranceSeconds()}
+                  filenameSimilarityThreshold={getFilenameSimilarityThreshold()}
+                  initialSourceFile={initialSourceFile}
+                />
+              )}
+            </OnboardingHintsProvider>
           </DeepAnalysisStatusProvider>
         )}
 

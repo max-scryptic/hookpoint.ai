@@ -194,3 +194,37 @@ body {
 .animate-indeterminate-progress {
   animation: indeterminate-progress 1.4s ease-in-out infinite;
 }
+
+/*
+ * Coach-mark pulse — a ring that swells out of a retention marker and fades,
+ * for as long as a one-time hint is pointing at it. Scaled about the marker's
+ * own centre, which the element sets as its transform-origin in the SVG's user
+ * space, so this works wherever on the curve the marker happens to sit.
+ */
+@keyframes hint-pulse {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.65;
+  }
+  70% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+.animate-hint-pulse {
+  animation: hint-pulse 1.9s ease-out infinite;
+}
+
+/* A repeating swell is exactly what reduced motion asks us not to draw. Hold
+ * the ring still instead, so the marker is still marked out. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-hint-pulse {
+    animation: none;
+    opacity: 0.5;
+  }
+}
