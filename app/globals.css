@@ -66,6 +66,20 @@ body {
   min-height: 100%;
 }
 
+/*
+ * Smooth anchor scrolling, scoped to the public landing page. Its nav is a set
+ * of anchors into sections of the same page, so following one should read as a
+ * scroll rather than a jump. It is deliberately not applied to the document at
+ * large: the report page animates window.scrollTo itself (see the eased scroll
+ * in components/analysed-video-detail.tsx), and a globally smooth root would
+ * animate against every frame of that animation.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  html:has(#landing-root) {
+    scroll-behavior: smooth;
+  }
+}
+
 body {
   margin: 0;
   font-family:
