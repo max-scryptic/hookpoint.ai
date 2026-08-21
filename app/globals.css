@@ -55,6 +55,17 @@
   --sidebar-accent-foreground: oklch(0.44 0.15 292);
   --sidebar-border: oklch(0.91 0.012 285);
   --sidebar-ring: oklch(0.55 0.16 292);
+  /*
+   * The landing page alternates its sections between the page tier and this
+   * band, so the funnel reads as a series of stops rather than one long wash.
+   * It is its own token rather than a translucent --muted because the two
+   * themes need opposite moves: light mode deepens the lavender tint below the
+   * page (--muted is *lighter* than the page here, so a muted wash all but
+   * vanishes), dark mode lifts above it. Both land a step of roughly 0.03 in
+   * lightness, which is visible without cutting the page into stripes, and in
+   * both themes a white/raised card still sits clearly above the band.
+   */
+  --landing-band: oklch(0.925 0.019 291);
 }
 
 * {
@@ -122,6 +133,7 @@ body {
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
+  --color-landing-band: var(--landing-band);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -164,6 +176,7 @@ body {
   --sidebar-accent-foreground: oklch(0.92 0.04 292);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.7 0.13 292);
+  --landing-band: oklch(0.237 0.038 270);
 }
 
 @layer base {

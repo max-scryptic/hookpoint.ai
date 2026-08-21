@@ -245,7 +245,7 @@ const PROBLEM_POINTS = [
 
 function Problem() {
   return (
-    <Section className="border-y bg-muted/30">
+    <Section className="border-y bg-landing-band">
       <SectionHeading
         eyebrow="The problem"
         title="Retention data tells you when. Never why."
@@ -426,7 +426,7 @@ const FEATURES: FeatureBlock[] = [
 
 function Features() {
   return (
-    <Section id="features" className="border-t bg-muted/30">
+    <Section id="features" className="border-t bg-landing-band">
       <SectionHeading
         eyebrow="Features"
         title="A retention team, in one tab"
@@ -523,7 +523,7 @@ function Pricing({ isAuthenticated }: { isAuthenticated: boolean }) {
 
 function Faq() {
   return (
-    <Section id="faq" className="border-t bg-muted/30">
+    <Section id="faq" className="border-t bg-landing-band">
       <SectionHeading
         eyebrow="FAQ"
         title="Questions creators ask first"
