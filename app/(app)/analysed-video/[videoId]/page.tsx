@@ -534,6 +534,14 @@ export default async function Page({
     initialDeepAnalysisProgress = { active: false, complete: true, stages: null }
   }
 
+  // Whether this video's footage has been through the deeper analysis and
+  // settled — the render in which the report gains the playable highlights and
+  // the per-window footage tabs, and so the render its coach marks wait for.
+  // The ready-file check carries the weight: `complete` is also how the idle
+  // reading above describes a video with no footage at all.
+  const deepAnalysisComplete =
+    readySourceFile != null && initialDeepAnalysisProgress?.complete === true
+
   return (
     <>
       <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
@@ -570,9 +578,9 @@ export default async function Page({
             videoId={videoId}
             initialProgress={initialDeepAnalysisProgress}
           >
-            {/* Wraps the report and the upload card together: the card is what
-                announces a file landing without a reload, and the coach marks
-                the report then draws are the answer to it. */}
+            {/* Sits inside the status provider, whose poll refreshes this
+                route when a run lands: that refresh is what turns
+                `deepAnalysisComplete` true and brings the coach marks out. */}
             <OnboardingHintsProvider pendingHints={pendingHints}>
               <AnalysedVideoDetail
                 video={result.video}
@@ -588,7 +596,7 @@ export default async function Page({
                   deepAnalysisRollout.insights ? deepAnalysisEvidence : null
                 }
                 showDeepRecommendations={deepAnalysisRollout.recommendations}
-                hasSourceFile={readySourceFile != null}
+                deepAnalysisComplete={deepAnalysisComplete}
               />
               {/* The foot of the report is the one slot that leads to the
                   footage-based half of it. On a paid plan that is the upload

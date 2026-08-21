@@ -42,7 +42,6 @@ import {
 import { RecommendationCallout } from "@/components/recommendation-callout"
 import { RetentionEventsInfo } from "@/components/retention-events-info"
 import {
-  SOURCE_FILE_READY_EVENT,
   SourceVideoPlayer,
   SourceVideoThumbnail,
 } from "@/components/source-video-thumbnail"
@@ -1384,7 +1383,7 @@ export function AnalysedVideoDetail({
   analyticsSummary = null,
   deepAnalysisEvidence = null,
   showDeepRecommendations = true,
-  hasSourceFile = false,
+  deepAnalysisComplete = false,
 }: {
   video: VideoDetails
   retention: RetentionPoint[]
@@ -1397,10 +1396,14 @@ export function AnalysedVideoDetail({
   analyticsSummary?: VideoAnalyticsSummary | null
   deepAnalysisEvidence?: DeepAnalysisEvidence | null
   showDeepRecommendations?: boolean
-  // Whether this video has an accepted raw source file, which is what makes a
-  // highlight on the chart play its moment back. The coach mark that teaches
-  // that only makes sense once there is footage behind it.
-  hasSourceFile?: boolean
+  // Whether this video's uploaded footage has been through the deeper analysis
+  // and settled. Both coach marks below wait for it: that is the render where
+  // the report gains everything they point at, and it arrives on its own (the
+  // status poll refreshes the route when a run lands) while the creator is
+  // reading. Pointing at the tabs any earlier would point at nothing, and
+  // teaching playback while the analysis still ran would spend the one showing
+  // each hint gets on half the news.
+  deepAnalysisComplete?: boolean
 }) {
   const [previewTime, setPreviewTime] = useState<number | null>(null)
   const [playbackWindow, setPlaybackWindow] = useState<{
@@ -1410,30 +1413,10 @@ export function AnalysedVideoDetail({
   } | null>(null)
   const insightAreaRef = useRef<HTMLDivElement | null>(null)
 
-  // A file uploaded without leaving the page wasn't there when the server
-  // decided `hasSourceFile`, and the report is not re-rendered until the
-  // deeper analysis lands — minutes later. The upload card announces a landed
-  // file on the same event the floating player re-signs its playback URL from,
-  // so pick it up here too and let the hint appear while the creator is still
-  // looking at the upload they just made.
-  const [sourceFileArrived, setSourceFileArrived] = useState(false)
-  const sourceFileReady = hasSourceFile || sourceFileArrived
-  useEffect(() => {
-    function handleSourceFileReady(event: Event) {
-      const readyVideoId = (event as CustomEvent<{ videoId?: string }>).detail
-        ?.videoId
-      if (readyVideoId === video.id) setSourceFileArrived(true)
-    }
-
-    window.addEventListener(SOURCE_FILE_READY_EVENT, handleSourceFileReady)
-    return () =>
-      window.removeEventListener(SOURCE_FILE_READY_EVENT, handleSourceFileReady)
-  }, [video.id])
-
-  // The two things an upload unlocks that nothing on the page otherwise
-  // announces: highlights that play their moment back, and the tabs the deeper
-  // analysis adds to each window. Each is pointed at once and never again — see
-  // ONBOARDING_HINTS in lib/onboarding-hints.ts.
+  // The two things a finished analysis of an upload leaves behind that nothing
+  // on the page otherwise announces: highlights that play their moment back,
+  // and the tabs it adds to each window. Each is pointed at once and never
+  // again — see ONBOARDING_HINTS in lib/onboarding-hints.ts.
   const playbackHint = useOnboardingHint("retention_insight_playback")
   const footageTabsHint = useOnboardingHint("deep_analysis_window_tabs")
 
@@ -1554,10 +1537,11 @@ export function AnalysedVideoDetail({
 
   // Whether any window below actually renders a tab switcher. The footage tabs
   // only appear where the deeper analysis reached distinct, actionable
-  // conclusions, so a report can have deep evidence and still show none — and a
-  // callout explaining tabs that aren't there would be worse than silence.
+  // conclusions, so a report can have a finished analysis and still show none —
+  // and a callout explaining tabs that aren't there would be worse than silence.
   const showFootageTabsHint =
     footageTabsHint.pending &&
+    deepAnalysisComplete &&
     [hookSection, dropSection, gainSection, holdSection].some(
       ({ attribution, deepFeedback }) =>
         [...deepFeedback.entries()].some(([windowIndex, feedback]) =>
@@ -1814,11 +1798,11 @@ export function AnalysedVideoDetail({
               insights={chartInsights}
               selectedInsightId={playbackWindow?.id ?? null}
               hint={
-                // Once there is footage behind the report, point at the first
+                // Once the footage has been analysed, point at the first
                 // highlight on the curve: nothing else on the page says that
                 // clicking one now plays that moment back.
                 playbackHint.pending &&
-                sourceFileReady &&
+                deepAnalysisComplete &&
                 chartInsights.length > 0
                   ? {
                       insightId: chartInsights[0].id,

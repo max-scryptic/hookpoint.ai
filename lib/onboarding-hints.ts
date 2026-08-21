@@ -3,12 +3,12 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 // The one-time hints a creator can meet in the interface, keyed by what each
 // one teaches.
 //
-// Both of these exist for the same moment: the first time a creator's raw
-// source file finishes processing, the report quietly gains abilities it did
-// not have when they last read one. Nothing on the page says so, so each hint
-// points at one of them, and each is retired the moment the creator uses the
-// thing it points at — clicking a highlight, or opening a footage tab — since
-// at that point they know it is there.
+// Both of these belong to the same moment, and both are shown at it: when a
+// creator's raw source file has finished processing, the report quietly gains
+// abilities it did not have when they last read one. Nothing on the page says
+// so, so each hint points at one of them, and each is retired the moment the
+// creator uses the thing it points at — clicking a highlight, or opening a
+// footage tab — since at that point they know it is there.
 //
 // A hint is pending while the creator has no row for it in onboarding_hints,
 // which means a key added here ships as "not yet seen" for every account.
