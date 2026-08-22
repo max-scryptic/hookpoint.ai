@@ -19,7 +19,6 @@ import {
 } from "@/components/channel-trends-script"
 import {
   formatCompactNumber,
-  formatRate,
   plural,
 } from "@/components/channel-trends-shared"
 import { ChannelTrendsTabs } from "@/components/channel-trends-tabs"
@@ -113,11 +112,11 @@ function ChannelSnapshotCards({ snapshot }: { snapshot: ChannelSnapshot }) {
       icon: VideoIcon,
     },
     {
-      label: "Median reach",
+      label: "Median views / video",
       value:
-        snapshot.medianViewsPerDay == null
+        snapshot.medianViewsPerVideo == null
           ? null
-          : `${formatCompactNumber(snapshot.medianViewsPerDay)}/day`,
+          : formatCompactNumber(snapshot.medianViewsPerVideo),
       icon: EyeIcon,
     },
     {
@@ -129,11 +128,11 @@ function ChannelSnapshotCards({ snapshot }: { snapshot: ChannelSnapshot }) {
       icon: GaugeIcon,
     },
     {
-      label: "Median subs / 1k views",
+      label: "Median subs / video",
       value:
-        snapshot.medianSubsPer1k == null
+        snapshot.medianSubsPerVideo == null
           ? null
-          : formatRate(snapshot.medianSubsPer1k),
+          : formatCompactNumber(snapshot.medianSubsPerVideo),
       icon: UserPlusIcon,
     },
     {
