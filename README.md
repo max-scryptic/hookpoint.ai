@@ -37,3 +37,27 @@ This starter uses `@supabase/ssr` in:
 - `lib/supabase/client.ts` for browser components
 - `lib/supabase/server.ts` for Server Components and server code
 - `proxy.ts` for auth cookie refresh
+
+## Database migrations
+
+Migrations live in `supabase/migrations` and are applied by hand — through the
+dashboard's SQL editor, `supabase db push`, or the Supabase MCP — separately
+from the deploy. Merging a pull request ships its code to production straight
+away, so a migration that is committed but not yet applied leaves the live app
+asking for schema the database does not have. That usually fails quietly: the
+reads that touch new schema are best-effort, so the feature simply never
+appears.
+
+`npm run check:migrations` compares the committed migrations against the
+database's ledger and names any that have not been applied. The `Migrations`
+workflow runs it after every push to `main` and again each morning, so drift
+turns into a failed run rather than a mystery. It needs one repository secret:
+
+- `SUPABASE_DB_URL`: the **session pooler** connection string from Supabase →
+  Project Settings → Database. The direct host is IPv6-only, which GitHub's
+  runners cannot reach.
+
+Migrations are matched by name — the filename without its leading timestamp —
+because a migration applied through the dashboard or the MCP is recorded under
+the timestamp of the moment it ran rather than the one in its filename. So
+don't rename a migration once it has been applied.
