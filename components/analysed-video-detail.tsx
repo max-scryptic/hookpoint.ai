@@ -218,14 +218,21 @@ function RetentionWindows({
   attribution,
   deepFeedback,
   highlightedId,
+  footageTabsHint = false,
 }: {
   windows: RetentionWindow[]
   transcript: TranscriptCue[]
   attribution: Map<number, RetentionMomentAttribution>
   deepFeedback: Map<number, DeepWindowFeedback[]>
   highlightedId?: string | null
+  // Whether the footage-tabs coach mark is still owed. The list hangs it off
+  // its first tabbed row; see firstTabbedRowIndex above.
+  footageTabsHint?: boolean
 }) {
   const highlightedRef = useHighlightScroll(highlightedId)
+  const hintRowIndex = footageTabsHint
+    ? firstTabbedRowIndex(windows, attribution, deepFeedback)
+    : -1
 
   if (windows.length === 0) {
     return (
@@ -278,6 +285,7 @@ function RetentionWindows({
                 section="Retention: Hook"
                 attribution={attribution.get(window.windowIndex)}
                 deepFeedback={deepFeedback.get(window.windowIndex) ?? []}
+                anchorsFootageTabsHint={index === hintRowIndex}
                 header={(tabs) => (
                   <div className="flex min-h-[2.625rem] flex-wrap items-center justify-between gap-x-2 gap-y-2">
                     <div className="flex flex-wrap items-center gap-3">
@@ -651,10 +659,29 @@ function rendersFeedbackTabs(
     : uniqueDeep.length > 1
 }
 
+// Which row of a list carries the footage-tabs coach mark: the first one in it
+// that actually grew tabs, or -1 where none did. Only the open retention tab's
+// list is mounted, so each list answering for itself leaves exactly one bubble
+// on screen — on something the creator can see.
+function firstTabbedRowIndex(
+  windows: RetentionWindow[],
+  attribution: Map<number, RetentionMomentAttribution>,
+  deepFeedback: Map<number, DeepWindowFeedback[]>,
+): number {
+  return windows.findIndex(
+    (window) =>
+      !window.outOfRange &&
+      rendersFeedbackTabs(
+        attribution.get(window.windowIndex),
+        deepFeedback.get(window.windowIndex) ?? [],
+      ),
+  )
+}
+
 // The mark a footage tab wears until the creator opens one: a small pulsing
 // dot, the same signal an unread item carries elsewhere. Paired with the
-// callout above the retention lists, which is what actually says what these
-// tabs are — a dot on its own can only draw the eye, not explain.
+// callout hung under the first of these strips, which is what actually says
+// what the tabs are — a dot on its own can only draw the eye, not explain.
 function NewFootageTabDot({ shown }: { shown: boolean }) {
   if (!shown) return null
   return (
@@ -662,6 +689,36 @@ function NewFootageTabDot({ shown }: { shown: boolean }) {
       aria-hidden="true"
       className="size-1.5 animate-pulse rounded-full bg-primary"
     />
+  )
+}
+
+// The callout that explains those dots, hung off the tab strip it points at the
+// way the chart's coach mark hangs off its marker: absolutely placed, so it
+// floats over the row's feedback instead of pushing the lists down the page
+// when it appears — and leaves nothing to settle back when it goes.
+//
+// It sits below the strip rather than above it so the tabs themselves stay
+// clickable: opening one is what the hint is asking for.
+function FootageTabsHintCallout({
+  shown,
+  onDismiss,
+}: {
+  shown: boolean
+  onDismiss: () => void
+}) {
+  if (!shown) return null
+  return (
+    <div className="absolute top-full left-0 z-20 mt-2 w-max">
+      <HintCallout
+        title="New tabs, read from your footage"
+        arrow={{ side: "top", align: "start" }}
+        onDismiss={onDismiss}
+      >
+        These each hold a conclusion the deeper analysis drew from your frames
+        and audio, alongside what the script alone says. Open one to see its
+        evidence.
+      </HintCallout>
+    </div>
   )
 }
 
@@ -682,6 +739,7 @@ function WindowFeedback({
   attribution,
   deepFeedback,
   section,
+  anchorsFootageTabsHint = false,
 }: {
   header: (tabs: React.ReactNode) => React.ReactNode
   attribution: RetentionMomentAttribution | undefined
@@ -689,6 +747,10 @@ function WindowFeedback({
   // Which retention list this window belongs to ("Hook", "Drop-off", "Gain",
   // "Hold"), so a tip kept from it says where it was read.
   section: string
+  // Whether this row is the one carrying the footage-tabs coach mark. Every
+  // tabbed row wears the dots, but the bubble that explains them belongs on
+  // exactly one of them — the first in the list on show, chosen by the list.
+  anchorsFootageTabsHint?: boolean
 }) {
   // Until the creator has opened one, the tabs the deeper analysis added are
   // marked as new and any of them being opened is what retires that hint for
@@ -716,15 +778,21 @@ function WindowFeedback({
     return (
       <Tabs defaultValue="script" className="gap-2" onValueChange={onTabChange}>
         {header(
-          <TabsList>
-            <TabsTrigger value="script">Script</TabsTrigger>
-            {uniqueDeep.map(({ insight }, index) => (
-              <TabsTrigger key={insight.id} value={`deep-${insight.id}`}>
-                <NewFootageTabDot shown={footageTabsHint.pending} />
-                {deepFeedbackTabLabel(insight, index, uniqueDeep)}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+          <div className="relative">
+            <TabsList>
+              <TabsTrigger value="script">Script</TabsTrigger>
+              {uniqueDeep.map(({ insight }, index) => (
+                <TabsTrigger key={insight.id} value={`deep-${insight.id}`}>
+                  <NewFootageTabDot shown={footageTabsHint.pending} />
+                  {deepFeedbackTabLabel(insight, index, uniqueDeep)}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            <FootageTabsHintCallout
+              shown={anchorsFootageTabsHint && footageTabsHint.pending}
+              onDismiss={footageTabsHint.dismiss}
+            />
+          </div>
         )}
         <TabsContent value="script" className="pl-10">
           <ScriptFeedbackBody attribution={script} section={section} />
@@ -755,14 +823,20 @@ function WindowFeedback({
         onValueChange={onTabChange}
       >
         {header(
-          <TabsList>
-            {uniqueDeep.map(({ insight }, index) => (
-              <TabsTrigger key={insight.id} value={`deep-${insight.id}`}>
-                <NewFootageTabDot shown={footageTabsHint.pending} />
-                {deepFeedbackTabLabel(insight, index, uniqueDeep)}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+          <div className="relative">
+            <TabsList>
+              {uniqueDeep.map(({ insight }, index) => (
+                <TabsTrigger key={insight.id} value={`deep-${insight.id}`}>
+                  <NewFootageTabDot shown={footageTabsHint.pending} />
+                  {deepFeedbackTabLabel(insight, index, uniqueDeep)}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            <FootageTabsHintCallout
+              shown={anchorsFootageTabsHint && footageTabsHint.pending}
+              onDismiss={footageTabsHint.dismiss}
+            />
+          </div>
         )}
         {uniqueDeep.map(({ insight, recommendation }) => (
           <TabsContent
@@ -800,6 +874,7 @@ function DropList({
   attribution,
   deepFeedback,
   highlightedId,
+  footageTabsHint = false,
 }: {
   // The significant *mid-video* drop-offs (kind = 'drop_off'). The Hook section
   // above already covers the opening, so these never overlap it.
@@ -809,8 +884,12 @@ function DropList({
   attribution: Map<number, RetentionMomentAttribution>
   deepFeedback: Map<number, DeepWindowFeedback[]>
   highlightedId?: string | null
+  footageTabsHint?: boolean
 }) {
   const highlightedRef = useHighlightScroll(highlightedId)
+  const hintRowIndex = footageTabsHint
+    ? firstTabbedRowIndex(drops, attribution, deepFeedback)
+    : -1
 
   if (drops.length === 0) {
     return (
@@ -840,6 +919,7 @@ function DropList({
               section="Retention: Drop-off"
               attribution={attribution.get(drop.windowIndex)}
               deepFeedback={deepFeedback.get(drop.windowIndex) ?? []}
+              anchorsFootageTabsHint={index === hintRowIndex}
               header={(tabs) => (
                 <div className="flex min-h-[2.625rem] items-center justify-between gap-4">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -924,14 +1004,19 @@ function GainList({
   attribution,
   deepFeedback,
   highlightedId,
+  footageTabsHint = false,
 }: {
   gains: RetentionWindow[]
   transcript: TranscriptCue[]
   attribution: Map<number, RetentionMomentAttribution>
   deepFeedback: Map<number, DeepWindowFeedback[]>
   highlightedId?: string | null
+  footageTabsHint?: boolean
 }) {
   const highlightedRef = useHighlightScroll(highlightedId)
+  const hintRowIndex = footageTabsHint
+    ? firstTabbedRowIndex(gains, attribution, deepFeedback)
+    : -1
 
   return (
     <ul className="divide-y overflow-hidden rounded-xl border bg-card [&>li:first-child]:rounded-t-xl [&>li:last-child]:rounded-b-xl">
@@ -952,6 +1037,7 @@ function GainList({
               section="Retention: Gain"
               attribution={attribution.get(gain.windowIndex)}
               deepFeedback={deepFeedback.get(gain.windowIndex) ?? []}
+              anchorsFootageTabsHint={index === hintRowIndex}
               header={(tabs) => (
                 <div className="flex min-h-[2.625rem] items-center justify-between gap-4">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -992,14 +1078,19 @@ function HoldList({
   attribution,
   deepFeedback,
   highlightedId,
+  footageTabsHint = false,
 }: {
   holds: RetentionWindow[]
   transcript: TranscriptCue[]
   attribution: Map<number, RetentionMomentAttribution>
   deepFeedback: Map<number, DeepWindowFeedback[]>
   highlightedId?: string | null
+  footageTabsHint?: boolean
 }) {
   const highlightedRef = useHighlightScroll(highlightedId)
+  const hintRowIndex = footageTabsHint
+    ? firstTabbedRowIndex(holds, attribution, deepFeedback)
+    : -1
 
   return (
     <ul className="divide-y overflow-hidden rounded-xl border bg-card [&>li:first-child]:rounded-t-xl [&>li:last-child]:rounded-b-xl">
@@ -1023,6 +1114,7 @@ function HoldList({
               section="Retention: Hold"
               attribution={attribution.get(hold.windowIndex)}
               deepFeedback={deepFeedback.get(hold.windowIndex) ?? []}
+              anchorsFootageTabsHint={index === hintRowIndex}
               header={(tabs) => (
                 <div className="flex min-h-[2.625rem] items-center justify-between gap-4">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -1539,6 +1631,9 @@ export function AnalysedVideoDetail({
   // only appear where the deeper analysis reached distinct, actionable
   // conclusions, so a report can have a finished analysis and still show none —
   // and a callout explaining tabs that aren't there would be worse than silence.
+  //
+  // Where they do appear, the list on show hangs the callout off its own first
+  // tabbed row, so the bubble always points at tabs the creator can see.
   const showFootageTabsHint =
     footageTabsHint.pending &&
     deepAnalysisComplete &&
@@ -1839,18 +1934,6 @@ export function AnalysedVideoDetail({
               }}
             />
 
-            {showFootageTabsHint && (
-              <HintCallout
-                title="New tabs, read from your footage"
-                onDismiss={footageTabsHint.dismiss}
-                className="max-w-2xl"
-              >
-                The windows below now carry a tab per conclusion the deeper
-                analysis drew from your frames and audio, alongside what the
-                script alone says. Open one to see its evidence.
-              </HintCallout>
-            )}
-
             {defaultRetentionTab && (
               <Tabs
                 value={retentionTab ?? defaultRetentionTab}
@@ -1903,6 +1986,7 @@ export function AnalysedVideoDetail({
                     attribution={hookSection.attribution}
                     deepFeedback={hookSection.deepFeedback}
                     highlightedId={playbackWindow?.id ?? null}
+                    footageTabsHint={showFootageTabsHint}
                   />
                 </TabsContent>
               )}
@@ -1915,6 +1999,7 @@ export function AnalysedVideoDetail({
                     attribution={dropSection.attribution}
                     deepFeedback={dropSection.deepFeedback}
                     highlightedId={playbackWindow?.id ?? null}
+                    footageTabsHint={showFootageTabsHint}
                   />
                 </TabsContent>
               )}
@@ -1927,6 +2012,7 @@ export function AnalysedVideoDetail({
                     attribution={gainSection.attribution}
                     deepFeedback={gainSection.deepFeedback}
                     highlightedId={playbackWindow?.id ?? null}
+                    footageTabsHint={showFootageTabsHint}
                   />
                 </TabsContent>
               )}
@@ -1939,6 +2025,7 @@ export function AnalysedVideoDetail({
                     attribution={holdSection.attribution}
                     deepFeedback={holdSection.deepFeedback}
                     highlightedId={playbackWindow?.id ?? null}
+                    footageTabsHint={showFootageTabsHint}
                   />
                 </TabsContent>
               )}
