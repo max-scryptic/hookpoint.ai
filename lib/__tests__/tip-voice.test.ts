@@ -59,6 +59,12 @@ describe("tip voice", () => {
     // already prints "Try:" in front of every tip.
     expect(TIP_VOICE_PROMPT).toMatch(/Next time/)
     expect(TIP_VOICE_PROMPT).toMatch(/never begin one with 'Try'/)
+
+    // "Give a spoken point like this something to look at as you make it"
+    // parses and still leaves a beginner with nothing to do.
+    expect(TIP_VOICE_PROMPT).toMatch(/plain English/)
+    expect(TIP_VOICE_PROMPT).toMatch(/never edited a video/)
+    expect(TIP_VOICE_PROMPT).toMatch(/One instruction, one sentence/)
   })
 
   it("is one block of prompt text with no dashes the page bans", () => {
