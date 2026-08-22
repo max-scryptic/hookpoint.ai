@@ -18,6 +18,20 @@
 // the recommendation because it says which moment taught the lesson, not which
 // frames to go and change.
 //
+// PLAIN LANGUAGE
+//
+// A tip is only worth writing if it can be acted on the moment it is read, so
+// every sentence here is written to be understood in one pass by someone who
+// has never edited a video before: one instruction per sentence, short and
+// common words, and the verb of the actual action first. That rules out the
+// shapes these tips used to be written in, where the instruction arrived
+// wrapped in an abstraction ("Give a spoken point like this something to look
+// at as you make it") or leaned on craft vocabulary a beginner does not have
+// ("with no wind-up in front of it", "signpost a shift like this"). Say the
+// concrete thing instead: show something on screen while you make a point;
+// start with the point, not a warm-up. lib/tip-voice.ts states the same bar for
+// the tips a model writes, so a page mixing the two reads as one voice.
+//
 // HOW A RECOMMENDATION IS CHOSEN
 //
 // Two things describe a moment, and they are not equal. The event says what the
@@ -117,19 +131,18 @@ const PRESERVE_PATTERN: RecommendationChoice = {
   copy: [
     {
       action:
-        "Treat this as a pattern to repeat: when you reach a comparable beat in your next videos, use the same delivery, visual change, and transition timing you used here.",
+        "Do the same thing again when your next video reaches a moment like this: the same delivery, the same visual change, the same timing.",
       expectedPurpose:
-        "Repeating a proven pattern deliberately is what turns one gain into a habit.",
+        "Doing what worked again, on purpose, turns one good moment into a habit.",
     },
     {
       action:
-        "Write down the three parts of a beat like this, the setup, the payoff and how long each ran, and build them into the plan for your next video.",
-      expectedPurpose:
-        "Written down as a recipe, a moment that worked survives past the video it happened in.",
+        "Write down what made a moment like this work, the set-up, the payoff and how long each one ran, then plan it into your next video.",
+      expectedPurpose: "Once it is written down, a moment that worked is easy to build again.",
     },
     {
       action:
-        "Place a beat like this early in your next videos, while most of the audience is still watching, so more of them reach the moment that lands.",
+        "Put a moment like this near the start of your next video, while most people are still watching, so more of them get to see it.",
       expectedPurpose:
         "Where a strong moment sits decides how many people ever see it.",
     },
@@ -147,21 +160,19 @@ const SUSTAIN_ATTENTION: RecommendationChoice = {
   copy: [
     {
       action:
-        "Plan a whole segment around whatever a stretch like this runs on, a decision being worked through or a question you have not answered yet, and give it room to play out at length.",
+        "Plan a long section around the kind of thing that holds people in a stretch like this: a decision you work through out loud, or a question you leave open.",
       expectedPurpose:
-        "A mechanism you can name is one you can build the next video around.",
+        "Once you can name what holds people, you can build the next video around it.",
     },
     {
       action:
-        "Keep one thread running underneath a long section, something the audience is waiting to see resolved, so the minutes in the middle of a video have their own reason to be watched.",
-      expectedPurpose:
-        "An unresolved thread is what gives a long middle section its pull.",
+        "Leave one thing unanswered through a long stretch, so people in the middle of a video still want to see how it turns out.",
+      expectedPurpose: "A question people want answered is what pulls them through a long middle.",
     },
     {
       action:
-        "Spend more of your runtime on material that behaves like this and less on the sections around it, so the parts that carry the audience are the parts that run long.",
-      expectedPurpose:
-        "Runtime spent on what holds is runtime the audience stays for.",
+        "Give more of your run time to material that works like this, and less to the parts around it.",
+      expectedPurpose: "Time spent on what holds people is time they stay for.",
     },
   ],
 }
@@ -171,20 +182,18 @@ const REPLACE_FREEZE: RecommendationChoice = {
   copy: [
     {
       action:
-        "Keep the picture moving through a stretch like this: plan relevant B-roll, a close-up, or a supporting graphic to cover it rather than letting the frame hold.",
-      expectedPurpose: "Keeps the picture advancing while the point is delivered.",
+        "Keep the picture moving through a stretch like this: plan some B-roll, a close-up, or a graphic to cut to instead of leaving one shot on screen.",
+      expectedPurpose: "A picture that keeps changing gives people less reason to look away.",
     },
     {
       action:
-        "Record a second camera angle for talking sections so there is somewhere to go whenever the main shot would otherwise sit still.",
-      expectedPurpose:
-        "A second angle turns a held frame into a cut you can make at any moment.",
+        "Film talking sections with a second camera angle, so you always have somewhere to cut when the main shot would sit still.",
+      expectedPurpose: "A second angle turns a still shot into a cut you can make at any point.",
     },
     {
       action:
-        "Build a slow push in or a reframe into a shot you know you will hold, so the screen keeps changing while you talk.",
-      expectedPurpose:
-        "Motion inside the shot does the work of a cut without needing one.",
+        "Add a slow zoom or a reframe to any shot you plan to hold, so the screen keeps changing while you speak.",
+      expectedPurpose: "Movement inside a shot does the job of a cut without needing one.",
     },
   ],
 }
@@ -194,20 +203,18 @@ const REMOVE_BLACK_FRAME: RecommendationChoice = {
   copy: [
     {
       action:
-        "Bridge a transition like this with a continuous visual instead of cutting to black, or hold the black for only a few frames.",
-      expectedPurpose: "A smoother transition gives viewers less of a cue to leave.",
+        "Keep a picture on screen across a change like this instead of cutting to black, or let the black last only a few frames.",
+      expectedPurpose: "A change people hardly notice is not a place they stop watching.",
     },
     {
       action:
-        "Run the audio of the next section under the last moment of the one before it, so the sound carries the viewer across the join.",
-      expectedPurpose:
-        "Sound that continues across a join keeps it from reading as an ending.",
+        "Start the sound of the next section under the end of the one before it, so the audio carries people over the join.",
+      expectedPurpose: "Sound that runs on across a join stops it feeling like the end.",
     },
     {
       action:
-        "Design one short title card you reuse for section breaks, with a line of text and a beat of music, so a break lands as part of the video.",
-      expectedPurpose:
-        "A break that looks designed reads as structure rather than as a stop.",
+        "Make one short title card to use at every section break, with a line of text and a second of music.",
+      expectedPurpose: "A break that looks planned reads as part of the video, not a stop.",
     },
   ],
 }
@@ -217,19 +224,18 @@ const TRIM_SILENCE: RecommendationChoice = {
   copy: [
     {
       action:
-        "Cut dead air like this while you edit, keeping only the short pause a sentence genuinely needs.",
-      expectedPurpose: "A tighter audio transition sustains momentum through the point.",
+        "Cut the silence between sentences when you edit, and leave only the short pause a sentence needs.",
+      expectedPurpose: "Cutting the empty moments keeps a point moving from start to finish.",
     },
     {
       action:
-        "Set yourself a limit for how long a gap between sentences may run, half a second is a common one, and close anything past it on your edit pass.",
-      expectedPurpose:
-        "A number to edit against catches the gaps that judgement alone lets through.",
+        "Pick a limit for how long a gap between sentences can run, half a second works well, and close anything longer when you edit.",
+      expectedPurpose: "A number to edit against catches gaps that a quick listen lets through.",
     },
     {
       action:
-        "Say the next sentence in your head before you stop speaking, so the gaps you leave while thinking never make it onto the recording.",
-      expectedPurpose: "Silence that is never recorded is silence you never have to cut.",
+        "Know your next sentence before you stop talking, so the pauses you take while thinking never get recorded.",
+      expectedPurpose: "Silence you never record is silence you never have to cut.",
     },
   ],
 }
@@ -240,20 +246,18 @@ const STEADY_THE_DELIVERY: RecommendationChoice = {
   copy: [
     {
       action:
-        "Keep the delivery on an explanation like this closer to your usual speaking pace, or plan a shorter version of it.",
-      expectedPurpose:
-        "A pace closer to your established norm is what viewers arrive expecting.",
+        "Speak at your normal pace when you explain something, or plan a shorter explanation.",
+      expectedPurpose: "Your usual pace is the one people came to your channel for.",
     },
     {
       action:
-        "Script a long explanation as three or four beats and give each one a single sentence, so the section moves at the speed you talk everywhere else.",
-      expectedPurpose:
-        "Written as beats, an explanation stops expanding while it is being spoken.",
+        "Split a long explanation into three or four steps, and give each step one sentence.",
+      expectedPurpose: "Broken into steps, an explanation stops growing while you talk.",
     },
     {
       action:
-        "Run through an explanation once before you record it, so the take you keep is the one where you already know what comes next.",
-      expectedPurpose: "A rehearsed take carries the pace that a first attempt loses.",
+        "Practise an explanation once before you record it, so the take you keep is one where you already know what comes next.",
+      expectedPurpose: "A quick practice run holds a pace that a first attempt loses.",
     },
   ],
 }
@@ -264,20 +268,18 @@ const GIVE_THE_POINT_ROOM: RecommendationChoice = {
   copy: [
     {
       action:
-        "Give a key point like this slightly more room, or simplify the wording so it stays easy to follow at speed.",
-      expectedPurpose:
-        "A pace closer to your established norm is what viewers arrive expecting.",
+        "Slow down a little on a key point like this, or use simpler words so it is easy to follow at speed.",
+      expectedPurpose: "Your usual pace is the one people are used to hearing from you.",
     },
     {
       action:
-        "Leave a beat of silence after a key point before you move on, so it has time to land.",
-      expectedPurpose: "A pause after the point is what gives the audience time to take it in.",
+        "Stop for a second after a key point before you move on, so it has time to land.",
+      expectedPurpose: "A pause after the point gives people a moment to take it in.",
     },
     {
       action:
-        "Split a dense point into two sentences and put the number or the name at the end of each, where it is easiest to catch.",
-      expectedPurpose:
-        "Short sentences survive a fast delivery in a way that long ones do not.",
+        "Break a heavy point into two sentences, and put the number or the name at the end of each one, where it is easiest to catch.",
+      expectedPurpose: "Short sentences survive fast talking in a way that long ones do not.",
     },
   ],
 }
@@ -287,26 +289,23 @@ const INCREASE_VISUAL_PACING: RecommendationChoice = {
   copy: [
     {
       action:
-        "Plan at least one purposeful visual change for a stretch like this: B-roll, a crop change, a demonstration, or concise on-screen text.",
-      expectedPurpose: "Pacing closer to the rest of the video, without adding noise.",
+        "Plan at least one thing for people to look at during a stretch like this: B-roll, a closer crop, a demo, or a few words on screen.",
+      expectedPurpose: "Something new to look at keeps a long talking stretch from feeling flat.",
     },
     {
       action:
-        "Put the numbers, names and steps you are talking about on screen as you say them, so there is something new to look at through a long spoken passage.",
-      expectedPurpose:
-        "On-screen text gives a talking passage a second channel to hold attention with.",
+        "Put the numbers, names and steps you are talking about on screen as you say them.",
+      expectedPurpose: "Words on screen give a talking section a second way to hold attention.",
     },
     {
       action:
-        "Mark the supporting shots you will need beside the script before you record, so every couple of sentences already has somewhere to go.",
-      expectedPurpose:
-        "Deciding what to cut to before the shoot is what makes the footage exist later.",
+        "Mark the extra shots you will need next to your script before you film, so every couple of sentences has somewhere to cut to.",
+      expectedPurpose: "Choosing what to cut to before you film is what makes the footage exist.",
     },
     {
       action:
-        "Cut a long explanation into two or three shorter passages and change what fills the screen at each one.",
-      expectedPurpose:
-        "A change of screen at each beat marks progress through the explanation.",
+        "Break a long explanation into two or three shorter parts, and change what fills the screen at each one.",
+      expectedPurpose: "A new picture at each part shows people they are getting somewhere.",
     },
   ],
 }
@@ -316,19 +315,18 @@ const REDUCE_VISUAL_PACING: RecommendationChoice = {
   copy: [
     {
       action:
-        "Cut less through a stretch like this: leave out the non-essential cuts and let the most informative shot stay on screen long enough to register.",
-      expectedPurpose: "Clearer visual continuity is easier to follow.",
+        "Cut less through a stretch like this: drop the cuts that add nothing, and let the shot that shows the most stay on screen long enough to take in.",
+      expectedPurpose: "A picture people get time to read is a picture that does its job.",
     },
     {
       action:
-        "Decide which single image carries the point, then hold it and add a cut only where something the audience has not seen appears.",
-      expectedPurpose:
-        "One image held is read; four images flashed past are only glimpsed.",
+        "Pick the one image that carries the point, hold it, and only cut when there is something new to show.",
+      expectedPurpose: "One image held long enough is seen. Four flashed past are not.",
     },
     {
       action:
-        "Keep quick cutting for the moments that are about energy, and let the sections where you explain something run on a steady frame.",
-      expectedPurpose: "Reserving fast cutting for a purpose is what keeps it effective.",
+        "Save fast cutting for the parts that are about energy, and let the parts where you explain something run on a steady shot.",
+      expectedPurpose: "Fast cutting works best when you save it for a reason.",
     },
   ],
 }
@@ -340,21 +338,18 @@ const SIGNPOST_TOPIC_SHIFT: RecommendationChoice = {
   copy: [
     {
       action:
-        "Signpost a shift like this before you make it: say what is coming and why it matters to what viewers came for, then keep the new section short and tie it back to the main topic.",
-      expectedPurpose:
-        "A signposted shift reads as part of the promise instead of a different video.",
+        "Tell people what is coming before you change subject, and why it matters to what they clicked for, then keep the new part short.",
+      expectedPurpose: "A change people saw coming feels like part of the plan.",
     },
     {
       action:
-        "Open every new section with one line naming what it pays off, so a change of subject arrives as the next step rather than as a break.",
-      expectedPurpose:
-        "A stated payoff gives the audience a reason to stay through the change.",
+        "Open every new section with one line saying what the viewer gets out of it.",
+      expectedPurpose: "A clear payoff gives people a reason to stay through the change.",
     },
     {
       action:
-        "Group related material together when you order the script, and move anything that breaks the through line to the end, where leaving costs you least.",
-      expectedPurpose:
-        "Order decides how often a viewer is asked to accept a change of subject.",
+        "Group related material together when you put the script in order, and move anything off topic to the end, where leaving costs you least.",
+      expectedPurpose: "The order you choose decides how often people are asked to switch subject.",
     },
   ],
 }
@@ -364,19 +359,18 @@ const ADD_VISUAL_SUPPORT: RecommendationChoice = {
   copy: [
     {
       action:
-        "Give a spoken point like this something to look at as you make it: a relevant demonstration, graphic, or framing change.",
-      expectedPurpose: "Gives the spoken point clearer visual support.",
+        "Show something on screen while you make a point like this: a quick demo, a graphic, or a change of camera framing.",
+      expectedPurpose: "A point people can see as well as hear is easier to follow.",
     },
     {
       action:
-        "Show the thing you are describing happening, rather than describing it, whenever it is something you can put in front of the camera.",
-      expectedPurpose:
-        "Watching something happen takes less effort than picturing it from a description.",
+        "Show the thing you are describing happening, rather than describing it, whenever you can put it in front of the camera.",
+      expectedPurpose: "Watching something happen is easier than picturing it from words.",
     },
     {
       action:
-        "Prepare a simple diagram for an explanation with several parts and reveal it one part at a time as you reach each.",
-      expectedPurpose: "A diagram built up in steps keeps the visual in sync with the words.",
+        "Draw a simple diagram for an explanation with several parts, and reveal one part at a time as you reach it.",
+      expectedPurpose: "A diagram that builds up in steps keeps the picture level with the words.",
     },
   ],
 }
@@ -386,20 +380,18 @@ const REVIEW_TRANSITION: RecommendationChoice = {
   copy: [
     {
       action:
-        "Get through a transition like this faster: move straight into the next point rather than talking your way into it.",
-      expectedPurpose:
-        "Turns the retention signal at this moment into an editing habit for the next video.",
+        "Move straight into the next point at a moment like this, rather than talking your way into it.",
+      expectedPurpose: "A quick hand-over gives people less of a gap to drift off in.",
     },
     {
       action:
-        "Write the opening sentence of each section so it starts on the point itself, with no wind-up in front of it.",
-      expectedPurpose:
-        "A section that opens on its point never has to earn back the seconds spent arriving at it.",
+        "Start each new section with the point itself, not with a warm-up sentence.",
+      expectedPurpose: "A section that opens on its point never has to win people back.",
     },
     {
       action:
-        "Trim the tail of a section as you edit, so one point ends and the next begins with nothing in between.",
-      expectedPurpose: "The join is where attention is loosest, so it is worth keeping short.",
+        "Trim the end of a section as you edit, so one point finishes and the next begins with nothing in between.",
+      expectedPurpose: "The join is where attention is weakest, so it is worth keeping short.",
     },
   ],
 }

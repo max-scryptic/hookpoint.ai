@@ -33,6 +33,20 @@
 //
 // Same advice, and now it survives being read on its own from the checklist.
 //
+// PLAIN ENGLISH
+//
+// The second rule the tips share is that they are readable at a glance by
+// someone who has never edited a video. A tip is read in a couple of seconds,
+// between two rows of a report, by an uploader deciding whether it is worth
+// acting on, so a sentence they have to go back over has already failed. The
+// failures this bans are not grammar mistakes: they are tips whose instruction
+// arrives wrapped in an abstraction ("Give a spoken point like this something
+// to look at as you make it") or resting on craft vocabulary the reader does
+// not have ("with no wind-up in front of it"). Both parse; neither tells a
+// beginner what to do. Rule 5 below is what the prompts are given, and
+// lib/deep-analysis-recommendations.ts holds the hand-written tips to the same
+// bar, so a page mixing the two reads as one voice.
+//
 // WHERE THE FRAMING GOES
 //
 // In the words of the advice, never in a lead-in. "Next time, ..." / "In future
@@ -68,6 +82,9 @@ export const TIP_VOICE_RULES: readonly string[] = [
 
   // 4. Shape: a plain command, with no lead-in and no doubled label.
   "Write the tip as a plain command that starts with its verb, the way the video analysis tips are written ('Open on the specific claim rather than the setup', 'Keep the picture moving through a stretch like this'). The interface prefixes every tip with 'Try:', so a tip beginning 'Try opening with a split-screen' lands on the page as 'Try: Try opening with a split-screen': never begin one with 'Try', 'Try to', 'Consider', 'Aim to' or a gerund. Do not begin one with 'Next time', 'In future videos', 'In your next video', 'Going forward' or any similar lead-in either: the forward-looking framing belongs in how the advice is worded, and a lead-in only delays the point.",
+
+  // 5. Plain English, because a tip that has to be read twice is not acted on.
+  "Write the tip in plain English, so that someone who has never edited a video can act on it the first time they read it. One instruction, one sentence, about twenty five words at most, and the shortest everyday word that carries the meaning. Say the concrete thing to do in the main clause rather than putting an abstraction in front of it: 'Show something on screen while you make a point' beats 'Give a spoken point something to look at as you make it', and 'Start each section with the point, not a warm-up' beats 'Write the opening sentence so it starts on the point itself, with no wind-up in front of it'. Use a craft word only where it is the plain name for the thing and a beginner meets it in their editor anyway ('B-roll', 'cut', 'shot', 'frame'); avoid the rest ('wind-up', 'signpost', 'beat', 'mechanism', 'pattern interrupt', 'continuity', 'cadence'), and never abbreviate. Do not stack clauses, and do not join two separate instructions with a semicolon or a colon, though a colon introducing an example or a short list is fine.",
 ]
 
 /**

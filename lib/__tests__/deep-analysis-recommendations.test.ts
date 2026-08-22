@@ -42,7 +42,7 @@ describe("compileDeepAnalysisRecommendations", () => {
       audio: { silence: 0.2 } as never,
     })
     expect(recommendations[0]).toMatchObject({ actionType: "trim_silence" })
-    expect(recommendations[0].action).toContain("dead air")
+    expect(recommendations[0].action).toContain("Cut the silence")
   })
 
   it("preserves a successful pattern for a gain", () => {
@@ -65,7 +65,7 @@ describe("compileDeepAnalysisRecommendations", () => {
       audio: null,
     })
     expect(recommendations[0].actionType).toBe("signpost_topic_shift")
-    expect(recommendations[0].action).toMatch(/signpost/i)
+    expect(recommendations[0].action).toMatch(/before you change subject/i)
   })
 
   // What the insight is about is measured on the event; freeze coverage, cut
@@ -341,7 +341,7 @@ describe("compileDeepAnalysisRecommendations", () => {
       }
     }
     // The strongest insight keeps the wording the branch leads with.
-    expect(groups[0][0].action).toContain("purposeful visual change")
+    expect(groups[0][0].action).toContain("one thing for people to look at")
   })
 
   it("drops a repeat once the branch has nothing new left to say", () => {
