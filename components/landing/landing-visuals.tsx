@@ -860,7 +860,20 @@ export function BrandBackdrop({ className }: { className?: string }) {
  * on a surface, which flat tone alone never manages in dark mode, where the
  * card and the page are only a few percent apart in lightness.
  */
-export function SectionTexture({ className }: { className?: string }) {
+export function SectionTexture({
+  className,
+  intensity = "default",
+}: {
+  className?: string
+  /**
+   * How loud the brand pool is. `subtle` keeps just enough surface to hold the
+   * cards without the wash reading as a second hero, which is what a banded
+   * section sitting directly under the hero needs.
+   */
+  intensity?: "default" | "subtle"
+}) {
+  const subtle = intensity === "subtle"
+
   return (
     <div
       aria-hidden="true"
@@ -869,9 +882,19 @@ export function SectionTexture({ className }: { className?: string }) {
         className
       )}
     >
-      <div className="landing-drift-slow absolute top-1/2 left-1/2 size-[44rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/10 blur-3xl dark:bg-primary/15" />
       <div
-        className="absolute inset-0 opacity-60 dark:opacity-40"
+        className={cn(
+          "landing-drift-slow absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl",
+          subtle
+            ? "size-[30rem] bg-primary/[0.03] dark:bg-primary/[0.04]"
+            : "size-[44rem] bg-primary/10 dark:bg-primary/15"
+        )}
+      />
+      <div
+        className={cn(
+          "absolute inset-0",
+          subtle ? "opacity-40 dark:opacity-25" : "opacity-60 dark:opacity-40"
+        )}
         style={{
           backgroundImage:
             "radial-gradient(var(--color-border) 1px, transparent 1px)",
