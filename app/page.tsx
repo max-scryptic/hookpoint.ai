@@ -15,7 +15,9 @@ import {
 import { BrandLogo } from "@/components/brand-logo"
 import { LandingFaq } from "@/components/landing/landing-faq"
 import { LandingHeader } from "@/components/landing/landing-header"
+import { delayStyle } from "@/components/landing/landing-motion"
 import { LandingPricing } from "@/components/landing/landing-pricing"
+import { Reveal } from "@/components/landing/landing-reveal"
 import {
   BrandBackdrop,
   ChecklistVisual,
@@ -23,6 +25,7 @@ import {
   EventsVisual,
   EvidenceVisual,
   ReportVisual,
+  SectionTexture,
   TrendsVisual,
 } from "@/components/landing/landing-visuals"
 import { getAuthenticatedUser } from "@/lib/auth"
@@ -87,10 +90,13 @@ export default async function Home() {
 function Section({
   id,
   className,
+  backdrop,
   children,
 }: {
   id?: string
   className?: string
+  /** Decoration painted behind the content, edge to edge. */
+  backdrop?: React.ReactNode
   children: React.ReactNode
 }) {
   return (
@@ -98,9 +104,14 @@ function Section({
       id={id}
       // The offset keeps a section's heading clear of the fixed header when it
       // is jumped to from the nav.
-      className={cn("scroll-mt-20 px-4 py-20 sm:px-6 sm:py-24", className)}
+      className={cn(
+        "relative scroll-mt-20 px-4 py-20 sm:px-6 sm:py-24",
+        backdrop != null && "overflow-hidden",
+        className
+      )}
     >
-      <div className="mx-auto w-full max-w-6xl">{children}</div>
+      {backdrop}
+      <div className="relative mx-auto w-full max-w-6xl">{children}</div>
     </section>
   )
 }
@@ -117,20 +128,38 @@ function SectionHeading({
   align?: "center" | "start"
 }) {
   return (
-    <div
+    <Reveal
       className={cn(
         "max-w-2xl",
         align === "center" ? "mx-auto text-center" : "text-left"
       )}
     >
-      <p className="text-sm font-semibold text-primary">{eyebrow}</p>
-      <h2 className="mt-2 font-heading text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
+      <p className="text-sm font-semibold text-primary">
+        <span
+          // A short rule either side of the eyebrow, so the label reads as a
+          // marker for the section rather than as a stray line of blue text.
+          aria-hidden="true"
+          className={cn(
+            "mr-2 inline-block h-px w-6 bg-primary/40 align-middle",
+            align === "center" && "hidden sm:inline-block"
+          )}
+        />
+        {eyebrow}
+        <span
+          aria-hidden="true"
+          className={cn(
+            "ml-2 hidden h-px w-6 bg-primary/40 align-middle",
+            align === "center" && "sm:inline-block"
+          )}
+        />
+      </p>
+      <h2 className="mt-3 font-heading text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
         {title}
       </h2>
       <p className="mt-4 text-base leading-relaxed text-muted-foreground text-pretty">
         {description}
       </p>
-    </div>
+    </Reveal>
   )
 }
 
@@ -147,12 +176,14 @@ function PrimaryCta({
     <Link
       href={href}
       className={cn(
-        "inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:bg-primary/90 hover:shadow-primary/35",
+        "group/cta inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition duration-300 hover:-translate-y-0.5 hover:bg-primary/90 hover:shadow-xl hover:shadow-primary/35",
         className
       )}
     >
       {children}
-      <ArrowRightIcon className="size-4" />
+      {/* The arrow leans into the direction it points as the button is
+          approached, which is the whole of the button's animation. */}
+      <ArrowRightIcon className="size-4 transition-transform duration-300 group-hover/cta:translate-x-1" />
     </Link>
   )
 }
@@ -173,13 +204,20 @@ function Hero({
       <BrandBackdrop />
 
       <div className="relative mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+        {/* The hero is above the fold on every screen, so its entrance is the
+            landing-enter one: pure CSS, playing at first paint, rather than the
+            observer-driven Reveal the rest of the page uses. Waiting for
+            hydration here would mean a blank hero for as long as that took. */}
         <div className="text-center lg:text-left">
-          <span className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary">
+          <span className="landing-enter inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary">
             <SparklesIcon className="size-3.5" />
             AI retention analysis for YouTube creators
           </span>
 
-          <h1 className="mt-6 font-heading text-4xl leading-[1.05] font-semibold tracking-tight text-balance sm:text-5xl lg:text-6xl">
+          <h1
+            style={delayStyle(70)}
+            className="landing-enter mt-6 font-heading text-4xl leading-[1.05] font-semibold tracking-tight text-balance sm:text-5xl lg:text-6xl"
+          >
             Know exactly where your viewers leave.
             <span className="bg-gradient-to-r from-primary to-chart-3 bg-clip-text text-transparent">
               {" "}
@@ -187,35 +225,45 @@ function Hero({
             </span>
           </h1>
 
-          <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground text-pretty lg:mx-0">
+          <p
+            style={delayStyle(150)}
+            className="landing-enter mx-auto mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground text-pretty lg:mx-0"
+          >
             Your analytics tell you when people left. Hookpoint.ai reads that
             same curve against the video itself, frame by frame, and hands back
             the reason and the fix for your next upload.
           </p>
 
-          <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row lg:justify-start">
+          <div
+            style={delayStyle(230)}
+            className="landing-enter mt-8 flex flex-col items-center gap-3 sm:flex-row lg:justify-start"
+          >
             <PrimaryCta href={primaryHref} className="w-full sm:w-auto">
               {primaryLabel}
             </PrimaryCta>
             <a
               href="#how-it-works"
-              className="inline-flex h-11 w-full items-center justify-center rounded-xl border bg-card px-6 text-sm font-semibold transition-colors hover:bg-muted sm:w-auto"
+              className="inline-flex h-11 w-full items-center justify-center rounded-xl border bg-card px-6 text-sm font-semibold transition duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-muted hover:shadow-lg sm:w-auto"
             >
               See how it works
             </a>
           </div>
 
-          <p className="mt-4 text-sm text-muted-foreground">
+          <p
+            style={delayStyle(300)}
+            className="landing-enter mt-4 text-sm text-muted-foreground"
+          >
             {PLAN_BY_ID.free.videoAnalysesPerMonth} free analyses every month. No
             card required.
           </p>
         </div>
 
-        <div className="relative">
-          {/* A soft glow behind the report so it lifts off the page. */}
+        <div style={delayStyle(180)} className="landing-enter group relative">
+          {/* A soft glow behind the report so it lifts off the page. It warms
+              up when the pointer is over the report itself. */}
           <div
             aria-hidden="true"
-            className="absolute -inset-6 rounded-[2rem] bg-gradient-to-br from-primary/20 via-chart-3/10 to-transparent blur-2xl"
+            className="absolute -inset-6 rounded-[2rem] bg-gradient-to-br from-primary/20 via-chart-3/10 to-transparent opacity-75 blur-2xl transition-opacity duration-700 group-hover:opacity-100"
           />
           <ReportVisual className="relative" />
         </div>
@@ -245,7 +293,7 @@ const PROBLEM_POINTS = [
 
 function Problem() {
   return (
-    <Section className="border-y bg-muted/30">
+    <Section className="border-y bg-muted/30" backdrop={<SectionTexture />}>
       <SectionHeading
         eyebrow="The problem"
         title="Retention data tells you when. Never why."
@@ -254,20 +302,44 @@ function Problem() {
 
       <div className="mt-12 grid gap-4 md:grid-cols-3">
         {PROBLEM_POINTS.map((point, index) => (
-          <div
+          <Reveal
             key={point.title}
-            className="rounded-2xl border bg-card p-6 shadow-sm"
+            delay={index * 110}
+            // The card is lit from the top so it reads as a raised surface in
+            // dark mode, where the page and the card sit only a few percent
+            // apart in lightness and a flat fill of --card disappears into the
+            // section behind it.
+            className="group relative overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-b from-secondary/60 to-card p-6 shadow-lg shadow-black/5 transition duration-300 hover:-translate-y-1.5 hover:border-primary/40 hover:shadow-xl hover:shadow-primary/10 dark:shadow-black/20"
           >
-            <span className="font-heading text-sm font-semibold text-primary/70">
+            {/* A brand wash and a hairline along the top edge, both of which
+                only exist while the pointer is on the card. */}
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-chart-3/10 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+            />
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 top-0 h-px origin-left scale-x-0 bg-gradient-to-r from-transparent via-primary to-transparent transition-transform duration-500 group-hover:scale-x-100"
+            />
+            {/* The number, oversized and nearly invisible, gives each card
+                something of its own behind the copy. */}
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute -top-6 -right-2 font-heading text-8xl font-semibold text-primary/[0.06] transition-colors duration-300 group-hover:text-primary/[0.1]"
+            >
               0{index + 1}
             </span>
-            <h3 className="mt-3 font-heading text-lg font-semibold">
+
+            <span className="relative flex size-9 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 font-heading text-sm font-semibold text-primary transition duration-300 group-hover:scale-105 group-hover:border-primary/40 group-hover:bg-primary/15">
+              0{index + 1}
+            </span>
+            <h3 className="relative mt-4 font-heading text-lg font-semibold transition-colors duration-300 group-hover:text-primary">
               {point.title}
             </h3>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            <p className="relative mt-2 text-sm leading-relaxed text-muted-foreground">
               {point.body}
             </p>
-          </div>
+          </Reveal>
         ))}
       </div>
     </Section>
@@ -309,29 +381,36 @@ function HowItWorks() {
         {STEPS.map((step, index) => {
           const Icon = step.icon
           return (
-            <li key={step.title} className="relative">
+            <Reveal
+              as="li"
+              key={step.title}
+              delay={index * 140}
+              className="group relative"
+            >
               {/* The connector between steps. The icon is at the left of its
                   column, so the line runs from just past it to the next icon:
-                  the negative right inset carries it across the grid gutter. */}
+                  the negative right inset carries it across the grid gutter.
+                  It grows out of the icon it starts at as the step arrives. */}
               {index < STEPS.length - 1 && (
                 <span
                   aria-hidden="true"
-                  className="absolute top-6 left-14 -right-8 hidden h-px bg-gradient-to-r from-primary/40 to-transparent md:block"
+                  style={delayStyle(index * 140 + 400)}
+                  className="landing-bar absolute top-6 left-14 -right-8 hidden h-px bg-gradient-to-r from-primary/40 to-transparent md:block"
                 />
               )}
-              <div className="flex size-12 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
+              <div className="flex size-12 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary transition duration-300 group-hover:-translate-y-0.5 group-hover:scale-105 group-hover:border-primary/40 group-hover:bg-primary/15 group-hover:shadow-lg group-hover:shadow-primary/20">
                 <Icon className="size-5" />
               </div>
               <p className="mt-5 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
                 Step {index + 1}
               </p>
-              <h3 className="mt-1.5 font-heading text-xl font-semibold">
+              <h3 className="mt-1.5 font-heading text-xl font-semibold transition-colors duration-300 group-hover:text-primary">
                 {step.title}
               </h3>
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                 {step.body}
               </p>
-            </li>
+            </Reveal>
           )
         })}
       </ol>
@@ -438,13 +517,13 @@ function Features() {
           const Icon = feature.icon
           const reversed = index % 2 === 1
           return (
-            <div
+            <Reveal
               key={feature.id}
               className="grid items-center gap-10 lg:grid-cols-2 lg:gap-14"
             >
-              <div className={cn(reversed && "lg:order-2")}>
+              <div className={cn("group/copy", reversed && "lg:order-2")}>
                 <span className="inline-flex items-center gap-2 rounded-lg bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
-                  <Icon className="size-3.5" />
+                  <Icon className="size-3.5 transition-transform duration-500 group-hover/copy:scale-110" />
                   {feature.eyebrow}
                 </span>
                 <h3 className="mt-4 font-heading text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
@@ -454,10 +533,14 @@ function Features() {
                   {feature.body}
                 </p>
                 <ul className="mt-6 space-y-3">
-                  {feature.points.map((point) => (
-                    <li key={point} className="flex items-start gap-3 text-sm">
-                      <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" />
-                      <span className="leading-relaxed text-foreground/80">
+                  {feature.points.map((point, pointIndex) => (
+                    <li
+                      key={point}
+                      style={delayStyle(200 + pointIndex * 90)}
+                      className="landing-rise group/point flex items-start gap-3 text-sm"
+                    >
+                      <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary transition-transform duration-300 group-hover/point:scale-[1.8]" />
+                      <span className="leading-relaxed text-foreground/80 transition-colors duration-300 group-hover/point:text-foreground">
                         {point}
                       </span>
                     </li>
@@ -465,8 +548,22 @@ function Features() {
                 </ul>
               </div>
 
-              <div className={cn(reversed && "lg:order-1")}>{feature.visual}</div>
-            </div>
+              {/* The visual owns the `group` the figures in landing-visuals.tsx
+                  animate off, so hovering the image lifts it and warms the glow
+                  behind it without the copy column doing the same. */}
+              <div
+                className={cn(
+                  "group relative",
+                  reversed && "lg:order-1"
+                )}
+              >
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -inset-4 rounded-[2rem] bg-gradient-to-br from-primary/15 via-chart-3/10 to-transparent opacity-0 blur-2xl transition-opacity duration-500 group-hover:opacity-100"
+                />
+                <div className="relative">{feature.visual}</div>
+              </div>
+            </Reveal>
           )
         })}
       </div>
@@ -478,9 +575,9 @@ function Features() {
 
 function ComingSoon() {
   return (
-    <div className="mt-20 rounded-2xl border border-dashed bg-card/60 p-6 sm:p-8">
+    <Reveal className="group mt-20 rounded-2xl border border-dashed bg-card/60 p-6 transition duration-300 hover:border-primary/40 hover:bg-card hover:shadow-lg hover:shadow-primary/5 sm:p-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-        <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
+        <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary transition duration-300 group-hover:scale-105 group-hover:border-primary/40 group-hover:bg-primary/15">
           <ClapperboardIcon className="size-5" />
         </div>
         <div>
@@ -498,7 +595,7 @@ function ComingSoon() {
           </p>
         </div>
       </div>
-    </div>
+    </Reveal>
   )
 }
 
@@ -523,15 +620,19 @@ function Pricing({ isAuthenticated }: { isAuthenticated: boolean }) {
 
 function Faq() {
   return (
-    <Section id="faq" className="border-t bg-muted/30">
+    <Section
+      id="faq"
+      className="border-t bg-muted/30"
+      backdrop={<SectionTexture />}
+    >
       <SectionHeading
         eyebrow="FAQ"
         title="Questions creators ask first"
         description="If yours is not here, sign up and ask. The free tier is enough to see whether the reports are worth your time."
       />
-      <div className="mt-12">
+      <Reveal className="mt-12">
         <LandingFaq />
-      </div>
+      </Reveal>
     </Section>
   )
 }
@@ -546,7 +647,7 @@ function ClosingCta({
   return (
     <section className="relative overflow-hidden border-t px-4 py-24 sm:px-6">
       <BrandBackdrop className="opacity-80" />
-      <div className="relative mx-auto max-w-2xl text-center">
+      <Reveal className="relative mx-auto max-w-2xl text-center">
         <BrandLogo className="mx-auto size-14" />
         <h2 className="mt-6 font-heading text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
           Your next video does not have to repeat this one
@@ -561,7 +662,7 @@ function ClosingCta({
         <p className="mt-4 text-sm text-muted-foreground">
           Free to start. Upgrade only when you want the deep dives.
         </p>
-      </div>
+      </Reveal>
     </section>
   )
 }

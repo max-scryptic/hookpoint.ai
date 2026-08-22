@@ -63,14 +63,20 @@ const FAQS: { question: string; answer: string }[] = [
 
 export function LandingFaq() {
   return (
-    <div className="mx-auto max-w-3xl divide-y rounded-2xl border bg-card">
+    <div className="mx-auto max-w-3xl divide-y overflow-hidden rounded-2xl border bg-card shadow-lg shadow-black/5 dark:shadow-black/20">
       {FAQS.map((faq) => (
-        <details key={faq.question} className="group">
-          <summary className="flex cursor-pointer list-none items-start justify-between gap-4 p-5 text-left font-medium transition-colors hover:text-primary [&::-webkit-details-marker]:hidden">
+        <details
+          key={faq.question}
+          className="group transition-colors duration-200 open:bg-muted/30 hover:bg-muted/40"
+        >
+          <summary className="flex cursor-pointer list-none items-start justify-between gap-4 p-5 text-left font-medium transition-colors hover:text-primary group-open:text-primary [&::-webkit-details-marker]:hidden">
             <span className="text-sm sm:text-base">{faq.question}</span>
-            <PlusIcon className="mt-0.5 size-5 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-45" />
+            <PlusIcon className="mt-0.5 size-5 shrink-0 text-muted-foreground transition-transform duration-300 group-hover:text-primary group-open:rotate-[135deg] group-open:text-primary" />
           </summary>
-          <p className="px-5 pb-5 text-sm leading-relaxed text-muted-foreground">
+          {/* The answer fades up as it opens. The panel itself still appears at
+              once, which is what keeps this section working with no JavaScript
+              and searchable by find-in-page: only the paragraph is animated. */}
+          <p className="faq-answer px-5 pb-5 text-sm leading-relaxed text-muted-foreground">
             {faq.answer}
           </p>
         </details>
