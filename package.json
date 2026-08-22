@@ -11,7 +11,8 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:migrations": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/check-applied-migrations.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1076.0",
