@@ -4,6 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { CheckIcon } from "lucide-react"
 
+import { Reveal } from "@/components/landing/landing-reveal"
 import {
   annualSavingPercent,
   CREDITS_TOOLTIP,
@@ -35,12 +36,13 @@ export function LandingPricing({
       <BillingToggle period={period} onChange={setPeriod} />
 
       <div className="grid gap-4 lg:grid-cols-3">
-        {PLANS.map((plan) => (
+        {PLANS.map((plan, index) => (
           <PlanCard
             key={plan.id}
             plan={plan}
             period={period}
             isAuthenticated={isAuthenticated}
+            delay={index * 110}
           />
         ))}
       </div>
@@ -106,10 +108,12 @@ function PlanCard({
   plan,
   period,
   isAuthenticated,
+  delay,
 }: {
   plan: Plan
   period: BillingPeriod
   isAuthenticated: boolean
+  delay: number
 }) {
   const pence = monthlyEquivalentPence(plan, period)
   const isFree = plan.id === "free"
@@ -120,16 +124,17 @@ function PlanCard({
   const href = isAuthenticated ? "/pricing" : "/signup"
 
   return (
-    <div
+    <Reveal
+      delay={delay}
       className={cn(
-        "relative flex flex-col rounded-2xl border bg-card p-6 transition-shadow",
+        "group relative flex flex-col rounded-2xl border bg-card p-6 transition duration-300 hover:-translate-y-1.5",
         plan.featured
-          ? "border-primary/40 shadow-xl shadow-primary/10 ring-1 ring-primary/20"
-          : "hover:shadow-lg"
+          ? "border-primary/40 shadow-xl shadow-primary/10 ring-1 ring-primary/20 hover:shadow-2xl hover:shadow-primary/20"
+          : "hover:border-primary/30 hover:shadow-xl hover:shadow-primary/5"
       )}
     >
       {plan.featured && (
-        <span className="absolute -top-3 left-6 rounded-full bg-primary px-3 py-1 text-[11px] font-semibold text-primary-foreground">
+        <span className="absolute -top-3 left-6 rounded-full bg-primary px-3 py-1 text-[11px] font-semibold text-primary-foreground shadow-lg shadow-primary/25">
           Most popular
         </span>
       )}
@@ -175,14 +180,14 @@ function PlanCard({
       <Link
         href={href}
         className={cn(
-          "mt-6 inline-flex h-10 items-center justify-center rounded-lg text-sm font-medium transition-colors",
+          "mt-6 inline-flex h-10 items-center justify-center rounded-lg text-sm font-medium transition duration-300",
           plan.featured
-            ? "bg-primary text-primary-foreground hover:bg-primary/90"
-            : "border bg-background hover:bg-muted"
+            ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20 hover:bg-primary/90 hover:shadow-lg hover:shadow-primary/30"
+            : "border bg-background hover:border-primary/30 hover:bg-muted"
         )}
       >
         {isFree ? "Start for free" : `Choose ${plan.name}`}
       </Link>
-    </div>
+    </Reveal>
   )
 }

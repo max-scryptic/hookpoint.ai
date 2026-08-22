@@ -1,3 +1,4 @@
+import { delayStyle } from "@/components/landing/landing-motion"
 import { cn } from "@/lib/utils"
 
 // The imagery for the landing page. Every visual here is hand-drawn SVG and
@@ -8,6 +9,19 @@ import { cn } from "@/lib/utils"
 // arrives at the app recognising what they were shown.
 //
 // COPY GUARDRAIL: no em or en dashes anywhere in this file. Hyphens are fine.
+//
+// MOTION: each figure is meant to sit inside a <Reveal> (components/landing/
+// landing-reveal.tsx) and inside an element carrying `group`. The landing-draw,
+// landing-rise, landing-bar, landing-fade and landing-pop classes below play
+// once the reveal wrapper reports itself on screen, and the group-hover states
+// answer the pointer. Both degrade to a fully drawn, still figure when either
+// wrapper is missing, so a visual is never invisible or inert by accident.
+
+// The lift every card on the page shares when the pointer is over it. Kept in
+// one constant so the hero report, the five feature figures and the cards in
+// page.tsx all rise by the same amount at the same speed.
+const CARD_HOVER =
+  "transition duration-500 ease-out group-hover:-translate-y-1.5 group-hover:border-primary/30"
 
 // The shape of a typical YouTube retention curve: a steep hook drop, a long
 // gentle decline, a cliff in the middle, a flat hold, then a small rise where
@@ -62,7 +76,8 @@ export function ReportVisual({ className }: { className?: string }) {
   return (
     <figure
       className={cn(
-        "overflow-hidden rounded-2xl border bg-card shadow-2xl shadow-primary/10 ring-1 ring-black/5 dark:shadow-black/40",
+        "overflow-hidden rounded-2xl border bg-card shadow-2xl shadow-primary/10 ring-1 ring-black/5 group-hover:shadow-primary/20 dark:shadow-black/40",
+        CARD_HOVER,
         className
       )}
     >
@@ -124,17 +139,32 @@ export function ReportVisual({ className }: { className?: string }) {
               opacity="0.09"
             />
 
-            <path d={CURVE_AREA} fill="url(#hp-curve-fill)" />
+            <path
+              d={CURVE_AREA}
+              fill="url(#hp-curve-fill)"
+              className="landing-fade"
+              style={delayStyle(700)}
+            />
+            {/* The curve draws itself left to right once the card arrives, so
+                the reader watches the retention story rather than finding it
+                already finished. */}
             <path
               d={CURVE}
+              pathLength="1"
               fill="none"
               stroke="var(--color-primary)"
               strokeWidth="2.5"
               strokeLinecap="round"
               vectorEffect="non-scaling-stroke"
+              className="landing-draw"
+              style={delayStyle(150)}
             />
 
-            {/* The drop-off and the gain, marked on the curve itself. */}
+            {/* The drop-off and the gain, marked on the curve itself. They are
+                dashed, so they fade in rather than draw: an animated dash
+                offset would slide the dashes along the rule. Their softness
+                lives in stroke-opacity, leaving the element's own opacity free
+                for the fade to animate from nothing up to full. */}
             <line
               x1="160"
               y1="88"
@@ -144,7 +174,9 @@ export function ReportVisual({ className }: { className?: string }) {
               strokeWidth="1.5"
               strokeDasharray="4 4"
               vectorEffect="non-scaling-stroke"
-              opacity="0.7"
+              strokeOpacity="0.7"
+              className="landing-fade"
+              style={delayStyle(900)}
             />
             {/* The gain is drawn in the same green the Gains tile uses, so the
                 two are read as the same fact. */}
@@ -153,22 +185,26 @@ export function ReportVisual({ className }: { className?: string }) {
               y1="100"
               x2="300"
               y2="150"
-              className="text-emerald-500"
+              className="landing-fade text-emerald-500"
+              style={delayStyle(1050)}
               stroke="currentColor"
               strokeWidth="1.5"
               strokeDasharray="4 4"
               vectorEffect="non-scaling-stroke"
-              opacity="0.7"
+              strokeOpacity="0.7"
             />
           </ChartFrame>
 
           {/* Markers ride above the stretched SVG so they stay circular. */}
-          <Marker className="left-[40%] top-[59%]" tone="bad" />
-          <Marker className="left-[75%] top-[67%]" tone="good" />
+          <Marker className="left-[40%] top-[59%]" tone="bad" delay={950} />
+          <Marker className="left-[75%] top-[67%]" tone="good" delay={1100} />
 
           {/* Sits above the curve and clear of the gain marker further right,
               so nothing the chart is pointing at ends up underneath it. */}
-          <div className="absolute top-[4%] left-[41%] hidden max-w-[44%] rounded-lg border bg-popover/95 p-2.5 text-left shadow-lg backdrop-blur sm:block">
+          <div
+            className="landing-pop absolute top-[4%] left-[41%] hidden max-w-[44%] origin-bottom-left rounded-lg border bg-popover/95 p-2.5 text-left shadow-lg backdrop-blur sm:block"
+            style={delayStyle(1200)}
+          >
             <p className="text-[10px] font-semibold tracking-wide text-destructive uppercase">
               Drop-off at 2:41
             </p>
@@ -180,21 +216,18 @@ export function ReportVisual({ className }: { className?: string }) {
         </div>
 
         <div className="flex flex-wrap gap-1.5">
-          <Badge className="bg-blue-500/10 text-blue-700 dark:text-blue-400">
-            Scene cut
-          </Badge>
-          <Badge className="bg-violet-500/10 text-violet-700 dark:text-violet-400">
-            Topic shift
-          </Badge>
-          <Badge className="bg-orange-500/10 text-orange-700 dark:text-orange-400">
-            Pacing change
-          </Badge>
-          <Badge className="bg-cyan-500/10 text-cyan-700 dark:text-cyan-400">
-            On screen text
-          </Badge>
+          {SIGNAL_BADGES.map((badge, index) => (
+            <Badge
+              key={badge.label}
+              className={badge.tone}
+              style={delayStyle(1300 + index * 90)}
+            >
+              {badge.label}
+            </Badge>
+          ))}
         </div>
 
-        <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
+        <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 transition-colors duration-500 group-hover:border-primary/40 group-hover:bg-primary/10">
           <p className="text-[11px] font-semibold tracking-wide text-primary uppercase">
             Fix for next time
           </p>
@@ -208,14 +241,23 @@ export function ReportVisual({ className }: { className?: string }) {
   )
 }
 
-function Marker({ className, tone }: { className?: string; tone: Tone }) {
+function Marker({
+  className,
+  tone,
+  delay = 0,
+}: {
+  className?: string
+  tone: Tone
+  delay?: number
+}) {
   return (
     <span
+      style={delayStyle(delay)}
       className={cn(
-        "absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full ring-4",
+        "landing-pop absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full ring-4 transition-[box-shadow,scale] duration-500 group-hover:scale-125",
         tone === "bad"
-          ? "bg-destructive ring-destructive/20"
-          : "bg-emerald-500 ring-emerald-500/20",
+          ? "bg-destructive ring-destructive/20 group-hover:ring-destructive/35"
+          : "bg-emerald-500 ring-emerald-500/20 group-hover:ring-emerald-500/35",
         className
       )}
     />
@@ -234,7 +276,7 @@ function StatChip({
   tone: Tone
 }) {
   return (
-    <div className="rounded-lg border bg-muted/40 px-2.5 py-1.5 text-center">
+    <div className="rounded-lg border bg-muted/40 px-2.5 py-1.5 text-center transition duration-500 group-hover:-translate-y-0.5 group-hover:border-primary/25 group-hover:bg-muted/70">
       <p className="text-[10px] leading-none text-muted-foreground">{label}</p>
       <p
         className={cn(
@@ -250,17 +292,38 @@ function StatChip({
   )
 }
 
+// The signal types a deep dive tags a moment with, in the order they land under
+// the chart once the report has drawn itself.
+const SIGNAL_BADGES = [
+  { label: "Scene cut", tone: "bg-blue-500/10 text-blue-700 dark:text-blue-400" },
+  {
+    label: "Topic shift",
+    tone: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
+  },
+  {
+    label: "Pacing change",
+    tone: "bg-orange-500/10 text-orange-700 dark:text-orange-400",
+  },
+  {
+    label: "On screen text",
+    tone: "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400",
+  },
+]
+
 function Badge({
   children,
   className,
+  style,
 }: {
   children: React.ReactNode
   className?: string
+  style?: React.CSSProperties
 }) {
   return (
     <span
+      style={style}
       className={cn(
-        "rounded-md px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap",
+        "landing-rise rounded-md px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap",
         className
       )}
     >
@@ -309,7 +372,8 @@ export function EventsVisual({ className }: { className?: string }) {
   return (
     <figure
       className={cn(
-        "overflow-hidden rounded-2xl border bg-card p-4 shadow-xl shadow-primary/5 sm:p-5",
+        "overflow-hidden rounded-2xl border bg-card p-4 shadow-xl shadow-primary/5 group-hover:shadow-primary/15 sm:p-5",
+        CARD_HOVER,
         className
       )}
     >
@@ -317,8 +381,9 @@ export function EventsVisual({ className }: { className?: string }) {
         {["Hook", "Drop-offs", "Gains", "Holds", "Pacing"].map((tab, index) => (
           <span
             key={tab}
+            style={delayStyle(index * 60)}
             className={cn(
-              "rounded-lg px-2.5 py-1 text-[11px] font-medium",
+              "landing-rise rounded-lg px-2.5 py-1 text-[11px] font-medium",
               index === 0
                 ? "bg-primary text-primary-foreground"
                 : "bg-muted text-muted-foreground"
@@ -330,8 +395,12 @@ export function EventsVisual({ className }: { className?: string }) {
       </div>
 
       <ul className="mt-3 space-y-2">
-        {events.map((event) => (
-          <li key={event.time} className="rounded-xl border bg-muted/30 p-3">
+        {events.map((event, index) => (
+          <li
+            key={event.time}
+            style={delayStyle(220 + index * 110)}
+            className="landing-rise rounded-xl border bg-muted/30 p-3 transition duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary/5"
+          >
             <div className="flex items-center gap-2">
               <span
                 className={cn(
@@ -398,19 +467,24 @@ export function EvidenceVisual({ className }: { className?: string }) {
   return (
     <figure
       className={cn(
-        "overflow-hidden rounded-2xl border bg-card p-4 shadow-xl shadow-primary/5 sm:p-5",
+        "overflow-hidden rounded-2xl border bg-card p-4 shadow-xl shadow-primary/5 group-hover:shadow-primary/15 sm:p-5",
+        CARD_HOVER,
         className
       )}
     >
       <div className="grid grid-cols-4 gap-2">
         {frames.map((frame, index) => (
-          <div key={frame.time} className="space-y-1.5">
+          <div
+            key={frame.time}
+            style={delayStyle(index * 120)}
+            className="landing-rise space-y-1.5"
+          >
             <div
               className={cn(
-                "relative aspect-video overflow-hidden rounded-lg border bg-gradient-to-br",
+                "relative aspect-video overflow-hidden rounded-lg border bg-gradient-to-br transition duration-500",
                 index === 1
-                  ? "from-primary/30 to-accent ring-2 ring-primary"
-                  : "from-muted to-secondary"
+                  ? "from-primary/30 to-accent ring-2 ring-primary group-hover:ring-[3px]"
+                  : "from-muted to-secondary group-hover:from-muted group-hover:to-accent/60"
               )}
             >
               {/* A suggestion of a frame: a horizon line and a subject. */}
@@ -437,21 +511,38 @@ export function EvidenceVisual({ className }: { className?: string }) {
         ))}
       </div>
 
-      <div className="mt-4 space-y-2 rounded-xl border bg-muted/40 p-3">
+      <div className="mt-4 space-y-2 rounded-xl border bg-muted/40 p-3 transition-colors duration-500 group-hover:border-primary/25">
         <EvidenceRow
           label="Transcript"
           value={"“So, quick recap of what we just did...”"}
+          delay={520}
         />
-        <EvidenceRow label="Visuals" value="Static frame held for 9s, no cuts" />
-        <EvidenceRow label="Audio" value="Bed music ends, room tone only" />
+        <EvidenceRow
+          label="Visuals"
+          value="Static frame held for 9s, no cuts"
+          delay={640}
+        />
+        <EvidenceRow
+          label="Audio"
+          value="Bed music ends, room tone only"
+          delay={760}
+        />
       </div>
     </figure>
   )
 }
 
-function EvidenceRow({ label, value }: { label: string; value: string }) {
+function EvidenceRow({
+  label,
+  value,
+  delay = 0,
+}: {
+  label: string
+  value: string
+  delay?: number
+}) {
   return (
-    <div className="flex gap-2 text-[11px] leading-snug">
+    <div className="landing-rise flex gap-2 text-[11px] leading-snug" style={delayStyle(delay)}>
       <span className="w-16 shrink-0 font-medium text-muted-foreground">
         {label}
       </span>
@@ -468,7 +559,8 @@ export function ComparisonVisual({ className }: { className?: string }) {
   return (
     <figure
       className={cn(
-        "overflow-hidden rounded-2xl border bg-card p-4 shadow-xl shadow-primary/5 sm:p-5",
+        "overflow-hidden rounded-2xl border bg-card p-4 shadow-xl shadow-primary/5 group-hover:shadow-primary/15 sm:p-5",
+        CARD_HOVER,
         className
       )}
     >
@@ -481,7 +573,10 @@ export function ComparisonVisual({ className }: { className?: string }) {
           <span className="size-2.5 rounded-full bg-chart-3" />
           Video B
         </span>
-        <span className="ml-auto rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400">
+        <span
+          className="landing-pop ml-auto rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400"
+          style={delayStyle(1300)}
+        >
           A holds 12% longer
         </span>
       </div>
@@ -489,31 +584,63 @@ export function ComparisonVisual({ className }: { className?: string }) {
       <div className="mt-3 h-32 sm:h-36">
         <ChartFrame>
           <Gridlines />
+          {/* The weaker curve is drawn first and slightly ahead, so the pair
+              read as a race the reader watches rather than a static chart. */}
           <path
             d={CURVE_B}
+            pathLength="1"
             fill="none"
             stroke="var(--color-chart-3)"
             strokeWidth="2"
             strokeDasharray="5 4"
             strokeLinecap="round"
             vectorEffect="non-scaling-stroke"
+            className="landing-fade"
+            style={delayStyle(500)}
           />
           <path
             d={CURVE}
+            pathLength="1"
             fill="none"
             stroke="var(--color-primary)"
             strokeWidth="2.5"
             strokeLinecap="round"
             vectorEffect="non-scaling-stroke"
+            className="landing-draw"
+            style={delayStyle(150)}
           />
         </ChartFrame>
       </div>
 
       <div className="mt-4 grid gap-2 sm:grid-cols-2">
-        <CompareRow label="Hook promise" a="Explicit" b="Implied" winner="a" />
-        <CompareRow label="Title match" a="Strong" b="Partial" winner="a" />
-        <CompareRow label="Pace, first 30s" a="4 cuts" b="1 cut" winner="a" />
-        <CompareRow label="Payoff timing" a="6:12" b="2:40" winner="b" />
+        <CompareRow
+          label="Hook promise"
+          a="Explicit"
+          b="Implied"
+          winner="a"
+          delay={900}
+        />
+        <CompareRow
+          label="Title match"
+          a="Strong"
+          b="Partial"
+          winner="a"
+          delay={1000}
+        />
+        <CompareRow
+          label="Pace, first 30s"
+          a="4 cuts"
+          b="1 cut"
+          winner="a"
+          delay={1100}
+        />
+        <CompareRow
+          label="Payoff timing"
+          a="6:12"
+          b="2:40"
+          winner="b"
+          delay={1200}
+        />
       </div>
     </figure>
   )
@@ -524,14 +651,19 @@ function CompareRow({
   a,
   b,
   winner,
+  delay = 0,
 }: {
   label: string
   a: string
   b: string
   winner: "a" | "b"
+  delay?: number
 }) {
   return (
-    <div className="rounded-lg border bg-muted/30 px-2.5 py-2">
+    <div
+      style={delayStyle(delay)}
+      className="landing-rise rounded-lg border bg-muted/30 px-2.5 py-2 transition-colors duration-300 hover:border-primary/30 hover:bg-primary/5"
+    >
       <p className="text-[10px] text-muted-foreground">{label}</p>
       <div className="mt-1 flex items-center justify-between gap-2 text-[11px] font-medium">
         <span className={winner === "a" ? "text-primary" : "text-foreground/60"}>
@@ -561,7 +693,8 @@ export function TrendsVisual({ className }: { className?: string }) {
   return (
     <figure
       className={cn(
-        "overflow-hidden rounded-2xl border bg-card p-4 shadow-xl shadow-primary/5 sm:p-5",
+        "overflow-hidden rounded-2xl border bg-card p-4 shadow-xl shadow-primary/5 group-hover:shadow-primary/15 sm:p-5",
+        CARD_HOVER,
         className
       )}
     >
@@ -573,8 +706,12 @@ export function TrendsVisual({ className }: { className?: string }) {
       </div>
 
       <div className="mt-3 space-y-3">
-        {trends.map((trend) => (
-          <div key={trend.label}>
+        {trends.map((trend, index) => (
+          <div
+            key={trend.label}
+            className="landing-rise"
+            style={delayStyle(index * 120)}
+          >
             <div className="flex items-baseline justify-between gap-2">
               <p className="truncate text-[11px] font-medium sm:text-xs">
                 {trend.label}
@@ -584,21 +721,29 @@ export function TrendsVisual({ className }: { className?: string }) {
               </p>
             </div>
             <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
+              {/* The bar is sized in the markup and grown with a scale, so the
+                  animation never reflows the row it sits in. */}
               <div
                 className={cn(
-                  "h-full rounded-full",
+                  "landing-bar h-full rounded-full",
                   trend.weak
                     ? "bg-gradient-to-r from-destructive/50 to-destructive"
                     : "bg-gradient-to-r from-primary to-chart-3"
                 )}
-                style={{ width: `${trend.value}%` }}
+                style={{
+                  width: `${trend.value}%`,
+                  ...delayStyle(240 + index * 120),
+                }}
               />
             </div>
           </div>
         ))}
       </div>
 
-      <p className="mt-4 rounded-lg border border-primary/20 bg-primary/5 p-2.5 text-[11px] leading-relaxed text-foreground/80">
+      <p
+        className="landing-rise mt-4 rounded-lg border border-primary/20 bg-primary/5 p-2.5 text-[11px] leading-relaxed text-foreground/80 transition-colors duration-500 group-hover:border-primary/40 group-hover:bg-primary/10"
+        style={delayStyle(760)}
+      >
         Videos that open cold hold{" "}
         <span className="font-semibold text-primary">9% more</span> of their
         audience through the first minute than the ones with an intro.
@@ -622,7 +767,8 @@ export function ChecklistVisual({ className }: { className?: string }) {
   return (
     <figure
       className={cn(
-        "overflow-hidden rounded-2xl border bg-card p-4 shadow-xl shadow-primary/5 sm:p-5",
+        "overflow-hidden rounded-2xl border bg-card p-4 shadow-xl shadow-primary/5 group-hover:shadow-primary/15 sm:p-5",
+        CARD_HOVER,
         className
       )}
     >
@@ -630,14 +776,15 @@ export function ChecklistVisual({ className }: { className?: string }) {
         Checklist for the next upload
       </p>
       <ul className="mt-3 space-y-2">
-        {tips.map((tip) => (
+        {tips.map((tip, index) => (
           <li
             key={tip.text}
-            className="flex items-start gap-2.5 rounded-lg border bg-muted/30 px-2.5 py-2"
+            style={delayStyle(index * 130)}
+            className="landing-rise flex items-start gap-2.5 rounded-lg border bg-muted/30 px-2.5 py-2 transition duration-300 hover:translate-x-1 hover:border-primary/30 hover:bg-primary/5"
           >
             <span
               className={cn(
-                "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border",
+                "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border transition-colors duration-300",
                 tip.done
                   ? "border-primary bg-primary text-primary-foreground"
                   : "border-border"
@@ -645,13 +792,17 @@ export function ChecklistVisual({ className }: { className?: string }) {
             >
               {tip.done && (
                 <svg viewBox="0 0 12 12" className="size-3" aria-hidden="true">
+                  {/* The tick draws itself in as the row arrives. */}
                   <path
                     d="M2.5 6.2 4.8 8.5 9.5 3.8"
+                    pathLength="1"
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="1.8"
                     strokeLinecap="round"
                     strokeLinejoin="round"
+                    className="landing-draw"
+                    style={delayStyle(300 + index * 130, 450)}
                   />
                 </svg>
               )}
@@ -682,8 +833,10 @@ export function BrandBackdrop({ className }: { className?: string }) {
       aria-hidden="true"
       className={cn("pointer-events-none absolute inset-0 overflow-hidden", className)}
     >
-      <div className="absolute -top-40 -left-32 size-[36rem] rounded-full bg-primary/20 blur-3xl dark:bg-primary/25" />
-      <div className="absolute -top-24 right-[-10rem] size-[32rem] rounded-full bg-chart-3/20 blur-3xl dark:bg-chart-3/20" />
+      {/* The two fields drift on long, opposed cycles, which keeps the wash
+          behind the hero from ever reading as a fixed gradient. */}
+      <div className="landing-drift absolute -top-40 -left-32 size-[36rem] rounded-full bg-primary/20 blur-3xl dark:bg-primary/25" />
+      <div className="landing-drift-slow absolute -top-24 right-[-10rem] size-[32rem] rounded-full bg-chart-3/20 blur-3xl dark:bg-chart-3/20" />
       <div
         className="absolute inset-0 opacity-[0.4] dark:opacity-[0.15]"
         style={{
@@ -694,6 +847,39 @@ export function BrandBackdrop({ className }: { className?: string }) {
             "radial-gradient(ellipse 80% 60% at 50% 0%, black 30%, transparent 75%)",
           WebkitMaskImage:
             "radial-gradient(ellipse 80% 60% at 50% 0%, black 30%, transparent 75%)",
+        }}
+      />
+    </div>
+  )
+}
+
+/**
+ * The ground a banded section sits on: one soft brand-coloured pool in the
+ * middle and a faint dot field over it, both masked away at the edges. It gives
+ * a section enough texture that the cards on top of it read as objects sitting
+ * on a surface, which flat tone alone never manages in dark mode, where the
+ * card and the page are only a few percent apart in lightness.
+ */
+export function SectionTexture({ className }: { className?: string }) {
+  return (
+    <div
+      aria-hidden="true"
+      className={cn(
+        "pointer-events-none absolute inset-0 overflow-hidden",
+        className
+      )}
+    >
+      <div className="landing-drift-slow absolute top-1/2 left-1/2 size-[44rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/10 blur-3xl dark:bg-primary/15" />
+      <div
+        className="absolute inset-0 opacity-60 dark:opacity-40"
+        style={{
+          backgroundImage:
+            "radial-gradient(var(--color-border) 1px, transparent 1px)",
+          backgroundSize: "24px 24px",
+          maskImage:
+            "radial-gradient(ellipse 70% 70% at 50% 50%, black 10%, transparent 80%)",
+          WebkitMaskImage:
+            "radial-gradient(ellipse 70% 70% at 50% 50%, black 10%, transparent 80%)",
         }}
       />
     </div>
