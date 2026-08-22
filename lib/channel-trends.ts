@@ -463,12 +463,12 @@ export const SNAPSHOT_MIN_COVERED_VIDEOS = 3
 
 export interface ChannelSnapshot {
   libraryVideoCount: number
-  // Views per day since publish, at snapshot time.
-  medianViewsPerDay: number | null
+  // Lifetime views a video has taken, at snapshot time.
+  medianViewsPerVideo: number | null
   // 0..100, the average share of a video watched.
   medianRetentionPercent: number | null
-  // Subscribers gained per 1,000 views.
-  medianSubsPer1k: number | null
+  // Subscribers a video has gained, at snapshot time.
+  medianSubsPerVideo: number | null
   // 0..1 impression-weighted thumbnail click-through.
   medianClickThroughRate: number | null
   // Share (0..1) of views arriving from Browse and Suggested, the surfaces
@@ -486,24 +486,17 @@ export function buildChannelSnapshot(
 ): ChannelSnapshot {
   return {
     libraryVideoCount,
-    medianViewsPerDay: medianOrNull(
-      videos.flatMap((video) => {
-        const reach = videoReachPerDay(video)
-        return reach == null ? [] : [reach]
-      }),
+    medianViewsPerVideo: medianOrNull(
+      videos.flatMap((video) => (video.views == null ? [] : [video.views])),
     ),
     medianRetentionPercent: medianOrNull(
       videos.flatMap((video) =>
         video.averageViewPercentage == null ? [] : [video.averageViewPercentage],
       ),
     ),
-    medianSubsPer1k: medianOrNull(
+    medianSubsPerVideo: medianOrNull(
       videos.flatMap((video) =>
-        video.views == null ||
-        video.views <= 0 ||
-        video.subscribersGained == null
-          ? []
-          : [(video.subscribersGained / video.views) * 1000],
+        video.subscribersGained == null ? [] : [video.subscribersGained],
       ),
     ),
     medianClickThroughRate: medianOrNull(

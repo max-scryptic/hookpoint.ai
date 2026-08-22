@@ -1004,24 +1004,21 @@ describe("buildChannelSnapshot", () => {
     const snapshot = buildChannelSnapshot(snapshotVideos, 5)
 
     expect(snapshot.libraryVideoCount).toBe(5)
-    expect(snapshot.medianViewsPerDay).toBe(40)
+    expect(snapshot.medianViewsPerVideo).toBe(400)
     expect(snapshot.medianRetentionPercent).toBe(40)
-    expect(snapshot.medianSubsPer1k).toBe(10)
+    expect(snapshot.medianSubsPerVideo).toBe(4)
     expect(snapshot.medianClickThroughRate).toBe(0.03)
   })
 
   it("leaves a metric null rather than speaking for one or two videos", () => {
     const snapshot = buildChannelSnapshot(
-      [
-        snapshotVideos[0],
-        video("s-4", null, null, { views: 100 }),
-        video("s-5", null, null, { views: 100 }),
-      ],
+      [snapshotVideos[0], video("s-4"), video("s-5")],
       3,
     )
 
-    expect(snapshot.medianViewsPerDay).toBeNull()
+    expect(snapshot.medianViewsPerVideo).toBeNull()
     expect(snapshot.medianRetentionPercent).toBeNull()
+    expect(snapshot.medianSubsPerVideo).toBeNull()
     expect(snapshot.medianClickThroughRate).toBeNull()
     expect(snapshot.medianBrowseSuggestedShare).toBeNull()
   })
