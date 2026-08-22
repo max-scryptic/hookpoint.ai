@@ -291,9 +291,15 @@ const PROBLEM_POINTS = [
   },
 ]
 
+// This band sits directly under the hero, so its texture stays quiet: the hero
+// and the closing CTA are the two places on the page where the brand gradient is
+// meant to carry.
 function Problem() {
   return (
-    <Section className="border-y bg-landing-band" backdrop={<SectionTexture />}>
+    <Section
+      className="border-y bg-landing-band"
+      backdrop={<SectionTexture intensity="subtle" />}
+    >
       <SectionHeading
         eyebrow="The problem"
         title="Retention data tells you when. Never why."
