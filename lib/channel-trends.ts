@@ -144,11 +144,12 @@ export interface ChannelVideo {
   durationSeconds: number | null
 }
 
-// Reach for one video: views per day between publish and the analytics
-// snapshot, floored at a day. Raw views cannot be compared across a library
-// where one upload is two years old and another is two weeks old, so every
-// reach comparison on this page runs over this rate. Null when the video is
-// missing either end of the measurement.
+// Reach for one video as a rate: views per day between publish and the
+// analytics snapshot, floored at a day. What every comparison of two halves of
+// the library runs over, because a median taken across a library where one
+// upload is two years old and another is two weeks old is otherwise mostly a
+// reading of publish dates. Null when the video is missing either end of the
+// measurement.
 export function videoReachPerDay(video: ChannelVideo): number | null {
   if (video.views == null || video.views <= 0) return null
   const published = video.publishedAt ? Date.parse(video.publishedAt) : NaN
@@ -157,6 +158,15 @@ export function videoReachPerDay(video: ChannelVideo): number | null {
     : NaN
   if (!Number.isFinite(published) || !Number.isFinite(fetched)) return null
   return video.views / Math.max(1, Math.round((fetched - published) / DAY_MS))
+}
+
+// Reach for one video as a total: the lifetime views the snapshot stored. What
+// the two named bands are ranked on, so the three uploads a creator is shown at
+// each end of their library are the three they would name themselves. Null
+// when nothing was stored, so an unmeasured upload is left out of the ranking
+// rather than sorted to the bottom of it.
+export function videoViews(video: ChannelVideo): number | null {
+  return video.views == null || video.views <= 0 ? null : video.views
 }
 
 const DAY_MS = 86_400_000
@@ -1448,11 +1458,16 @@ export function buildChannelTrends(params: {
       outcome: "reach",
       outcomeOf: videoReachPerDay,
     }),
+    // The one reach reading on this page taken on lifetime views rather than
+    // the rate: these two bands are shown as the videos in them, so they are
+    // ranked on the figure a creator would rank them on themselves. The halves
+    // split either side of it stays on the rate, where nothing is named and an
+    // older library would otherwise sort itself by publish date.
     packagingExtremes: buildChannelExtremesProfile({
       videos,
       source: "packaging",
       outcome: "reach",
-      outcomeOf: videoReachPerDay,
+      outcomeOf: videoViews,
     }),
     packagingAlignment: buildChannelAlignmentAverage(videos),
     packagingStyle: buildChannelStyleProfile({

@@ -9,7 +9,7 @@ import { packagingFeatureLabel } from "@/components/channel-trends-copy"
 import { PackagingSurfaceTabs } from "@/components/channel-trends-packaging-tabs"
 import {
   TrendCard,
-  formatRate,
+  formatCompactNumber,
   plural,
 } from "@/components/channel-trends-shared"
 import {
@@ -184,11 +184,15 @@ const SURFACE_ORDER: PackagingSurface[] = [
 // What the two ends of the library are called, on the card that names them and
 // on every chart drawn off them, so the legend under a radar reads as the list
 // above the tab bar rather than as a second pair of bands.
-const EXTREMES_TOP_LABEL = "top 3 by reach"
-const EXTREMES_BOTTOM_LABEL = "bottom 3 by reach"
+const EXTREMES_TOP_LABEL = "top 3 by views"
+const EXTREMES_BOTTOM_LABEL = "bottom 3 by views"
+
+// The metric both bands are ranked and listed on, printed the way the rest of
+// the page prints a view count.
+const formatViews = (value: number) => `${formatCompactNumber(value)} views`
 
 const EXTREMES_DESCRIPTION_TAIL =
-  "scored on the three uploads that reached furthest, the three that reached least, and your whole library as a baseline."
+  "scored on your three most-viewed uploads, your three least-viewed, and your whole library as a baseline."
 
 const FEATURES_DESCRIPTION_TAIL =
   "Correlation, not proof: reach is also topic, timing and who YouTube showed it to."
@@ -228,8 +232,7 @@ const SURFACE_CONFIG: Record<PackagingSurface, SurfaceConfig> = {
     group: "alignment",
     featurePrefixes: ["alignment", "promise"],
     extremesTitle: "Your best and worst uploads on alignment",
-    extremesDescription:
-      "The two cross-surface axes, scored on the three uploads that reached furthest, the three that reached least, and your whole library as a baseline.",
+    extremesDescription: `The two cross-surface axes, ${EXTREMES_DESCRIPTION_TAIL}`,
     extremesEmptyNote:
       "Your best and worst uploads align alike on both axes so far. When the two ends of your library start promising differently, the gap lands here.",
     featuresTitle: "What your high-reach packaging promises differently",
@@ -334,18 +337,18 @@ export function PackagingPanel({ data }: { data: ChannelTrendsData }) {
       : null
   return (
     <div className="flex flex-col gap-3">
-      {/* The two bands are picked once, off reach, and every chart under the
-          tab bar is scored on them, so they are named here rather than four
+      {/* The two bands are picked once, off total views, and every chart under
+          the tab bar is scored on them, so they are named here rather than four
           times over. */}
       {extremes != null && (
         <ExtremeBandsCard
           profile={extremes}
           icon={TrophyIcon}
           title="The uploads every chart below compares"
-          description="Your three uploads that reached furthest and your three that reached least, ranked on views per day. Each tab below scores this same pair of bands on its own axes."
+          description="Your three most-viewed uploads and your three least-viewed, ranked on total views. Each tab below scores this same pair of bands on its own axes."
           topLabel={EXTREMES_TOP_LABEL}
           bottomLabel={EXTREMES_BOTTOM_LABEL}
-          formatOutcome={(value) => `${formatRate(value)}/day`}
+          formatOutcome={formatViews}
         />
       )}
       <PackagingSurfaceTabs

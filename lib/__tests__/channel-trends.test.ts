@@ -13,9 +13,13 @@ import {
   channelTrendsStage,
   packagingFeatures,
   videoReachPerDay,
+  videoViews,
   type ChannelVideo,
 } from "@/lib/channel-trends"
-import type { PackagingTaxonomy } from "@/lib/packaging-taxonomy"
+import type {
+  PackagingDetail,
+  PackagingTaxonomy,
+} from "@/lib/packaging-taxonomy"
 
 function record(overrides: Partial<ChannelEventRecord>): ChannelEventRecord {
   return {
@@ -1063,5 +1067,128 @@ describe("videoReachPerDay", () => {
         }),
       ),
     ).toBeNull()
+  })
+})
+
+describe("videoViews", () => {
+  it("reads the stored lifetime views, no dates required", () => {
+    expect(videoViews(video("v-1", null, null, { views: 12_345 }))).toBe(12_345)
+  })
+
+  it("returns null when nothing was stored, so the upload is left unranked", () => {
+    expect(videoViews(video("v-2"))).toBeNull()
+    expect(videoViews(video("v-3", null, null, { views: 0 }))).toBeNull()
+  })
+})
+
+// A packaging read has to carry a detail block before any axis can be scored
+// off it, and every axis reads its own surface, so the fixture is the whole
+// shape rather than the one field a test looks at.
+function packagingDetail(titleSpecificity: number): PackagingDetail {
+  return {
+    title: {
+      specificity: titleSpecificity,
+      curiosityGap: 5,
+      emotionalCharge: 5,
+      emotionalValence: "curiosity",
+      stakes: 5,
+      personalFraming: "impersonal",
+      relatability: 5,
+      novelty: 5,
+      clarity: 5,
+      targetIdentity: "",
+      concreteAnchors: [],
+      powerDevices: [],
+      characterLength: 40,
+    },
+    thumbnail: {
+      faceProminence: 5,
+      eyeContact: true,
+      emotionIntensity: 5,
+      sceneType: "talking_head_indoor",
+      mood: "serious",
+      colorContrast: 5,
+      visualComplexity: 5,
+      textVerbatim: "",
+      impliedPromise: "",
+    },
+    hook: {
+      openingType: "bold_claim",
+      payoffSpeed: 5,
+      restatesPromise: 5,
+      stakesEstablished: 5,
+      personalDisclosure: 5,
+      specificity: 5,
+      genericFiller: false,
+      firstSentence: "",
+    },
+    cross: {
+      titleThumbnailMatch: 5,
+      hookDeliversPromise: 5,
+      singleClearPromise: "",
+      contradiction: false,
+      contradictionNote: "",
+    },
+    drivers: {
+      clickDrivers: ["curiosity"],
+      primaryDriver: "curiosity",
+      archetype: "tutorial",
+      trendRelevance: 2,
+      trendRelevanceConfidence: 2,
+    },
+  }
+}
+
+describe("buildChannelTrends packaging extremes", () => {
+  // Three old uploads carrying most of the channel's views, and three fresh
+  // ones with almost none. On views per day the two ends interleave, which is
+  // exactly what makes this a test: the bands may only come out split by total
+  // views.
+  const SNAPSHOT = "2026-08-01T00:00:00Z"
+  const rankedVideos = () => [
+    { id: "old-a", views: 100_000, publishedAt: "2020-01-01T00:00:00Z" },
+    { id: "old-b", views: 90_000, publishedAt: "2020-01-01T00:00:00Z" },
+    { id: "old-c", views: 80_000, publishedAt: "2020-01-01T00:00:00Z" },
+    { id: "new-d", views: 40, publishedAt: "2026-07-31T00:00:00Z" },
+    { id: "new-e", views: 30, publishedAt: "2026-07-31T00:00:00Z" },
+    { id: "new-f", views: 20, publishedAt: "2026-07-31T00:00:00Z" },
+  ].map((entry) =>
+    video(entry.id, entry.id, null, {
+      views: entry.views,
+      publishedAt: entry.publishedAt,
+      analyticsFetchedAt: SNAPSHOT,
+      packaging: taxonomy({ detail: packagingDetail(5) }),
+    }),
+  )
+
+  it("ranks the two named bands on total views, not views per day", () => {
+    const data = buildChannelTrends({
+      records: [],
+      videos: rankedVideos(),
+      libraryVideoCount: 6,
+      windowCount: 0,
+    })
+
+    const extremes = data.packagingExtremes
+    expect(extremes).not.toBeNull()
+    expect(extremes!.top.map((entry) => entry.id)).toEqual([
+      "old-a",
+      "old-b",
+      "old-c",
+    ])
+    expect(extremes!.bottom.map((entry) => entry.id)).toEqual([
+      "new-d",
+      "new-e",
+      "new-f",
+    ])
+    // The figure the band lists print is the view count itself.
+    expect(extremes!.top.map((entry) => entry.outcome)).toEqual([
+      100_000, 90_000, 80_000,
+    ])
+    // The fresh uploads out-reach two of the old ones per day, so a rate
+    // ranking would have split these bands differently.
+    expect(videoReachPerDay(rankedVideos()[3])).toBeGreaterThan(
+      videoReachPerDay(rankedVideos()[1])!,
+    )
   })
 })
