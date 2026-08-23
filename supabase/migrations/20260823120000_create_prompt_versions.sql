@@ -28,7 +28,7 @@
 create table public.prompt_versions (
   id uuid primary key default gen_random_uuid(),
   prompt_key text not null check (char_length(prompt_key) between 1 and 100),
-  -- 1-based per key, assigned by next_prompt_version below.
+  -- 1-based per key, assigned by append_prompt_version below.
   version integer not null check (version > 0),
   -- The prompt text this version made live, or null for "back to the shipped
   -- default". Capped well above the longest prompt we send (~14k characters)
@@ -70,11 +70,19 @@ create index prompt_versions_latest_idx
 
 alter table public.prompt_versions enable row level security;
 
--- No grants to `authenticated` or `anon`, and so no policies: this table is
--- reached only through the service-role client, from server code that has
--- already established the caller is an admin (see requireAdminUser in
--- lib/admin/auth.ts). RLS is enabled anyway so that a future grant cannot
--- accidentally open the table to every signed-in user.
+-- This table is reached only through the service-role client, from server code
+-- that has already established the caller is an admin (see requireAdminUser in
+-- lib/admin/auth.ts), so no policy is written for it and RLS denies every
+-- request that arrives as anon or authenticated.
+--
+-- The revoke is not redundant with that. This project carries default
+-- privileges that grant full DML on any new public table to anon and
+-- authenticated, so the table is created already granted; RLS with no policies
+-- is what actually stops those roles today, and a single `create policy` added
+-- later for any reason would open the whole table because the grants were
+-- sitting underneath it. Taking them away makes the deny the property of the
+-- grants rather than of the absence of a policy.
+revoke all on public.prompt_versions from anon, authenticated;
 
 -- Allocates the next version number for a key and inserts the row, so two
 -- admins saving at the same moment cannot both compute the same version and
