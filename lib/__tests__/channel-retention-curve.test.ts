@@ -261,6 +261,69 @@ describe("buildChannelRetentionCurve", () => {
     expect(curve!.averageDurationSeconds).toBeCloseTo(440, 6)
   })
 
+  it("withholds the two bands until they can be full and disjoint", () => {
+    const curve = buildChannelRetentionCurve(
+      Array.from({ length: 5 }, (_, index) =>
+        video(`v-${index}`, 1_000, linearCurve(0.1 * (index + 1))),
+      ),
+    )
+    expect(curve).not.toBeNull()
+    expect(curve!.bands).toBeNull()
+  })
+
+  it("averages the three best-retaining uploads against the three worst", () => {
+    // A linear curve ending at e holds (1 + e) / 2 of its runtime on average, so
+    // the ranking runs straight down the ending.
+    const curve = buildChannelRetentionCurve([
+      video("worst", 1_000, linearCurve(0.1)),
+      video("best", 1_000, linearCurve(0.9)),
+      video("second", 1_000, linearCurve(0.8)),
+      video("fifth", 1_000, linearCurve(0.2)),
+      video("third", 1_000, linearCurve(0.7)),
+      video("fourth", 1_000, linearCurve(0.3)),
+    ])
+    expect(curve).not.toBeNull()
+    const bands = curve!.bands
+    expect(bands).not.toBeNull()
+
+    expect(bands!.top.videoCount).toBe(3)
+    expect(bands!.top.totalViews).toBe(3_000)
+    // Every video ends where it ends, so the band's ending is the mean of the
+    // three it was built from.
+    expect(bands!.top.watchRatios[CHANNEL_CURVE_GRID_POINTS - 1]).toBeCloseTo(
+      (0.9 + 0.8 + 0.7) / 3,
+      6,
+    )
+    expect(bands!.bottom.watchRatios[CHANNEL_CURVE_GRID_POINTS - 1]).toBeCloseTo(
+      (0.3 + 0.2 + 0.1) / 3,
+      6,
+    )
+    // Both bands start where every curve starts, and the better band holds more
+    // of its runtime by construction.
+    expect(bands!.top.watchRatios[0]).toBeCloseTo(1, 6)
+    expect(bands!.bottom.watchRatios[0]).toBeCloseTo(1, 6)
+    expect(bands!.top.watchedShare).toBeGreaterThan(bands!.bottom.watchedShare)
+  })
+
+  it("weights a band by the viewers behind its videos", () => {
+    const curve = buildChannelRetentionCurve([
+      video("big", 100_000, linearCurve(0.9)),
+      video("small-1", 100, linearCurve(0.8)),
+      video("small-2", 100, linearCurve(0.7)),
+      video("low-1", 1_000, linearCurve(0.3)),
+      video("low-2", 1_000, linearCurve(0.2)),
+      video("low-3", 1_000, linearCurve(0.1)),
+    ])
+    expect(curve).not.toBeNull()
+    const top = curve!.bands!.top
+    // An even average of the band would end at 0.8. The 100,000-view upload
+    // leads it, held to the two thirds a three-video band allows.
+    expect(top.watchRatios[CHANNEL_CURVE_GRID_POINTS - 1]).toBeCloseTo(
+      (2 / 3) * 0.9 + (1 / 6) * 0.8 + (1 / 6) * 0.7,
+      6,
+    )
+  })
+
   it("leaves the runtime unknown when no contributing video stored one", () => {
     const curve = buildChannelRetentionCurve([
       video("a", 3_000, linearCurve(0.5), null),

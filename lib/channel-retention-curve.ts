@@ -20,6 +20,12 @@
 // channelCurveMaxWeightShare of the total, so a hit still leads the average
 // without being it.
 //
+// The same arithmetic then runs over the two ends of the library on their own:
+// the three best-retaining uploads averaged into one line, the three worst into
+// another, with the whole library's average behind them as the baseline. That is
+// the split every other Channel Trends tab is read against, so the retention
+// chart answers the same question they do.
+//
 // Pure arithmetic over stored curves and view counts, so it is exercised
 // directly by tests.
 //
@@ -81,6 +87,20 @@ export function channelCurveMaxWeightShare(videoCount: number): number {
 // and short enough to name a specific moment.
 const STEEPEST_DROP_SPAN = 0.1
 
+// The two ends of the library, drawn as one averaged line each over the whole
+// library's average. Same split, same band size and same reading as every other
+// Channel Trends tab: three uploads at the top, three at the bottom, the library
+// behind both as the baseline.
+//
+// The ranking is taken off the curves themselves, by the share of its runtime an
+// average viewer watched (the area under the resampled curve), so the order the
+// bands were picked in and the lines the page draws cannot disagree, and a video
+// missing its analytics summary is still rankable.
+export const RETENTION_BAND_SIZE = 3
+
+// Both bands have to be full and disjoint before the comparison means anything.
+export const RETENTION_BAND_MIN_VIDEOS = RETENTION_BAND_SIZE * 2
+
 // One video as the average needs it. ChannelVideo satisfies this shape, so the
 // page passes its library straight in.
 export interface ChannelRetentionVideoInput {
@@ -115,6 +135,25 @@ export interface ChannelRetentionVideoCurve {
   watchRatios: number[]
 }
 
+// One end of the library, averaged onto the shared grid the same way the whole
+// library is: views-weighted, under the same per-video cap, so a band is read on
+// the same terms as the baseline behind it.
+export interface ChannelRetentionBand {
+  videoCount: number
+  // The audience behind the band, summed across its videos.
+  totalViews: number
+  // One share still watching per grid position, in grid order.
+  watchRatios: number[]
+  // Share of runtime the band's average viewer watched, 0..1: the figure the
+  // band was ranked on.
+  watchedShare: number
+}
+
+export interface ChannelRetentionBands {
+  top: ChannelRetentionBand
+  bottom: ChannelRetentionBand
+}
+
 // The steepest stretch of the average: where a tenth of an upload costs the
 // channel the most audience.
 export interface ChannelRetentionDrop {
@@ -141,6 +180,10 @@ export interface ChannelRetentionCurve {
   holdAtHalf: number
   holdAtEnd: number
   steepestDrop: ChannelRetentionDrop | null
+  // The three best-retaining uploads and the three worst, each averaged into one
+  // line. Null until six videos carry both a curve and a view count, because two
+  // bands drawn from overlapping videos would compare a library with itself.
+  bands: ChannelRetentionBands | null
 }
 
 // Viewer counts turned into weights, with no single video allowed more than
@@ -184,6 +227,59 @@ export function cappedViewWeights(
 // prepend.
 function resample(curve: RetentionPoint[], grid: readonly number[]): number[] {
   return grid.map((ratio) => watchRatioAt(curve, ratio) ?? 0)
+}
+
+// The share of its runtime an average viewer watched: the mean of the resampled
+// curve, which is the area under it. The one number a whole curve can be ranked
+// on, and the same quantity YouTube reports as average view percentage.
+function watchedShare(watchRatios: readonly number[]): number {
+  return (
+    watchRatios.reduce((total, ratio) => total + ratio, 0) / watchRatios.length
+  )
+}
+
+// One band of videos averaged onto the shared grid, weighted by the viewers
+// behind each of them under the same cap the library average uses.
+function bandCurve(
+  indices: readonly number[],
+  series: readonly number[][],
+  views: readonly number[],
+): ChannelRetentionBand {
+  const weights = cappedViewWeights(indices.map((index) => views[index]))
+  const totalWeight = weights.reduce((total, weight) => total + weight, 0)
+  const watchRatios = series[indices[0]].map((_, gridIndex) =>
+    indices.reduce(
+      (total, videoIndex, bandIndex) =>
+        total + weights[bandIndex] * series[videoIndex][gridIndex],
+      0,
+    ) / totalWeight,
+  )
+  return {
+    videoCount: indices.length,
+    totalViews: indices.reduce((total, index) => total + views[index], 0),
+    watchRatios,
+    watchedShare: watchedShare(watchRatios),
+  }
+}
+
+// The two ends of the library, or null when there are too few videos for the
+// bands to be full and disjoint.
+function retentionBands(
+  series: readonly number[][],
+  views: readonly number[],
+  ids: readonly string[],
+): ChannelRetentionBands | null {
+  if (series.length < RETENTION_BAND_MIN_VIDEOS) return null
+  const shares = series.map(watchedShare)
+  const ranked = series
+    .map((_, index) => index)
+    // Best-retaining first, ties broken on the id so the bands are stable
+    // between renders rather than left to sort order.
+    .sort((a, b) => shares[b] - shares[a] || ids[a].localeCompare(ids[b]))
+  return {
+    top: bandCurve(ranked.slice(0, RETENTION_BAND_SIZE), series, views),
+    bottom: bandCurve(ranked.slice(-RETENTION_BAND_SIZE), series, views),
+  }
 }
 
 function steepestDrop(
@@ -287,5 +383,10 @@ export function buildChannelRetentionCurve(
     holdAtHalf: points[Math.round(last * 0.5)].watchRatio,
     holdAtEnd: points[last].watchRatio,
     steepestDrop: steepestDrop(points),
+    bands: retentionBands(
+      series,
+      views,
+      contributors.map((video) => video.id),
+    ),
   }
 }
