@@ -1,5 +1,6 @@
 import {
   ActivityIcon,
+  AreaChartIcon,
   ChevronDownIcon,
   GitCompareArrowsIcon,
   LayersIcon,
@@ -9,6 +10,7 @@ import {
 } from "lucide-react"
 
 import { insightCopy } from "@/components/channel-trends-copy"
+import { ChannelRetentionCurveChart } from "@/components/channel-trends-retention-curve"
 import {
   CalloutBlock,
   CardEyebrow,
@@ -18,6 +20,8 @@ import {
   EvidenceDisclosure,
   SignalMeter,
   TrendCard,
+  formatCompactNumber,
+  percent,
   plural,
 } from "@/components/channel-trends-shared"
 import { EventTypeBadge, formatEventTypeLabel } from "@/components/event-type-badge"
@@ -29,6 +33,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import type { ChannelRetentionCurve } from "@/lib/channel-retention-curve"
 import {
   SIGNAL_STRONG_THRESHOLD,
   type ChannelInsight,
@@ -42,9 +47,10 @@ import {
 } from "@/lib/channel-trends"
 
 // The Retention tab: what the accumulated event library says about where this
-// channel keeps viewers and where it loses them. Five blocks, in the order a
+// channel keeps viewers and where it loses them. Six blocks, in the order a
 // reader needs them:
 //
+//   average     every stored curve on one axis, averaged by viewers
 //   insights    the few patterns confident enough to phrase as a verdict
 //   signature   every event type placed between the drop side and the gain side
 //   recurrence  whether each pattern is still happening, upload by upload
@@ -57,6 +63,69 @@ import {
 // COPY GUARDRAIL: no em dashes (U+2014) or en dashes (U+2013), ever, in any
 // text in this file. Hyphens are fine. Enforced by
 // lib/__tests__/copy-guardrails.test.ts.
+
+// --- The average curve ------------------------------------------------------
+// The one view on the page drawn from the raw curves rather than from
+// synthesized events: what a typical viewer of this channel actually does.
+//
+// It is a weighted average, and the weighting is the honest part. A retention
+// curve is estimated from however many people watched, so a video seen by a few
+// hundred swings wildly from one position to the next while one seen by
+// thousands traces a smooth line. Averaging them evenly would let the small
+// uploads write the channel's shape, so every video counts in proportion to its
+// viewers, and no single upload may carry more than a capped share of the
+// total. The card says so, because a reader who does not know a curve is
+// weighted will read it as an even average of their videos.
+
+function AverageCurveCard({ curve }: { curve: ChannelRetentionCurve }) {
+  const { steepestDrop } = curve
+  return (
+    <TrendCard
+      icon={AreaChartIcon}
+      title="Your average retention curve"
+      description="Every video in your library on one axis, averaged into a single channel curve. Videos count in proportion to the viewers behind them, because a curve drawn from a few hundred people swings hard from point to point where one drawn from thousands runs smooth, and the small uploads should not get to write your channel's shape. No single video carries more than a capped share of the average, so one breakout upload leads it without becoming it."
+      footer={
+        <>
+          Averaged over {plural(curve.videoCount, "video")} and{" "}
+          {formatCompactNumber(curve.totalViews)} views.
+          {curve.unweightedVideoCount > 0 && (
+            <>
+              {" "}
+              {plural(curve.unweightedVideoCount, "other video")} in your library
+              stored a curve but no view count, so{" "}
+              {curve.unweightedVideoCount === 1 ? "it is" : "they are"} left out
+              rather than weighted by a guess.
+            </>
+          )}{" "}
+          Position is the share of each video&apos;s runtime, so uploads of
+          different lengths can sit on one axis.
+        </>
+      }
+    >
+      <ChannelRetentionCurveChart curve={curve} />
+      <div className="flex flex-wrap gap-1.5">
+        <Chip>{percent(curve.holdAtQuarter)} still watching a quarter in</Chip>
+        <Chip>{percent(curve.holdAtHalf)} still watching at halfway</Chip>
+        <Chip>{percent(curve.holdAtEnd)} still watching at the end</Chip>
+        {steepestDrop && (
+          <Chip>
+            steepest fall {percent(steepestDrop.fromRatio)} to{" "}
+            {percent(steepestDrop.toRatio)} in, {percent(steepestDrop.lost)} of
+            your audience
+          </Chip>
+        )}
+      </div>
+      {steepestDrop && (
+        <CoverageNote>
+          Your average upload loses more of its audience between{" "}
+          {percent(steepestDrop.fromRatio)} and {percent(steepestDrop.toRatio)}{" "}
+          in than anywhere else. The patterns below are what the synthesis found
+          happening in stretches like it.
+        </CoverageNote>
+      )}
+    </TrendCard>
+  )
+}
 
 const INSIGHT_KIND_META = {
   fix: {
@@ -488,9 +557,28 @@ function FullBreakdown({ data }: { data: ChannelTrendsData }) {
   )
 }
 
+// A library can reach the early stage on its event synthesis alone, with no
+// stored curves and no patterns confident enough to write up, so the tab is
+// dropped from the bar rather than opened empty.
+export function retentionPanelHasContent(data: ChannelTrendsData): boolean {
+  return (
+    data.averageCurve != null ||
+    data.insights.length > 0 ||
+    data.signature != null ||
+    data.recurrence != null ||
+    data.hooks != null ||
+    data.dropOffs != null ||
+    data.gains != null ||
+    data.holds != null
+  )
+}
+
 export function RetentionPanel({ data }: { data: ChannelTrendsData }) {
   return (
     <>
+      {data.averageCurve != null && (
+        <AverageCurveCard curve={data.averageCurve} />
+      )}
       {data.insights.length > 0 && (
         <div className="flex flex-col gap-3">
           {data.insights.map((insight) => (

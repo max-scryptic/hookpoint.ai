@@ -14,6 +14,10 @@ import {
   packagingPanelHasContent,
 } from "@/components/channel-trends-packaging"
 import {
+  RetentionPanel,
+  retentionPanelHasContent,
+} from "@/components/channel-trends-retention"
+import {
   ScriptPanel,
   scriptPanelHasContent,
 } from "@/components/channel-trends-script"
@@ -38,8 +42,12 @@ import {
 } from "@/lib/channel-trends"
 
 // The Channel Trends page body: the unlock meter, the library's headline
-// numbers, then two tabs.
+// numbers, then three tabs.
 //
+//   Retention  what the library actually did to viewers: the views-weighted
+//              average of every stored curve, then the patterns the event
+//              synthesis found behind the moments viewers left, came back or
+//              stayed steady (components/channel-trends-retention.tsx)
 //   Packaging  what your uploads promise, read one surface at a time across its
 //              own Hook, Title, Thumbnail and Alignment sub-tabs
 //              (components/channel-trends-packaging.tsx)
@@ -226,6 +234,7 @@ function TrendsPanel({
 
 export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
   const showTrends = data.stage === "early" || data.stage === "established"
+  const hasRetention = retentionPanelHasContent(data)
   const hasPackaging = packagingPanelHasContent(data)
   const hasScript = scriptPanelHasContent(data)
 
@@ -237,6 +246,13 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
           <ChannelSnapshotCards snapshot={data.snapshot} />
           <EarlySignalNote data={data} />
           <ChannelTrendsTabs
+            retention={
+              hasRetention ? (
+                <TrendsPanel description="Where your videos keep viewers and where they lose them: your library's average curve, then the patterns that recur behind it.">
+                  <RetentionPanel data={data} />
+                </TrendsPanel>
+              ) : undefined
+            }
             packaging={
               hasPackaging ? (
                 <TrendsPanel description="What your packaging promises, surface by surface: your hooks, your titles, your thumbnails, and how tightly the three of them agree.">

@@ -25,6 +25,10 @@ import {
   type ChannelEventRecord,
 } from "@/lib/channel-event-history"
 import {
+  buildChannelRetentionCurve,
+  type ChannelRetentionCurve,
+} from "@/lib/channel-retention-curve"
+import {
   buildChannelAlignmentAverage,
   buildChannelAxisProfile,
   buildChannelExtremesProfile,
@@ -44,6 +48,7 @@ import type {
 import type { RetentionWindowEventType } from "@/lib/retention-window-events"
 import type { RetentionWindowKind } from "@/lib/retention-windows"
 import type { ScriptTaxonomy } from "@/lib/script-taxonomy"
+import type { RetentionPoint } from "@/lib/youtube/youtube"
 
 // Trend confidence grows with library size: below EARLY the page only shows
 // the library filling up; from EARLY trends appear labelled as early signals;
@@ -130,6 +135,13 @@ export interface ChannelVideo {
   packaging: PackagingTaxonomy | null
   // The categorical read of the whole spoken script; null until generated.
   script: ScriptTaxonomy | null
+  // The full stored audience-retention curve, as YouTube reported it. Feeds the
+  // library's average curve (lib/channel-retention-curve.ts); null for rows
+  // analysed before the curve was persisted.
+  retention: RetentionPoint[] | null
+  // Runtime in seconds, so a position on the average curve's normalized axis
+  // can be read back as a rough timestamp.
+  durationSeconds: number | null
 }
 
 // Reach for one video: views per day between publish and the analytics
@@ -542,6 +554,10 @@ export interface ChannelTrendsData {
   packaging: ChannelPackagingPatterns | null
   // The library's headline medians, for the tiles above the tabs.
   snapshot: ChannelSnapshot
+  // Every stored retention curve averaged onto one axis, weighted by the
+  // viewers behind each video. Null until enough videos carry both a curve and
+  // a view count.
+  averageCurve: ChannelRetentionCurve | null
   // The 0-10 packaging axes: the channel's own profile, and where its
   // high-reach half separates from its low-reach half. Null until enough
   // videos carry an enriched (v2) packaging read.
@@ -1425,6 +1441,7 @@ export function buildChannelTrends(params: {
     subscribers: buildSubscriberConversion(records, videos, libraryVideoCount),
     packaging: buildPackagingPatterns(videos, libraryVideoCount),
     snapshot: buildChannelSnapshot(videos, libraryVideoCount),
+    averageCurve: buildChannelRetentionCurve(videos),
     packagingAxes: buildChannelAxisProfile({
       videos,
       source: "packaging",
@@ -1540,7 +1557,9 @@ function browseSuggestedShare(
 // chronological columns, the subscriber conversion view and the packaging
 // patterns view all read from this. JSON-path selects keep the payload to the
 // fields used instead of shipping whole video_details/packaging_alignment
-// documents.
+// documents. The one deliberately whole column is `retention`: the average
+// curve needs every sample of every video's curve, and Postgrest cannot project
+// inside a JSON array.
 async function loadVideos(
   supabase: SupabaseClient,
   userId: string,
@@ -1551,7 +1570,7 @@ async function loadVideos(
   const { data, error } = await supabase
     .from("analysed_videos")
     .select(
-      "id, video_title, date_analysed, analytics_summary, published_at:video_details->>publishedAt, packaging_taxonomy:packaging_alignment->taxonomy, script_taxonomy",
+      "id, video_title, date_analysed, analytics_summary, retention, published_at:video_details->>publishedAt, duration_seconds:video_details->durationSeconds, packaging_taxonomy:packaging_alignment->taxonomy, script_taxonomy",
     )
     .eq("user_id", userId)
     .in("id", videoIds)
@@ -1574,7 +1593,9 @@ async function loadVideos(
         trafficSources?: { source?: string; views?: number }[]
         fetchedAt?: string | null
       } | null
+      retention: RetentionPoint[] | null
       published_at: string | null
+      duration_seconds: number | null
       packaging_taxonomy: PackagingTaxonomy | null
       script_taxonomy: ScriptTaxonomy | null
     }[]
@@ -1595,6 +1616,8 @@ async function loadVideos(
       row.analytics_summary?.impressionClickThroughRate ?? null,
     packaging: row.packaging_taxonomy,
     script: row.script_taxonomy,
+    retention: row.retention,
+    durationSeconds: row.duration_seconds,
   }))
 }
 
