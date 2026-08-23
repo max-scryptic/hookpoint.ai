@@ -1,7 +1,11 @@
 import { AreaChartIcon, TrophyIcon } from "lucide-react"
 
 import { ChannelRetentionCurveChart } from "@/components/channel-trends-retention-curve"
-import { BandVideoPair, TrendCard } from "@/components/channel-trends-shared"
+import {
+  BandVideoPair,
+  TrendCard,
+  formatCompactNumber,
+} from "@/components/channel-trends-shared"
 import type {
   ChannelRetentionBands,
   ChannelRetentionCurve,
@@ -34,9 +38,9 @@ import type { ChannelTrendsData } from "@/lib/channel-trends"
 const TOP_BAND_LABEL = "top 3 by views"
 const BOTTOM_BAND_LABEL = "bottom 3 by views"
 
-// The share of a video that gets watched, printed the way the Script tab prints
-// the same quantity, because it is the same quantity.
-const formatWatched = (share: number) => `${Math.round(share * 100)}% watched`
+// The metric both bands are ranked and listed on, printed the way the rest of
+// the page prints a view count.
+const formatViews = (value: number) => `${formatCompactNumber(value)} views`
 
 // The uploads behind the two lines, named. The same card the Packaging and
 // Script tabs open with, on the reach ranking the Packaging tab uses rather than
@@ -44,31 +48,31 @@ const formatWatched = (share: number) => `${Math.round(share * 100)}% watched`
 // faster than any curve, so the chart is worth more once they know which three
 // videos each line is made of.
 //
-// Views are the criterion, so the figure printed against each row is the other
-// one: the share of that video that got watched. Read down a column and you can
-// see whether the band's line is a shape all three uploads share or one upload
-// dragging the other two.
+// Views are the criterion, so views are the figure printed against each row: the
+// same reach ranking the Packaging tab lists its bands on, so a creator reads
+// the two cards the same way. The retention each upload earned is what the chart
+// below draws.
 function RetentionBandsCard({ bands }: { bands: ChannelRetentionBands }) {
   return (
     <TrendCard
       icon={TrophyIcon}
-      title="The uploads the chart compares"
-      description="Your three most-viewed uploads and your three least-viewed, with the share of each one that actually gets watched."
+      title="The uploads the chart below compares"
+      description="Your three most-viewed uploads and your three least-viewed, ranked on total views."
     >
       <BandVideoPair
         top={bands.top.videos.map((video) => ({
           id: video.id,
           title: video.title,
-          outcome: video.watchedShare,
+          outcome: video.views,
         }))}
         bottom={bands.bottom.videos.map((video) => ({
           id: video.id,
           title: video.title,
-          outcome: video.watchedShare,
+          outcome: video.views,
         }))}
         topLabel={TOP_BAND_LABEL}
         bottomLabel={BOTTOM_BAND_LABEL}
-        formatOutcome={formatWatched}
+        formatOutcome={formatViews}
       />
     </TrendCard>
   )
