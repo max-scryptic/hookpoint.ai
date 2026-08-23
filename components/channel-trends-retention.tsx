@@ -1,14 +1,8 @@
 import { AreaChartIcon, TrophyIcon } from "lucide-react"
 
 import { ChannelRetentionCurveChart } from "@/components/channel-trends-retention-curve"
-import {
-  BandVideoPair,
-  TrendCard,
-  formatCompactNumber,
-  plural,
-} from "@/components/channel-trends-shared"
+import { BandVideoPair, TrendCard } from "@/components/channel-trends-shared"
 import type {
-  ChannelRetentionBand,
   ChannelRetentionBands,
   ChannelRetentionCurve,
 } from "@/lib/channel-retention-curve"
@@ -44,15 +38,6 @@ const BOTTOM_BAND_LABEL = "bottom 3 by views"
 // the same quantity, because it is the same quantity.
 const formatWatched = (share: number) => `${Math.round(share * 100)}% watched`
 
-// The reach a band was picked on, for the footer. Spelled out because the two
-// bands only mean something next to each other: 40K against 20K is a comparison,
-// 40K against 5 is a coincidence.
-function bandRange(band: ChannelRetentionBand): string {
-  return band.minViews === band.maxViews
-    ? `${formatCompactNumber(band.minViews)} views`
-    : `${formatCompactNumber(band.minViews)} to ${formatCompactNumber(band.maxViews)} views`
-}
-
 // The uploads behind the two lines, named. The same card the Packaging and
 // Script tabs open with, on the reach ranking the Packaging tab uses rather than
 // the retention one the Script tab does: a creator recognises their own uploads
@@ -63,19 +48,12 @@ function bandRange(band: ChannelRetentionBand): string {
 // one: the share of that video that got watched. Read down a column and you can
 // see whether the band's line is a shape all three uploads share or one upload
 // dragging the other two.
-function RetentionBandsCard({
-  bands,
-  videoCount,
-}: {
-  bands: ChannelRetentionBands
-  videoCount: number
-}) {
+function RetentionBandsCard({ bands }: { bands: ChannelRetentionBands }) {
   return (
     <TrendCard
       icon={TrophyIcon}
       title="The uploads the chart compares"
       description="Your three most-viewed uploads and your three least-viewed, with the share of each one that actually gets watched."
-      footer={`Your ${bands.top.videoCount} most-viewed (${bandRange(bands.top)}) and ${bands.bottom.videoCount} least-viewed (${bandRange(bands.bottom)}) of the ${plural(videoCount, "video")} storing a retention curve. Each line below is those videos averaged together, weighted by the viewers behind them.`}
     >
       <BandVideoPair
         top={bands.top.videos.map((video) => ({
@@ -131,9 +109,7 @@ export function RetentionPanel({ data }: { data: ChannelTrendsData }) {
       {/* Null on a library too small for two full, disjoint bands, which leaves
           the channel average as the only line there is to draw and nothing to
           name above it. */}
-      {curve.bands != null && (
-        <RetentionBandsCard bands={curve.bands} videoCount={curve.videoCount} />
-      )}
+      {curve.bands != null && <RetentionBandsCard bands={curve.bands} />}
       <RetentionCurveCard curve={curve} />
     </div>
   )
