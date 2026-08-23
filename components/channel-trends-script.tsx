@@ -168,7 +168,7 @@ export function ScriptPanel({ data }: { data: ChannelTrendsData }) {
         description="Your three uploads that held viewers longest and your three that lost them fastest, ranked on the share of each video that gets watched. Each tab below scores this same pair of bands on its own axes."
         topLabel={EXTREMES_TOP_LABEL}
         bottomLabel={EXTREMES_BOTTOM_LABEL}
-        formatOutcome={(video) => formatWatched(video.outcome)}
+        formatOutcome={formatWatched}
       />
       <ScriptSurfaceTabs
         substance={body("substance")}

@@ -15,10 +15,15 @@
 //                  warnings; the 2 tutorials reach twice as far")
 //
 // Two outcomes are supported and both come off the stored analytics snapshot:
-// REACH (views per day since publish, the packaging outcome) and RETENTION
-// (average view percentage, the script outcome). Everything here is
-// correlational by construction and the page says so: a library is a handful of
-// videos, and the same creator made all of them.
+// REACH (how far an upload travelled, the packaging outcome) and RETENTION
+// (average view percentage, the script outcome). Which reach figure is the
+// caller's to choose: the halves split reads views per day, so the split is not
+// mostly a reading of publish dates, while the two named bands read lifetime
+// views, because a band shown as the videos in it has to be ranked on the
+// number a creator knows those videos by.
+//
+// Everything here is correlational by construction and the page says so: a
+// library is a handful of videos, and the same creator made all of them.
 //
 // COPY GUARDRAIL: no em dashes (U+2014) or en dashes (U+2013), ever, in this
 // file. Hyphens are fine. Enforced by lib/__tests__/copy-guardrails.test.ts.
@@ -326,15 +331,9 @@ const MAX_EXTREME_CONTRASTS = 3
 export interface ChannelExtremeVideo {
   id: string
   title: string | null
-  // The metric the ranking was made on: views per day for reach, average view
+  // The metric the ranking was made on: lifetime views for reach, average view
   // percentage for retention.
   outcome: number
-  // Lifetime views, when the caller supplied them. The ranking is made on views
-  // per day so a fresh upload is not beaten by an old one purely on age, but
-  // the number a creator recognises their own upload by is its view count, so
-  // that is what the band lists print. Null when the caller had none to hand,
-  // which is every ranking that is not about reach.
-  views: number | null
 }
 
 export interface ChannelExtremeAxisRow {
@@ -389,11 +388,8 @@ export function buildChannelExtremesProfile<
   source: TaxonomySource
   outcome: ChannelOutcome
   outcomeOf: (video: V) => number | null
-  // Lifetime views, for the bands to be listed by. Only the ranking metric
-  // decides who is in a band; this is what each of them is printed with.
-  viewsOf?: (video: V) => number | null
 }): ChannelExtremesProfile | null {
-  const { videos, source, outcome, outcomeOf, viewsOf } = params
+  const { videos, source, outcome, outcomeOf } = params
 
   const carrying = videos.flatMap((video) => {
     const taxonomy = source === "packaging" ? video.packaging : video.script
@@ -451,7 +447,6 @@ export function buildChannelExtremesProfile<
     id: entry.video.id,
     title: entry.video.title,
     outcome: entry.outcome,
-    views: viewsOf?.(entry.video) ?? null,
   })
 
   return {

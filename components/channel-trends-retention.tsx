@@ -67,7 +67,7 @@ function RetentionBandsCard({
         }))}
         topLabel={TOP_BAND_LABEL}
         bottomLabel={BOTTOM_BAND_LABEL}
-        formatOutcome={(video) => formatWatched(video.outcome)}
+        formatOutcome={formatWatched}
       />
     </TrendCard>
   )
