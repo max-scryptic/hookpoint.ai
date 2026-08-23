@@ -12,6 +12,7 @@ import {
   VideoIcon,
 } from "lucide-react"
 
+import { HelpNav, type HelpSection } from "@/components/help-nav"
 import { buttonVariants } from "@/components/ui/button"
 import {
   EARLY_TRENDS_VIDEO_THRESHOLD,
@@ -28,10 +29,14 @@ import { ACCEPTED_EXTENSIONS } from "@/lib/source-files/config"
 import { cn } from "@/lib/utils"
 
 // The one page that explains the whole product to the person using it, in the
-// plainest words we can write it in. Everything here is read from the same
-// constants the rest of the app is built on (plan limits, credit costs, trend
-// thresholds, accepted file types), so the guide cannot drift away from what
-// the product actually does when one of those numbers changes.
+// plainest and fewest words we can write it in. Everything here is read from
+// the same constants the rest of the app is built on (plan limits, credit
+// costs, trend thresholds, accepted file types), so the guide cannot drift
+// away from what the product actually does when one of those numbers changes.
+//
+// The guide runs the full width of the page and leans on grids rather than a
+// single column, so a reader can take in a whole section at a glance instead of
+// scrolling through it. The jump bar at the top is the only client bit.
 //
 // COPY GUARDRAIL: no em or en dashes anywhere in this file (comments
 // included). Hyphens are fine.
@@ -42,23 +47,35 @@ const pro = PLAN_BY_ID.pro
 
 const FILE_TYPES = ACCEPTED_EXTENSIONS.map((ext) => `.${ext}`).join(", ")
 
+// The running order of the page, and the buttons in the jump bar. Kept in one
+// place so the bar and the sections below it can never disagree.
+const SECTIONS = [
+  { id: "overview", label: "Overview" },
+  { id: "start-here", label: "Start here" },
+  { id: "plans", label: "Free and Paid" },
+  { id: "deep-dives", label: "Deep dives" },
+  { id: "tools", label: "Tools" },
+  { id: "glossary", label: "Words we use" },
+  { id: "fixes", label: "Fixes" },
+] as const satisfies readonly HelpSection[]
+
 function Section({
+  id,
   title,
   intro,
   children,
 }: {
+  id: string
   title: string
   intro?: string
   children: React.ReactNode
 }) {
   return (
-    <section className="flex flex-col gap-4">
+    <section id={id} className="flex scroll-mt-20 flex-col gap-3">
       <div>
         <h2 className="text-lg font-semibold tracking-normal">{title}</h2>
         {intro ? (
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            {intro}
-          </p>
+          <p className="mt-0.5 text-sm text-muted-foreground">{intro}</p>
         ) : null}
       </div>
       {children}
@@ -66,8 +83,8 @@ function Section({
   )
 }
 
-// One numbered step. The number sits in its own circle so the eye can follow
-// the order down the page without reading a word of it.
+// One numbered step. The steps sit side by side in a grid, so the number rides
+// on the same line as the title and the eye still gets the order for free.
 function Step({
   number,
   title,
@@ -78,15 +95,15 @@ function Step({
   children: React.ReactNode
 }) {
   return (
-    <li className="flex gap-4">
-      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-        {number}
-      </span>
-      <div className="flex flex-col gap-1 pt-0.5">
+    <li className="flex flex-col gap-2 rounded-xl border bg-card p-4">
+      <div className="flex items-center gap-2">
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+          {number}
+        </span>
         <h3 className="text-sm font-medium">{title}</h3>
-        <div className="space-y-2 text-sm text-muted-foreground">
-          {children}
-        </div>
+      </div>
+      <div className="space-y-1.5 text-sm text-muted-foreground">
+        {children}
       </div>
     </li>
   )
@@ -108,7 +125,7 @@ function ToolCard({
   children: React.ReactNode
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-xl border bg-card p-4">
+    <div className="flex flex-col gap-2 rounded-xl border bg-card p-4">
       <div className="flex items-center gap-2">
         <Icon className="size-4 shrink-0 text-muted-foreground" />
         <h3 className="text-sm font-medium">{title}</h3>
@@ -119,13 +136,15 @@ function ToolCard({
           </span>
         ) : null}
       </div>
-      <div className="space-y-2 text-sm text-muted-foreground">{children}</div>
+      <div className="space-y-1.5 text-sm text-muted-foreground">
+        {children}
+      </div>
       {href ? (
         <Link
           href={href}
           className={cn(
             buttonVariants({ variant: "outline", size: "sm" }),
-            "w-fit",
+            "mt-auto w-fit",
           )}
         >
           {linkLabel ?? `Open ${title}`}
@@ -155,7 +174,7 @@ function PlanCard({
   return (
     <div
       className={cn(
-        "flex flex-col gap-3 rounded-xl border bg-card p-4",
+        "flex flex-col gap-2 rounded-xl border bg-card p-4",
         currentPlanName && "border-primary ring-1 ring-primary/20",
       )}
     >
@@ -168,7 +187,7 @@ function PlanCard({
           </span>
         ) : null}
       </div>
-      <ul className="space-y-1.5 text-sm text-muted-foreground">
+      <ul className="space-y-1 text-sm text-muted-foreground">
         {points.map((point) => (
           <li key={point} className="flex gap-2">
             <span aria-hidden className="text-foreground">
@@ -188,7 +207,9 @@ function PlanCard({
   )
 }
 
-function Glossary({
+// Used for both the glossary and the troubleshooting list: a short heading with
+// one plain answer under it.
+function Definition({
   term,
   children,
 }: {
@@ -203,63 +224,54 @@ function Glossary({
   )
 }
 
-function Problem({
-  problem,
-  children,
-}: {
-  problem: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="rounded-xl border bg-card p-4">
-      <h3 className="text-sm font-medium">{problem}</h3>
-      <p className="mt-1 text-sm text-muted-foreground">{children}</p>
-    </div>
-  )
-}
-
 export function HelpGuide({ planId }: { planId: PlanId }) {
   const isFree = planId === "free"
   const currentPlanName = PLAN_BY_ID[planId].name
 
   return (
-    <div className="flex max-w-4xl flex-col gap-10 pb-8">
+    <div className="flex w-full flex-col gap-6 pb-8">
+      <HelpNav sections={SECTIONS} />
+
       {/* What the app is for, in one breath. */}
-      <section className="rounded-xl border bg-card p-5">
-        <h2 className="text-base font-semibold tracking-normal">
-          What this app does
-        </h2>
-        <div className="mt-2 space-y-2 text-sm text-muted-foreground">
-          <p>
-            YouTube keeps a graph for every one of your videos. The graph shows
-            how many people were still watching at each second. When lots of
-            people leave at once, the graph drops.
-          </p>
-          <p>
-            Hookpoint reads that graph, finds the moments that matter, then
-            works out what was happening in your video at those moments. You get
-            a report that says what happened, why it happened, and one thing to
-            do differently next time.
-          </p>
-          <p>
-            You do not need to know anything about charts. Pick a video, press
-            the button, read the tips.
-          </p>
+      <section id="overview" className="scroll-mt-20">
+        <div className="grid gap-4 rounded-xl border bg-card p-5 lg:grid-cols-2">
+          <div>
+            <h2 className="text-base font-semibold tracking-normal">
+              What this app does
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              YouTube draws a graph for every video you post: how many people
+              were still watching at each second. When a lot of people leave at
+              once, the graph drops.
+            </p>
+          </div>
+          <div className="space-y-1.5 text-sm text-muted-foreground lg:pt-7">
+            <p>
+              Viewlio reads that graph, finds the moments that matter, works
+              out what was happening in your video at each one, and tells you
+              one thing to do differently next time.
+            </p>
+            <p>
+              You do not need to know anything about charts. Pick a video, press
+              the button, read the tips.
+            </p>
+          </div>
         </div>
       </section>
 
       <Section
+        id="start-here"
         title="Start here"
         intro="Four steps. Everyone does these, on every plan."
       >
-        <ol className="flex flex-col gap-6 rounded-xl border bg-card p-5">
-          <Step number={1} title="Connect your YouTube channel">
+        <ol className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Step number={1} title="Connect your channel">
             <p>
               Sign in with the Google account that owns your channel. That is
-              what lets us read your own numbers. Nobody else can see them.
+              what lets us read your own numbers, and nobody else can see them.
             </p>
             <p>
-              You can unplug the channel whenever you like, in{" "}
+              Unplug it whenever you like, in{" "}
               <Link href="/settings" className="underline underline-offset-4">
                 Settings
               </Link>
@@ -267,34 +279,30 @@ export function HelpGuide({ planId }: { planId: PlanId }) {
             </p>
           </Step>
 
-          <Step number={2} title="Analyse a video you have already posted">
+          <Step number={2} title="Analyse a video you have posted">
             <p>
-              Go to <strong className="text-foreground">Analyse a Video</strong>
-              . Paste the link to one of your videos, or just click one from the
-              list of your recent uploads underneath.
+              In <strong className="text-foreground">Analyse a Video</strong>,
+              paste a link to one of your videos or click one from your recent
+              uploads.
             </p>
             <p>
-              The video has to have retention data. That means it must be on the
-              channel you signed in with, and enough people must have watched it
-              for YouTube to draw the graph. Brand new videos and very small
-              videos do not have one yet. If yours does not, we tell you plainly
-              instead of guessing.
+              It needs retention data: it must be on the channel you signed in
+              with, and enough people must have watched it for YouTube to draw
+              the graph. If yours has none, we say so plainly instead of
+              guessing.
             </p>
-            <p>
-              Free gives you {free.videoAnalysesPerMonth} of these every month.
-            </p>
+            <p>Free gives you {free.videoAnalysesPerMonth} a month.</p>
           </Step>
 
           <Step number={3} title="Read the report">
             <p>
-              The finished report lives in{" "}
-              <strong className="text-foreground">Analysed Videos</strong>. It
-              shows your hook (the first few seconds), the places where lots of
-              people left, the places where people stayed or came back, and your
-              packaging: your title, your thumbnail and your hook.
+              It lands in{" "}
+              <strong className="text-foreground">Analysed Videos</strong>: your
+              hook, where lots of people left, where they stayed or came back,
+              and your packaging (title, thumbnail, hook).
             </p>
             <p>
-              Every part of the report ends with a blue{" "}
+              Every part ends with a blue{" "}
               <strong className="text-foreground">Try:</strong> line. That is
               the one thing to change next time.
             </p>
@@ -303,19 +311,20 @@ export function HelpGuide({ planId }: { planId: PlanId }) {
           <Step number={4} title="Keep the tips you like">
             <p>
               Click a <strong className="text-foreground">Try:</strong> tip and
-              choose Keep. It gets saved to your{" "}
-              <strong className="text-foreground">Checklist</strong>, so you
-              have it in front of you while you make your next video.
+              choose Keep. It is saved to your{" "}
+              <strong className="text-foreground">Checklist</strong>, in front
+              of you while you make your next video.
             </p>
           </Step>
         </ol>
       </Section>
 
       <Section
+        id="plans"
         title="Free and Paid, side by side"
         intro="Free is the retention half of the product. Paid adds the footage half, plus the tools that compare videos to each other."
       >
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-2">
           <PlanCard
             name={free.name}
             price="Free forever"
@@ -328,8 +337,7 @@ export function HelpGuide({ planId }: { planId: PlanId }) {
             ]}
             missing={[
               "No source file uploads, so no deep dives",
-              "No Channel Trends",
-              "No Video Comparator",
+              "No Channel Trends and no Video Comparator",
             ]}
           />
           <PlanCard
@@ -339,7 +347,7 @@ export function HelpGuide({ planId }: { planId: PlanId }) {
             points={[
               `${starter.videoAnalysesPerMonth} analyses a month on ${starter.name}, ${pro.videoAnalysesPerMonth} on ${pro.name}`,
               `${starter.deepCreditsPerMonth} deep-dive credits a month on ${starter.name}, ${pro.deepCreditsPerMonth} on ${pro.name}`,
-              `Upload your raw source files, up to ${starter.maxUploadGb} GB per file on ${starter.name} and ${pro.maxUploadGb} GB on ${pro.name}`,
+              `Source file uploads up to ${starter.maxUploadGb} GB per file on ${starter.name}, ${pro.maxUploadGb} GB on ${pro.name}`,
               "The full report: script, editing, pacing, visuals and sound",
               "Channel Trends across everything you have analysed",
               "Video Comparator, to put two videos head to head",
@@ -354,70 +362,97 @@ export function HelpGuide({ planId }: { planId: PlanId }) {
       </Section>
 
       <Section
+        id="deep-dives"
         title="Deep dives: unlocking the full report"
-        intro="This is the part that needs a paid plan, and it is the part that changes the report the most."
+        intro="This is the part that needs a paid plan, and the part that changes the report the most."
       >
-        <div className="rounded-xl border bg-card p-5">
-          <div className="space-y-2 text-sm text-muted-foreground">
-            <p>
-              A normal analysis only sees what YouTube hands over: your
-              retention graph, your title, your thumbnail, your description and
-              your words. It cannot see your footage. So it can tell you that a
-              lot of people left at 2:41, but not that they left because a slow
-              recap landed right after a cut.
-            </p>
-            <p>
-              A deep dive can. You give us the raw video file, the same one you
-              uploaded to YouTube. We then go through the picture, the sound and
-              the words around every important moment, second by second. That is
-              when the report can talk about your{" "}
-              <strong className="text-foreground">script</strong>, your{" "}
-              <strong className="text-foreground">editing</strong>, your{" "}
-              <strong className="text-foreground">pacing</strong>, your{" "}
-              <strong className="text-foreground">visuals</strong> and your{" "}
-              <strong className="text-foreground">sound</strong>, and point at
-              the exact bit of footage it means.
-            </p>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="flex flex-col gap-2 rounded-xl border bg-card p-4">
+            <h3 className="text-sm font-medium">What a deep dive adds</h3>
+            <div className="space-y-1.5 text-sm text-muted-foreground">
+              <p>
+                A normal analysis only sees what YouTube hands over: your
+                retention graph, title, thumbnail, description and words. It can
+                tell you a lot of people left at 2:41, but not that they left
+                because a slow recap landed right after a cut.
+              </p>
+              <p>
+                A deep dive can. You give us the raw file you uploaded to
+                YouTube, and we go through the picture, the sound and the words
+                around every important moment, second by second. That is when
+                the report can talk about your{" "}
+                <strong className="text-foreground">script</strong>,{" "}
+                <strong className="text-foreground">editing</strong>,{" "}
+                <strong className="text-foreground">pacing</strong>,{" "}
+                <strong className="text-foreground">visuals</strong> and{" "}
+                <strong className="text-foreground">sound</strong>, and point at
+                the exact bit of footage it means.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2 rounded-xl border bg-card p-4">
+            <div className="flex items-center gap-2">
+              <SparklesIcon className="size-4 text-muted-foreground" />
+              <h3 className="text-sm font-medium">How credits work</h3>
+            </div>
+            <div className="space-y-1.5 text-sm text-muted-foreground">
+              <p>
+                {CREDITS_TOOLTIP} So a 12 minute video costs 12 credits and a 40
+                minute video costs 40. Longer video, more footage to watch, more
+                credits.
+              </p>
+              <p>
+                {starter.name} gives you {starter.deepCreditsPerMonth} a month,{" "}
+                {pro.name} gives you {pro.deepCreditsPerMonth}, and they refill
+                every month. Ordinary analyses do not use credits at all: they
+                are counted separately, one per video.
+              </p>
+              <p>
+                See what you have left in{" "}
+                <Link href="/settings" className="underline underline-offset-4">
+                  Settings
+                </Link>
+                .
+              </p>
+            </div>
           </div>
         </div>
 
-        <ol className="flex flex-col gap-6 rounded-xl border bg-card p-5">
-          <Step number={1} title="Open a video you have already analysed">
+        <ol className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Step number={1} title="Open a video you have analysed">
             <p>
-              Deep dives sit on top of an analysis, so the video has to be
-              analysed first. Open it from{" "}
-              <strong className="text-foreground">Analysed Videos</strong>.
+              Deep dives sit on top of an analysis, so open the video from{" "}
+              <strong className="text-foreground">Analysed Videos</strong> and
+              scroll to the{" "}
+              <strong className="text-foreground">Raw source file</strong> card
+              at the bottom. On Free you see an Unlock the full report message
+              there instead.
             </p>
           </Step>
-          <Step number={2} title="Scroll to Raw source file">
-            <p>
-              It is the card at the bottom of the report. On Free you see an
-              Unlock the full report message there instead.
-            </p>
-          </Step>
-          <Step number={3} title="Drop your file in">
+          <Step number={2} title="Drop your file in">
             <p>
               We take {FILE_TYPES} files, up to {starter.maxUploadGb} GB on{" "}
               {starter.name} and {pro.maxUploadGb} GB on {pro.name}.
             </p>
             <p>
-              Give us the finished cut, the exact video that is live on YouTube.
-              We check the length against YouTube and warn you if it looks like
-              a different video, so a wrong file does not quietly get analysed.
+              Give us the finished cut that is live on YouTube. We check the
+              length against YouTube and warn you if it looks like a different
+              video.
             </p>
           </Step>
-          <Step number={4} title="Wait for it to finish">
+          <Step number={3} title="Leave it running">
             <p>
               Big files take a while to send. Once the upload bar is done you
-              can leave the page, and we carry on working in the background.
+              can leave the page and we carry on in the background.
             </p>
             <p>
               Your footage goes into private storage only your account can
-              reach. We make a small copy for the analysis and then delete the
+              reach. We make a small copy for the analysis, then delete the
               original.
             </p>
           </Step>
-          <Step number={5} title="Read the fuller report">
+          <Step number={4} title="Read the fuller report">
             <p>
               A{" "}
               <strong className="text-foreground">
@@ -425,47 +460,18 @@ export function HelpGuide({ planId }: { planId: PlanId }) {
               </strong>{" "}
               section appears, with the moments grouped by what they are: your
               hook, the big drops, the holds, the gains. Each one names what was
-              on screen, what was being said, and what to do about it.
+              on screen, what was said, and what to do about it.
             </p>
           </Step>
         </ol>
-
-        <div className="flex flex-col gap-2 rounded-xl border bg-card p-5">
-          <div className="flex items-center gap-2">
-            <SparklesIcon className="size-4 text-muted-foreground" />
-            <h3 className="text-sm font-medium">How credits work</h3>
-          </div>
-          <div className="space-y-2 text-sm text-muted-foreground">
-            <p>
-              {CREDITS_TOOLTIP} So a 12 minute video costs 12 credits, and a 40
-              minute video costs 40. Longer video, more footage to watch, more
-              credits.
-            </p>
-            <p>
-              {starter.name} gives you {starter.deepCreditsPerMonth} credits a
-              month. {pro.name} gives you {pro.deepCreditsPerMonth}. They refill
-              every month.
-            </p>
-            <p>
-              Ordinary analyses do not use credits at all. They are counted
-              separately, one per video.
-            </p>
-            <p>
-              You can see what you have left in{" "}
-              <Link href="/settings" className="underline underline-offset-4">
-                Settings
-              </Link>
-              .
-            </p>
-          </div>
-        </div>
       </Section>
 
       <Section
+        id="tools"
         title="Every tool, explained"
         intro="What each thing in the sidebar is for, and when to use it."
       >
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <ToolCard
             icon={VideoIcon}
             title="Analyse a Video"
@@ -474,11 +480,8 @@ export function HelpGuide({ planId }: { planId: PlanId }) {
           >
             <p>
               Where everything starts. Paste a link to one of your videos, or
-              pick one from your recent uploads.
-            </p>
-            <p>
-              Videos you have already done are marked, so you do not spend an
-              analysis twice on the same one.
+              pick one from your recent uploads. Videos you have already done
+              are marked, so you do not spend an analysis twice.
             </p>
           </ToolCard>
 
@@ -489,8 +492,7 @@ export function HelpGuide({ planId }: { planId: PlanId }) {
             linkLabel="See your videos"
           >
             <p>
-              Every report you have made, kept in one place. Click one to open
-              it.
+              Every report you have made, in one place. Click one to open it.
             </p>
             <p>
               This is also where you upload a raw source file to turn a report
@@ -512,11 +514,10 @@ export function HelpGuide({ planId }: { planId: PlanId }) {
               actually earn you.
             </p>
             <p>
-              The first patterns show up once you have{" "}
-              {EARLY_TRENDS_VIDEO_THRESHOLD} analysed videos, and get much more
-              solid from {ESTABLISHED_TRENDS_VIDEO_THRESHOLD}. Every deep dive
-              you run makes it sharper, because its moments join your private
-              library.
+              Patterns show up at {EARLY_TRENDS_VIDEO_THRESHOLD} analysed
+              videos, and get much more solid from{" "}
+              {ESTABLISHED_TRENDS_VIDEO_THRESHOLD}. Every deep dive sharpens
+              them.
             </p>
           </ToolCard>
 
@@ -528,19 +529,14 @@ export function HelpGuide({ planId }: { planId: PlanId }) {
             paidOnly
           >
             <p>
-              Puts two of your videos next to each other and asks why one held
-              people better than the other. It lays the two curves on top of
-              each other and compares the scripts and the packaging.
+              Puts two of your videos side by side and asks why one held people
+              better: it lays the curves on top of each other and compares the
+              scripts and the packaging.
             </p>
             <p>
-              You need two deeply analysed videos to use it. Your first
-              comparison is free. After that each one costs{" "}
-              {VIDEO_COMPARISON_CREDIT_COST} credits, no matter how long the
-              videos are.
-            </p>
-            <p>
-              Old comparisons are saved, so you can reopen one without paying
-              again.
+              Needs two deeply analysed videos. Your first comparison is free,
+              then {VIDEO_COMPARISON_CREDIT_COST} credits each, whatever the
+              length. Old ones are saved, so reopening is free.
             </p>
           </ToolCard>
 
@@ -552,11 +548,8 @@ export function HelpGuide({ planId }: { planId: PlanId }) {
           >
             <p>
               The tips you kept, all together. Drag them into the order you want
-              to work through them, and delete the ones you have outgrown.
-            </p>
-            <p>
-              Use it while you write and edit your next video. That is the whole
-              point of it.
+              and delete the ones you have outgrown. Use it while you write and
+              edit your next video: that is the whole point of it.
             </p>
             <p>
               If a tip is wrong or unhelpful, flag it from the same menu you
@@ -581,89 +574,87 @@ export function HelpGuide({ planId }: { planId: PlanId }) {
       </Section>
 
       <Section
+        id="glossary"
         title="Words we use"
         intro="Plain meanings for the words that show up in your reports."
       >
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Glossary term="Retention curve">
-            The graph of how many people were still watching at each second of
-            your video. It always starts at the top and goes down. What matters
-            is how fast, and where.
-          </Glossary>
-          <Glossary term="Hook">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <Definition term="Retention curve">
+            The graph of how many people were still watching at each second. It
+            always starts at the top and goes down. What matters is how fast,
+            and where.
+          </Definition>
+          <Definition term="Hook">
             The opening of your video, where the most people leave. A small
             change here usually beats a big change anywhere else.
-          </Glossary>
-          <Glossary term="Retention event">
-            A stretch of your video where something clear happened to the curve:
-            a sharp drop, a flat hold, or a rise where people came back or
-            rewatched.
-          </Glossary>
-          <Glossary term="Packaging">
-            Your title, your thumbnail and your hook, judged together. They are
-            a promise. The report checks whether the video keeps it.
-          </Glossary>
-          <Glossary term="Analysis">
+          </Definition>
+          <Definition term="Retention event">
+            A stretch where something clear happened to the curve: a sharp drop,
+            a flat hold, or a rise where people came back or rewatched.
+          </Definition>
+          <Definition term="Packaging">
+            Your title, thumbnail and hook, judged together. They are a promise.
+            The report checks whether the video keeps it.
+          </Definition>
+          <Definition term="Analysis">
             The normal report, built from your retention curve, your words and
-            your packaging. Every plan gets these. Counted per video.
-          </Glossary>
-          <Glossary term="Deep dive">
+            your packaging. Every plan gets these, counted per video.
+          </Definition>
+          <Definition term="Deep dive">
             The bigger report, built from your actual footage after you upload
-            it. Paid plans only. Paid for in credits.
-          </Glossary>
-          <Glossary term="Credit">
+            it. Paid plans only, paid for in credits.
+          </Definition>
+          <Definition term="Credit">
             {`${CREDITS_TOOLTIP} Credits are only ever spent on deep dives and comparisons, never on an ordinary analysis.`}
-          </Glossary>
-          <Glossary term="Try: tip">
+          </Definition>
+          <Definition term="Try: tip">
             The one specific change we suggest for a moment in your video. Keep
             it and it goes on your Checklist.
-          </Glossary>
+          </Definition>
         </div>
       </Section>
 
       <Section
+        id="fixes"
         title="If something does not work"
         intro="The four things people hit most often."
       >
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Problem problem="No retention data available">
-            YouTube has not drawn a curve for that video yet. Either it is not
-            on the channel you signed in with, or too few people have watched it
-            so far. Give a new video a few days, and try one of your bigger
-            videos in the meantime.
-          </Problem>
-          <Problem problem="My videos are not showing up">
-            The connection to YouTube has probably gone stale. Sign in again
-            with the Google account that owns the channel, using the reconnect
-            button on the Analyse a Video page.
-          </Problem>
-          <Problem problem="It says my file is a different video">
-            We compared the length of your file to the length of the video on
-            YouTube and they did not match. That usually means it is the wrong
-            cut. Send the exact file you gave YouTube. You can carry on anyway
-            if you are sure.
-          </Problem>
-          <Problem problem="My upload will not start">
-            Check the file type and the size. We take {FILE_TYPES} files, up to{" "}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Definition term="No retention data available">
+            YouTube has not drawn a curve for that video yet: either it is not
+            on the channel you signed in with, or too few people have watched
+            it. Give a new video a few days and try a bigger one meanwhile.
+          </Definition>
+          <Definition term="My videos are not showing up">
+            The YouTube connection has gone stale. Sign in again with the Google
+            account that owns the channel, using the reconnect button on the
+            Analyse a Video page.
+          </Definition>
+          <Definition term="It says my file is a different video">
+            Your file and the YouTube video are different lengths, which usually
+            means it is the wrong cut. Send the exact file you gave YouTube, or
+            carry on anyway if you are sure.
+          </Definition>
+          <Definition term="My upload will not start">
+            Check the file type and size. We take {FILE_TYPES} files, up to{" "}
             {starter.maxUploadGb} GB on {starter.name} and {pro.maxUploadGb} GB
             on {pro.name}. Free plans cannot upload at all.
-          </Problem>
+          </Definition>
         </div>
-      </Section>
 
-      <Section title="Still stuck?">
-        <div className="flex flex-col gap-3 rounded-xl border bg-card p-5">
-          <div className="flex items-center gap-2">
-            <LightbulbIcon className="size-4 text-muted-foreground" />
-            <h3 className="text-sm font-medium">A good first video to try</h3>
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-card p-4 lg:flex-nowrap">
+          <div className="flex min-w-0 items-start gap-2">
+            <LightbulbIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+            <div>
+              <h3 className="text-sm font-medium">A good first video to try</h3>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                One of yours from a month or two ago that did reasonably well.
+                It has a solid curve, you still remember making it, and the
+                report will make far more sense than one about yesterday.
+              </p>
+            </div>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Pick a video of yours from a month or two ago that did reasonably
-            well. It will have a solid curve, you will still remember making it,
-            and the report will make far more sense than one about a video you
-            posted yesterday.
-          </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex shrink-0 flex-wrap gap-2">
             <Link
               href="/analyse-video"
               className={cn(buttonVariants({ size: "sm" }), "w-fit")}
