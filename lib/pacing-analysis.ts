@@ -1,6 +1,6 @@
 import { recordLlmCallCost, type LlmLogContext } from "@/lib/llm-calls"
 import { responsesCallCost, type ResponsesUsage } from "@/lib/llm-cost"
-import { TIP_VOICE_PROMPT } from "@/lib/tip-voice"
+import { resolvePrompt } from "@/lib/prompts/resolve"
 import type { TranscriptCue, VideoDetails } from "@/lib/youtube/youtube"
 
 export type PacingRate =
@@ -282,6 +282,8 @@ export async function generatePacingAnalysis(
   if (!apiKey) throw new Error("OPENAI_API_KEY is not configured")
 
   const model = process.env.OPENAI_PACING_MODEL ?? "gpt-4.1-mini"
+
+  const instructions = await resolvePrompt("pacing")
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
@@ -300,30 +302,7 @@ export async function generatePacingAnalysis(
           content: [
             {
               type: "input_text",
-              text: [
-                "You analyse narrative pacing in YouTube transcripts.",
-                "Write to the uploader in the second person (you, your video), reviewing their own video. Whoever is heard speaking may be the uploader, a co-host, a guest, or a voiceover, so never pin what is said on a specific or gendered person (he, she, the creator, the host); frame it as the uploader's own video instead (say 'here you are still laying out the context', not 'he is still laying out the context').",
-                "Judge each supplied window relative to this video's own rhythm, not an imagined universal ideal.",
-                "Use only transcript content and the supplied word metrics. Do not infer editing, visuals, music, vocal energy, audience retention, or causal effects.",
-                "Narrative pacing includes novelty, information density, progression, repetition, topic movement, setup/payoff, questions, and open loops.",
-                "The first 30-second window is the hook. Every later window is 60 seconds except a shorter final window.",
-                "Return exactly one windows entry for every supplied window, using its zero-based windowIndex.",
-                "Keep evidence specific and concise. Set possibleIssue to null when there is no meaningful issue.",
-                "For slowOrRepetitiveStretches, pick the 3 to 5 areas most worth reviewing: where pacing drags or runs much slower than this video's own rhythm, wording or ideas repeat, or a stretch is low in novelty and risks feeling boring.",
-                "Each stretch needs a concise reason describing the specific problem and a suggestion giving one concrete, actionable way to handle a stretch like it better. Both must reference what is actually said in that window.",
-                // Every stretch's suggestion is shown to the uploader as a
-                // "Try:" tip, so it is written under the same voice as every
-                // other tip on the site. The reason beside it is not: that
-                // describes the stretch as it was.
-                TIP_VOICE_PROMPT,
-                // Written into the prompt as well as enforced at render time
-                // (lib/report-tip-uniqueness.ts): a repeat caught here is a
-                // stretch that keeps a useful tip, while one caught at render
-                // time is a stretch that loses its tip altogether.
-                "No two suggestions in your response may give the same advice. Two stretches often share a cause, and the second one still has to teach something the first did not: name a different action rather than restating the first suggestion in other words. Where you genuinely have nothing new to add about a stretch, say the one thing that is specific to it.",
-                "Order stretches from most to least worth reviewing. Return fewer than 3 only when the video genuinely has no such areas, and never more than 5.",
-                'Never output an em dash character (U+2014) anywhere in your response; if you would use one, rewrite the phrase with a comma, colon, parentheses, or two separate sentences instead.',
-              ].join(" "),
+              text: instructions,
             },
           ],
         },

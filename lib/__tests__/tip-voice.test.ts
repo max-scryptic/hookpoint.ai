@@ -1,8 +1,7 @@
-import { readFileSync } from "node:fs"
-import { join } from "node:path"
-
 import { describe, expect, it } from "vitest"
 
+import { defaultPromptText } from "@/lib/prompts/resolve"
+import { promptDefinition, TIP_VOICE_KEY } from "@/lib/prompts/registry"
 import { TIP_VOICE_PROMPT, TIP_VOICE_RULES } from "@/lib/tip-voice"
 
 // GUARDRAIL: every prompt that writes a "Try:" tip must include the shared tip
@@ -10,30 +9,48 @@ import { TIP_VOICE_PROMPT, TIP_VOICE_RULES } from "@/lib/tip-voice"
 // Before this existed each prompt restated the rule in its own words and they
 // drifted: the retention prompt banned "re-cut this", the packaging prompt said
 // nothing at all, and the pages showed two different products. If a new prompt
-// starts writing tips, add its file here. Do NOT delete or weaken this test.
-
-const TIP_PROMPT_SOURCE_FILES = [
+// starts writing tips, add its key here. Do NOT delete or weaken this test.
+//
+// The prompts quote the voice as a {{tip_voice}} placeholder now rather than
+// interpolating the constant, so that an admin editing the tip voice once in
+// the Prompts page changes every prompt that quotes it. That indirection is
+// exactly what this test has to see through: it asserts on the resolved text,
+// which is what actually reaches the model, rather than on the source that
+// produces it.
+const TIP_PROMPT_KEYS = [
   // Video analysis
-  "lib/packaging-alignment.ts", // whatCouldBeBetter, per packaging component
-  "lib/pacing-analysis.ts", // suggestion, per slow or repetitive stretch
-  "lib/retention-attribution.ts", // tip, per hook / drop-off / gain / hold
+  "packaging_alignment", // whatCouldBeBetter, per packaging component
+  "pacing", // suggestion, per slow or repetitive stretch
+  "retention_attribution", // tip, per hook / drop-off / gain / hold
   // Head-to-head comparison reports
-  "lib/packaging-comparison-report.ts", // driver tips, surface tips
-  "lib/retention-comparison-report.ts", // section tips
-  "lib/script-comparison-report.ts", // section tips
+  "packaging_comparison", // driver tips, surface tips
+  "retention_comparison", // section tips
+  "script_comparison", // section tips
 ]
 
 const EM_DASH = "—"
 const EN_DASH = "–"
 
 describe("tip voice", () => {
-  for (const file of TIP_PROMPT_SOURCE_FILES) {
-    it(`${file} writes its tips under the shared tip voice`, () => {
-      const source = readFileSync(join(process.cwd(), file), "utf8")
+  for (const key of TIP_PROMPT_KEYS) {
+    it(`${key} writes its tips under the shared tip voice`, () => {
+      const definition = promptDefinition(key)
+      expect(definition, `${key} is not a registered prompt`).not.toBeNull()
+
+      // Declared as a fragment, so the admin page can tell an editor which
+      // other prompts an edit to the tip voice will reach.
       expect(
-        source.includes("TIP_VOICE_PROMPT"),
-        `${file} generates tips, so its prompt must include TIP_VOICE_PROMPT from lib/tip-voice.ts rather than restating the rule in its own words.`,
+        definition?.fragments.includes(TIP_VOICE_KEY),
+        `${key} generates tips, so it must declare the ${TIP_VOICE_KEY} fragment in lib/prompts/registry.ts.`,
       ).toBe(true)
+
+      // Quoted by placeholder rather than restated, so one edit reaches all of
+      // them, and present in the resolved text the model is actually sent.
+      expect(
+        definition?.default.includes(`{{${TIP_VOICE_KEY}}}`),
+        `${key} must quote {{${TIP_VOICE_KEY}}} in its prompt text rather than restating the rule in its own words.`,
+      ).toBe(true)
+      expect(defaultPromptText(key)).toContain(TIP_VOICE_PROMPT)
     })
   }
 

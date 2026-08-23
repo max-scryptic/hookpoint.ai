@@ -22,6 +22,7 @@ import {
   LayoutDashboardIcon,
   MessageSquareWarningIcon,
   ReceiptTextIcon,
+  SquarePenIcon,
   UsersIcon,
 } from "lucide-react"
 
@@ -41,6 +42,11 @@ const navMain = [
     title: "Cost Logs",
     url: "/admin/cost-logs",
     icon: <ReceiptTextIcon />,
+  },
+  {
+    title: "Prompts",
+    url: "/admin/prompts",
+    icon: <SquarePenIcon />,
   },
   {
     title: "Tip Feedback",

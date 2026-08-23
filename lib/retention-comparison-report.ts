@@ -26,6 +26,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { RETENTION_COMPARISON_REPORT_SCHEMA_VERSION } from "@/lib/comparison-report-versions"
 import { recordLlmCallCost, type LlmLogContext } from "@/lib/llm-calls"
 import { responsesCallCost, type ResponsesUsage } from "@/lib/llm-cost"
+import { resolvePrompt } from "@/lib/prompts/resolve"
 import {
   comparisonSampleSize,
   getRetentionComparison,
@@ -38,7 +39,6 @@ import {
   worstCasePointMargin,
   type ComparisonReliability,
 } from "@/lib/retention-sample-size"
-import { TIP_VOICE_PROMPT } from "@/lib/tip-voice"
 import { saveRetentionComparisonReport } from "@/lib/video-comparisons"
 import type { RetentionPoint, TranscriptCue } from "@/lib/youtube/youtube"
 
@@ -390,31 +390,9 @@ export function retentionComparisonForModel(
   }
 }
 
-const INSTRUCTIONS = [
-  "You write a head-to-head comparison of the RETENTION of two YouTube videos, Video A and Video B: how many viewers each one held, where each one lost them, and what in the evidence most plausibly explains why one curve held where the other did not.",
-  "You are given, for each video: its length, views and average watched; how much of the audience it still had at the end of its hook; its share still watching at 25%, 50%, 75% and 100% of the way through; its curve sampled every 5% of runtime (each sample carries both the share of runtime and the real clock time); every notable stretch the analysis found (a hook, drop-offs, gains and holds) with the change in watch-ratio points across it and the ranked event evidence for what happened there; and the verbatim transcript of the stretch where the two curves separated the most.",
-  "You are also given divergence: the stretch where the gap between the two curves grew the most, in share of runtime and in real clock time on each video separately, since the same share of runtime is a different moment in a short video than in a long one. When it is null the two curves never separated meaningfully, so say that plainly rather than inventing a divergence.",
-  "Watch ratios are given as percentages of the starting audience, and a window's change is given in watch-ratio points. A window marked deeplyAnalysed false has no event evidence behind it, so the curve is all you may say about it; never present the absence of evidence as evidence of nothing happening. Events are model-synthesized reads of a stretch, not proof, and retention data carries a few seconds of slop, so events describe stretches rather than exact frames.",
-  "Every time you name a moment, give the clock time, not only the percentage: '1:12 to 2:40 in Video A' is useful and '20% to 45% of the way through' on its own is not. Where a stretch is the same share of runtime in both videos, give both videos' clock times for it.",
-  "Ground every claim in the supplied curves, windows, events and transcript. Never invent a moment, a number or a spoken line that is not there. When a video has no transcript for the stretch, or no deeply analysed windows, say so for that side rather than guessing.",
-  "Whoever is heard speaking may be the uploader, a co-host, a guest or a voiceover, so never pin what is said on a specific or gendered person (he, she, the creator); refer to the uploader's own video, or simply Video A and Video B.",
-  "Write the name in full every time: Video A and Video B, never a bare A or B on its own, in the summary and in every section. 'Video B holds through the midpoint, Video A sheds a third of its audience' is right; 'B holds through the midpoint, A sheds a third' is not. The same holds for the possessive, so write Video A's hook rather than A's hook.",
-  "Views and average watched are provided for orientation. Treat any link between something in a video and how its curve moved as correlation worth acting on, never as proof; hedge accordingly.",
-  "reliability decides how far this pair may be pushed, and it is not negotiable. A retention curve is estimated from whoever actually watched, so a curve built from a few dozen viewers carries a margin of several watch-ratio points at every position, and two videos that reached very differently sized audiences reached differently mixed traffic too, which moves a curve on its own. The arithmetic is already settled for you: never redo it, never overrule it, and never write about the statistics themselves.",
-  "When reliability.comparable is 'shape_only' you may not claim either video held more of its audience than the other, anywhere in the report. Do not rank the two ending shares against each other, do not call either curve higher or stronger overall, and do not build the summary on the gap between two percentages. Compare shape instead: where in its own runtime each video loses people, how steep each loss is against that video's own starting audience, and whether the losses cluster at the hook, through the middle or at the end. State once, in the summary, that the smaller audience cannot be compared on level against the larger one, and then get on with the shape.",
-  "When reliability.comparable is 'level_and_shape' both readings are open and you may compare the two curves on level directly. When it is 'unknown' the view counts were not stored, so hedge any level claim once and carry on.",
-  "When reliability.endingGapIsSignificant is false the two videos finished within each other's margin of error, which means they finished level; never name one of them the stronger finisher.",
-  "videoAPointMarginInPoints and videoBPointMarginInPoints are the widest margin a single share on each curve can carry. Two figures that differ by less than the larger of the two are the same figure, so never present that difference as a difference, in either video or between them.",
-  "Whenever you give a share still watching for a video with fewer than a few hundred viewersBehindCurve, give the viewers it stands for alongside it, as in '9%, which is about 7 of its 80 viewers', so a small share of a small audience is never read as a large result.",
-  "Keep every field short. This report is read on one screen, so say each difference once, in the fewest words that still carry the evidence, and stop. Cut wind-up clauses, restatement of the heading, hedging padding and any sentence that only says a difference matters without naming what it is.",
-  "summary: the overall verdict on how the two curves compare, with the one figure that carries it. Two sentences and about 45 words at most, never a third, naming which video held its audience better. When reliability.comparable is 'shape_only' it is still two sentences: the verdict is about where each video loses people rather than about which one held more, and the fact that the audiences are too far apart in size to compare on level is named inside those two as a single short clause rather than given a sentence of its own.",
-  "sections: 3 to 5 titled paragraphs, each with a short heading and a body of one to two sentences, about 50 words at most, naming Video A and Video B explicitly. Cover, in this order and only where the evidence supports them: the hooks (how much of its own starting audience each video's hook kept, and whether that difference clears the point margins); the stretch where the curves separated the most (what the transcripts and events say was happening there in each video); how each video ends (whether either drops away late in its own runtime); and the pattern across the drop-offs (whether one video loses viewers at the same kind of moment repeatedly).",
-  "One of your sections must answer the question the numbers alone cannot: why one curve held where the other did not, across the divergence stretch specifically. That stretch has already been checked against both margins of error, so it is a real difference whatever reliability.comparable says, and it is the one place you may always name a stronger side. Say what that video was doing there, using the transcript and the event evidence, rather than restating that it held.",
-  TIP_VOICE_PROMPT,
-  "In this report that rule also means the two videos stay out of the tips entirely: never name Video A or Video B inside a tip, and never phrase a tip as something one of these two videos should have done. The section bodies are the opposite: those describe what these two videos already did, so they name Video A and Video B freely.",
-  "tip: every section carries one. It is the single change that section's comparison argues for, written as a one-sentence instruction of about 25 words at most for the uploader's next video (for example 'Put the first proof of the promise before the two minute mark, and cut any setup that delays it'). Name the change rather than restating the paragraph, and keep it specific to what this comparison actually showed rather than generic retention advice, while phrasing it as a rule to apply next time. Do not repeat another section's tip word for word.",
-  "Write in plain, direct prose. Never output an em dash character (U+2014) or en dash (U+2013) anywhere in your response; if you would use one, rewrite with a comma, colon, parentheses or two sentences instead.",
-].join(" ")
+// The prompt text lives in lib/prompts/defaults/comparison.ts and is
+// resolved by the "retention_comparison" key at send time, so an override saved in the admin
+// Prompts page reaches the next call without a deploy (lib/prompts/resolve.ts).
 
 function extractOutputText(response: {
   output?: Array<{ content?: Array<{ type?: string; text?: string }> }>
@@ -492,6 +470,8 @@ export async function generateRetentionComparisonReport(
     }
   }
 
+  const instructions = await resolvePrompt("retention_comparison")
+
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
@@ -504,7 +484,7 @@ export async function generateRetentionComparisonReport(
       input: [
         {
           role: "developer",
-          content: [{ type: "input_text", text: INSTRUCTIONS }],
+          content: [{ type: "input_text", text: instructions }],
         },
         {
           role: "user",

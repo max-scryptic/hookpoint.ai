@@ -55,13 +55,13 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   assessPairComparability,
   comparabilityForModel,
-  COMPARABILITY_PROMPT,
   isAnchored,
   type PairComparability,
 } from "@/lib/comparison-comparability"
 import { PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION } from "@/lib/comparison-report-versions"
 import { recordLlmCallCost, type LlmLogContext } from "@/lib/llm-calls"
 import { responsesCallCost, type ResponsesUsage } from "@/lib/llm-cost"
+import { resolvePrompt } from "@/lib/prompts/resolve"
 import { getOrGeneratePackagingAlignment } from "@/lib/packaging-alignments"
 import {
   emptyHookEvidence,
@@ -70,7 +70,6 @@ import {
   type PackagingHookEvidence,
 } from "@/lib/packaging-comparison-evidence"
 import type { PackagingTaxonomy } from "@/lib/packaging-taxonomy"
-import { TIP_VOICE_PROMPT } from "@/lib/tip-voice"
 import { savePackagingComparisonReport } from "@/lib/video-comparisons"
 import {
   preferredViewCount,
@@ -309,26 +308,9 @@ const REPORT_SCHEMA = {
   },
 } as const
 
-const INSTRUCTIONS = [
-  "You compare the PACKAGING of two YouTube videos, Video A and Video B, and explain why one of them plausibly out-performed the other. Packaging means the thumbnail, the title, the first ten seconds, and how tightly those three promise the same thing. Everything after the first ten seconds is out of scope.",
-  "You are given, for each video: its verbatim title; its thumbnail as an image (Video A's image is supplied first, then Video B's, each labelled); its view count, but only where the pair has earned a performance anchor and null otherwise (see comparability below); its stored packaging read (a fixed taxonomy scored on that video alone at analysis time, with 0-10 axes and short verbatim spans); and hook, the full stored evidence for its first ten seconds.",
-  "hook contains: retention (how the hook's watch ratio actually moved), transcript (the spoken hook, verbatim), transcriptTaxonomy (a structured read of those words), visual (frames already described by a vision pass, each with a timestamp, its deterministic OCR text as ground truth, and scored axes such as faceProminence, colorContrast, visualComplexity, textProminence, shotScale and motion), editing (cut count, cuts per minute, freeze and black coverage across the hook), audio (measured speech rate in words per minute, silence coverage and mean loudness; no listener judgement of tone), events (retention events already synthesized for this hook) and baseline (this video's own full-video averages). Judge editing, pacing and speech rate as deviations from that baseline, not in absolute terms.",
-  COMPARABILITY_PROMPT,
-  "The question this report asks of comparability is whether one of the two earned the click better, which is not the same question as whether one held its audience better and does not always have the same answer. In the anchored case you are given higherViewsSide, naming the video with more views, computed for you, and where impressions were available a click-through percentage for each side; do not do that arithmetic yourself. In every other case higherViewsSide is null and no view count reaches you at all, so judge which packaging reads stronger from the thumbnails, the titles and the hooks themselves and say plainly, once, that there is no performance anchor behind it. That is not a weaker report: a thumbnail that buries its subject, a title that promises nothing specific and a hook that abandons what the two of them set up are all visible without knowing how either video did.",
-  "Ground every claim in what you can actually see in the thumbnails or read in the supplied evidence. Never invent frame content, spoken lines, thumbnail text or numbers that were not given. When a video's evidence is missing (no frames, no transcript, no packaging read), say so for that side rather than guessing, and lean on what is present.",
-  "Whoever is heard speaking may be the uploader, a co-host, a guest or a voiceover, so never pin what is said on a specific or gendered person (he, she, the creator). Address the uploader as you, about their own videos, and name the videos as Video A and Video B.",
-  "Write the name in full every time: Video A and Video B, never a bare A or B on its own, in any sentence and any field. 'Video B makes the promise legible, Video A leads with a face' is right; 'B makes the promise legible, A leads with a face' is not. The same holds for the possessive, so write Video A's thumbnail rather than A's thumbnail.",
-  "Views are one number about two videos, so treat every link between a packaging trait and performance as correlation worth acting on, never as proof. Thumbnails and titles are judged on click appeal, the hook on whether it holds the promise those two made.",
-  "verdict: strongerSide is the video whose packaging is the stronger play (or neither when they are genuinely close), summary is the verdict itself in two sentences at most, about 45 words, and never a third sentence, and confidence is 0 to 1 in how strongly the evidence supports that verdict. This is a judgement of the packaging itself, so it stays answerable in every mode; what changes is what stands behind it. Lower the confidence when the two are close, when evidence is thin on one side, and whenever comparability.anchor is not 'anchored', since no performance figure is backing you there.",
-  "surfaces: one entry for each of thumbnail, title, hook and alignment that you have evidence for. aRead and bRead describe what that video's surface actually does, concretely (what is in the frame, what the title claims, what the hook says and shows). whyItMatters explains in one or two sentences why that difference would move clicks or hold attention through the hook. Use surface 'alignment' for whether the title, thumbnail and hook promise one thing or pull apart.",
-  "drivers: the ranked reasons the stronger video is stronger, most important first, one to six of them. label is a short phrase (for example 'Thumbnail is doing three things at once'). detail is one or two sentences. evidence is up to four short pointers back to the supplied inputs, quoting the real thing where possible (a verbatim title fragment, the thumbnail's overlaid words, 'frame at 0:04 is a wide shot with no face', 'one cut in the first ten seconds versus eleven per minute across the video'). Only emit a driver where the evidence genuinely supports it.",
-  `The tips in this report are its advice, so every one of them is written under the rules that follow. ${TIP_VOICE_PROMPT}`,
-  "In this report those rules also mean the two videos stay out of the advice entirely: never name Video A or Video B inside a tip, and never phrase advice as something one of these two videos should have done (for example 'Show the payoff itself in the first three seconds, not only in the title and thumbnail'). Your reads, drivers and evidence are the opposite: those describe what these two videos already did, so they name Video A and Video B freely.",
-  "tip: every driver is a comparison you have evidence for, so every driver carries one. It is the single change that driver's evidence argues for, written as a one-sentence instruction for the uploader's next video (for example 'Cut the thumbnail to one subject and one line of text, sized to read at phone width'). Name the change rather than restating detail, and keep it specific to what this comparison actually showed rather than generic packaging advice, while phrasing it as a rule to apply next time.",
-  "Every entry in surfaces carries a tip of its own as well, written under exactly those same rules: the single change that surface's comparison argues for, in one sentence, for the uploader's next video. Write one for every surface you cover, including the surfaces your drivers already speak to. This is the line the reader acts on, and the drivers themselves are never shown, so it has to stand on its own rather than continue a driver.",
-  "The reader sees one piece of advice per surface and it is that surface's tip, so that tip has to be the single most valuable change you can name there. Nothing else you write reaches them as advice: do not hold a second suggestion for a surface back for anywhere else in your answer, because there is nowhere for it to go and nothing will show it.",
-  "Write in plain, direct prose with no marketing filler. Never output an em dash character (U+2014) or en dash (U+2013) anywhere in your response; if you would use one, rewrite with a comma, colon, parentheses or two sentences instead.",
-].join(" ")
+// The prompt text lives in lib/prompts/defaults/comparison.ts and is
+// resolved by the "packaging_comparison" key at send time, so an override saved in the admin
+// Prompts page reaches the next call without a deploy (lib/prompts/resolve.ts).
 
 interface ModelReportOutput {
   verdict: PackagingReportVerdict
@@ -611,6 +593,8 @@ export async function generatePackagingComparisonReport(
     })
   }
 
+  const instructions = await resolvePrompt("packaging_comparison")
+
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
@@ -624,7 +608,7 @@ export async function generatePackagingComparisonReport(
       input: [
         {
           role: "developer",
-          content: [{ type: "input_text", text: INSTRUCTIONS }],
+          content: [{ type: "input_text", text: instructions }],
         },
         {
           role: "user",
