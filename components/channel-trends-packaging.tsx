@@ -9,7 +9,7 @@ import { packagingFeatureLabel } from "@/components/channel-trends-copy"
 import { PackagingSurfaceTabs } from "@/components/channel-trends-packaging-tabs"
 import {
   TrendCard,
-  formatRate,
+  formatCompactNumber,
   plural,
 } from "@/components/channel-trends-shared"
 import {
@@ -23,6 +23,7 @@ import {
 import {
   extremeGroupAxes,
   type ChannelAlignmentAverage,
+  type ChannelExtremeVideo,
   type PackagingAxisGroup,
 } from "@/lib/channel-taxonomy-trends"
 import type {
@@ -187,6 +188,15 @@ const SURFACE_ORDER: PackagingSurface[] = [
 const EXTREMES_TOP_LABEL = "top 3 by reach"
 const EXTREMES_BOTTOM_LABEL = "bottom 3 by reach"
 
+// What each named upload is printed with: its lifetime views, not the views per
+// day the two bands were ranked on. The rate is what keeps a month-old upload
+// from being beaten on age alone, but it is not a number a creator carries
+// around, and the view count is. A band is only ranked once it has views, so
+// the fallback here is for a caller that supplied none rather than a real gap.
+function formatBandViews(video: ChannelExtremeVideo): string {
+  return video.views == null ? "-" : `${formatCompactNumber(video.views)} views`
+}
+
 const EXTREMES_DESCRIPTION_TAIL =
   "scored on the three uploads that reached furthest, the three that reached least, and your whole library as a baseline."
 
@@ -342,10 +352,10 @@ export function PackagingPanel({ data }: { data: ChannelTrendsData }) {
           profile={extremes}
           icon={TrophyIcon}
           title="The uploads every chart below compares"
-          description="Your three uploads that reached furthest and your three that reached least, ranked on views per day. Each tab below scores this same pair of bands on its own axes."
+          description="Your three uploads that reached furthest and your three that reached least, ranked on views per day so a fresh upload is not beaten on age alone, listed with their total views. Each tab below scores this same pair of bands on its own axes."
           topLabel={EXTREMES_TOP_LABEL}
           bottomLabel={EXTREMES_BOTTOM_LABEL}
-          formatOutcome={(value) => `${formatRate(value)}/day`}
+          formatOutcome={formatBandViews}
         />
       )}
       <PackagingSurfaceTabs

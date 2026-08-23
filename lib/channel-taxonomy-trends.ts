@@ -329,6 +329,12 @@ export interface ChannelExtremeVideo {
   // The metric the ranking was made on: views per day for reach, average view
   // percentage for retention.
   outcome: number
+  // Lifetime views, when the caller supplied them. The ranking is made on views
+  // per day so a fresh upload is not beaten by an old one purely on age, but
+  // the number a creator recognises their own upload by is its view count, so
+  // that is what the band lists print. Null when the caller had none to hand,
+  // which is every ranking that is not about reach.
+  views: number | null
 }
 
 export interface ChannelExtremeAxisRow {
@@ -383,8 +389,11 @@ export function buildChannelExtremesProfile<
   source: TaxonomySource
   outcome: ChannelOutcome
   outcomeOf: (video: V) => number | null
+  // Lifetime views, for the bands to be listed by. Only the ranking metric
+  // decides who is in a band; this is what each of them is printed with.
+  viewsOf?: (video: V) => number | null
 }): ChannelExtremesProfile | null {
-  const { videos, source, outcome, outcomeOf } = params
+  const { videos, source, outcome, outcomeOf, viewsOf } = params
 
   const carrying = videos.flatMap((video) => {
     const taxonomy = source === "packaging" ? video.packaging : video.script
@@ -442,6 +451,7 @@ export function buildChannelExtremesProfile<
     id: entry.video.id,
     title: entry.video.title,
     outcome: entry.outcome,
+    views: viewsOf?.(entry.video) ?? null,
   })
 
   return {

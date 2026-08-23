@@ -271,14 +271,14 @@ export interface TrendBandVideo {
 
 // One band, named. A creator recognises their own uploads faster than any bar
 // or line, so the videos behind a shape are listed before the shape.
-function BandVideoList({
+function BandVideoList<V extends TrendBandVideo>({
   label,
   videos,
   formatOutcome,
 }: {
   label: string
-  videos: TrendBandVideo[]
-  formatOutcome: (value: number) => string
+  videos: V[]
+  formatOutcome: (video: V) => string
 }) {
   // Set in a panel of its own rather than as loose text, so the ranked pair
   // reads as the table it is and lifts off the prose either side of it.
@@ -301,7 +301,7 @@ function BandVideoList({
               {video.title ?? "Untitled video"}
             </span>
             <span className="text-xs tabular-nums text-muted-foreground">
-              {formatOutcome(video.outcome)}
+              {formatOutcome(video)}
             </span>
           </li>
         ))}
@@ -313,18 +313,21 @@ function BandVideoList({
 // The two bands, side by side. The single way this page names the two ends of a
 // library, wherever the split was made: on reach, on the script's retention, or
 // on the retention curves themselves.
-export function BandVideoPair({
+export function BandVideoPair<V extends TrendBandVideo>({
   top,
   bottom,
   topLabel,
   bottomLabel,
   formatOutcome,
 }: {
-  top: TrendBandVideo[]
-  bottom: TrendBandVideo[]
+  top: V[]
+  bottom: V[]
   topLabel: string
   bottomLabel: string
-  formatOutcome: (value: number) => string
+  // Handed the whole upload rather than its ranking metric, so a band ranked on
+  // one number can be printed with another: the reach bands are ranked on views
+  // per day and listed on lifetime views.
+  formatOutcome: (video: V) => string
 }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2">

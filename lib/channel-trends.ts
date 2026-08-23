@@ -1453,6 +1453,9 @@ export function buildChannelTrends(params: {
       source: "packaging",
       outcome: "reach",
       outcomeOf: videoReachPerDay,
+      // Ranked on views per day so age does not decide the bands, listed on
+      // lifetime views because that is the number a creator knows the upload by.
+      viewsOf: (video) => video.views,
     }),
     packagingAlignment: buildChannelAlignmentAverage(videos),
     packagingStyle: buildChannelStyleProfile({

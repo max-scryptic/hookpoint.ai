@@ -427,6 +427,41 @@ describe("buildChannelExtremesProfile", () => {
     expect(specificity!.delta).toBe(8)
   })
 
+  it("lists each band video with the views the caller supplied", () => {
+    // Deliberately not in ranking order: the bands are picked on the ranking
+    // metric, and the views ride along only to be printed.
+    const views = new Map([
+      ["a", 1_000],
+      ["b", 9_000],
+      ["c", 300],
+      ["d", 40],
+      ["e", 5_000],
+    ])
+    const profile = buildChannelExtremesProfile({
+      videos: sixVideos(),
+      source: "packaging",
+      outcome: "reach",
+      outcomeOf: reachOf,
+      viewsOf: (item) => views.get(item.id) ?? null,
+    })
+
+    expect(profile!.top.map((entry) => entry.views)).toEqual([1_000, 9_000, 300])
+    // "f" has no views to hand, which is a gap rather than a zero.
+    expect(profile!.bottom.map((entry) => entry.views)).toEqual([40, 5_000, null])
+  })
+
+  it("leaves band views null when the caller supplies none", () => {
+    const profile = buildChannelExtremesProfile({
+      videos: sixVideos(),
+      source: "packaging",
+      outcome: "reach",
+      outcomeOf: reachOf,
+    })
+
+    expect(profile!.top.every((entry) => entry.views === null)).toBe(true)
+    expect(profile!.bottom.every((entry) => entry.views === null)).toBe(true)
+  })
+
   it("reports only the axes where the two bands genuinely separate", () => {
     const profile = buildChannelExtremesProfile({
       videos: sixVideos(),

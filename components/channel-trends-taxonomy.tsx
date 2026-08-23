@@ -37,6 +37,7 @@ import {
   type ChannelAxisRow,
   type ChannelExtremeAxisRow,
   type ChannelExtremeGroup,
+  type ChannelExtremeVideo,
   type ChannelExtremesProfile,
   type ChannelStyleDimension,
   type ChannelStyleProfile,
@@ -319,7 +320,7 @@ function ExtremeBands({
   profile: ChannelExtremesProfile
   topLabel: string
   bottomLabel: string
-  formatOutcome: (value: number) => string
+  formatOutcome: (video: ChannelExtremeVideo) => string
 }) {
   return (
     <BandVideoPair
@@ -350,7 +351,7 @@ export function ExtremeBandsCard({
   description: string
   topLabel: string
   bottomLabel: string
-  formatOutcome: (value: number) => string
+  formatOutcome: (video: ChannelExtremeVideo) => string
   footer?: string
 }) {
   if (profile.top.length === 0 && profile.bottom.length === 0) return null
@@ -437,7 +438,7 @@ export function ExtremesRadarCard({
   // drops the two band lists from this card, which is what a caller drawing
   // several of these off one profile does once it has stated the lists above
   // them as an ExtremeBandsCard.
-  formatOutcome?: (value: number) => string
+  formatOutcome?: (video: ChannelExtremeVideo) => string
   // What to say when the two bands scored alike on every axis.
   emptyNote: string
   // Drops the prose around the chart: no callout under it, no caveat under the
