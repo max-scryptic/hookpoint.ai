@@ -13,6 +13,7 @@ import {
   TaxonomyRadar,
 } from "@/components/channel-trends-radar"
 import {
+  BandVideoPair,
   Chip,
   CoverageNote,
   RADAR_MIN_AXES,
@@ -36,7 +37,6 @@ import {
   type ChannelAxisRow,
   type ChannelExtremeAxisRow,
   type ChannelExtremeGroup,
-  type ChannelExtremeVideo,
   type ChannelExtremesProfile,
   type ChannelStyleDimension,
   type ChannelStyleProfile,
@@ -304,51 +304,12 @@ export function AxisContrastCard({
 
 // --- The extremes, drawn as shapes -------------------------------------------
 
-// The two bands, named. A creator recognises their own uploads faster than any
-// bar, so the videos behind the shapes are listed before the shapes.
-function ExtremeBandList({
-  label,
-  videos,
-  formatOutcome,
-}: {
-  label: string
-  videos: ChannelExtremeVideo[]
-  formatOutcome: (value: number) => string
-}) {
-  // Set in a panel of its own rather than as loose text, so the ranked pair
-  // reads as the table it is and lifts off the prose either side of it.
-  return (
-    <div className="rounded-lg border bg-muted/40 px-3 py-2.5">
-      <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-        {label}
-      </span>
-      <ol className="mt-1.5 flex flex-col divide-y">
-        {videos.map((video, index) => (
-          <li
-            key={video.id}
-            className="grid grid-cols-[1rem_1fr_auto] items-baseline gap-x-2 py-1.5 first:pt-0 last:pb-0"
-            title={video.title ?? undefined}
-          >
-            <span className="text-xs tabular-nums text-muted-foreground/60">
-              {index + 1}
-            </span>
-            <span className="truncate text-sm">
-              {video.title ?? "Untitled video"}
-            </span>
-            <span className="text-xs tabular-nums text-muted-foreground">
-              {formatOutcome(video.outcome)}
-            </span>
-          </li>
-        ))}
-      </ol>
-    </div>
-  )
-}
-
 // The two bands, side by side. Split out of ExtremesRadarCard for callers that
 // draw more than one chart off a single profile: the bands are a property of the
 // library and its ranking, not of the axes being drawn, so repeating the lists
-// over every chart would state the same two lists several times over.
+// over every chart would state the same two lists several times over. The lists
+// themselves are the page's shared BandVideoPair, so the Retention tab names its
+// two ends in exactly the same object.
 function ExtremeBands({
   profile,
   topLabel,
@@ -361,18 +322,13 @@ function ExtremeBands({
   formatOutcome: (value: number) => string
 }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      <ExtremeBandList
-        label={topLabel}
-        videos={profile.top}
-        formatOutcome={formatOutcome}
-      />
-      <ExtremeBandList
-        label={bottomLabel}
-        videos={profile.bottom}
-        formatOutcome={formatOutcome}
-      />
-    </div>
+    <BandVideoPair
+      top={profile.top}
+      bottom={profile.bottom}
+      topLabel={topLabel}
+      bottomLabel={bottomLabel}
+      formatOutcome={formatOutcome}
+    />
   )
 }
 

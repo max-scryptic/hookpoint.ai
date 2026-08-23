@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 
 import type {
   ChannelRetentionBands,
@@ -20,6 +20,13 @@ import type {
 // told apart by weight and dash, exactly as the taxonomy radars tell the same
 // three bands apart (components/channel-trends-radar.tsx), so the chart survives
 // greyscale, colour blindness and dark mode.
+//
+// The key under the chart is also its control, on the same terms as the key
+// above the radars: three lines over one another means stretches of one run
+// underneath the others, so pointing at a band in the key pulls that band to the
+// front and fades the two it was crossing. Hover, keyboard focus and a tap all
+// do it; a click or tap pins the choice so it survives the pointer leaving,
+// which is the only way to hold it on a touch screen.
 //
 // COPY GUARDRAIL: no em dashes (U+2014) or en dashes (U+2013) anywhere in this
 // file (comments included). Hyphens are fine. Enforced by
@@ -62,6 +69,41 @@ const BAND_LABEL: Record<Band, string> = {
   average: "Channel average",
 }
 
+// What a band draws as while one of the three is being pointed at. The picked
+// band goes up to full contrast and a heavier stroke; the other two drop to a
+// ghost of themselves. Nothing is hidden outright, because the point of the
+// chart is the comparison: the reader still needs to see where the faded lines
+// sit relative to the one they asked for. Same treatment, same floor and same
+// reasoning as bandStyleFor in components/channel-trends-radar.tsx.
+function bandStyleFor(
+  band: Band,
+  highlighted: Band | null,
+): (typeof BAND_STYLE)[Band] {
+  const style = BAND_STYLE[band]
+  if (highlighted == null) return style
+  if (highlighted !== band) {
+    return {
+      ...style,
+      // Faded to a trace rather than to nothing. The floor is what keeps the
+      // channel average - the faintest of the three before any of this, and
+      // dotted - from leaving the chart altogether in dark mode, where these
+      // lines are already the dim tone on a dim ground.
+      opacity: Math.max(style.opacity * 0.18, 0.12),
+    }
+  }
+  return {
+    ...style,
+    stroke: "var(--foreground)",
+    opacity: 1,
+    width: style.width + 0.5,
+  }
+}
+
+// Presentation attributes are ordinary CSS properties, so the lines ease between
+// the two states instead of snapping. Honours a reduced-motion setting.
+const LINE_TRANSITION =
+  "transition-all duration-200 ease-out motion-reduce:transition-none"
+
 // Baseline first, winners last, so the line being read is never crossed out by
 // the two under it.
 const BAND_DRAW_ORDER: Band[] = ["average", "bottom", "top"]
@@ -85,10 +127,22 @@ function percent(ratio: number): string {
   return `${Math.round(ratio * 100)}%`
 }
 
-function BandSwatch({ band }: { band: Band }) {
-  const style = BAND_STYLE[band]
+// One entry in the key: the exact line the chart draws that band with, at the
+// size a line of text can carry.
+function BandSwatch({
+  band,
+  highlighted,
+}: {
+  band: Band
+  highlighted: Band | null
+}) {
+  const style = bandStyleFor(band, highlighted)
   return (
-    <svg viewBox="0 0 20 8" className="h-2 w-5 shrink-0" aria-hidden="true">
+    <svg
+      viewBox="0 0 20 8"
+      className={`h-2 w-5 shrink-0 ${LINE_TRANSITION}`}
+      aria-hidden="true"
+    >
       <line
         x1="0"
         y1="4"
@@ -100,8 +154,50 @@ function BandSwatch({ band }: { band: Band }) {
         strokeDasharray={
           band === "top" ? undefined : band === "bottom" ? "5 4" : "1.5 3"
         }
+        className={LINE_TRANSITION}
       />
     </svg>
+  )
+}
+
+// A band's entry in the key, and the handle for picking that band out of the
+// chart above it. A button rather than a span, so the same thing a mouse does is
+// reachable from the keyboard and from a touch screen: focus previews a band the
+// way hovering does, and a click or tap pins it until it is picked again.
+function BandLegendItem({
+  band,
+  highlighted,
+  pinned,
+  setHovered,
+  togglePinned,
+}: {
+  band: Band
+  highlighted: Band | null
+  pinned: Band | null
+  setHovered: (band: Band | null) => void
+  togglePinned: (band: Band) => void
+}) {
+  const faded = highlighted != null && highlighted !== band
+  return (
+    <button
+      type="button"
+      onPointerEnter={() => setHovered(band)}
+      onPointerLeave={() => setHovered(null)}
+      onFocus={() => setHovered(band)}
+      onBlur={() => setHovered(null)}
+      onClick={() => togglePinned(band)}
+      aria-pressed={pinned === band}
+      className={`-mx-1 flex items-center gap-1.5 rounded-sm px-1 text-left transition-colors duration-200 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none ${
+        highlighted === band
+          ? "text-foreground"
+          : faded
+            ? "text-muted-foreground/45"
+            : "hover:text-foreground"
+      }`}
+    >
+      <BandSwatch band={band} highlighted={highlighted} />
+      {BAND_LABEL[band]}
+    </button>
   )
 }
 
@@ -117,6 +213,15 @@ export function ChannelRetentionCurveChart({
   averageDurationSeconds: number | null
 }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
+  // The band pulled to the front, from either the pointer on the key or a pin
+  // held by a click. A pointer beats a pin while it is on the key, so hovering
+  // the other two entries still previews them without having to unpin first.
+  const [hoveredBand, setHoveredBand] = useState<Band | null>(null)
+  const [pinnedBand, setPinnedBand] = useState<Band | null>(null)
+  const highlighted = hoveredBand ?? pinnedBand
+  const togglePinned = useCallback((band: Band) => {
+    setPinnedBand((current) => (current === band ? null : band))
+  }, [])
 
   const model = useMemo(() => {
     const averageRatios = points.map((point) => point.watchRatio)
@@ -168,6 +273,14 @@ export function ChannelRetentionCurveChart({
   }
 
   const legend: Band[] = bands == null ? ["average"] : BAND_READING_ORDER
+  // The picked line draws last so it sits over the two it was crossing.
+  const drawnLines =
+    highlighted == null
+      ? model.lines
+      : [
+          ...model.lines.filter((line) => line.band !== highlighted),
+          ...model.lines.filter((line) => line.band === highlighted),
+        ]
   const hovered = hoverIndex == null ? null : points[hoverIndex]
   const readout =
     hovered == null || hoverIndex == null
@@ -242,8 +355,8 @@ export function ChannelRetentionCurveChart({
           </text>
         ))}
 
-        {model.lines.map((line) => {
-          const style = BAND_STYLE[line.band]
+        {drawnLines.map((line) => {
+          const style = bandStyleFor(line.band, highlighted)
           return (
             <path
               key={line.band}
@@ -256,6 +369,7 @@ export function ChannelRetentionCurveChart({
               strokeLinejoin="round"
               strokeLinecap="round"
               vectorEffect="non-scaling-stroke"
+              className={LINE_TRANSITION}
             />
           )
         })}
@@ -278,12 +392,25 @@ export function ChannelRetentionCurveChart({
 
       <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground">
-          {legend.map((band) => (
-            <span key={band} className="flex items-center gap-1.5">
-              <BandSwatch band={band} />
-              {BAND_LABEL[band]}
+          {/* Only a control when there is more than one line to pick between:
+              a lone channel average has nothing to be pulled in front of. */}
+          {legend.length === 1 ? (
+            <span className="flex items-center gap-1.5">
+              <BandSwatch band={legend[0]} highlighted={null} />
+              {BAND_LABEL[legend[0]]}
             </span>
-          ))}
+          ) : (
+            legend.map((band) => (
+              <BandLegendItem
+                key={band}
+                band={band}
+                highlighted={highlighted}
+                pinned={pinnedBand}
+                setHovered={setHoveredBand}
+                togglePinned={togglePinned}
+              />
+            ))
+          )}
         </div>
         {readout ? (
           <span className="font-mono tabular-nums">{readout}</span>

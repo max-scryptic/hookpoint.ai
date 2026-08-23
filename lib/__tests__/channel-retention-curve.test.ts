@@ -305,6 +305,43 @@ describe("buildChannelRetentionCurve", () => {
     expect(bands!.top.watchedShare).toBeGreaterThan(bands!.bottom.watchedShare)
   })
 
+  it("names the uploads behind each band, best-retaining first", () => {
+    const curve = buildChannelRetentionCurve([
+      video("worst", 1_000, linearCurve(0.1)),
+      video("best", 1_000, linearCurve(0.9)),
+      video("second", 1_000, linearCurve(0.8)),
+      video("fifth", 1_000, linearCurve(0.2)),
+      video("third", 1_000, linearCurve(0.7)),
+      video("fourth", 1_000, linearCurve(0.3)),
+    ])
+    const bands = curve!.bands!
+
+    expect(bands.top.videos.map((entry) => entry.id)).toEqual([
+      "best",
+      "second",
+      "third",
+    ])
+    // The bottom band keeps the same best-first order, so the worst upload is
+    // the last row of the list rather than the first.
+    expect(bands.bottom.videos.map((entry) => entry.id)).toEqual([
+      "fourth",
+      "fifth",
+      "worst",
+    ])
+    expect(bands.top.videos.map((entry) => entry.title)).toEqual([
+      "best",
+      "second",
+      "third",
+    ])
+    expect(bands.top.videos.map((entry) => entry.views)).toEqual([
+      1_000, 1_000, 1_000,
+    ])
+    // A linear curve ending at e holds (1 + e) / 2 of its runtime on average,
+    // which is what each video was ranked on.
+    expect(bands.top.videos[0].watchedShare).toBeCloseTo((1 + 0.9) / 2, 2)
+    expect(bands.bottom.videos[2].watchedShare).toBeCloseTo((1 + 0.1) / 2, 2)
+  })
+
   it("weights a band by the viewers behind its videos", () => {
     const curve = buildChannelRetentionCurve([
       video("big", 100_000, linearCurve(0.9)),

@@ -135,6 +135,18 @@ export interface ChannelRetentionVideoCurve {
   watchRatios: number[]
 }
 
+// One upload inside a band, named so the page can list what a line is made of.
+// A creator recognises their own uploads faster than any curve, so the three
+// titles are worth as much as the shape they average into.
+export interface ChannelRetentionBandVideo {
+  id: string
+  title: string | null
+  views: number
+  // Share of its own runtime the average viewer watched, 0..1: the figure this
+  // video was ranked on, and so the reason it landed in this band.
+  watchedShare: number
+}
+
 // One end of the library, averaged onto the shared grid the same way the whole
 // library is: views-weighted, under the same per-video cap, so a band is read on
 // the same terms as the baseline behind it.
@@ -147,6 +159,8 @@ export interface ChannelRetentionBand {
   // Share of runtime the band's average viewer watched, 0..1: the figure the
   // band was ranked on.
   watchedShare: number
+  // The uploads averaged into the line, best-retaining first.
+  videos: ChannelRetentionBandVideo[]
 }
 
 export interface ChannelRetentionBands {
@@ -238,14 +252,24 @@ function watchedShare(watchRatios: readonly number[]): number {
   )
 }
 
+// What a band needs to know about each of its videos beyond the curve itself.
+interface RetentionBandMember {
+  id: string
+  title: string | null
+  views: number
+}
+
 // One band of videos averaged onto the shared grid, weighted by the viewers
 // behind each of them under the same cap the library average uses.
 function bandCurve(
   indices: readonly number[],
   series: readonly number[][],
-  views: readonly number[],
+  members: readonly RetentionBandMember[],
+  shares: readonly number[],
 ): ChannelRetentionBand {
-  const weights = cappedViewWeights(indices.map((index) => views[index]))
+  const weights = cappedViewWeights(
+    indices.map((index) => members[index].views),
+  )
   const totalWeight = weights.reduce((total, weight) => total + weight, 0)
   const watchRatios = series[indices[0]].map((_, gridIndex) =>
     indices.reduce(
@@ -256,9 +280,18 @@ function bandCurve(
   )
   return {
     videoCount: indices.length,
-    totalViews: indices.reduce((total, index) => total + views[index], 0),
+    totalViews: indices.reduce(
+      (total, index) => total + members[index].views,
+      0,
+    ),
     watchRatios,
     watchedShare: watchedShare(watchRatios),
+    videos: indices.map((index) => ({
+      id: members[index].id,
+      title: members[index].title,
+      views: members[index].views,
+      watchedShare: shares[index],
+    })),
   }
 }
 
@@ -266,8 +299,7 @@ function bandCurve(
 // bands to be full and disjoint.
 function retentionBands(
   series: readonly number[][],
-  views: readonly number[],
-  ids: readonly string[],
+  members: readonly RetentionBandMember[],
 ): ChannelRetentionBands | null {
   if (series.length < RETENTION_BAND_MIN_VIDEOS) return null
   const shares = series.map(watchedShare)
@@ -275,10 +307,26 @@ function retentionBands(
     .map((_, index) => index)
     // Best-retaining first, ties broken on the id so the bands are stable
     // between renders rather than left to sort order.
-    .sort((a, b) => shares[b] - shares[a] || ids[a].localeCompare(ids[b]))
+    .sort(
+      (a, b) =>
+        shares[b] - shares[a] || members[a].id.localeCompare(members[b].id),
+    )
   return {
-    top: bandCurve(ranked.slice(0, RETENTION_BAND_SIZE), series, views),
-    bottom: bandCurve(ranked.slice(-RETENTION_BAND_SIZE), series, views),
+    top: bandCurve(
+      ranked.slice(0, RETENTION_BAND_SIZE),
+      series,
+      members,
+      shares,
+    ),
+    // Kept in the same best-first order the ranking produced, so the worst
+    // upload is the last row of the list rather than the first, exactly as the
+    // other tabs print their bottom band.
+    bottom: bandCurve(
+      ranked.slice(-RETENTION_BAND_SIZE),
+      series,
+      members,
+      shares,
+    ),
   }
 }
 
@@ -385,8 +433,11 @@ export function buildChannelRetentionCurve(
     steepestDrop: steepestDrop(points),
     bands: retentionBands(
       series,
-      views,
-      contributors.map((video) => video.id),
+      contributors.map((video) => ({
+        id: video.id,
+        title: video.title,
+        views: video.views,
+      })),
     ),
   }
 }
