@@ -5,6 +5,7 @@ import Link from "next/link"
 import { CircleCheckIcon } from "lucide-react"
 
 import { useAnalysisLauncher } from "@/components/analysis-launcher"
+import { HintCallout, useOnboardingHint } from "@/components/onboarding-hints"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { parseVideoId } from "@/lib/youtube/youtube"
@@ -14,11 +15,20 @@ interface AlreadyAnalysed {
   title?: string
 }
 
-export function AnalyseVideoForm() {
+export function AnalyseVideoForm({
+  showFirstAnalysisHint = false,
+}: {
+  // Whether this creator has yet to analyse anything, and so is owed the coach
+  // mark that says a pasted link is one of the two ways to start. The other one
+  // lives on the uploads list below; both answer to the same hint, so using
+  // either way puts both away. See ONBOARDING_HINTS in lib/onboarding-hints.ts.
+  showFirstAnalysisHint?: boolean
+}) {
   // The launcher owns the "analysing your video" popup and the redirect to the
   // report once /api/analyze resolves (see AnalysisLauncherProvider). The form
   // just validates the URL, then hands the video off to it.
   const launcher = useAnalysisLauncher()
+  const firstAnalysisHint = useOnboardingHint("first_video_analysis")
   const [url, setUrl] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [alreadyAnalysed, setAlreadyAnalysed] =
@@ -37,6 +47,10 @@ export function AnalyseVideoForm() {
     setError(null)
     setAlreadyAnalysed(null)
     setIsValidating(true)
+    // Submitting a link is the lesson the coach mark was teaching, so it goes
+    // now rather than on the way back: whether the video validates or not, the
+    // creator has found this box.
+    firstAnalysisHint.dismiss()
 
     try {
       const response = await fetch("/api/validate-video", {
@@ -83,7 +97,7 @@ export function AnalyseVideoForm() {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-2">
-      <div className="flex items-start gap-2">
+      <div className="relative flex items-start gap-2">
         <Input
           type="url"
           inputMode="url"
@@ -101,6 +115,21 @@ export function AnalyseVideoForm() {
         <Button type="submit" size="lg" disabled={!canSubmit}>
           {isValidating ? "Checking…" : "Analyse Video"}
         </Button>
+        {/* Hung under the input rather than placed in the flow, so it floats
+            over the list below instead of pushing the page down when it appears
+            — and leaves nothing to settle back when it goes. */}
+        {showFirstAnalysisHint && firstAnalysisHint.pending && (
+          <div className="absolute top-full left-0 z-20 mt-2 w-72 max-w-[80vw]">
+            <HintCallout
+              title="Start with a link"
+              arrow={{ side: "top", align: "start" }}
+              onDismiss={firstAnalysisHint.dismiss}
+            >
+              Paste a video URL from your channel to see where its viewers
+              stayed and where they left.
+            </HintCallout>
+          </div>
+        )}
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
       {alreadyAnalysed && (

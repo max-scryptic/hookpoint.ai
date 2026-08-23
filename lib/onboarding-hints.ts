@@ -3,16 +3,19 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 // The one-time hints a creator can meet in the interface, keyed by what each
 // one teaches.
 //
-// Both of these belong to the same moment, and both are shown at it: when a
-// creator's raw source file has finished processing, the report quietly gains
-// abilities it did not have when they last read one. Nothing on the page says
-// so, so each hint points at one of them, and each is retired the moment the
-// creator uses the thing it points at — clicking a highlight, or opening a
-// footage tab — since at that point they know it is there.
+// Each points at something the interface offers but does not announce, and each
+// is retired the moment the creator uses the thing it points at — starting an
+// analysis, clicking a highlight, opening a footage tab — since at that point
+// they know it is there.
 //
 // A hint is pending while the creator has no row for it in onboarding_hints,
 // which means a key added here ships as "not yet seen" for every account.
 export const ONBOARDING_HINTS = [
+  // The two ways to start an analysis on the Analyse a Video page: paste a URL,
+  // or open the actions menu on a row of your uploads. Shown side by side, and
+  // only to a creator who has not analysed anything yet — the row menu in
+  // particular gives no sign that it is where an analysis begins.
+  "first_video_analysis",
   // The retention chart's highlights play their window back from the uploaded
   // footage. Points at the first highlight on the curve.
   "retention_insight_playback",

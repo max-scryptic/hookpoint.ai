@@ -1,10 +1,15 @@
 import { AnalyseVideoForm } from "@/components/analyse-video-form"
 import { AnalysisLauncherProvider } from "@/components/analysis-launcher"
 import { ConnectYouTubeButton } from "@/components/connect-youtube-button"
+import { OnboardingHintsProvider } from "@/components/onboarding-hints"
 import { UpgradeSuccessDialog } from "@/components/upgrade-success-dialog"
 import { VideoBrowser } from "@/components/video-browser"
 import { requireAuthenticatedUser } from "@/lib/auth"
 import { getEntitlement } from "@/lib/billing/entitlements"
+import {
+  getPendingOnboardingHints,
+  type OnboardingHint,
+} from "@/lib/onboarding-hints"
 import { createClient } from "@/lib/supabase/server"
 import { listAnalysedVideoIds } from "@/lib/analysed-videos"
 import {
@@ -44,13 +49,29 @@ async function loadRecentVideos(userId: string): Promise<VideosResult> {
 }
 
 // Best-effort fetch of the user's analysed video IDs. The list still renders if
-// this fails — videos just won't be flagged as analysed.
-async function loadAnalysedVideoIds(userId: string): Promise<string[]> {
+// this fails — videos just won't be flagged as analysed. Null says the read
+// failed, which an empty array must not be confused with: "nothing analysed
+// yet" is what the first-analysis coach marks key off, and a failed read would
+// otherwise put them in front of a creator with a hundred analyses behind them.
+async function loadAnalysedVideoIds(userId: string): Promise<string[] | null> {
   try {
     const supabase = await createClient()
     return await listAnalysedVideoIds(supabase, userId)
   } catch (error) {
     console.error("Failed to load analysed video ids", error)
+    return null
+  }
+}
+
+// The one-time coach marks this creator has still to meet, read on the server so
+// the first paint already knows which — if any — to draw. Best-effort: the page
+// is worth more than a hint, so a failed read simply shows none.
+async function loadPendingHints(userId: string): Promise<OnboardingHint[]> {
+  try {
+    const supabase = await createClient()
+    return await getPendingOnboardingHints(supabase, userId)
+  } catch (error) {
+    console.error("Failed to load onboarding hints", error)
     return []
   }
 }
@@ -75,12 +96,21 @@ export default async function Page({
   // Stripe's checkout-success route lands here with ?checkout=success, so the
   // plan is only worth reading when that flag is present.
   const isCheckoutReturn = resolvedSearchParams?.checkout === "success"
-  const [result, analysedVideoIds, currentPlan] = await Promise.all([
-    loadRecentVideos(user.id),
-    loadAnalysedVideoIds(user.id),
-    isCheckoutReturn ? loadCurrentPlan(user.id) : Promise.resolve(null),
-  ])
+  const [result, analysedVideoIds, pendingHints, currentPlan] =
+    await Promise.all([
+      loadRecentVideos(user.id),
+      loadAnalysedVideoIds(user.id),
+      loadPendingHints(user.id),
+      isCheckoutReturn ? loadCurrentPlan(user.id) : Promise.resolve(null),
+    ])
   const showUpgradeSuccess = isCheckoutReturn && currentPlan?.id !== "free"
+
+  // Nothing on this page says that an analysis starts either by pasting a URL or
+  // from a row's actions menu, and the menu especially gives no sign of it. So a
+  // creator with no analyses behind them gets a coach mark on each — until they
+  // start one, or wave the pair off.
+  const isFirstAnalysis =
+    analysedVideoIds !== null && analysedVideoIds.length === 0
 
   return (
     <>
@@ -118,16 +148,19 @@ export default async function Page({
           // The launcher provides the shared "analysing your video" popup +
           // redirect for both the URL form and the recent-uploads list below.
           <AnalysisLauncherProvider>
-            <AnalyseVideoForm />
-            <div className="mt-4 flex flex-col gap-3">
-              <h2 className="text-sm font-medium text-muted-foreground">
-                Your Videos
-              </h2>
-              <VideoBrowser
-                initial={result.page}
-                analysedVideoIds={analysedVideoIds}
-              />
-            </div>
+            <OnboardingHintsProvider pendingHints={pendingHints}>
+              <AnalyseVideoForm showFirstAnalysisHint={isFirstAnalysis} />
+              <div className="mt-4 flex flex-col gap-3">
+                <h2 className="text-sm font-medium text-muted-foreground">
+                  Your Videos
+                </h2>
+                <VideoBrowser
+                  initial={result.page}
+                  analysedVideoIds={analysedVideoIds ?? []}
+                  showFirstAnalysisHint={isFirstAnalysis}
+                />
+              </div>
+            </OnboardingHintsProvider>
           </AnalysisLauncherProvider>
         )}
 
