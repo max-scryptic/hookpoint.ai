@@ -2,24 +2,24 @@
 
 import { useMemo, useState } from "react"
 
-import type { ChannelRetentionCurve } from "@/lib/channel-retention-curve"
+import type {
+  ChannelRetentionBands,
+  ChannelRetentionCurvePoint,
+} from "@/lib/channel-retention-curve"
 
-// The library's average retention curve: every video drawn faintly on one
-// shared normalized axis, with the views-weighted average of them all drawn
-// through the middle inside its 95% band.
+// The library's retention curves: the three best-retaining uploads averaged
+// into one line, the three worst into another, and every video in the library
+// averaged behind them as the baseline.
 //
-// Both readings matter and neither works alone. The average is the channel's
-// shape, but on its own it hides how much disagreement it was drawn through,
-// and a reader would take a line built from four uploads for a law. The faint
-// per-video curves put the spread back: the thin wandering ones are the small
-// uploads whose curves swing on a handful of viewers, and they are drawn
-// fainter the less weight they carry, so the picture and the arithmetic agree
-// on sight.
+// Three lines rather than one because a single channel average says how the
+// channel does without saying what separates a good upload from a bad one. The
+// gap between the two bands is the reading: where it opens is where the library
+// splits, and the baseline says which of the two ends is the odd one out.
 //
-// Colour: none of its own, matching the rest of Channel Trends. The average is
-// the foreground, its band is the same tone at low opacity, and the individual
-// videos are the muted tone. Meaning is written out beneath the chart rather
-// than encoded in a hue.
+// Colour: none of its own, matching the rest of Channel Trends. The bands are
+// told apart by weight and dash, exactly as the taxonomy radars tell the same
+// three bands apart (components/channel-trends-radar.tsx), so the chart survives
+// greyscale, colour blindness and dark mode.
 //
 // COPY GUARDRAIL: no em dashes (U+2014) or en dashes (U+2013) anywhere in this
 // file (comments included). Hyphens are fine. Enforced by
@@ -31,11 +31,45 @@ const PAD = { top: 16, right: 16, bottom: 32, left: 48 }
 const PLOT_W = WIDTH - PAD.left - PAD.right
 const PLOT_H = HEIGHT - PAD.top - PAD.bottom
 
-// How faint an individual video is drawn, from the lightest-weight upload in
-// the library to the heaviest. Kept low at both ends: these lines are context
-// for the average, never competition for it.
-const VIDEO_MIN_OPACITY = 0.1
-const VIDEO_MAX_OPACITY = 0.4
+// The winners are the only solid line, because they are the thing being read;
+// the losers are dashed; the channel average is a fine dotted baseline rather
+// than a third competitor. Same order of weight the radars use for the same
+// three bands.
+type Band = "top" | "bottom" | "average"
+
+const BAND_STYLE: Record<
+  Band,
+  { stroke: string; opacity: number; width: number; dash?: string }
+> = {
+  top: { stroke: "var(--foreground)", opacity: 0.9, width: 2.5 },
+  bottom: {
+    stroke: "var(--muted-foreground)",
+    opacity: 0.85,
+    width: 2,
+    dash: "8 6",
+  },
+  average: {
+    stroke: "var(--muted-foreground)",
+    opacity: 0.6,
+    width: 1.75,
+    dash: "2 5",
+  },
+}
+
+const BAND_LABEL: Record<Band, string> = {
+  top: "Top 3 videos",
+  bottom: "Bottom 3 videos",
+  average: "Channel average",
+}
+
+// Baseline first, winners last, so the line being read is never crossed out by
+// the two under it.
+const BAND_DRAW_ORDER: Band[] = ["average", "bottom", "top"]
+
+// The key reads the other way round: the two ends of the library first, the
+// baseline they are read against last, as it does above every other tab's
+// charts.
+const BAND_READING_ORDER: Band[] = ["top", "bottom", "average"]
 
 function formatTimestamp(totalSeconds: number): string {
   const seconds = Math.max(0, Math.round(totalSeconds))
@@ -51,23 +85,52 @@ function percent(ratio: number): string {
   return `${Math.round(ratio * 100)}%`
 }
 
+function BandSwatch({ band }: { band: Band }) {
+  const style = BAND_STYLE[band]
+  return (
+    <svg viewBox="0 0 20 8" className="h-2 w-5 shrink-0" aria-hidden="true">
+      <line
+        x1="0"
+        y1="4"
+        x2="20"
+        y2="4"
+        stroke={style.stroke}
+        strokeOpacity={style.opacity}
+        strokeWidth={2}
+        strokeDasharray={
+          band === "top" ? undefined : band === "bottom" ? "5 4" : "1.5 3"
+        }
+      />
+    </svg>
+  )
+}
+
 export function ChannelRetentionCurveChart({
-  curve,
+  points,
+  bands,
+  averageDurationSeconds,
 }: {
-  curve: ChannelRetentionCurve
+  points: ChannelRetentionCurvePoint[]
+  // Null on a library too small for two full, disjoint bands, which leaves the
+  // channel average as the only line there is to draw.
+  bands: ChannelRetentionBands | null
+  averageDurationSeconds: number | null
 }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
 
   const model = useMemo(() => {
-    const { points, videos } = curve
+    const averageRatios = points.map((point) => point.watchRatio)
+    const series: Record<Band, number[] | null> = {
+      top: bands?.top.watchRatios ?? null,
+      bottom: bands?.bottom.watchRatios ?? null,
+      average: averageRatios,
+    }
 
-    // The band can reach above 100% where a rewatched opening pushes an
-    // individual curve over its own start, so the axis is sized to whatever is
-    // actually drawn rather than assumed to end at 1.
-    const maxWatch = [
-      ...points.map((point) => point.watchRatio + (point.margin ?? 0)),
-      ...videos.flatMap((video) => video.watchRatios),
-    ].reduce((max, value) => Math.max(max, value), 1)
+    // A rewatched opening can push a band over its own start, so the axis is
+    // sized to whatever is actually drawn rather than assumed to end at 1.
+    const maxWatch = BAND_DRAW_ORDER.flatMap(
+      (band) => series[band] ?? [],
+    ).reduce((max, value) => Math.max(max, value), 1)
     const yMax = Math.max(1, Math.ceil(maxWatch * 2) / 2)
 
     const xFor = (ratio: number) => PAD.left + ratio * PLOT_W
@@ -82,59 +145,48 @@ export function ChannelRetentionCurveChart({
         )
         .join(" ")
 
-    // Out along the top of the band and back along the bottom, closed into one
-    // fillable ribbon. Null when any position could not be given a margin, so a
-    // partial band never reads as a complete one.
-    const bandPath = points.some((point) => point.margin == null)
-      ? null
-      : `${points
-          .map(
-            (point, index) =>
-              `${index === 0 ? "M" : "L"}${xFor(point.elapsedRatio).toFixed(2)},${yFor(point.watchRatio + (point.margin ?? 0)).toFixed(2)}`,
-          )
-          .join(" ")} ${[...points]
-          .reverse()
-          .map(
-            (point) =>
-              `L${xFor(point.elapsedRatio).toFixed(2)},${yFor(Math.max(0, point.watchRatio - (point.margin ?? 0))).toFixed(2)}`,
-          )
-          .join(" ")} Z`
-
-    const maxShare = videos.reduce(
-      (max, video) => Math.max(max, video.weightShare),
-      0,
-    )
-
     const yTicks: number[] = []
     for (let value = 0; value <= yMax + 1e-9; value += 0.25) yTicks.push(value)
 
     return {
-      averagePath: pathFor(points.map((point) => point.watchRatio)),
-      bandPath,
-      videoPaths: videos.map((video) => ({
-        id: video.id,
-        path: pathFor(video.watchRatios),
-        opacity:
-          maxShare > 0
-            ? VIDEO_MIN_OPACITY +
-              (VIDEO_MAX_OPACITY - VIDEO_MIN_OPACITY) *
-                (video.weightShare / maxShare)
-            : VIDEO_MIN_OPACITY,
-      })),
+      series,
+      lines: BAND_DRAW_ORDER.flatMap((band) => {
+        const watchRatios = series[band]
+        return watchRatios == null ? [] : [{ band, path: pathFor(watchRatios) }]
+      }),
       xFor,
       yFor,
       yTicks,
     }
-  }, [curve])
+  }, [points, bands])
 
   function handleMove(event: React.PointerEvent<SVGSVGElement>) {
     const rect = event.currentTarget.getBoundingClientRect()
     const svgX = ((event.clientX - rect.left) / rect.width) * WIDTH
     const ratio = Math.min(1, Math.max(0, (svgX - PAD.left) / PLOT_W))
-    setHoverIndex(Math.round(ratio * (curve.points.length - 1)))
+    setHoverIndex(Math.round(ratio * (points.length - 1)))
   }
 
-  const hovered = hoverIndex == null ? null : curve.points[hoverIndex]
+  const legend: Band[] = bands == null ? ["average"] : BAND_READING_ORDER
+  const hovered = hoverIndex == null ? null : points[hoverIndex]
+  const readout =
+    hovered == null || hoverIndex == null
+      ? null
+      : [
+          `${percent(hovered.elapsedRatio)} in`,
+          ...(bands == null
+            ? [`${percent(hovered.watchRatio)} still watching`]
+            : [
+                `top 3 ${percent(bands.top.watchRatios[hoverIndex])}`,
+                `bottom 3 ${percent(bands.bottom.watchRatios[hoverIndex])}`,
+                `channel ${percent(hovered.watchRatio)}`,
+              ]),
+          ...(averageDurationSeconds == null
+            ? []
+            : [
+                `around ${formatTimestamp(hovered.elapsedRatio * averageDurationSeconds)}`,
+              ]),
+        ].join(" · ")
 
   return (
     <div className="rounded-xl border bg-card p-4">
@@ -142,7 +194,11 @@ export function ChannelRetentionCurveChart({
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         className="w-full"
         role="img"
-        aria-label="Your videos' audience retention curves with the views-weighted average drawn through them"
+        aria-label={
+          bands == null
+            ? "Your channel's average audience retention curve"
+            : "Audience retention averaged across your top 3 videos, your bottom 3 videos and your whole channel"
+        }
         onPointerMove={handleMove}
         onPointerLeave={() => setHoverIndex(null)}
       >
@@ -186,36 +242,23 @@ export function ChannelRetentionCurveChart({
           </text>
         ))}
 
-        {model.videoPaths.map((video) => (
-          <path
-            key={video.id}
-            d={video.path}
-            fill="none"
-            stroke="var(--muted-foreground)"
-            strokeOpacity={video.opacity}
-            strokeWidth={1}
-            strokeLinejoin="round"
-            vectorEffect="non-scaling-stroke"
-          />
-        ))}
-
-        {model.bandPath && (
-          <path
-            d={model.bandPath}
-            fill="var(--foreground)"
-            fillOpacity={0.12}
-          />
-        )}
-
-        <path
-          d={model.averagePath}
-          fill="none"
-          stroke="var(--foreground)"
-          strokeWidth={2.5}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-          vectorEffect="non-scaling-stroke"
-        />
+        {model.lines.map((line) => {
+          const style = BAND_STYLE[line.band]
+          return (
+            <path
+              key={line.band}
+              d={line.path}
+              fill="none"
+              stroke={style.stroke}
+              strokeOpacity={style.opacity}
+              strokeWidth={style.width}
+              strokeDasharray={style.dash}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+            />
+          )
+        })}
 
         {hovered && (
           <line
@@ -235,34 +278,18 @@ export function ChannelRetentionCurveChart({
 
       <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground">
-          <span className="flex items-center gap-1.5">
-            <span
-              className="h-0.5 w-4 shrink-0 rounded-full"
-              style={{ backgroundColor: "var(--foreground)" }}
-            />
-            Your weighted average
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span
-              className="h-0.5 w-4 shrink-0 rounded-full opacity-40"
-              style={{ backgroundColor: "var(--muted-foreground)" }}
-            />
-            Individual videos
-          </span>
+          {legend.map((band) => (
+            <span key={band} className="flex items-center gap-1.5">
+              <BandSwatch band={band} />
+              {BAND_LABEL[band]}
+            </span>
+          ))}
         </div>
-        {hovered ? (
-          <span className="font-mono tabular-nums">
-            {percent(hovered.elapsedRatio)} in · {percent(hovered.watchRatio)}
-            {hovered.margin != null &&
-              ` +/-${Math.max(1, Math.round(hovered.margin * 100))}`}{" "}
-            still watching
-            {curve.averageDurationSeconds != null &&
-              ` · around ${formatTimestamp(hovered.elapsedRatio * curve.averageDurationSeconds)}`}
-          </span>
+        {readout ? (
+          <span className="font-mono tabular-nums">{readout}</span>
         ) : (
           <span className="text-muted-foreground">
-            Position is % of each video&apos;s runtime. The shaded band is the
-            95% margin on the average. Hover to read any point.
+            Position is % of each video&apos;s runtime.
           </span>
         )}
       </div>
