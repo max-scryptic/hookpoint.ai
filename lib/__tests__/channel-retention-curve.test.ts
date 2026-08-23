@@ -271,94 +271,153 @@ describe("buildChannelRetentionCurve", () => {
     expect(curve!.bands).toBeNull()
   })
 
-  it("averages the three best-retaining uploads against the three worst", () => {
-    // A linear curve ending at e holds (1 + e) / 2 of its runtime on average, so
-    // the ranking runs straight down the ending.
+  it("splits the bands on views, not on retention", () => {
+    // Retention runs the opposite way to reach here: the three least-viewed
+    // uploads are the three best retainers, which is exactly the shape a
+    // subscriber-heavy tail produces.
     const curve = buildChannelRetentionCurve([
-      video("worst", 1_000, linearCurve(0.1)),
-      video("best", 1_000, linearCurve(0.9)),
-      video("second", 1_000, linearCurve(0.8)),
-      video("fifth", 1_000, linearCurve(0.2)),
-      video("third", 1_000, linearCurve(0.7)),
-      video("fourth", 1_000, linearCurve(0.3)),
+      video("big-1", 90_000, linearCurve(0.2)),
+      video("big-2", 80_000, linearCurve(0.3)),
+      video("big-3", 70_000, linearCurve(0.1)),
+      video("small-1", 300, linearCurve(0.8)),
+      video("small-2", 200, linearCurve(0.9)),
+      video("small-3", 100, linearCurve(0.7)),
     ])
     expect(curve).not.toBeNull()
     const bands = curve!.bands
     expect(bands).not.toBeNull()
 
     expect(bands!.top.videoCount).toBe(3)
-    expect(bands!.top.totalViews).toBe(3_000)
-    // Every video ends where it ends, so the band's ending is the mean of the
-    // three it was built from.
-    expect(bands!.top.watchRatios[CHANNEL_CURVE_GRID_POINTS - 1]).toBeCloseTo(
-      (0.9 + 0.8 + 0.7) / 3,
-      6,
+    expect(bands!.top.totalViews).toBe(240_000)
+    expect(bands!.top.minViews).toBe(70_000)
+    expect(bands!.top.maxViews).toBe(90_000)
+    expect(bands!.bottom.totalViews).toBe(600)
+    expect(bands!.bottom.minViews).toBe(100)
+    expect(bands!.bottom.maxViews).toBe(300)
+
+    // The most-viewed band is made of the three big uploads and nothing else,
+    // however badly they retained.
+    expect(bands!.top.watchRatios[CHANNEL_CURVE_GRID_POINTS - 1]).toBeLessThan(
+      0.35,
     )
-    expect(bands!.bottom.watchRatios[CHANNEL_CURVE_GRID_POINTS - 1]).toBeCloseTo(
-      (0.3 + 0.2 + 0.1) / 3,
-      6,
-    )
-    // Both bands start where every curve starts, and the better band holds more
-    // of its runtime by construction.
+    expect(
+      bands!.bottom.watchRatios[CHANNEL_CURVE_GRID_POINTS - 1],
+    ).toBeGreaterThan(0.65)
+    // Both bands start where every curve starts, and the least-viewed band
+    // out-retaining the most-viewed one is now a finding the chart can show
+    // rather than something the ranking rules out.
     expect(bands!.top.watchRatios[0]).toBeCloseTo(1, 6)
     expect(bands!.bottom.watchRatios[0]).toBeCloseTo(1, 6)
-    expect(bands!.top.watchedShare).toBeGreaterThan(bands!.bottom.watchedShare)
+    expect(bands!.bottom.watchedShare).toBeGreaterThan(bands!.top.watchedShare)
   })
 
-  it("names the uploads behind each band, best-retaining first", () => {
+  it("keeps a five-view outlier out of the bands it never earned", () => {
+    // The best retainer in the library was seen by five people. Ranking on
+    // retention would have made it a third of the top band; ranking on views
+    // puts it where its audience says it belongs.
     const curve = buildChannelRetentionCurve([
-      video("worst", 1_000, linearCurve(0.1)),
-      video("best", 1_000, linearCurve(0.9)),
-      video("second", 1_000, linearCurve(0.8)),
-      video("fifth", 1_000, linearCurve(0.2)),
-      video("third", 1_000, linearCurve(0.7)),
-      video("fourth", 1_000, linearCurve(0.3)),
+      video("fluke", 5, linearCurve(0.95)),
+      video("big-1", 50_000, linearCurve(0.4)),
+      video("big-2", 40_000, linearCurve(0.35)),
+      video("big-3", 30_000, linearCurve(0.3)),
+      video("mid-1", 2_000, linearCurve(0.25)),
+      video("mid-2", 1_000, linearCurve(0.2)),
+    ])
+    expect(curve).not.toBeNull()
+    const bands = curve!.bands!
+    expect(bands.top.maxViews).toBe(50_000)
+    expect(bands.top.minViews).toBe(30_000)
+    expect(bands.bottom.minViews).toBe(5)
+    // Even inside the bottom band the fluke is weighted by its five viewers, so
+    // its 95% ending barely moves the line.
+    expect(
+      bands.bottom.watchRatios[CHANNEL_CURVE_GRID_POINTS - 1],
+    ).toBeLessThan(0.3)
+  })
+
+  it("names the uploads behind each band, most-viewed first", () => {
+    // Retention deliberately runs the other way to reach, so an ordering taken
+    // off the curves rather than the views would show up here.
+    const curve = buildChannelRetentionCurve([
+      video("sixth", 400, linearCurve(0.9)),
+      video("first", 90_000, linearCurve(0.1)),
+      video("second", 60_000, linearCurve(0.2)),
+      video("fifth", 900, linearCurve(0.8)),
+      video("third", 30_000, linearCurve(0.3)),
+      video("fourth", 2_000, linearCurve(0.7)),
     ])
     const bands = curve!.bands!
 
     expect(bands.top.videos.map((entry) => entry.id)).toEqual([
-      "best",
+      "first",
       "second",
       "third",
     ])
-    // The bottom band keeps the same best-first order, so the worst upload is
-    // the last row of the list rather than the first.
+    // The bottom band keeps the same most-viewed-first order, so the smallest
+    // upload is the last row of the list rather than the first.
     expect(bands.bottom.videos.map((entry) => entry.id)).toEqual([
       "fourth",
       "fifth",
-      "worst",
+      "sixth",
     ])
     expect(bands.top.videos.map((entry) => entry.title)).toEqual([
-      "best",
+      "first",
       "second",
       "third",
     ])
     expect(bands.top.videos.map((entry) => entry.views)).toEqual([
-      1_000, 1_000, 1_000,
+      90_000, 60_000, 30_000,
     ])
-    // A linear curve ending at e holds (1 + e) / 2 of its runtime on average,
-    // which is what each video was ranked on.
-    expect(bands.top.videos[0].watchedShare).toBeCloseTo((1 + 0.9) / 2, 2)
-    expect(bands.bottom.videos[2].watchedShare).toBeCloseTo((1 + 0.1) / 2, 2)
+    // A linear curve ending at e holds (1 + e) / 2 of its runtime on average.
+    // Not what the video was ranked on any more: it is what the reach it was
+    // ranked on actually bought, which is why the top band's rows are the low
+    // ones here.
+    expect(bands.top.videos[0].watchedShare).toBeCloseTo((1 + 0.1) / 2, 2)
+    expect(bands.bottom.videos[2].watchedShare).toBeCloseTo((1 + 0.9) / 2, 2)
   })
 
   it("weights a band by the viewers behind its videos", () => {
     const curve = buildChannelRetentionCurve([
       video("big", 100_000, linearCurve(0.9)),
-      video("small-1", 100, linearCurve(0.8)),
-      video("small-2", 100, linearCurve(0.7)),
-      video("low-1", 1_000, linearCurve(0.3)),
-      video("low-2", 1_000, linearCurve(0.2)),
-      video("low-3", 1_000, linearCurve(0.1)),
+      video("mid-1", 100, linearCurve(0.8)),
+      video("mid-2", 100, linearCurve(0.7)),
+      video("low-1", 90, linearCurve(0.3)),
+      video("low-2", 80, linearCurve(0.2)),
+      video("low-3", 70, linearCurve(0.1)),
     ])
     expect(curve).not.toBeNull()
     const top = curve!.bands!.top
-    // An even average of the band would end at 0.8. The 100,000-view upload
-    // leads it, held to the two thirds a three-video band allows.
+    // An even average of the three most-viewed would end at 0.8. The
+    // 100,000-view upload leads it, held to the two thirds a three-video band
+    // allows.
     expect(top.watchRatios[CHANNEL_CURVE_GRID_POINTS - 1]).toBeCloseTo(
       (2 / 3) * 0.9 + (1 / 6) * 0.8 + (1 / 6) * 0.7,
       6,
     )
+  })
+
+  it("breaks a tie in views on the id so the bands are stable", () => {
+    // Every upload has the same view count, so only the id decides which end it
+    // lands in, and the bands must not depend on the order the library arrived
+    // in.
+    const library = ["a", "b", "c", "d", "e", "f"].map((id, index) =>
+      video(id, 1_000, linearCurve(0.1 * (index + 1))),
+    )
+    const forward = buildChannelRetentionCurve(library)
+    const reversed = buildChannelRetentionCurve([...library].reverse())
+    expect(forward!.bands!.top.watchedShare).toBeCloseTo(
+      reversed!.bands!.top.watchedShare,
+      10,
+    )
+    expect(forward!.bands!.bottom.watchedShare).toBeCloseTo(
+      reversed!.bands!.bottom.watchedShare,
+      10,
+    )
+    // a, b and c take the top by id, so the top band is the three lowest
+    // endings.
+    expect(
+      forward!.bands!.top.watchRatios[CHANNEL_CURVE_GRID_POINTS - 1],
+    ).toBeCloseTo((0.1 + 0.2 + 0.3) / 3, 6)
   })
 
   it("leaves the runtime unknown when no contributing video stored one", () => {
