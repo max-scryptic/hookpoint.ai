@@ -259,6 +259,89 @@ export function ScoreBar({ value }: { value: number }) {
   )
 }
 
+// One upload in a named band, as the band lists need it. Structural on purpose:
+// the taxonomy tabs hand over their own ChannelExtremeVideo and the Retention
+// tab hands over a curve band's video, and neither has to know about the other.
+export interface TrendBandVideo {
+  id: string
+  title: string | null
+  // The metric the band was ranked on, printed by the caller's formatOutcome.
+  outcome: number
+}
+
+// One band, named. A creator recognises their own uploads faster than any bar
+// or line, so the videos behind a shape are listed before the shape.
+function BandVideoList({
+  label,
+  videos,
+  formatOutcome,
+}: {
+  label: string
+  videos: TrendBandVideo[]
+  formatOutcome: (value: number) => string
+}) {
+  // Set in a panel of its own rather than as loose text, so the ranked pair
+  // reads as the table it is and lifts off the prose either side of it.
+  return (
+    <div className="rounded-lg border bg-muted/40 px-3 py-2.5">
+      <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+        {label}
+      </span>
+      <ol className="mt-1.5 flex flex-col divide-y">
+        {videos.map((video, index) => (
+          <li
+            key={video.id}
+            className="grid grid-cols-[1rem_1fr_auto] items-baseline gap-x-2 py-1.5 first:pt-0 last:pb-0"
+            title={video.title ?? undefined}
+          >
+            <span className="text-xs tabular-nums text-muted-foreground/60">
+              {index + 1}
+            </span>
+            <span className="truncate text-sm">
+              {video.title ?? "Untitled video"}
+            </span>
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {formatOutcome(video.outcome)}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  )
+}
+
+// The two bands, side by side. The single way this page names the two ends of a
+// library, wherever the split was made: on reach, on the script's retention, or
+// on the retention curves themselves.
+export function BandVideoPair({
+  top,
+  bottom,
+  topLabel,
+  bottomLabel,
+  formatOutcome,
+}: {
+  top: TrendBandVideo[]
+  bottom: TrendBandVideo[]
+  topLabel: string
+  bottomLabel: string
+  formatOutcome: (value: number) => string
+}) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <BandVideoList
+        label={topLabel}
+        videos={top}
+        formatOutcome={formatOutcome}
+      />
+      <BandVideoList
+        label={bottomLabel}
+        videos={bottom}
+        formatOutcome={formatOutcome}
+      />
+    </div>
+  )
+}
+
 // A note in the small print under a card: what a figure is measured over, or
 // which videos are still missing from it.
 export function CoverageNote({ children }: { children: ReactNode }) {
