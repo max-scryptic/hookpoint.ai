@@ -50,6 +50,8 @@ function video(
     impressionClickThroughRate: null,
     packaging: null,
     script: null,
+    retention: null,
+    durationSeconds: null,
     ...extras,
   }
 }

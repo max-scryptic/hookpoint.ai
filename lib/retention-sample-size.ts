@@ -57,6 +57,51 @@ export function marginOfError(
   return standardError == null ? null : Z_95 * standardError
 }
 
+// One video's contribution to a weighted average of the same point across
+// several curves: the share it reported, the weight it carries in the average,
+// and the audience its share was estimated from.
+export interface WeightedProportion {
+  proportion: number
+  weight: number
+  sampleSize: number | null
+}
+
+// The 95% margin on a weighted average of proportions, each estimated from its
+// own audience. The Channel Trends average curve weights every video by the
+// viewers behind it, so the average's precision is not any one video's
+// precision: each contribution carries variance p(1-p)/n, and a weighted mean
+// carries the sum of those variances scaled by the square of each
+// contribution's share of the total weight. Weighting by viewers is what makes
+// that sum small, because it is inverse-variance weighting: the noisy curves
+// are exactly the ones held down.
+//
+// Null when the weights are empty or when any contributing curve has no usable
+// audience behind it, since a missing n cannot be read as zero variance
+// without inventing certainty the average does not have.
+export function weightedProportionMarginOfError(
+  contributions: readonly WeightedProportion[],
+): number | null {
+  let totalWeight = 0
+  for (const contribution of contributions) {
+    totalWeight += Math.max(0, contribution.weight)
+  }
+  if (totalWeight <= 0) return null
+
+  let variance = 0
+  for (const contribution of contributions) {
+    const weight = Math.max(0, contribution.weight)
+    if (weight <= 0) continue
+    const standardError = proportionStandardError(
+      contribution.proportion,
+      contribution.sampleSize,
+    )
+    if (standardError == null) return null
+    const share = weight / totalWeight
+    variance += share * share * standardError * standardError
+  }
+  return Z_95 * Math.sqrt(variance)
+}
+
 // The widest 95% margin any single point on a curve estimated from n viewers
 // can carry. Proportion variance peaks at p = 0.5, so this is the one number
 // that describes a whole curve's precision without picking a position on it:
