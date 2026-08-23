@@ -21,10 +21,17 @@
 // without being it.
 //
 // The same arithmetic then runs over the two ends of the library on their own:
-// the three best-retaining uploads averaged into one line, the three worst into
-// another, with the whole library's average behind them as the baseline. That is
-// the split every other Channel Trends tab is read against, so the retention
-// chart answers the same question they do.
+// the three most-viewed uploads averaged into one line, the three least-viewed
+// into another, with the whole library's average behind them as the baseline.
+//
+// The split is taken off views rather than off retention, and that is the point
+// of the chart. Ranking by retention picks the two bands out of the same column
+// the chart then draws, so the top line is high and the bottom line is low by
+// construction: the gap between them is the ranking, not a finding, and the
+// upload that leads it may be one seen by five people. Views are the
+// independent axis. Split on reach and the chart answers a question the creator
+// actually has, which is whether the videos that travel hold their audience the
+// way the ones that mostly reach subscribers do.
 //
 // Pure arithmetic over stored curves and view counts, so it is exercised
 // directly by tests.
@@ -88,14 +95,16 @@ export function channelCurveMaxWeightShare(videoCount: number): number {
 const STEEPEST_DROP_SPAN = 0.1
 
 // The two ends of the library, drawn as one averaged line each over the whole
-// library's average. Same split, same band size and same reading as every other
-// Channel Trends tab: three uploads at the top, three at the bottom, the library
-// behind both as the baseline.
+// library's average. Same band size and same reading as every other Channel
+// Trends tab: three uploads at the top, three at the bottom, the library behind
+// both as the baseline.
 //
-// The ranking is taken off the curves themselves, by the share of its runtime an
-// average viewer watched (the area under the resampled curve), so the order the
-// bands were picked in and the lines the page draws cannot disagree, and a video
-// missing its analytics summary is still rankable.
+// The ranking is lifetime views: the same figure the weighting uses and the
+// same n behind every margin on this chart, so a band is picked on the audience
+// its curves were actually estimated from. Not views per day, which is what the
+// Packaging tab ranks reach on: age-adjusted reach answers "which upload
+// travelled fastest", and the question here is the plainer one of which uploads
+// the most people saw.
 export const RETENTION_BAND_SIZE = 3
 
 // Both bands have to be full and disjoint before the comparison means anything.
@@ -142,8 +151,9 @@ export interface ChannelRetentionBandVideo {
   id: string
   title: string | null
   views: number
-  // Share of its own runtime the average viewer watched, 0..1: the figure this
-  // video was ranked on, and so the reason it landed in this band.
+  // Share of its own runtime the average viewer watched, 0..1. Not what put the
+  // video in this band (views did that), which is the point: it is what the
+  // reach the band was picked on actually bought, video by video.
   watchedShare: number
 }
 
@@ -154,12 +164,16 @@ export interface ChannelRetentionBand {
   videoCount: number
   // The audience behind the band, summed across its videos.
   totalViews: number
+  // The view counts the band was picked on: its smallest and largest upload.
+  minViews: number
+  maxViews: number
   // One share still watching per grid position, in grid order.
   watchRatios: number[]
-  // Share of runtime the band's average viewer watched, 0..1: the figure the
-  // band was ranked on.
+  // Share of runtime the band's average viewer watched, 0..1. A result rather
+  // than a criterion now that the bands are picked on views, so the top band
+  // holding less than the bottom one is a finding about the library, not a bug.
   watchedShare: number
-  // The uploads averaged into the line, best-retaining first.
+  // The uploads averaged into the line, most-viewed first.
   videos: ChannelRetentionBandVideo[]
 }
 
@@ -194,9 +208,9 @@ export interface ChannelRetentionCurve {
   holdAtHalf: number
   holdAtEnd: number
   steepestDrop: ChannelRetentionDrop | null
-  // The three best-retaining uploads and the three worst, each averaged into one
-  // line. Null until six videos carry both a curve and a view count, because two
-  // bands drawn from overlapping videos would compare a library with itself.
+  // The three most-viewed uploads and the three least-viewed, each averaged into
+  // one line. Null until six videos carry both a curve and a view count, because
+  // two bands drawn from overlapping videos would compare a library with itself.
   bands: ChannelRetentionBands | null
 }
 
@@ -278,12 +292,12 @@ function bandCurve(
       0,
     ) / totalWeight,
   )
+  const bandViews = indices.map((index) => members[index].views)
   return {
     videoCount: indices.length,
-    totalViews: indices.reduce(
-      (total, index) => total + members[index].views,
-      0,
-    ),
+    totalViews: bandViews.reduce((total, value) => total + value, 0),
+    minViews: Math.min(...bandViews),
+    maxViews: Math.max(...bandViews),
     watchRatios,
     watchedShare: watchedShare(watchRatios),
     videos: indices.map((index) => ({
@@ -295,21 +309,24 @@ function bandCurve(
   }
 }
 
-// The two ends of the library, or null when there are too few videos for the
-// bands to be full and disjoint.
+// The two ends of the library by reach, or null when there are too few videos
+// for the bands to be full and disjoint.
 function retentionBands(
   series: readonly number[][],
   members: readonly RetentionBandMember[],
 ): ChannelRetentionBands | null {
   if (series.length < RETENTION_BAND_MIN_VIDEOS) return null
+  // No longer the ranking, just the figure each band prints against its own
+  // uploads: what the reach the band was picked on actually bought.
   const shares = series.map(watchedShare)
   const ranked = series
     .map((_, index) => index)
-    // Best-retaining first, ties broken on the id so the bands are stable
-    // between renders rather than left to sort order.
+    // Most-viewed first, ties broken on the id so the bands are stable between
+    // renders rather than left to sort order.
     .sort(
       (a, b) =>
-        shares[b] - shares[a] || members[a].id.localeCompare(members[b].id),
+        members[b].views - members[a].views ||
+        members[a].id.localeCompare(members[b].id),
     )
   return {
     top: bandCurve(
@@ -318,9 +335,9 @@ function retentionBands(
       members,
       shares,
     ),
-    // Kept in the same best-first order the ranking produced, so the worst
-    // upload is the last row of the list rather than the first, exactly as the
-    // other tabs print their bottom band.
+    // Kept in the same most-viewed-first order the ranking produced, so the
+    // smallest upload is the last row of the list rather than the first,
+    // exactly as the other tabs print their bottom band.
     bottom: bandCurve(
       ranked.slice(-RETENTION_BAND_SIZE),
       series,

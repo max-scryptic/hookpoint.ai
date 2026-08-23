@@ -4,18 +4,26 @@ import { ChannelRetentionCurveChart } from "@/components/channel-trends-retentio
 import {
   BandVideoPair,
   TrendCard,
+  formatCompactNumber,
   plural,
 } from "@/components/channel-trends-shared"
 import type {
+  ChannelRetentionBand,
   ChannelRetentionBands,
   ChannelRetentionCurve,
 } from "@/lib/channel-retention-curve"
 import type { ChannelTrendsData } from "@/lib/channel-trends"
 
 // The Retention tab: the two ends of the library named, then one chart, read the
-// way every other tab on this page is read. The three best-retaining uploads
-// averaged into one line, the three worst into another, and the whole library
-// averaged behind them as the baseline, all on one normalized axis.
+// way every other tab on this page is read. The three most-viewed uploads
+// averaged into one line, the three least-viewed into another, and the whole
+// library averaged behind them as the baseline, all on one normalized axis.
+//
+// Split on views rather than on retention so the chart is not ranking the same
+// column it draws: a top band picked on retention outruns a bottom band picked
+// the same way whatever the library does, and can be led by an upload five
+// people saw. Views are the independent axis, and the answer they buy (whether
+// reach costs the channel retention) is one a creator can act on.
 //
 // Purely presentational; all aggregation and gating lives in
 // lib/channel-retention-curve.ts.
@@ -29,17 +37,32 @@ import type { ChannelTrendsData } from "@/lib/channel-trends"
 // imported from the chart because that module is a client component, and a plain
 // value exported from one does not survive the crossing into a server component
 // (see the note on RADAR_MIN_AXES in components/channel-trends-shared.tsx).
-const TOP_BAND_LABEL = "top 3 videos"
-const BOTTOM_BAND_LABEL = "bottom 3 videos"
+const TOP_BAND_LABEL = "top 3 by views"
+const BOTTOM_BAND_LABEL = "bottom 3 by views"
 
 // The share of a video that gets watched, printed the way the Script tab prints
 // the same quantity, because it is the same quantity.
 const formatWatched = (share: number) => `${Math.round(share * 100)}% watched`
 
+// The reach a band was picked on, for the footer. Spelled out because the two
+// bands only mean something next to each other: 40K against 20K is a comparison,
+// 40K against 5 is a coincidence.
+function bandRange(band: ChannelRetentionBand): string {
+  return band.minViews === band.maxViews
+    ? `${formatCompactNumber(band.minViews)} views`
+    : `${formatCompactNumber(band.minViews)} to ${formatCompactNumber(band.maxViews)} views`
+}
+
 // The uploads behind the two lines, named. The same card the Packaging and
-// Script tabs open with, on the same ranking those tabs' script bands use: a
-// creator recognises their own uploads faster than any curve, so the chart is
-// worth more once they know which three videos each line is made of.
+// Script tabs open with, on the reach ranking the Packaging tab uses rather than
+// the retention one the Script tab does: a creator recognises their own uploads
+// faster than any curve, so the chart is worth more once they know which three
+// videos each line is made of.
+//
+// Views are the criterion, so the figure printed against each row is the other
+// one: the share of that video that got watched. Read down a column and you can
+// see whether the band's line is a shape all three uploads share or one upload
+// dragging the other two.
 function RetentionBandsCard({
   bands,
   videoCount,
@@ -51,8 +74,8 @@ function RetentionBandsCard({
     <TrendCard
       icon={TrophyIcon}
       title="The uploads the chart compares"
-      description="Your three uploads that held viewers longest and your three that lost them fastest, ranked on the share of each video that gets watched."
-      footer={`Your ${bands.top.videoCount} best and ${bands.bottom.videoCount} worst of the ${plural(videoCount, "video")} storing a retention curve. Each line below is those videos averaged together, weighted by the viewers behind them.`}
+      description="Your three most-viewed uploads and your three least-viewed, with the share of each one that actually gets watched."
+      footer={`Your ${bands.top.videoCount} most-viewed (${bandRange(bands.top)}) and ${bands.bottom.videoCount} least-viewed (${bandRange(bands.bottom)}) of the ${plural(videoCount, "video")} storing a retention curve. Each line below is those videos averaged together, weighted by the viewers behind them.`}
     >
       <BandVideoPair
         top={bands.top.videos.map((video) => ({
@@ -81,7 +104,7 @@ function RetentionCurveCard({ curve }: { curve: ChannelRetentionCurve }) {
       description={
         curve.bands == null
           ? "Every video in your library, averaged onto one axis."
-          : "Your three best-retaining uploads and your three worst, over your channel average."
+          : "Your three most-viewed uploads and your three least-viewed, over your channel average."
       }
     >
       <ChannelRetentionCurveChart

@@ -44,9 +44,9 @@ import {
 // The Channel Trends page body: the unlock meter, the library's headline
 // numbers, then three tabs.
 //
-//   Retention  what the library actually did to viewers: the three
-//              best-retaining uploads and the three worst averaged onto one
-//              axis, over the views-weighted average of every stored curve
+//   Retention  what the library actually did to viewers: the three most-viewed
+//              uploads and the three least-viewed averaged onto one axis, over
+//              the views-weighted average of every stored curve
 //              (components/channel-trends-retention.tsx)
 //   Packaging  what your uploads promise, read one surface at a time across its
 //              own Hook, Title, Thumbnail and Alignment sub-tabs
@@ -248,7 +248,7 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
           <ChannelTrendsTabs
             retention={
               hasRetention ? (
-                <TrendsPanel description="How much of your videos gets watched, from your best-retaining uploads to your worst.">
+                <TrendsPanel description="How much of your videos gets watched, from your most-viewed uploads to your least-viewed.">
                   <RetentionPanel data={data} />
                 </TrendsPanel>
               ) : undefined
