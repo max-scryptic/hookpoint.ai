@@ -78,11 +78,17 @@ const PRIVACY_OPTIONS: Array<{
 export function VideoBrowser({
   initial,
   analysedVideoIds = [],
+  showFirstAnalysisHint = false,
 }: {
   initial: VideosPage
   // The user's full set of analysed video IDs. Passed once and checked per row
   // so analysed uploads stay flagged across every paginated page.
   analysedVideoIds?: string[]
+  // Whether this creator has yet to analyse anything, and so is owed the coach
+  // mark pointing at a row's actions menu — the list gives no other sign that
+  // an analysis starts there. Only the first page carries it: someone paging
+  // through their uploads has read the row already.
+  showFirstAnalysisHint?: boolean
 }) {
   const analysedIds = useMemo(
     () => new Set(analysedVideoIds),
@@ -489,6 +495,7 @@ export function VideoBrowser({
           videos={pageVideos}
           analysedIds={analysedIds}
           showAnalysedColumn={showAnalysed}
+          showFirstAnalysisHint={showFirstAnalysisHint && pageNumber === 1}
         />
       )}
 

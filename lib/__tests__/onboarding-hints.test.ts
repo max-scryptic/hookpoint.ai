@@ -33,6 +33,7 @@ function insertingHints(error: { code?: string; message: string } | null) {
 
 describe("onboarding hint keys", () => {
   it("accepts only known hints", () => {
+    expect(isOnboardingHint("first_video_analysis")).toBe(true)
     expect(isOnboardingHint("retention_insight_playback")).toBe(true)
     expect(isOnboardingHint("deep_analysis_window_tabs")).toBe(true)
     expect(isOnboardingHint("retention_insight_playback ")).toBe(false)
@@ -53,7 +54,7 @@ describe("getPendingOnboardingHints", () => {
         selectingHints({ data: [{ hint: "retention_insight_playback" }] }),
         "user-1",
       ),
-    ).resolves.toEqual(["deep_analysis_window_tabs"])
+    ).resolves.toEqual(["first_video_analysis", "deep_analysis_window_tabs"])
   })
 
   // A row for a hint that has since been retired from the interface is left in

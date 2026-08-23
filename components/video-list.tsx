@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 
 import { useAnalysisLauncher } from "@/components/analysis-launcher"
+import { HintCallout, useOnboardingHint } from "@/components/onboarding-hints"
 import { VideoThumbnail } from "@/components/video-thumbnail"
 import { Button } from "@/components/ui/button"
 import {
@@ -115,29 +116,50 @@ function AnalysedBadge() {
 function VideoActions({
   video,
   isAnalysed,
+  anchorsFirstAnalysisHint = false,
 }: {
   video: RecentVideo
   isAnalysed: boolean
+  // Whether this row is the one carrying the first-analysis coach mark. Only
+  // one row wears it — the first on show — since the menu it points at is the
+  // same on every row.
+  anchorsFirstAnalysisHint?: boolean
 }) {
   // On the Analyse a Video page the launcher drives the "analysing your video"
   // popup and the redirect once it's done. Already-analysed videos (and any
   // render outside the launcher) just link straight to the cached report.
   const launcher = useAnalysisLauncher()
   const useLauncher = !isAnalysed && launcher !== null
+  // Opening the menu is the whole of what the coach mark asks for, so that is
+  // what retires it — for the URL box's twin above as well as this one. See
+  // ONBOARDING_HINTS in lib/onboarding-hints.ts.
+  const firstAnalysisHint = useOnboardingHint("first_video_analysis")
 
   return (
-    <DropdownMenu>
+    <DropdownMenu
+      onOpenChange={(open) => {
+        if (open) firstAnalysisHint.dismiss()
+      }}
+    >
       <DropdownMenuTrigger
         render={
           <Button
             variant="ghost"
             size="icon"
-            className="size-8 shrink-0"
+            className="relative size-8 shrink-0"
             aria-label={`Actions for ${video.title}`}
           />
         }
       >
         <MoreVerticalIcon className="size-4" />
+        {anchorsFirstAnalysisHint && (
+          // A pulse on the button itself, so the eye is drawn to the control
+          // and not only to the bubble explaining it.
+          <span
+            aria-hidden="true"
+            className="absolute top-0.5 right-0.5 size-1.5 animate-pulse rounded-full bg-primary"
+          />
+        )}
       </DropdownMenuTrigger>
       {/* Width sizes to content (w-auto) instead of matching the tiny icon
           trigger, so labels like "Analyse video" stay on one line. */}
@@ -181,6 +203,7 @@ export function VideoList({
   videos,
   analysedIds,
   showAnalysedColumn = false,
+  showFirstAnalysisHint = false,
 }: {
   videos: RecentVideo[]
   // IDs of videos the user has already analysed.
@@ -189,7 +212,14 @@ export function VideoList({
   // Video page hides analysed uploads, so the column only appears when the user opts
   // to show them.
   showAnalysedColumn?: boolean
+  // Whether this creator has yet to analyse anything, and so is owed the coach
+  // mark pointing at the first row's actions menu — nothing else in the table
+  // says that an analysis starts there.
+  showFirstAnalysisHint?: boolean
 }) {
+  const firstAnalysisHint = useOnboardingHint("first_video_analysis")
+  const showHint = showFirstAnalysisHint && firstAnalysisHint.pending
+
   if (videos.length === 0) {
     return (
       <div className="rounded-xl border bg-card p-8 text-center text-sm text-muted-foreground">
@@ -198,8 +228,19 @@ export function VideoList({
     )
   }
 
+  // The bubble on the first row hangs past that row and the card clips what
+  // overflows it, so a one-row table is given the room underneath to hold it.
+  // Padding on the card rather than height on the row, which would leave the
+  // row's other cells floating in the middle of it. Any second row already
+  // covers the overhang.
+  const hintNeedsRoom = showHint && videos.length === 1
+
   return (
-    <div className="overflow-hidden rounded-xl border bg-card">
+    <div
+      className={`overflow-hidden rounded-xl border bg-card ${
+        hintNeedsRoom ? "pb-16" : ""
+      }`}
+    >
       <Table className="text-left">
         <TableHeader>
           <TableRow className="bg-accent text-xs text-accent-foreground hover:bg-accent">
@@ -232,8 +273,9 @@ export function VideoList({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {videos.map((video) => {
+          {videos.map((video, index) => {
             const isAnalysed = analysedIds?.has(video.id) ?? false
+            const anchorsHint = showHint && index === 0
             return (
             <TableRow
               key={video.id}
@@ -299,7 +341,39 @@ export function VideoList({
                 </TableCell>
               )}
               <TableCell className="px-4 py-3 align-top text-right">
-                <VideoActions video={video} isAnalysed={isAnalysed} />
+                <div className="relative inline-block">
+                  <VideoActions
+                    video={video}
+                    isAnalysed={isAnalysed}
+                    anchorsFirstAnalysisHint={anchorsHint}
+                  />
+                  {anchorsHint && (
+                    // Hung below the menu button rather than placed in the
+                    // flow, so it floats over the rows beneath instead of
+                    // pushing them down — and leaves nothing to settle back
+                    // when it goes.
+                    //
+                    // It grows leftwards from the button because the actions
+                    // column is the table's last one, on a fixed width rather
+                    // than one sized to its text so that the arrow — drawn 20px
+                    // in from the right edge — stays put. The 8px of overhang
+                    // past the button is what centres that arrow on it, and the
+                    // card's own padding leaves room for the overhang.
+                    //
+                    // `whitespace-normal` because a table cell holds its text
+                    // on one line by default, which the bubble's copy is not.
+                    <div className="absolute top-full -right-2 z-20 mt-2 w-72 max-w-[80vw] text-left whitespace-normal">
+                      <HintCallout
+                        title="Analyse from this menu"
+                        arrow={{ side: "top", align: "end" }}
+                        onDismiss={firstAnalysisHint.dismiss}
+                      >
+                        Open it on any upload and choose Analyse video — that
+                        is how you start one from this list.
+                      </HintCallout>
+                    </div>
+                  )}
+                </div>
               </TableCell>
             </TableRow>
             )
