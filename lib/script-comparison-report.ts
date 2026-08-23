@@ -33,16 +33,15 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   assessPairComparability,
   comparabilityForModel,
-  COMPARABILITY_PROMPT,
   isAnchored,
   type PairComparability,
 } from "@/lib/comparison-comparability"
 import { SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION } from "@/lib/comparison-report-versions"
 import { recordLlmCallCost, type LlmLogContext } from "@/lib/llm-calls"
 import { responsesCallCost, type ResponsesUsage } from "@/lib/llm-cost"
+import { resolvePrompt } from "@/lib/prompts/resolve"
 import type { PackagingTaxonomy } from "@/lib/packaging-taxonomy"
 import { getOrGenerateScriptTaxonomy } from "@/lib/script-taxonomies"
-import { TIP_VOICE_PROMPT } from "@/lib/tip-voice"
 import { saveScriptComparisonReport } from "@/lib/video-comparisons"
 import {
   preferredViewCount,
@@ -281,24 +280,9 @@ export function scriptSideForModel(
 
 // Exported so a test can assert what the prompt actually binds the report to
 // without a network call.
-export const SCRIPT_COMPARISON_INSTRUCTIONS = [
-  "You write a head-to-head comparison of the SCRIPTS (the spoken content) of two YouTube videos, Video A and Video B, reading both full timestamped transcripts. Each video also comes with a packaging read (its title/thumbnail/hook taxonomy) that you may use as context for the hook and framing. Your job is to explain how the two scripts differ in what they SAY and how they FEEL, and what in the writing most plausibly moved audience retention.",
-  "Ground every claim in what is genuinely in the transcripts; never invent lines that are not there, and use the packaging read only as supporting context, not as the main evidence. When a video's transcript is missing, say so plainly for that side rather than guessing at its content.",
-  "Whoever is heard speaking may be the uploader, a co-host, a guest or a voiceover, so never pin what is said on a specific or gendered person (he, she, the creator); refer to the uploader's own video, or simply Video A and Video B.",
-  "Wherever you do name one of the two, write the name in full: Video A and Video B, never a bare A or B on its own. 'Video B front-loads the payoff, Video A holds it back' is right; 'B front-loads the payoff, A holds it back' is not. The same holds for the possessive, so write Video A's hook rather than A's hook.",
-  COMPARABILITY_PROMPT,
-  "In this report, where the pair is anchored, views and averageViewPercentage come through for orientation and every link you draw between a script trait and performance is still correlation worth noting rather than proof, so hedge accordingly. Where it is not, those two fields arrive null on both videos by design, and the script evidence is the whole of what you have to argue from, which is enough: what a script does with its structure, its payoffs and its asides is visible in the transcript without any performance figure at all.",
-  "Keep every field short. This report is read on one screen, so say each thing once, in the fewest words that still carry the evidence, and stop. Cut wind-up clauses, restatement of the heading, hedging padding and any sentence that only says a difference matters without naming what it is. A point that names the concrete thing the script does beats a longer one that circles it.",
-  "summary: two sentences, about 45 words at most and never a third sentence, on how the two scripts compare. When comparability.anchor is 'anchored' that includes which reads as the stronger retention play. Otherwise this is the one place the pair's limit is named, in a single short clause, and the rest of the summary says what the two scripts are each doing differently.",
-  "sections: 3 to 6 themes, each with a short heading (e.g. Structure and pacing, Substance and payoff, Hook and framing, Emotion and energy, Audience engagement). Every section is written in four parts, in this order: videoA and videoB, then strongerSide, then body, then tip. The reader meets them as two columns side by side, a conclusion under both, and one line of advice under that, so write each part for the place it lands.",
-  "videoA and videoB: 2 or 3 short points each, about 14 words apiece, saying concretely what that video's script does on this theme, grounded in what is actually in its transcript. Each point sits in a column already headed Video A or Video B, so never open a point with the video's name and never mention the other video inside one: write the observation itself, as in 'Opens on the deck list before naming the problem it solves'. Keep the two columns parallel, so a reader can read straight across from a point on one side to the matching point on the other.",
-  "strongerSide: which of the two writes this theme better, judged on the writing in front of you, or 'neither' when they are genuinely close or simply doing two different things well. This is a judgement of the scripts themselves and never a report of which video performed better.",
-  "body: the conclusion the two columns add up to, in one or two sentences of about 40 words, written as a general principle about scripts rather than about these two videos, as in 'A script holds attention when every aside pays back the thread it interrupted, and loses it when the asides stack up'. The columns above already say what each video did, so do not name Video A or Video B here, do not restate the points, and where this pair carries no performance anchor phrase the principle as what an approach buys and trades rather than as a claim about what performed.",
-  TIP_VOICE_PROMPT,
-  "In this report that rule also means the two videos stay out of the tips entirely: never name Video A or Video B inside a tip, and never phrase a tip as something one of these two scripts should have done. The per video points are the opposite: those describe what these two scripts already did, in the column belonging to the video that did it.",
-  "tip: every section carries one. It is the single change that section's comparison argues for, written as a one-sentence instruction of about 25 words at most for the uploader's next script (for example 'State the payoff you are building to within the first fifteen seconds, then keep every aside under one sentence'). Name the change rather than restating the principle the body just stated, and keep it specific to what this comparison actually showed rather than generic scripting advice, while phrasing it as a rule to apply next time. Do not repeat another section's tip word for word.",
-  "Write in plain, direct prose. Never output an em dash character (U+2014) or en dash (U+2013) anywhere in your response; if you would use one, rewrite with a comma, colon, parentheses or two sentences instead.",
-].join(" ")
+// The prompt text lives in lib/prompts/defaults/comparison.ts and is
+// resolved by the "script_comparison" key at send time, so an override saved in the admin
+// Prompts page reaches the next call without a deploy (lib/prompts/resolve.ts).
 
 // The whole comparison as the model receives it, comparability first so the
 // verdict is read before the evidence it governs. Exported so a test can assert
@@ -355,6 +339,8 @@ export async function generateScriptComparisonReport(
     process.env.OPENAI_SCRIPT_MODEL ??
     "gpt-4.1-mini"
 
+  const instructions = await resolvePrompt("script_comparison")
+
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
@@ -371,7 +357,7 @@ export async function generateScriptComparisonReport(
         {
           role: "developer",
           content: [
-            { type: "input_text", text: SCRIPT_COMPARISON_INSTRUCTIONS },
+            { type: "input_text", text: instructions },
           ],
         },
         {

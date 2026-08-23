@@ -3,6 +3,9 @@ import { join } from "node:path"
 
 import { describe, expect, it } from "vitest"
 
+import { defaultPromptText } from "@/lib/prompts/resolve"
+import { COMPARABILITY_KEY, promptDefinition } from "@/lib/prompts/registry"
+
 import {
   assessPairComparability,
   comparabilityForModel,
@@ -340,25 +343,37 @@ describe("comparabilityReason", () => {
 // crowning a winner out of two view counts on its own. This is the same
 // arrangement lib/__tests__/tip-voice.test.ts enforces for the voice of a tip,
 // and for the same reason: the rule was restated per prompt once before, and
-// the prompts drifted. If a new head-to-head starts writing advice, add its
-// file here. Do NOT delete or weaken this test.
+// the prompts drifted. If a new head-to-head starts writing advice, add it
+// here. Do NOT delete or weaken this test.
+//
+// The prompts quote the rules as a {{comparability}} placeholder now rather
+// than interpolating the constant, so an admin editing them once in the Prompts
+// page changes every report that quotes them. The assertion therefore reads the
+// resolved text, which is what the model is actually sent.
 
-const PAIR_ADVICE_SOURCE_FILES = [
-  "lib/packaging-comparison-report.ts",
-  "lib/script-comparison-report.ts",
+const PAIR_ADVICE_PROMPTS = [
+  { key: "packaging_comparison", file: "lib/packaging-comparison-report.ts" },
+  { key: "script_comparison", file: "lib/script-comparison-report.ts" },
 ]
 
 const EM_DASH = "—"
 const EN_DASH = "–"
 
 describe("comparability guardrail", () => {
-  for (const file of PAIR_ADVICE_SOURCE_FILES) {
+  for (const { key, file } of PAIR_ADVICE_PROMPTS) {
     it(`${file} writes its advice under the shared comparability rules`, () => {
-      const source = readFileSync(join(process.cwd(), file), "utf8")
+      const definition = promptDefinition(key)
+      expect(definition, `${key} is not a registered prompt`).not.toBeNull()
+
       expect(
-        source.includes("COMPARABILITY_PROMPT"),
-        `${file} writes advice about a pair of videos, so its prompt must include COMPARABILITY_PROMPT from lib/comparison-comparability.ts rather than deciding for itself what the pair's performance figures are worth.`,
+        definition?.fragments.includes(COMPARABILITY_KEY),
+        `${file} writes advice about a pair of videos, so its prompt must declare the ${COMPARABILITY_KEY} fragment in lib/prompts/registry.ts rather than deciding for itself what the pair's performance figures are worth.`,
       ).toBe(true)
+      expect(
+        definition?.default.includes(`{{${COMPARABILITY_KEY}}}`),
+        `${file} must quote {{${COMPARABILITY_KEY}}} in its prompt text rather than restating the rules in its own words.`,
+      ).toBe(true)
+      expect(defaultPromptText(key)).toContain(COMPARABILITY_PROMPT)
     })
 
     it(`${file} withholds the pair's performance figures when it may not rank them`, () => {

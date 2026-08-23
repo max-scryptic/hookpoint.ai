@@ -23,6 +23,7 @@ const ADMIN_HOME = { title: "Dashboard", url: "/admin" }
 const ADMIN_PAGES: Record<string, string> = {
   "/admin/users": "Users",
   "/admin/cost-logs": "Cost Logs",
+  "/admin/prompts": "Prompts",
   "/admin/tip-feedback": "Tip Feedback",
   "/admin/settings": "Settings",
 }
@@ -45,6 +46,11 @@ const VIDEO_DETAIL_PATTERN = /^\/admin\/users\/([^/]+)\/videos\/[^/]+$/
 // carries the opaque comparison id.
 const COMPARISON_DETAIL_PATTERN =
   /^\/admin\/users\/([^/]+)\/comparisons\/[^/]+$/
+
+// A prompt's detail page hangs off Prompts, e.g. "Dashboard / Prompts / Event
+// synthesis". The trailing crumb is the prompt's label, supplied by the page
+// via the breadcrumb context since the pathname only carries its key.
+const PROMPT_DETAIL_PATTERN = /^\/admin\/prompts\/[^/]+$/
 
 type Crumb = { label: string; href?: string }
 
@@ -72,6 +78,15 @@ function buildTrail(pathname: string, dynamicLabel: string | null): Crumb[] {
       { label: "User detail", href: `/admin/users/${userId}` },
       // Falls back to a generic label until the page publishes the pair.
       { label: dynamicLabel ?? "Comparison report" },
+    ]
+  }
+
+  if (PROMPT_DETAIL_PATTERN.test(pathname)) {
+    return [
+      { label: ADMIN_HOME.title, href: ADMIN_HOME.url },
+      { label: "Prompts", href: "/admin/prompts" },
+      // Falls back to a generic label until the page publishes the prompt name.
+      { label: dynamicLabel ?? "Prompt" },
     ]
   }
 

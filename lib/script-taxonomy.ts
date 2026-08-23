@@ -21,6 +21,7 @@
 
 import { recordLlmCallCost, type LlmLogContext } from "@/lib/llm-calls"
 import { responsesCallCost, type ResponsesUsage } from "@/lib/llm-cost"
+import { resolvePrompt } from "@/lib/prompts/resolve"
 import type { TranscriptCue, VideoDetails } from "@/lib/youtube/youtube"
 
 // Bumped whenever `detail` or any stored field's shape changes. A stored
@@ -627,6 +628,8 @@ export async function generateScriptTaxonomy(
 
   const model = process.env.OPENAI_SCRIPT_MODEL ?? "gpt-4.1-mini"
 
+  const instructions = await resolvePrompt("script_taxonomy")
+
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
@@ -642,22 +645,7 @@ export async function generateScriptTaxonomy(
           content: [
             {
               type: "input_text",
-              text: [
-                "You classify the SCRIPT (the spoken content) of a YouTube video into a fixed taxonomy, reading the full timestamped transcript. This is about what the video SAYS and how it FEELS, not how it is filmed or edited; use only the transcript, never infer visuals, music, editing or retention. Classify only from what is genuinely there; never invent content that isn't.",
-                "Whoever is heard speaking may be the uploader, a co-host, a guest or a voiceover, so never pin what is said on a specific or gendered person (he, she, the creator); frame it as the uploader's own video.",
-                "format: the single dominant content format. story is a narrative; tutorial teaches a how-to; listicle is a ranked or numbered rundown; essay_opinion argues a viewpoint; review evaluates something; vlog is a personal day/experience log; interview is a conversation with a guest; explainer breaks down how something works; other when none fit.",
-                "oneLineSummary: one sentence naming what the script is actually about.",
-                "segments: the topic map. List each distinct topic beat in time order as { approxStartSeconds, label } using the [m:ss] timestamps to place approxStartSeconds, with a short lowercase label. Return an empty array only when the script is too short or single-topic to segment. Never exceed 12; merge minor beats to stay within that.",
-                "topics: 1 to 3 short lowercase content tags naming the subject (e.g. \"gear reviews\", \"personal finance\"). Prefer stable, reusable nouns a channel would repeat.",
-                "Then fill the `detail` object. Score every 0-10 field on THIS video alone, never in comparison to any other video, and never think about how many views it got. Anchor the scale: 0 means the quality is absent, 5 means it is moderately present, 10 means it is as strong as this element could plausibly be. Use the full range and be willing to give low scores; most videos are not 8s.",
-                "detail.structure: segmentCount (how many distinct topic beats, matching your segments); topicCohesion (0 meandering across many threads, 10 tightly single-threaded; a descriptor, neither end is better); openLoops (0 everything resolved as it goes, 10 leans hard on unresolved questions and cliffhangers); payoffPlacement (0 value delivered early / front-loaded, 10 held to the end / back-loaded; a descriptor, not a quality score); hasCta (does it make an explicit call to action such as subscribe, comment, or check the description).",
-                "detail.substance: substanceDensity (0 very little information per minute, 10 dense with ideas; judge ideas, not words); concreteness (0 abstract and vague, 10 full of concrete examples, numbers and names); noveltyOfIdeas (0 familiar and well-worn, 10 fresh, contrarian or surprising); educationalValue (0 teaches nothing, 10 highly instructive); entertainmentValue (0 not entertaining, 10 highly entertaining; independent of educationalValue, a video can be high on both); fillerLevel (0 no filler, 10 heavy padding, throat-clearing and repeated points).",
-                "detail.emotion: dominantEmotion (excitement, curiosity, humor, awe, concern, outrage, warmth, calm, or neutral); energy (0 flat and low-key, 10 high intensity and enthusiasm); emotionalRange (0 one register the whole way, 10 a wide dynamic range of feeling); arcShape (flat, rising, falling, roller_coaster, or u_shaped, describing how the energy/emotion moves across the script); vulnerability (0 impersonal, 10 candid vulnerable first-person disclosure).",
-                "detail.humor: humorDensity (0 no levity, 10 comedy throughout; score the amount of humour, do not count individual jokes); humorStyle (witty, self_deprecating, absurd, sarcastic, observational, or \"none\" when there is essentially no humour).",
-                "detail.rhetoric: narrativeVoice (first_person_story like 'I did X', second_person_guide like 'you should do X', third_person_report, or impersonal); directAddress (0 never addresses the viewer, 10 constantly talks to 'you'); persuasionDevices (the devices leaned on: storytelling, data_evidence, authority, social_proof, analogy, contrast, urgency; report [\"none\"] when there are none); stakes (0 nothing at stake in the content, 10 high vivid stakes or tension); relatability (0 no target viewer sees themselves, 10 a target viewer clearly does).",
-                "detail.drivers: scriptArchetype (educational_deep_dive, entertainment_story, hype, calm_essay, personal_vlog, listicle_roundup, opinion_take, or other); primaryEngagementDriver (the single main reason a viewer keeps watching: information, story, humor, personality, emotion, controversy, or utility).",
-                "Never output an em dash character (U+2014) anywhere in your response; if you would use one, rewrite with a comma, colon, parentheses or two sentences instead.",
-              ].join(" "),
+              text: instructions,
             },
           ],
         },

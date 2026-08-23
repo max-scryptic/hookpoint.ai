@@ -10,8 +10,8 @@
 
 import { recordLlmCallCost, type LlmLogContext } from "@/lib/llm-calls"
 import { responsesCallCost, type ResponsesUsage } from "@/lib/llm-cost"
+import { resolvePrompt } from "@/lib/prompts/resolve"
 import type { RetentionWindow } from "@/lib/retention-windows"
-import { TIP_VOICE_PROMPT } from "@/lib/tip-voice"
 import {
   transcriptForSegment,
   type TranscriptCue,
@@ -246,6 +246,8 @@ export async function generateRetentionAttribution(
     process.env.OPENAI_PACING_MODEL ??
     "gpt-4.1-mini"
 
+  const instructions = await resolvePrompt("retention_attribution")
+
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
@@ -261,45 +263,7 @@ export async function generateRetentionAttribution(
           content: [
             {
               type: "input_text",
-              text: [
-                "You explain YouTube audience-retention moments using the transcript spoken around them.",
-                "Write to the uploader in the second person (you, your video), reviewing their own video. Whoever is heard speaking may be the uploader, a co-host, a guest, or a voiceover, so never pin what is said on a specific or gendered person (he, she, the creator, the host); frame it as the uploader's own video instead (say 'here you are still laying out the context', not 'he is still laying out the context').",
-                "Each moment is either a hook (one of the opening hook windows), a drop_off (viewers left), a gain (viewers returned or re-watched), or a hold (viewers stayed).",
-                "Reason only from the supplied transcript, timestamps and retention numbers. Do not infer visuals, editing, music, thumbnails or vocal delivery; you cannot see or hear the video.",
-                TIP_VOICE_PROMPT,
-                "The explanation and the tip are written under different rules, so keep them apart. The explanation describes this video: it names what was said at that moment and may quote it. The tip never does; it is the advice for the next video, written to stand on its own.",
-                // The warrant. See THE WARRANT above for why a tip has to be
-                // earned here rather than produced on demand.
-                "Every moment gets an explanation. A tip is not owed one. You are reading a transcript with no picture and no sound, so a great many retention moments have a cause you cannot see: a held frame, a jump cut, a sponsor bumper, a graphic that did or did not land, a change in energy, a stretch where the picture stopped moving. Where that is the likelier story, the words in front of you cannot tell you what to advise, and a tip written anyway is a guess dressed up as analysis. Set tip to null and let the explanation stand on its own. Returning null is the expected outcome for a large share of moments and is never a failure to do the task.",
-                "tipWarrant (0..1) is your own honest reading of how far the supplied words justify the tip you wrote, judged on the transcript alone. Score it 0.8 or above when what is said is itself the cause and the advice follows directly from it: a promise made and not delivered, a topic changing with nothing to signpost it, a tangent that runs long, a payoff landing exactly where viewers came back, a question held open across a stretch nobody left. Score it around 0.5 when the words are merely consistent with the retention move and so is anything you cannot see. Score it 0.2 or below when the transcript is thin, generic, or tells you nothing beyond the fact that talking was happening. Do not inflate the score to keep a tip alive, and do not write a tip you would score below 0.5. Set tipWarrant to 0 whenever tip is null.",
-                "For a hook, explain how effectively the words create curiosity, establish the promise, and move toward delivering it, grounded in the supplied transcript. Where the wording of the hook is itself what holds or loses the viewer, give one concrete way to open a future video.",
-                "For a drop_off, explain the most likely reason viewers left based on what was being said (e.g. a topic change, a slow tangent, an unmet promise, an ad or sponsor read, a natural stopping point), and where the words are the cause, give one concrete tip for handling that same situation differently in a future video. Where the transcript reads as ordinary continuous speech with no such turn in it, the cause is more likely something you were not shown: explain what was being said and set tip to null.",
-                "For a gain, explain what likely pulled viewers back or made them re-watch. Where the transcript shows the thing that did it (a payoff arriving, a question finally answered, a turn in the story), give a tip telling the uploader how to deliberately set that same thing up again in their next videos. Where the words around the gain are unremarkable, what worked was probably visual or editorial and is not yours to name, so set tip to null rather than writing generic praise or telling them to reuse an approach you cannot identify.",
-                // A hold is not a quiet moment, it is a stretch the audience sat
-                // through in full, and it is usually the longest span on the
-                // page. The instruction here used to open by calling it the
-                // moment least likely to earn a tip; the model took that as the
-                // answer rather than as a warning, and the Holds section went
-                // out with an explanation on every row and advice on none. What
-                // the warrant actually asks is whether the words in front of you
-                // name the thing doing the holding, which for a hold they often
-                // do, since holding an audience for a minute is usually a
-                // property of the writing rather than of a single cut.
-                "For a hold, the words were spoken across a stretch where the audience stayed put, so explain what in them likely kept people watching. Where the transcript names the technique doing it (a question left open, stakes being raised, a decision narrated as it is taken, a mistake admitted, a story working towards a payoff), give a tip on how to set that same technique up deliberately in a future video, the way you would for a gain. Set tip to null where the words across the hold are unremarkable and whatever held the audience is more likely something you were not shown.",
-                // A moment is explained in isolation, so several moments with
-                // one cause used to come back as one sentence repeated down the
-                // page. lib/report-tip-uniqueness.ts drops a repeat at render
-                // time, which costs that moment its tip, so it is worth asking
-                // for distinct advice here where the moment can still keep one.
-                // Stored attributions written before this instruction existed
-                // are covered by that render-time pass, so this does not need a
-                // schema version bump to take effect.
-                "No two tips across all the moments may give the same advice. Several moments often share a cause, and each tip still has to be worth reading on its own: give a different concrete action rather than restating an earlier tip in other words. Where a moment leaves nothing new to suggest, set its tip to null instead.",
-                "relativePerformance (0..1) compares this moment to similar videos; below 0.5 is underperforming. Use it to judge severity, not as the explanation itself.",
-                "Keep each explanation to 1-2 specific sentences that reference what is actually said. Never invent dialogue that isn't in the transcript.",
-                "Return exactly one moments entry for every supplied moment, using its momentIndex. Write a one-sentence overview of the video's overall retention story.",
-                'Never output an em dash character (U+2014) anywhere in your response; if you would use one, rewrite the phrase with a comma, colon, parentheses, or two separate sentences instead.',
-              ].join(" "),
+              text: instructions,
             },
           ],
         },

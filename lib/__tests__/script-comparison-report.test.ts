@@ -5,10 +5,10 @@ import {
   scriptComparability,
   scriptComparisonForModel,
   scriptSideForModel,
-  SCRIPT_COMPARISON_INSTRUCTIONS,
   SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION,
   type ScriptComparisonReportSide,
 } from "@/lib/script-comparison-report"
+import { SCRIPT_COMPARISON_PROMPT } from "@/lib/prompts/defaults/comparison"
 import type { TranscriptCue } from "@/lib/youtube/youtube"
 
 // The Script head-to-head's job is to compare two scripts. What it used to do
@@ -198,9 +198,9 @@ describe("scriptComparisonForModel", () => {
   })
 })
 
-describe("SCRIPT_COMPARISON_INSTRUCTIONS", () => {
+describe("SCRIPT_COMPARISON_PROMPT", () => {
   it("tells the summary where the pair's one hedge goes", () => {
-    expect(SCRIPT_COMPARISON_INSTRUCTIONS).toMatch(/one place the pair's limit/)
+    expect(SCRIPT_COMPARISON_PROMPT).toMatch(/one place the pair's limit/)
   })
 
   // The section is read as two columns and a conclusion under them, so the
@@ -208,10 +208,10 @@ describe("SCRIPT_COMPARISON_INSTRUCTIONS", () => {
   // without naming either. A body that restates the columns reads as the same
   // sentence twice on the page.
   it("asks for a column per video and keeps the videos out of the conclusion", () => {
-    expect(SCRIPT_COMPARISON_INSTRUCTIONS).toMatch(
+    expect(SCRIPT_COMPARISON_PROMPT).toMatch(
       /never open a point with the video's name/,
     )
-    expect(SCRIPT_COMPARISON_INSTRUCTIONS).toMatch(
+    expect(SCRIPT_COMPARISON_PROMPT).toMatch(
       /do not name Video A or Video B here/,
     )
   })
@@ -220,7 +220,7 @@ describe("SCRIPT_COMPARISON_INSTRUCTIONS", () => {
     // The old instruction read "which reads as the stronger retention play, if
     // either", with nothing conditioning it. That single clause is what turned
     // a 3 point gap on 73 views into a verdict.
-    expect(SCRIPT_COMPARISON_INSTRUCTIONS).not.toMatch(
+    expect(SCRIPT_COMPARISON_PROMPT).not.toMatch(
       /giving the overall verdict on how the two scripts compare and which reads as the stronger retention play/,
     )
   })

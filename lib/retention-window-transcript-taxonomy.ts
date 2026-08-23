@@ -24,6 +24,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { runWithConcurrency } from "@/lib/concurrency"
 import { recordLlmCallCost } from "@/lib/llm-calls"
 import { responsesCallCost, type ResponsesUsage } from "@/lib/llm-cost"
+import { resolvePrompt } from "@/lib/prompts/resolve"
 import { recordRetentionWindowCost } from "@/lib/retention-window-costs"
 import { getRetentionWindowAiCallConcurrency } from "@/lib/retention-window-media-config"
 import {
@@ -405,6 +406,8 @@ export async function generateWindowTranscriptTaxonomy(params: {
 
   const model = process.env.OPENAI_SCRIPT_MODEL ?? "gpt-4.1-mini"
 
+  const instructions = await resolvePrompt("transcript_taxonomy")
+
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
@@ -420,18 +423,7 @@ export async function generateWindowTranscriptTaxonomy(params: {
           content: [
             {
               type: "input_text",
-              text: [
-                "You classify the SPOKEN TRANSCRIPT of one short window of a YouTube video into a fixed taxonomy. This is about what the words SAY and how they FEEL in this span alone, not how it is filmed or edited; use only the transcript, never infer visuals, music, editing or retention numbers. Classify only from what is genuinely said; never invent content that isn't there.",
-                "Whoever is heard speaking may be the uploader, a co-host, a guest or a voiceover, so never pin what is said on a specific or gendered person (he, she, the creator); frame it as the uploader's own video.",
-                "You are told the window's role (windowContext) only as background for what this span is doing; still score every field on the words in this span alone, never in comparison to any other window or video, and never think about view counts. Anchor every 0-10 scale: 0 the quality is absent, 5 moderately present, 10 as strong as it could plausibly be. Use the full range and be willing to give low scores.",
-                "momentSummary: one sentence naming what is actually being said in this window.",
-                "detail.content: substanceDensity (0 very little information in this span, 10 dense with ideas; judge ideas, not words); concreteness (0 abstract and vague, 10 concrete examples, numbers and names); novelty (0 familiar and well-worn, 10 fresh, contrarian or surprising); clarity (0 you cannot tell what is being said, 10 crystal clear).",
-                "detail.emotion: dominantEmotion (excitement, curiosity, humor, awe, concern, outrage, warmth, calm, or neutral); energy (0 flat and low-key, 10 high intensity and enthusiasm); trajectory (how the energy moves across this span: steady, rising, falling, spike, or dip); vulnerability (0 impersonal, 10 candid vulnerable first-person disclosure).",
-                "detail.rhetoric: narrativeVoice (first_person_story like 'I did X', second_person_guide like 'you should do X', third_person_report, or impersonal); directAddress (0 never addresses the viewer, 10 constantly talks to 'you'); persuasionDevices (the devices leaned on here: storytelling, data_evidence, authority, social_proof, analogy, contrast, urgency; report [\"none\"] when there are none); stakes (0 nothing at stake, 10 high vivid stakes or tension); posesQuestion (does the span pose a direct question to the viewer).",
-                "detail.flow: topicShift (0 stays on one subject, 10 the subject clearly changes within this span); openLoopOpened (do the words open a curiosity loop or unresolved question here); openLoopResolved (do the words resolve or pay off a loop here); hasCta (does the span make an explicit call to action such as subscribe, comment, check the description, or a sponsor/ad read); fillerLevel (0 no filler, 10 heavy padding, throat-clearing and repeated points).",
-                "detail.primaryEngagementDriver: the single main reason a viewer would keep watching this span (information, story, humor, personality, emotion, controversy, or utility).",
-                "Never output an em dash character (U+2014) anywhere in your response; if you would use one, rewrite with a comma, colon, parentheses or two sentences instead.",
-              ].join(" "),
+              text: instructions,
             },
           ],
         },
