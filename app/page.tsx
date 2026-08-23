@@ -45,11 +45,11 @@ import { cn } from "@/lib/utils"
 // COPY GUARDRAIL: no em or en dashes anywhere in this file. Hyphens are fine.
 
 export const metadata: Metadata = {
-  title: "Hookpoint.ai | Find out why your viewers leave, and fix it",
+  title: "Viewlio | Find out why your viewers leave, and fix it",
   description:
-    "Hookpoint.ai reads your YouTube retention curve against the video itself and turns every drop, hold and spike into a specific fix for your next upload.",
+    "Viewlio reads your YouTube retention curve against the video itself and turns every drop, hold and spike into a specific fix for your next upload.",
   openGraph: {
-    title: "Hookpoint.ai | Find out why your viewers leave, and fix it",
+    title: "Viewlio | Find out why your viewers leave, and fix it",
     description:
       "AI retention analysis for YouTube creators. Video reports, head to head comparisons and channel wide trends, built on your own analytics.",
     type: "website",
@@ -229,7 +229,7 @@ function Hero({
             style={delayStyle(150)}
             className="landing-enter mx-auto mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground text-pretty lg:mx-0"
           >
-            Your analytics tell you when people left. Hookpoint.ai reads that
+            Your analytics tell you when people left. Viewlio reads that
             same curve against the video itself, frame by frame, and hands back
             the reason and the fix for your next upload.
           </p>
@@ -680,7 +680,7 @@ function SiteFooter() {
         <div className="flex items-center gap-2.5">
           <BrandLogo className="size-8" />
           <div>
-            <p className="font-heading text-sm font-semibold">Hookpoint.ai</p>
+            <p className="font-heading text-sm font-semibold">Viewlio</p>
             <p className="text-xs text-muted-foreground">
               Retention insight for YouTube creators
             </p>
@@ -710,7 +710,7 @@ function SiteFooter() {
       </div>
 
       <p className="mx-auto mt-8 w-full max-w-6xl text-center text-xs text-muted-foreground sm:text-left">
-        &copy; {new Date().getFullYear()} Hookpoint.ai. Not affiliated with or
+        &copy; {new Date().getFullYear()} Viewlio. Not affiliated with or
         endorsed by YouTube or Google.
       </p>
     </footer>

@@ -65,7 +65,7 @@ export function SettingsAccount({
         <CardHeader>
           <CardTitle>Appearance</CardTitle>
           <CardDescription>
-            Choose how Hookpoint.ai looks on this device.
+            Choose how Viewlio looks on this device.
           </CardDescription>
           <CardAction>
             <ModeToggle />

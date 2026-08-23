@@ -22,8 +22,8 @@ const REPORTING_API = "https://youtubereporting.googleapis.com/v1"
 // The bulk report type carrying daily thumbnail impressions and CTR by video.
 const REACH_REPORT_TYPE_ID = "channel_reach_basic_a1"
 
-// Name shown for the job in the API; identifies the one Hookpoint creates.
-const REACH_JOB_NAME = "Hookpoint thumbnail reach"
+// Name shown for the job in the API; identifies the one Viewlio creates.
+const REACH_JOB_NAME = "Viewlio thumbnail reach"
 
 // Bound the work a single refresh does. Reports are daily, retained ~60 days, so
 // this comfortably covers the full available window while capping downloads for
@@ -55,7 +55,7 @@ async function reportingGet(
   })
 }
 
-// Finds Hookpoint's reach reporting job, creating it if absent. Returns the job
+// Finds Viewlio's reach reporting job, creating it if absent. Returns the job
 // id, or null if the job can't be found or created (best-effort). Creating the
 // job is what starts YouTube generating daily reports, so a brand-new channel
 // returns an id here but has no reports to download yet.

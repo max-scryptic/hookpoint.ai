@@ -219,7 +219,7 @@ export function AdminActivityCharts({
             Active users per day
           </CardTitle>
           <CardDescription>
-            Distinct non-admin users who used Hookpoint.ai each day (UTC).
+            Distinct non-admin users who used Viewlio each day (UTC).
           </CardDescription>
           <CardAction>
             <ChartFilters

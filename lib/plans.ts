@@ -57,7 +57,7 @@ export const PLANS: Plan[] = [
     maxUploadGb: null,
     features: [
       { label: "10 video analyses / month" },
-      { label: "Basic hookpoint analysis" },
+      { label: "Basic hook analysis" },
     ],
   },
   {
@@ -73,7 +73,7 @@ export const PLANS: Plan[] = [
       { label: "30 video analyses / month" },
       { label: "140 deep-dive credits / month", credits: true },
       { label: "Upload source files up to 10 GB" },
-      { label: "Complete hookpoint analysis" },
+      { label: "Complete hook analysis" },
       { label: "Cross-video intelligence", tooltip: CROSS_VIDEO_TOOLTIP },
     ],
   },
@@ -91,7 +91,7 @@ export const PLANS: Plan[] = [
       { label: "100 video analyses / month" },
       { label: "280 deep-dive credits / month", credits: true },
       { label: "Upload source files up to 20 GB" },
-      { label: "Complete hookpoint analysis" },
+      { label: "Complete hook analysis" },
       { label: "Cross-video intelligence", tooltip: CROSS_VIDEO_TOOLTIP },
       { label: "Priority processing" },
     ],

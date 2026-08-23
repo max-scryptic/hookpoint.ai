@@ -15,7 +15,7 @@ describe("getMyChannelDetails", () => {
             {
               id: "channel-1",
               snippet: {
-                title: "Hookpoint Studio",
+                title: "Viewlio Studio",
                 description: "Stories about better videos.",
                 thumbnails: {
                   default: { url: "https://example.com/default.jpg" },
@@ -35,7 +35,7 @@ describe("getMyChannelDetails", () => {
 
     await expect(getMyChannelDetails("access-token")).resolves.toEqual({
       id: "channel-1",
-      title: "Hookpoint Studio",
+      title: "Viewlio Studio",
       description: "Stories about better videos.",
       thumbnailUrl: "https://example.com/high.jpg",
       subscriberCount: 12345,

@@ -28,7 +28,7 @@ import type { ReadableStream as WebReadableStream } from "node:stream/web"
 // Every cached file lives in a directory named with this prefix, so leaked
 // ones (see sweepStaleLocalSources) can be told apart from anything else in
 // the shared /tmp.
-const CACHE_DIR_PREFIX = "hookpoint-source-"
+const CACHE_DIR_PREFIX = "viewlio-source-"
 
 // A cached file belongs to exactly one extraction run and is deleted in that
 // run's finally block. Any cache directory older than this can therefore only
@@ -121,7 +121,7 @@ export async function acquireLocalSource(
       return null
     }
 
-    dir = await mkdtemp(path.join(os.tmpdir(), "hookpoint-source-"))
+    dir = await mkdtemp(path.join(os.tmpdir(), "viewlio-source-"))
     const filePath = path.join(dir, "source.mp4")
 
     // Enforce the cap while streaming too: a missing/incorrect content-length

@@ -125,14 +125,14 @@ describe("resolvePlanFromPriceId", () => {
 describe("getSubscriptionReturnUrl", () => {
   it("routes successful checkouts through sync before the dashboard", () => {
     const previousBaseUrl = process.env.APP_BASE_URL
-    process.env.APP_BASE_URL = "https://hookpoint.test"
+    process.env.APP_BASE_URL = "https://viewlio.test"
 
     try {
       expect(getSubscriptionReturnUrl("success")).toBe(
-        "https://hookpoint.test/api/billing/checkout/success?checkout=success&session_id=%7BCHECKOUT_SESSION_ID%7D",
+        "https://viewlio.test/api/billing/checkout/success?checkout=success&session_id=%7BCHECKOUT_SESSION_ID%7D",
       )
       expect(getSubscriptionReturnUrl("cancelled")).toBe(
-        "https://hookpoint.test/pricing?checkout=cancelled",
+        "https://viewlio.test/pricing?checkout=cancelled",
       )
     } finally {
       if (previousBaseUrl) {

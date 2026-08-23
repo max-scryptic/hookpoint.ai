@@ -67,7 +67,7 @@ export function CancelSurveyDialog({
           <DialogTitle className="text-xl">Before you downgrade</DialogTitle>
           <DialogDescription>
             You&rsquo;re about to cancel your {planName} plan. Mind telling us
-            why? It helps us improve Hookpoint.
+            why? It helps us improve Viewlio.
           </DialogDescription>
         </DialogHeader>
 

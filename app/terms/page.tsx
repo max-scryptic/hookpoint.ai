@@ -1,7 +1,7 @@
 import { LegalPage, LegalSection } from "@/components/legal-page"
 
 export const metadata = {
-  title: "Terms of Service · Hookpoint.ai",
+  title: "Terms of Service · Viewlio",
 }
 
 export default function TermsPage() {
@@ -9,9 +9,9 @@ export default function TermsPage() {
     <LegalPage title="Terms of Service" lastUpdated="20 August 2026">
       <LegalSection heading="1. These terms">
         <p>
-          These terms are the agreement between you and Hookpoint.ai
-          (&ldquo;Hookpoint&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;) for use of
-          the Hookpoint web application. By creating an account or using the
+          These terms are the agreement between you and Viewlio
+          (&ldquo;Viewlio&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;) for use of
+          the Viewlio web application. By creating an account or using the
           service you accept them. If you do not accept them, do not use the
           service.
         </p>
@@ -19,7 +19,7 @@ export default function TermsPage() {
 
       <LegalSection heading="2. The service">
         <p>
-          Hookpoint connects to your YouTube channel, reads your videos and
+          Viewlio connects to your YouTube channel, reads your videos and
           audience retention data, and produces AI generated analysis of hooks,
           pacing, packaging and drop-off points. Paid plans add deep analysis of
           source video you upload, cross-video intelligence across your own
@@ -40,7 +40,7 @@ export default function TermsPage() {
         <p>
           The service only works once you grant read access to your own YouTube
           channel. You confirm you own or are authorised to manage the channel
-          and videos you analyse. Hookpoint uses YouTube API Services, so the{" "}
+          and videos you analyse. Viewlio uses YouTube API Services, so the{" "}
           <a
             href="https://www.youtube.com/t/terms"
             target="_blank"
@@ -212,7 +212,7 @@ export default function TermsPage() {
       <LegalSection heading="14. Contact">
         <p>
           Questions about these terms:{" "}
-          <a href="mailto:support@hookpoint.ai">support@hookpoint.ai</a>.
+          <a href="mailto:support@viewlio.ai">support@viewlio.ai</a>.
         </p>
       </LegalSection>
     </LegalPage>

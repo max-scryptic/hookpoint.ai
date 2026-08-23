@@ -1,4 +1,4 @@
-# Hookpoint.ai
+# Viewlio
 
 A minimal Next.js application scaffolded for Vercel deployment and Supabase SSR auth/client wiring.
 
@@ -20,7 +20,7 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 ## Connect Vercel
 
 1. Push this repository to GitHub.
-2. In Vercel, import the `hookpoint.ai` GitHub repository.
+2. In Vercel, import the `hookpoint.ai` GitHub repository (unchanged; the repo has not been renamed).
 3. Keep the detected framework preset as `Next.js`.
 4. Add the Supabase environment variables to Vercel for Production, Preview, and Development.
 5. Deploy.
