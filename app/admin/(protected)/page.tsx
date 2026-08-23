@@ -201,7 +201,7 @@ export default async function AdminDashboardPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-normal">Dashboard</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Overview of the Hookpoint.ai workspace.
+          Overview of the Viewlio workspace.
         </p>
       </div>
 

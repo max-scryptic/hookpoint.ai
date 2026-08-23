@@ -9,7 +9,7 @@ interface SourceFileResponse {
   playbackUrl?: string | null
 }
 
-export const SOURCE_FILE_READY_EVENT = "hookpoint:source-file-ready"
+export const SOURCE_FILE_READY_EVENT = "viewlio:source-file-ready"
 
 export function notifySourceFileReady(videoId: string) {
   window.dispatchEvent(

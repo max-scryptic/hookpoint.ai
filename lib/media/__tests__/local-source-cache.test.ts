@@ -5,7 +5,7 @@ import path from "node:path"
 
 import { sweepStaleLocalSources } from "@/lib/media/local-source-cache"
 
-const CACHE_DIR_PREFIX = "hookpoint-source-"
+const CACHE_DIR_PREFIX = "viewlio-source-"
 
 // Tracks every directory a test creates in the real os.tmpdir() so it can be
 // cleaned up regardless of whether the sweep removed it.

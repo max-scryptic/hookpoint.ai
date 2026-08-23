@@ -1,7 +1,7 @@
 import { LegalPage, LegalSection } from "@/components/legal-page"
 
 export const metadata = {
-  title: "Privacy Policy · Hookpoint.ai",
+  title: "Privacy Policy · Viewlio",
 }
 
 export default function PrivacyPage() {
@@ -9,7 +9,7 @@ export default function PrivacyPage() {
     <LegalPage title="Privacy Policy" lastUpdated="20 August 2026">
       <LegalSection heading="1. Who we are">
         <p>
-          Hookpoint.ai (&ldquo;Hookpoint&rdquo;, &ldquo;we&rdquo;,
+          Viewlio (&ldquo;Viewlio&rdquo;, &ldquo;we&rdquo;,
           &ldquo;us&rdquo;) provides a web application that analyses a YouTube
           creator&rsquo;s own videos and audience retention data, and returns
           insights about hooks, pacing, packaging and drop-off points. This
@@ -18,7 +18,7 @@ export default function PrivacyPage() {
         </p>
         <p>
           Questions about this policy or your data:{" "}
-          <a href="mailto:privacy@hookpoint.ai">privacy@hookpoint.ai</a>.
+          <a href="mailto:privacy@viewlio.ai">privacy@viewlio.ai</a>.
         </p>
       </LegalSection>
 
@@ -110,7 +110,7 @@ export default function PrivacyPage() {
 
       <LegalSection heading="5. YouTube API Services">
         <p>
-          Hookpoint uses YouTube API Services. By using the service you also
+          Viewlio uses YouTube API Services. By using the service you also
           agree to the{" "}
           <a
             href="https://www.youtube.com/t/terms"
@@ -130,7 +130,7 @@ export default function PrivacyPage() {
           .
         </p>
         <p>
-          You can revoke Hookpoint&rsquo;s access to your Google and YouTube data
+          You can revoke Viewlio&rsquo;s access to your Google and YouTube data
           at any time at{" "}
           <a
             href="https://myaccount.google.com/permissions"
@@ -222,7 +222,7 @@ export default function PrivacyPage() {
           Subject to local law you can ask for a copy of your data, correct it,
           delete it, restrict or object to processing, or receive it in a
           portable format. Email{" "}
-          <a href="mailto:privacy@hookpoint.ai">privacy@hookpoint.ai</a> and we
+          <a href="mailto:privacy@viewlio.ai">privacy@viewlio.ai</a> and we
           will respond within one month. If you are in the UK you can also
           complain to the Information Commissioner&rsquo;s Office, and if you are
           in the EEA to your local supervisory authority.
@@ -251,7 +251,7 @@ export default function PrivacyPage() {
 
       <LegalSection heading="13. Children">
         <p>
-          Hookpoint is not intended for anyone under 16. We do not knowingly
+          Viewlio is not intended for anyone under 16. We do not knowingly
           collect data from children. If you believe a child has given us data,
           contact us and we will delete it.
         </p>

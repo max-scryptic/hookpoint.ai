@@ -79,12 +79,12 @@ const navSections = [
 function SidebarBrand() {
   return (
     <div
-      aria-label="hookpoint.ai"
+      aria-label="Viewlio"
       className="flex h-12 items-center gap-2 rounded-md px-2 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
     >
-      <BrandLogo className="size-8" priority />
-      <span className="min-w-0 truncate text-sm font-semibold tracking-normal text-sidebar-foreground group-data-[collapsible=icon]:hidden">
-        hookpoint.ai
+      <BrandLogo className="size-8" />
+      <span className="min-w-0 truncate font-heading text-sm font-semibold tracking-tight text-sidebar-foreground group-data-[collapsible=icon]:hidden">
+        Viewlio
       </span>
     </div>
   )

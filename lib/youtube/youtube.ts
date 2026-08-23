@@ -966,7 +966,7 @@ export async function getVideoAnalyticsSummary(
 // Two Data API calls are made: captions.list (50 quota units) to find the best
 // track, then captions.download (200 units) to fetch the cue text. Both require
 // the youtube.force-ssl scope and only work on videos owned by the signed-in
-// channel — exactly the videos Hookpoint analyses.
+// channel — exactly the videos Viewlio analyses.
 export async function getVideoTranscript(
   accessToken: string,
   videoId: string,

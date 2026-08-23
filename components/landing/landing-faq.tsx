@@ -15,14 +15,14 @@ import { PLAN_BY_ID } from "@/lib/plans"
 
 const FAQS: { question: string; answer: string }[] = [
   {
-    question: "What does Hookpoint.ai actually do?",
+    question: "What does Viewlio actually do?",
     answer:
       "It reads the audience retention curve for one of your videos, finds the moments that matter on it (the hook, the steep losses, the stretches where retention rises or holds flat), then works out what was happening in the video at each of those moments. You get a report that names the moment, explains what caused it, and gives you a specific change to make next time.",
   },
   {
     question: "How is this different from YouTube Studio?",
     answer:
-      "Studio shows you the curve and stops there. It can tell you that 14% of your audience left around 2:41, but not that they left because a nine second recap landed right after a scene cut. Hookpoint lines the curve up against your footage, your transcript and your packaging, so every dip comes back with a cause and a fix rather than a timestamp.",
+      "Studio shows you the curve and stops there. It can tell you that 14% of your audience left around 2:41, but not that they left because a nine second recap landed right after a scene cut. Viewlio lines the curve up against your footage, your transcript and your packaging, so every dip comes back with a cause and a fix rather than a timestamp.",
   },
   {
     question: "Do I need to connect my YouTube channel?",

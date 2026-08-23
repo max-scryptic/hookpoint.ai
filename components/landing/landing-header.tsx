@@ -81,8 +81,8 @@ export function LandingHeader({ isAuthenticated }: { isAuthenticated: boolean })
           href="/"
           className="flex items-center gap-2 font-heading text-base font-semibold tracking-tight"
         >
-          <BrandLogo className="size-8" priority />
-          Hookpoint.ai
+          <BrandLogo className="size-8" />
+          Viewlio
         </Link>
 
         <nav className="ml-6 hidden items-center gap-1 md:flex">
