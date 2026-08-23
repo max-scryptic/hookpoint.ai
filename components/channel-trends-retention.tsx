@@ -6,9 +6,15 @@ import type { ChannelRetentionCurve } from "@/lib/channel-retention-curve"
 import type { ChannelTrendsData } from "@/lib/channel-trends"
 
 // The Retention tab: one chart, read the way every other tab on this page is
-// read. The three best-retaining uploads averaged into one line, the three
-// worst into another, and the whole library averaged behind them as the
+// read. The three most-viewed uploads averaged into one line, the three
+// least-viewed into another, and the whole library averaged behind them as the
 // baseline, all on one normalized axis.
+//
+// Split on views rather than on retention so the chart is not ranking the same
+// column it draws: a top band picked on retention outruns a bottom band picked
+// the same way whatever the library does, and can be led by an upload five
+// people saw. Views are the independent axis, and the answer they buy (whether
+// reach costs the channel retention) is one a creator can act on.
 //
 // Purely presentational; all aggregation and gating lives in
 // lib/channel-retention-curve.ts.
@@ -25,7 +31,7 @@ function RetentionCurveCard({ curve }: { curve: ChannelRetentionCurve }) {
       description={
         curve.bands == null
           ? "Every video in your library, averaged onto one axis."
-          : "Your three best-retaining uploads and your three worst, over your channel average."
+          : "Your three most-viewed uploads and your three least-viewed, over your channel average."
       }
     >
       <ChannelRetentionCurveChart

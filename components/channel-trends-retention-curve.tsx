@@ -3,18 +3,21 @@
 import { useMemo, useState } from "react"
 
 import type {
+  ChannelRetentionBand,
   ChannelRetentionBands,
   ChannelRetentionCurvePoint,
 } from "@/lib/channel-retention-curve"
 
-// The library's retention curves: the three best-retaining uploads averaged
-// into one line, the three worst into another, and every video in the library
+// The library's retention curves: the three most-viewed uploads averaged into
+// one line, the three least-viewed into another, and every video in the library
 // averaged behind them as the baseline.
 //
 // Three lines rather than one because a single channel average says how the
-// channel does without saying what separates a good upload from a bad one. The
-// gap between the two bands is the reading: where it opens is where the library
-// splits, and the baseline says which of the two ends is the odd one out.
+// channel does without saying what reach costs it. The bands are picked on
+// views, not on retention, so neither line is high or low by construction and
+// the gap between them is a finding: it says whether the uploads that travel
+// hold their audience the way the ones that mostly reach subscribers do. Which
+// line ends up on top is the reading, and it is often the least-viewed one.
 //
 // Colour: none of its own, matching the rest of Channel Trends. The bands are
 // told apart by weight and dash, exactly as the taxonomy radars tell the same
@@ -31,10 +34,10 @@ const PAD = { top: 16, right: 16, bottom: 32, left: 48 }
 const PLOT_W = WIDTH - PAD.left - PAD.right
 const PLOT_H = HEIGHT - PAD.top - PAD.bottom
 
-// The winners are the only solid line, because they are the thing being read;
-// the losers are dashed; the channel average is a fine dotted baseline rather
-// than a third competitor. Same order of weight the radars use for the same
-// three bands.
+// The most-viewed band is the only solid line, because the videos that carry
+// the channel are the thing being read; the least-viewed band is dashed; the
+// channel average is a fine dotted baseline rather than a third competitor.
+// Same order of weight the radars use for the same three bands.
 type Band = "top" | "bottom" | "average"
 
 const BAND_STYLE: Record<
@@ -57,8 +60,8 @@ const BAND_STYLE: Record<
 }
 
 const BAND_LABEL: Record<Band, string> = {
-  top: "Top 3 videos",
-  bottom: "Bottom 3 videos",
+  top: "Top 3 by views",
+  bottom: "Bottom 3 by views",
   average: "Channel average",
 }
 
@@ -83,6 +86,23 @@ function formatTimestamp(totalSeconds: number): string {
 
 function percent(ratio: number): string {
   return `${Math.round(ratio * 100)}%`
+}
+
+function compact(value: number): string {
+  return new Intl.NumberFormat("en", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value)
+}
+
+// The views a band was picked on, spelled out next to its name. Without it a
+// reader has no way to tell whether the two lines are 40,000 views against
+// 20,000 or 40,000 against five, which is the difference between a comparison
+// and a coincidence.
+function bandRange(band: ChannelRetentionBand): string {
+  return band.minViews === band.maxViews
+    ? `${compact(band.minViews)} views`
+    : `${compact(band.minViews)} to ${compact(band.maxViews)} views`
 }
 
 function BandSwatch({ band }: { band: Band }) {
@@ -177,8 +197,8 @@ export function ChannelRetentionCurveChart({
           ...(bands == null
             ? [`${percent(hovered.watchRatio)} still watching`]
             : [
-                `top 3 ${percent(bands.top.watchRatios[hoverIndex])}`,
-                `bottom 3 ${percent(bands.bottom.watchRatios[hoverIndex])}`,
+                `top 3 by views ${percent(bands.top.watchRatios[hoverIndex])}`,
+                `bottom 3 by views ${percent(bands.bottom.watchRatios[hoverIndex])}`,
                 `channel ${percent(hovered.watchRatio)}`,
               ]),
           ...(averageDurationSeconds == null
@@ -197,7 +217,7 @@ export function ChannelRetentionCurveChart({
         aria-label={
           bands == null
             ? "Your channel's average audience retention curve"
-            : "Audience retention averaged across your top 3 videos, your bottom 3 videos and your whole channel"
+            : "Audience retention averaged across your 3 most-viewed videos, your 3 least-viewed videos and your whole channel"
         }
         onPointerMove={handleMove}
         onPointerLeave={() => setHoverIndex(null)}
@@ -278,12 +298,23 @@ export function ChannelRetentionCurveChart({
 
       <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground">
-          {legend.map((band) => (
-            <span key={band} className="flex items-center gap-1.5">
-              <BandSwatch band={band} />
-              {BAND_LABEL[band]}
-            </span>
-          ))}
+          {legend.map((band) => {
+            const range =
+              bands == null || band === "average"
+                ? null
+                : bandRange(band === "top" ? bands.top : bands.bottom)
+            return (
+              <span key={band} className="flex items-center gap-1.5">
+                <BandSwatch band={band} />
+                {BAND_LABEL[band]}
+                {range && (
+                  <span className="font-mono tabular-nums opacity-70">
+                    ({range})
+                  </span>
+                )}
+              </span>
+            )
+          })}
         </div>
         {readout ? (
           <span className="font-mono tabular-nums">{readout}</span>
