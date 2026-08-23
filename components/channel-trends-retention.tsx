@@ -1,11 +1,7 @@
 import { AreaChartIcon, TrophyIcon } from "lucide-react"
 
 import { ChannelRetentionCurveChart } from "@/components/channel-trends-retention-curve"
-import {
-  BandVideoPair,
-  TrendCard,
-  plural,
-} from "@/components/channel-trends-shared"
+import { BandVideoPair, TrendCard } from "@/components/channel-trends-shared"
 import type {
   ChannelRetentionBands,
   ChannelRetentionCurve,
@@ -40,19 +36,12 @@ const formatWatched = (share: number) => `${Math.round(share * 100)}% watched`
 // Script tabs open with, on the same ranking those tabs' script bands use: a
 // creator recognises their own uploads faster than any curve, so the chart is
 // worth more once they know which three videos each line is made of.
-function RetentionBandsCard({
-  bands,
-  videoCount,
-}: {
-  bands: ChannelRetentionBands
-  videoCount: number
-}) {
+function RetentionBandsCard({ bands }: { bands: ChannelRetentionBands }) {
   return (
     <TrendCard
       icon={TrophyIcon}
       title="The uploads the chart compares"
       description="Your three uploads that held viewers longest and your three that lost them fastest, ranked on the share of each video that gets watched."
-      footer={`Your ${bands.top.videoCount} best and ${bands.bottom.videoCount} worst of the ${plural(videoCount, "video")} storing a retention curve. Each line below is those videos averaged together, weighted by the viewers behind them.`}
     >
       <BandVideoPair
         top={bands.top.videos.map((video) => ({
@@ -108,9 +97,7 @@ export function RetentionPanel({ data }: { data: ChannelTrendsData }) {
       {/* Null on a library too small for two full, disjoint bands, which leaves
           the channel average as the only line there is to draw and nothing to
           name above it. */}
-      {curve.bands != null && (
-        <RetentionBandsCard bands={curve.bands} videoCount={curve.videoCount} />
-      )}
+      {curve.bands != null && <RetentionBandsCard bands={curve.bands} />}
       <RetentionCurveCard curve={curve} />
     </div>
   )
