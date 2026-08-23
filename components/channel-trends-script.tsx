@@ -165,7 +165,7 @@ export function ScriptPanel({ data }: { data: ChannelTrendsData }) {
         profile={extremes}
         icon={TrophyIcon}
         title="The uploads every chart below compares"
-        description="Your three best and three worst uploads by share watched — every tab below scores this same pair on its own axes."
+        description="Your three best and three worst uploads by share watched. Every tab below scores this same pair on its own axes."
         topLabel={EXTREMES_TOP_LABEL}
         bottomLabel={EXTREMES_BOTTOM_LABEL}
         formatOutcome={formatWatched}
