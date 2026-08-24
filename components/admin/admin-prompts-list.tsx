@@ -60,7 +60,7 @@ function GroupTable({
         </p>
       </div>
       <div className="overflow-hidden rounded-lg border">
-        <Table>
+        <Table className="min-w-[48rem] table-fixed">
           <TableHeader>
             <TableRow>
               <TableHead>Prompt</TableHead>
@@ -73,7 +73,7 @@ function GroupTable({
           <TableBody>
             {prompts.map((prompt) => (
               <TableRow key={prompt.key}>
-                <TableCell className="max-w-md">
+                <TableCell className="align-top whitespace-normal break-words">
                   <Link
                     href={`/admin/prompts/${prompt.key}`}
                     className="font-medium hover:underline"
@@ -84,16 +84,16 @@ function GroupTable({
                     {prompt.description}
                   </p>
                 </TableCell>
-                <TableCell>
+                <TableCell className="align-top">
                   <OverrideBadge prompt={prompt} />
                 </TableCell>
-                <TableCell className="text-right tabular-nums text-muted-foreground">
+                <TableCell className="align-top text-right tabular-nums text-muted-foreground">
                   {prompt.length.toLocaleString()}
                 </TableCell>
-                <TableCell className="text-right tabular-nums text-muted-foreground">
+                <TableCell className="align-top text-right tabular-nums text-muted-foreground">
                   {prompt.versionCount}
                 </TableCell>
-                <TableCell className="text-muted-foreground">
+                <TableCell className="align-top text-muted-foreground">
                   {prompt.lastEditedAt ? (
                     <span title={prompt.lastEditedBy ?? undefined}>
                       {formatDistanceToNow(new Date(prompt.lastEditedAt), {
