@@ -13,6 +13,8 @@ import {
   TaxonomyRadar,
 } from "@/components/channel-trends-radar"
 import {
+  BandDumbbell,
+  BandDumbbellLegend,
   BandVideoPair,
   Chip,
   CoverageNote,
@@ -75,36 +77,6 @@ import {
 // text in this file. Hyphens are fine. Enforced by
 // lib/__tests__/copy-guardrails.test.ts.
 
-// A 0-10 bar for one half of the split, with its band name and score.
-function BandBar({
-  label,
-  value,
-  emphasis,
-}: {
-  label: string
-  value: number
-  emphasis: boolean
-}) {
-  return (
-    <div className="grid grid-cols-[7rem_1fr_2rem] items-center gap-x-2">
-      <span className="truncate text-xs whitespace-nowrap text-muted-foreground">
-        {label}
-      </span>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-        <div
-          className={`h-full rounded-full ${
-            emphasis ? "bg-foreground/70" : "bg-muted-foreground/40"
-          }`}
-          style={{ width: `${Math.min(100, Math.max(0, value * 10))}%` }}
-        />
-      </div>
-      <span className="text-right text-xs tabular-nums">
-        {formatScore(value)}
-      </span>
-    </div>
-  )
-}
-
 // The name of an axis and what a 10 on it would mean, so a bar is never a bare
 // number the reader has to interpret, plus the note that says when a high score
 // is not simply a good one.
@@ -121,10 +93,11 @@ function AxisCaption({ axisKey }: { axisKey: string }) {
   )
 }
 
-// One axis, drawn as each band's score on it. The heavier bar is whichever of
-// the two compared bands scored higher, so the reader sees the direction before
-// reading a number; the library baseline, when there is one, is never the
-// emphasised bar because it is the thing being measured against.
+// One axis, drawn as the run between the two bands on a single 0-10 track. The
+// gap is what the row claims, so the gap is what gets a length; the library
+// baseline, when there is one, is a tick on the same track rather than a third
+// competitor, because it is the thing the pair is measured against. See
+// BandDumbbell in components/channel-trends-shared.tsx.
 function BandContrastRow({
   axisKey,
   topLabel,
@@ -142,17 +115,17 @@ function BandContrastRow({
   libraryLabel?: string
   libraryValue?: number
 }) {
-  const topLeads = topValue >= bottomValue
   return (
-    <div className="flex flex-col gap-1.5 py-2">
+    <div className="flex flex-col gap-1 py-2">
       <AxisCaption axisKey={axisKey} />
-      <div className="flex flex-col gap-1">
-        <BandBar label={topLabel} value={topValue} emphasis={topLeads} />
-        <BandBar label={bottomLabel} value={bottomValue} emphasis={!topLeads} />
-        {libraryLabel != null && libraryValue != null && (
-          <BandBar label={libraryLabel} value={libraryValue} emphasis={false} />
-        )}
-      </div>
+      <BandDumbbell
+        topLabel={topLabel}
+        topValue={topValue}
+        bottomLabel={bottomLabel}
+        bottomValue={bottomValue}
+        libraryLabel={libraryLabel}
+        libraryValue={libraryValue}
+      />
     </div>
   )
 }
@@ -276,15 +249,18 @@ export function AxisContrastCard({
       }
     >
       {contrasts.length > 0 ? (
-        <div className="divide-y">
-          {contrasts.map((row) => (
-            <AxisContrastRow
-              key={row.key}
-              row={row}
-              topLabel={topLabel}
-              bottomLabel={bottomLabel}
-            />
-          ))}
+        <div className="flex flex-col gap-2">
+          <BandDumbbellLegend topLabel={topLabel} bottomLabel={bottomLabel} />
+          <div className="divide-y">
+            {contrasts.map((row) => (
+              <AxisContrastRow
+                key={row.key}
+                row={row}
+                topLabel={topLabel}
+                bottomLabel={bottomLabel}
+              />
+            ))}
+          </div>
         </div>
       ) : (
         <CoverageNote>{emptyNote}</CoverageNote>
@@ -538,23 +514,33 @@ export function ExtremesRadarCard({
       )}
 
       {/* Two axes cannot enclose a shape, so a group that small (the alignment
-          pair) runs full width underneath as the bars it would have been
-          anyway, rather than leaving a hole in the grid of charts. */}
-      {tooSmallToDraw.map((entry) => (
-        <div key={entry.group} className="flex flex-col">
-          {showGroupLabels && (
-            <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              {taxonomyAxisGroupLabel(entry.group)}
-            </span>
-          )}
-          <ExtremeAxisRows
-            axes={entry.axes}
+          pair) runs full width underneath as the dumbbells it would have been
+          anyway, rather than leaving a hole in the grid of charts. Its own key
+          sits above the run, in the place the radars keep theirs. */}
+      {tooSmallToDraw.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <BandDumbbellLegend
             topLabel={topLabel}
             bottomLabel={bottomLabel}
             libraryLabel={libraryLabel}
           />
+          {tooSmallToDraw.map((entry) => (
+            <div key={entry.group} className="flex flex-col">
+              {showGroupLabels && (
+                <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                  {taxonomyAxisGroupLabel(entry.group)}
+                </span>
+              )}
+              <ExtremeAxisRows
+                axes={entry.axes}
+                topLabel={topLabel}
+                bottomLabel={bottomLabel}
+                libraryLabel={libraryLabel}
+              />
+            </div>
+          ))}
         </div>
-      ))}
+      )}
 
       {bare ? null : lead ? (
         <div className="flex flex-col gap-2 rounded-r-md border-l-2 border-muted-foreground/30 bg-muted/40 px-3 py-2.5">
@@ -605,6 +591,13 @@ export function ExtremesRadarCard({
             )}
           </CollapsibleTrigger>
           <CollapsibleContent className="flex flex-col gap-4 border-t p-3">
+            {/* The key above the charts speaks for the shapes, and these rows
+                are not shapes, so the fold carries its own. */}
+            <BandDumbbellLegend
+              topLabel={topLabel}
+              bottomLabel={bottomLabel}
+              libraryLabel={libraryLabel}
+            />
             {(showGroupLabels ? groups : drawable).map((entry) => (
               <div key={entry.group} className="flex flex-col">
                 {showGroupLabels && (
