@@ -4,10 +4,12 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
 } from "react"
+import { createPortal } from "react-dom"
 import { SparklesIcon, XIcon } from "lucide-react"
 
 import type { OnboardingHint } from "@/lib/onboarding-hints"
@@ -93,6 +95,81 @@ export function useOnboardingHint(hint: OnboardingHint): {
   const { pending, dismiss } = useContext(OnboardingHintsContext)
   const dismissThis = useCallback(() => dismiss(hint), [dismiss, hint])
   return { pending: pending.has(hint), dismiss: dismissThis }
+}
+
+// How far in from the bubble's aligned edge HintCallout draws the centre of its
+// arrow — the 20px inset of the rotated square plus half its 10px size. An
+// anchored bubble is offset by this much so the arrow lands on the middle of
+// what it points at.
+const ARROW_INSET = 25
+
+// The gap between the thing being pointed at and the bubble pointing at it.
+const ANCHOR_GAP = 8
+
+// Hangs a hint bubble off an element anywhere on the page, pointing up at it
+// from underneath.
+//
+// The bubble is drawn in a portal on the body rather than beside its anchor, so
+// that nothing between the two can cut it off: a coach mark on a table row has
+// both the table's own horizontal scroll container and the rounded card around
+// it clipping whatever overflows, and no amount of z-index escapes either.
+// Being out of the flow, it also floats over what sits below the anchor instead
+// of pushing it down, and leaves nothing to settle back when it goes.
+export function AnchoredHintCallout({
+  anchorRef,
+  children,
+}: {
+  // The element to point at. Nothing is drawn until it has been measured.
+  anchorRef: React.RefObject<HTMLElement | null>
+  // The bubble, normally a <HintCallout arrow={{ side: "top", align: "end" }} />.
+  children: React.ReactNode
+}) {
+  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null)
+
+  useEffect(() => {
+    const anchor = anchorRef.current
+    if (!anchor) return
+
+    const measure = () => setAnchorRect(anchor.getBoundingClientRect())
+    measure()
+
+    // Viewport coordinates go stale the moment anything moves the anchor, so
+    // this re-measures on all of it: scrolling (captured, since the scroller
+    // may be any container between the anchor and the root), the window
+    // resizing, and the anchor's own box or the page's changing size.
+    window.addEventListener("scroll", measure, true)
+    window.addEventListener("resize", measure)
+    const observer = new ResizeObserver(measure)
+    observer.observe(anchor)
+    observer.observe(document.documentElement)
+
+    return () => {
+      window.removeEventListener("scroll", measure, true)
+      window.removeEventListener("resize", measure)
+      observer.disconnect()
+    }
+  }, [anchorRef])
+
+  // Nothing to place against on the server or the first client render, where
+  // the anchor has yet to be measured.
+  if (!anchorRect) return null
+
+  return createPortal(
+    <div
+      // Pinned by its right edge so that the arrow, drawn a fixed distance in
+      // from that edge, stays on the anchor however wide the bubble ends up.
+      className="fixed z-50 w-72 max-w-[80vw] text-left whitespace-normal"
+      style={{
+        top: anchorRect.bottom + ANCHOR_GAP,
+        right:
+          window.innerWidth -
+          (anchorRect.left + anchorRect.width / 2 + ARROW_INSET),
+      }}
+    >
+      {children}
+    </div>,
+    document.body,
+  )
 }
 
 // The coach mark itself: a small primary-coloured bubble with a one-line
