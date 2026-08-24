@@ -27,6 +27,11 @@ import {
   dedupeSectionTips,
   type DeepWindowFeedback,
 } from "@/lib/report-tip-uniqueness"
+import {
+  dedupeDeepFeedback,
+  hasScriptFeedback,
+  hasWindowFeedback,
+} from "@/lib/retention-window-feedback"
 import type { ScriptTaxonomy } from "@/lib/script-taxonomy"
 import type { DeepAnalysisEvidence } from "@/lib/deep-analysis-evidence"
 import type { RankedRetentionWindowEvent } from "@/lib/deep-analysis-insight-ranking"
@@ -603,24 +608,6 @@ function deepFeedbackTabLabel(
   return matchingFeedback.length > 1 ? `${label} ${duplicateIndex + 1}` : label
 }
 
-// Reduce a window's raw per-event deep feedback to just the entries that earn
-// their own tab. Only an insight that produced an actionable tip is worth a
-// tab (the reasoning is shown above the tip inside it), and each distinct tip
-// gets a single tab — several events in one window often synthesise the same
-// recommendation, and a tipless event would render an empty tab.
-function dedupeDeepFeedback(
-  deepFeedback: DeepWindowFeedback[],
-): DeepWindowFeedback[] {
-  const seenTips = new Set<string>()
-
-  return deepFeedback.filter(({ recommendation }) => {
-    const tip = recommendation?.action.trim()
-    if (!tip || seenTips.has(tip)) return false
-    seenTips.add(tip)
-    return true
-  })
-}
-
 // Whether one of the window's deep tabs already carries this tip, in which case
 // the Script tab drops its own copy of it: a tip measured off the frames and the
 // audio is the better-evidenced version of the same advice, and it is the one
@@ -635,14 +622,6 @@ function deepFeedbackCarriesTip(
   return deepFeedback.some(
     ({ recommendation }) => recommendation?.action.trim() === wanted,
   )
-}
-
-// Whether the window's transcript reading is worth a showing of its own — the
-// one that becomes the "Script" tab.
-function hasScriptFeedback(
-  attribution: RetentionMomentAttribution | undefined,
-): attribution is RetentionMomentAttribution {
-  return attribution != null && attribution.explanation !== ""
 }
 
 // Whether a window's feedback renders as a tab switcher rather than as a single
@@ -1080,6 +1059,10 @@ function HoldList({
   highlightedId,
   footageTabsHint = false,
 }: {
+  // Only the holds something was said about: the caller has already dropped any
+  // whose feedback is empty, since a hold with no reading behind it is not a
+  // finding (see where `holds` is built). Rows are numbered by position here, so
+  // this must be the same list the chart's hold markers were built from.
   holds: RetentionWindow[]
   transcript: TranscriptCue[]
   attribution: Map<number, RetentionMomentAttribution>
@@ -1544,26 +1527,6 @@ export function AnalysedVideoDetail({
     : null
   const drops = retentionWindows.filter((w) => w.kind === "drop_off")
   const gains = retentionWindows.filter((w) => w.kind === "gain")
-  const holds = retentionWindows.filter((w) => w.kind === "hold")
-  const pacingStretches = pacingAnalysis?.slowOrRepetitiveStretches ?? []
-  const defaultRetentionTab =
-    hookWindows.length > 0
-      ? "hook"
-      : drops.length > 0
-        ? "drop-offs"
-        : gains.length > 0
-          ? "gains"
-          : holds.length > 0
-            ? "holds"
-            : pacingStretches.length > 0
-              ? "pacing"
-              : null
-
-  // The retention tab is controlled so that clicking an insight marker on the
-  // chart can switch to the tab holding that insight (see onInsightSelect).
-  const [retentionTab, setRetentionTab] = useState<string | null>(
-    defaultRetentionTab,
-  )
 
   // Index the LLM attribution by kind + windowIndex so each hook/drop-off/gain card
   // can pick up its own explanation and tip.
@@ -1626,6 +1589,48 @@ export function AnalysedVideoDetail({
     isFirstSaying,
   )
   const dedupedPacingAnalysis = dedupePacingTips(pacingAnalysis, isFirstSaying)
+
+  // The holds worth a row. A hold's finding is the reading of *why* the stretch
+  // held; the "% held" figure beside it is not one on its own, since a flat
+  // stretch of a curve holds whoever is left by definition — near the end of a
+  // video that is a handful of viewers and always 100%. So a hold nothing was
+  // said about is dropped here rather than rendered as a timestamp over an empty
+  // body, and every count below reads off this list: the chart marks only these
+  // holds, the Holds tab appears only if one survived, and the rows are numbered
+  // by position in it.
+  //
+  // The drop-offs, gains and hook windows keep their rows either way. Each of
+  // those *is* a measured event — this much was lost here, this much came back —
+  // so the row still tells the creator something the curve alone doesn't, with
+  // or without a reading of it. See hasWindowFeedback for why a window arrives
+  // with nothing said about it.
+  const holds = retentionWindows.filter(
+    (window) =>
+      window.kind === "hold" &&
+      hasWindowFeedback(
+        holdSection.attribution.get(window.windowIndex),
+        holdSection.deepFeedback.get(window.windowIndex) ?? [],
+      ),
+  )
+  const pacingStretches = pacingAnalysis?.slowOrRepetitiveStretches ?? []
+  const defaultRetentionTab =
+    hookWindows.length > 0
+      ? "hook"
+      : drops.length > 0
+        ? "drop-offs"
+        : gains.length > 0
+          ? "gains"
+          : holds.length > 0
+            ? "holds"
+            : pacingStretches.length > 0
+              ? "pacing"
+              : null
+
+  // The retention tab is controlled so that clicking an insight marker on the
+  // chart can switch to the tab holding that insight (see onInsightSelect).
+  const [retentionTab, setRetentionTab] = useState<string | null>(
+    defaultRetentionTab,
+  )
 
   // Whether any window below actually renders a tab switcher. The footage tabs
   // only appear where the deeper analysis reached distinct, actionable
@@ -1724,7 +1729,10 @@ export function AnalysedVideoDetail({
         transcript: said || undefined,
       }
     }),
-    ...holds.map((window) => {
+    // Numbered off `holds` — the holds that earned a row — rather than off the
+    // window index, so "Audience hold 2" is the second row of the list the
+    // marker jumps to and not the second hold detected on the curve.
+    ...holds.map((window, index) => {
       const said = transcriptForSegment(
         transcript,
         window.fromSeconds,
@@ -1737,7 +1745,7 @@ export function AnalysedVideoDetail({
       return {
         id: `hold-${window.windowIndex}`,
         kind: "hold" as const,
-        label: `Audience hold ${window.windowIndex + 1}`,
+        label: `Audience hold ${index + 1}`,
         fromSeconds: window.fromSeconds,
         toSeconds: window.toSeconds,
         metric: `${(retained * 100).toFixed(1)}%`,
