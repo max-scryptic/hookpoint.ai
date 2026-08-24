@@ -1,6 +1,7 @@
 import type { ComponentType } from "react"
 import { ChevronDownIcon } from "lucide-react"
 
+import { BandHighlightGroup } from "@/components/channel-trends-band-highlight"
 import {
   taxonomyAxisCopy,
   taxonomyAxisGroupLabel,
@@ -8,13 +9,11 @@ import {
   taxonomyDimensionLabel,
 } from "@/components/channel-trends-copy"
 import {
-  RadarHighlightGroup,
-  RadarLegend,
-  TaxonomyRadar,
-} from "@/components/channel-trends-radar"
-import {
   BandDumbbell,
   BandDumbbellLegend,
+} from "@/components/channel-trends-dumbbell"
+import { RadarLegend, TaxonomyRadar } from "@/components/channel-trends-radar"
+import {
   BandVideoPair,
   Chip,
   CoverageNote,
@@ -97,7 +96,7 @@ function AxisCaption({ axisKey }: { axisKey: string }) {
 // gap is what the row claims, so the gap is what gets a length; the library
 // baseline, when there is one, is a tick on the same track rather than a third
 // competitor, because it is the thing the pair is measured against. See
-// BandDumbbell in components/channel-trends-shared.tsx.
+// BandDumbbell in components/channel-trends-dumbbell.tsx.
 function BandContrastRow({
   axisKey,
   topLabel,
@@ -249,19 +248,24 @@ export function AxisContrastCard({
       }
     >
       {contrasts.length > 0 ? (
-        <div className="flex flex-col gap-2">
-          <BandDumbbellLegend topLabel={topLabel} bottomLabel={bottomLabel} />
-          <div className="divide-y">
-            {contrasts.map((row) => (
-              <AxisContrastRow
-                key={row.key}
-                row={row}
-                topLabel={topLabel}
-                bottomLabel={bottomLabel}
-              />
-            ))}
+        // The key and the rows it speaks for are one group, so pointing at a
+        // band in the key brightens that band down every row and fades the
+        // other, the same handle the radars keep above their charts.
+        <BandHighlightGroup>
+          <div className="flex flex-col gap-2">
+            <BandDumbbellLegend topLabel={topLabel} bottomLabel={bottomLabel} />
+            <div className="divide-y">
+              {contrasts.map((row) => (
+                <AxisContrastRow
+                  key={row.key}
+                  row={row}
+                  topLabel={topLabel}
+                  bottomLabel={bottomLabel}
+                />
+              ))}
+            </div>
           </div>
-        </div>
+        </BandHighlightGroup>
       ) : (
         <CoverageNote>{emptyNote}</CoverageNote>
       )}
@@ -470,7 +474,7 @@ export function ExtremesRadarCard({
           The group draws no element of its own, so the two stay siblings in the
           card's own column. */}
       {drawable.length > 0 && (
-        <RadarHighlightGroup>
+        <BandHighlightGroup>
           <RadarLegend
             topLabel={topLabel}
             bottomLabel={bottomLabel}
@@ -510,7 +514,7 @@ export function ExtremesRadarCard({
               </div>
             ))}
           </div>
-        </RadarHighlightGroup>
+        </BandHighlightGroup>
       )}
 
       {/* Two axes cannot enclose a shape, so a group that small (the alignment
@@ -518,28 +522,33 @@ export function ExtremesRadarCard({
           anyway, rather than leaving a hole in the grid of charts. Its own key
           sits above the run, in the place the radars keep theirs. */}
       {tooSmallToDraw.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <BandDumbbellLegend
-            topLabel={topLabel}
-            bottomLabel={bottomLabel}
-            libraryLabel={libraryLabel}
-          />
-          {tooSmallToDraw.map((entry) => (
-            <div key={entry.group} className="flex flex-col">
-              {showGroupLabels && (
-                <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                  {taxonomyAxisGroupLabel(entry.group)}
-                </span>
-              )}
-              <ExtremeAxisRows
-                axes={entry.axes}
-                topLabel={topLabel}
-                bottomLabel={bottomLabel}
-                libraryLabel={libraryLabel}
-              />
-            </div>
-          ))}
-        </div>
+        // Its key is the control for these rows the way the radar key is the
+        // control for the shapes: pointing at a band brightens it down the run
+        // and fades the two it is being compared with.
+        <BandHighlightGroup>
+          <div className="flex flex-col gap-2">
+            <BandDumbbellLegend
+              topLabel={topLabel}
+              bottomLabel={bottomLabel}
+              libraryLabel={libraryLabel}
+            />
+            {tooSmallToDraw.map((entry) => (
+              <div key={entry.group} className="flex flex-col">
+                {showGroupLabels && (
+                  <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                    {taxonomyAxisGroupLabel(entry.group)}
+                  </span>
+                )}
+                <ExtremeAxisRows
+                  axes={entry.axes}
+                  topLabel={topLabel}
+                  bottomLabel={bottomLabel}
+                  libraryLabel={libraryLabel}
+                />
+              </div>
+            ))}
+          </div>
+        </BandHighlightGroup>
       )}
 
       {bare ? null : lead ? (
@@ -592,27 +601,30 @@ export function ExtremesRadarCard({
           </CollapsibleTrigger>
           <CollapsibleContent className="flex flex-col gap-4 border-t p-3">
             {/* The key above the charts speaks for the shapes, and these rows
-                are not shapes, so the fold carries its own. */}
-            <BandDumbbellLegend
-              topLabel={topLabel}
-              bottomLabel={bottomLabel}
-              libraryLabel={libraryLabel}
-            />
-            {(showGroupLabels ? groups : drawable).map((entry) => (
-              <div key={entry.group} className="flex flex-col">
-                {showGroupLabels && (
-                  <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                    {taxonomyAxisGroupLabel(entry.group)}
-                  </span>
-                )}
-                <ExtremeAxisRows
-                  axes={entry.axes}
-                  topLabel={topLabel}
-                  bottomLabel={bottomLabel}
-                  libraryLabel={libraryLabel}
-                />
-              </div>
-            ))}
+                are not shapes, so the fold carries its own, and its own group
+                with it: a band picked in here reaches the rows in here. */}
+            <BandHighlightGroup>
+              <BandDumbbellLegend
+                topLabel={topLabel}
+                bottomLabel={bottomLabel}
+                libraryLabel={libraryLabel}
+              />
+              {(showGroupLabels ? groups : drawable).map((entry) => (
+                <div key={entry.group} className="flex flex-col">
+                  {showGroupLabels && (
+                    <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                      {taxonomyAxisGroupLabel(entry.group)}
+                    </span>
+                  )}
+                  <ExtremeAxisRows
+                    axes={entry.axes}
+                    topLabel={topLabel}
+                    bottomLabel={bottomLabel}
+                    libraryLabel={libraryLabel}
+                  />
+                </div>
+              ))}
+            </BandHighlightGroup>
           </CollapsibleContent>
         </Collapsible>
       )}
