@@ -1,28 +1,17 @@
-import {
-  CrosshairIcon,
-  RadarIcon,
-  ShapesIcon,
-  TrophyIcon,
-} from "lucide-react"
+import { RadarIcon, ShapesIcon, TrophyIcon } from "lucide-react"
 
 import { packagingFeatureLabel } from "@/components/channel-trends-copy"
 import { PackagingSurfaceTabs } from "@/components/channel-trends-packaging-tabs"
 import {
   TrendCard,
   formatCompactNumber,
-  plural,
 } from "@/components/channel-trends-shared"
 import {
   ExtremeBandsCard,
   ExtremesRadarCard,
 } from "@/components/channel-trends-taxonomy"
 import {
-  ALIGNMENT_PART_LABEL,
-  PackagingAlignmentScore,
-} from "@/components/packaging-alignment-score"
-import {
   extremeGroupAxes,
-  type ChannelAlignmentAverage,
   type PackagingAxisGroup,
 } from "@/lib/channel-taxonomy-trends"
 import type {
@@ -44,9 +33,9 @@ import type {
 // each end of the library whichever tab is open, so they are named once above
 // the tab bar rather than restated on all four charts. Under the bar, each
 // surface draws its own axes as one shape per band, then lists what its
-// high-reach half does differently. Alignment opens on the library's average
-// alignment score, the one number a creator already knows from a single video's
-// report.
+// high-reach half does differently. Alignment reads the same way as the other
+// three: its two cross-surface axes are too few to enclose a shape, so they are
+// drawn as paired bars rather than a spider, and nothing else is on the tab.
 //
 // Everything here is correlational by construction and the copy says so: reach
 // is also topic, timing and who YouTube showed a video to, and a library is a
@@ -108,44 +97,6 @@ function FeatureContrastCard({
           <FeatureContrastRow key={row.feature} row={row} />
         ))}
       </div>
-    </TrendCard>
-  )
-}
-
-// --- Average alignment -------------------------------------------------------
-
-// The alignment readout, averaged across the library, and the first thing the
-// Alignment surface says. Deliberately the same block a single video's report
-// and the packaging head-to-head render
-// (components/packaging-alignment-score.tsx), tint included, so the number a
-// creator already knows from one video reads as the same number here. It is the
-// one tinted block among this page's neutral bars, and that is the point: it is
-// one object shown in three places, not a fourth chart.
-function AverageAlignmentCard({
-  alignment,
-}: {
-  alignment: ChannelAlignmentAverage
-}) {
-  const over = `Averaged across ${plural(alignment.videoCount, "analysed video")}.`
-  return (
-    <TrendCard
-      icon={CrosshairIcon}
-      title="Your average alignment"
-      description="The alignment score off every video report, averaged across your library."
-      footer={
-        alignment.partVideoCount > 0 &&
-        alignment.partVideoCount < alignment.videoCount
-          ? `${over} The two rows under the score cover the ${alignment.partVideoCount} carrying an enriched packaging read.`
-          : over
-      }
-    >
-      <PackagingAlignmentScore
-        score={alignment.score}
-        parts={alignment.parts.map((part) => ({
-          label: ALIGNMENT_PART_LABEL[part.key],
-          value: part.value,
-        }))}
-      />
     </TrendCard>
   )
 }
@@ -259,7 +210,6 @@ function surfaceHasContent(
 ): boolean {
   const config = SURFACE_CONFIG[surface]
   return (
-    (surface === "alignment" && data.packagingAlignment != null) ||
     (data.packagingExtremes != null &&
       extremeGroupAxes(data.packagingExtremes, config.group).length > 0) ||
     surfaceFeatures(data, surface).length > 0
@@ -281,9 +231,6 @@ function SurfacePanel({
   const config = SURFACE_CONFIG[surface]
   return (
     <div className="flex flex-col gap-3">
-      {surface === "alignment" && data.packagingAlignment != null && (
-        <AverageAlignmentCard alignment={data.packagingAlignment} />
-      )}
       {data.packagingExtremes != null && (
         <ExtremesRadarCard
           profile={data.packagingExtremes}
