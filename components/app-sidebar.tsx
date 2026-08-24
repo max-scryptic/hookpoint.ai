@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import Link from "next/link"
 import { usePathname } from "next/navigation"
 
 import { BrandLogo } from "@/components/brand-logo"
@@ -12,14 +11,10 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar"
 import {
   ArrowLeftRightIcon,
-  CircleHelpIcon,
   ClapperboardIcon,
   ListChecksIcon,
   ListVideoIcon,
@@ -128,21 +123,6 @@ export function AppSidebar({
         <NavMain sections={sections} />
       </SidebarContent>
       <SidebarFooter>
-        {/* Help sits in the footer rather than in a nav group: it is not part
-            of the work, it is the manual for it, so it belongs with the other
-            standing controls at the bottom and above the account menu. */}
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              tooltip="Help"
-              isActive={pathname === "/help" || pathname.startsWith("/help/")}
-              render={<Link href="/help" />}
-            >
-              <CircleHelpIcon />
-              <span>Help</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
         <NavUser
           showUpgradeToPro={showUpgradeToPro}
           user={{ email: userEmail }}
