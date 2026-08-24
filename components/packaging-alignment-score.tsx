@@ -8,11 +8,11 @@ import { cn } from "@/lib/utils"
 // at analysis time (lib/packaging-taxonomy.ts), so nothing in this file is
 // itself comparative.
 //
-// Shared by the surfaces that set those numbers against something: the
-// packaging head-to-head puts one of these in each column of its Alignment tab,
-// and channel trends puts one behind a library-wide average. A single video's
-// report deliberately does not show it, since one score there has nothing to be
-// read against.
+// Shared by every surface that shows those numbers: a single video's report
+// heads its packaging section with one, the packaging head-to-head puts one in
+// each column of its Alignment tab, and channel trends puts one behind a
+// library-wide average. One object in three places, so the score a creator
+// learns on one video is visibly the score the other two rank and average.
 //
 // COPY GUARDRAIL: no em or en dashes (U+2014 / U+2013), ever, in any text in
 // this file. Hyphens are fine. Enforced by lib/__tests__/copy-guardrails.
@@ -88,7 +88,8 @@ export function ScoreBar({
 
 // One video's alignment score, its caption, its bar and its two parts. The
 // numbers speak for themselves, so nothing written sits under them: the prose
-// read of a video's packaging lives on that video's own report, not here.
+// read of a video's packaging lives in the per-surface cards each page carries,
+// not in this block.
 export function PackagingAlignmentScore({
   score,
   parts,
@@ -120,9 +121,10 @@ export function PackagingAlignmentScore({
         <ScoreBar value={score} color={color} />
         {parts.length > 0 && (
           // Side by side once the block itself is wide enough to hold two of
-          // these rows, which is the full-width channel trends card and not the
-          // narrow columns of the head-to-head. Measured on the block rather
-          // than the window so a wide screen never splits a narrow column.
+          // these rows, which is the full-width card on channel trends and on a
+          // single video's report, and not the narrow columns of the
+          // head-to-head. Measured on the block rather than the window so a wide
+          // screen never splits a narrow column.
           <div className="grid gap-x-10 gap-y-2 @2xl:grid-cols-2">
             {parts.map((part) => (
               <div key={part.label} className="flex items-center gap-3">
