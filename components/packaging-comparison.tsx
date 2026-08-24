@@ -117,11 +117,13 @@ function SideDot({ side }: { side: Side }) {
 // other. Generated once when the pair is created and stored on the comparison,
 // so this renders from JSON with no call at view time.
 
-// The one-paragraph read of which video packaged itself better, in the summary
-// box that heads the section, the same box the Summary sits in on a
-// single video's report. The badges and confidence label it used to carry are
-// restated by the per-surface panels below. Capped at two sentences like every
-// other summary card: the surface tabs below carry the detail.
+// The one-paragraph read of which video packaged itself better, in the box that
+// heads the section, where a single video's report heads its own packaging
+// section with its alignment score. This one is prose because the whole claim
+// here is comparative and no stored number carries it. The badges and
+// confidence label it used to carry are restated by the per-surface panels
+// below. Capped at two sentences like every other summary card: the surface
+// tabs below carry the detail.
 function ReportVerdict({
   verdict,
 }: {

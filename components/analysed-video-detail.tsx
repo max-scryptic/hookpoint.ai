@@ -39,6 +39,10 @@ import {
   HintCallout,
   useOnboardingHint,
 } from "@/components/onboarding-hints"
+import {
+  ALIGNMENT_PART_LABEL,
+  PackagingAlignmentScore,
+} from "@/components/packaging-alignment-score"
 import { RecommendationCallout } from "@/components/recommendation-callout"
 import { RetentionEventsInfo } from "@/components/retention-events-info"
 import {
@@ -57,7 +61,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { cleanCopy, limitSentences } from "@/lib/copy-guardrails"
+import { cleanCopy } from "@/lib/copy-guardrails"
 import type { PacingAnalysis } from "@/lib/pacing-analysis"
 import {
   prioritizePackagingImprovements,
@@ -65,6 +69,7 @@ import {
   type PackagingComponentFeedback,
   type PackagingComponentKey,
 } from "@/lib/packaging-alignment"
+import type { PackagingTaxonomy } from "@/lib/packaging-taxonomy"
 import type {
   RetentionAttribution,
   RetentionMomentAttribution,
@@ -1149,10 +1154,8 @@ function HoldList({
 // Title / Thumbnail / Hook alignment (LLM + vision over the thumbnail)
 // ---------------------------------------------------------------------------
 
-// The model's read of the three surfaces a viewer meets. The alignment numbers
-// the same analysis produces are deliberately not shown here: they belong to the
-// surfaces that set a score against something (the packaging head-to-head and
-// channel trends), not to one video's own report.
+// The model's read of the three surfaces a viewer meets: the alignment score
+// this video was given at analysis time, then the per-surface tabs behind it.
 function PackagingAlignmentSection({
   alignment,
   hasThumbnail,
@@ -1174,14 +1177,7 @@ function PackagingAlignmentSection({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 rounded-xl border bg-card p-4">
-        <h3 className="text-sm font-medium">Summary</h3>
-        <p className="text-sm text-muted-foreground">
-          {/* Two sentences at most, like every other summary card: the
-              per-surface tabs under it carry the detail. */}
-          {limitSentences(cleanCopy(alignment.overall))}
-        </p>
-      </div>
+      {alignment.taxonomy && <AlignmentCard taxonomy={alignment.taxonomy} />}
 
       {alignment.components ? (
         <PackagingComponentTabs
@@ -1206,6 +1202,43 @@ function PackagingAlignmentSection({
           />
         </div>
       )}
+    </div>
+  )
+}
+
+// What heads the packaging section: how tightly this video's title, thumbnail
+// and hook promise one thing, drawn as the same readout channel trends puts
+// behind a library-wide average and the packaging head-to-head puts in each of
+// its two columns (components/packaging-alignment-score.tsx), so the number a
+// creator meets here is visibly the number those pages are averaging and
+// ranking. It replaced a written summary of the packaging: the per-surface tabs
+// under it already say in words what each surface does, and a paragraph
+// restating all three said nothing they did not.
+function AlignmentCard({ taxonomy }: { taxonomy: PackagingTaxonomy }) {
+  // Stored 0..1, printed 0-10 to one decimal, the same scaling the channel
+  // average uses, so 0.78 reads as 7.8 on both pages.
+  const score = Math.round(taxonomy.alignmentScore * 100) / 10
+
+  // The two links the headline is made of. Both come off the enriched (v2)
+  // taxonomy, so a video analysed before that existed shows the headline alone.
+  const cross = taxonomy.detail?.cross
+  const parts = cross
+    ? [
+        {
+          label: ALIGNMENT_PART_LABEL.titleThumbnailMatch,
+          value: cross.titleThumbnailMatch,
+        },
+        {
+          label: ALIGNMENT_PART_LABEL.hookDeliversPromise,
+          value: cross.hookDeliversPromise,
+        },
+      ]
+    : []
+
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border bg-card p-4">
+      <h3 className="text-sm font-medium">Alignment</h3>
+      <PackagingAlignmentScore score={score} parts={parts} />
     </div>
   )
 }
@@ -1246,8 +1279,9 @@ const PACKAGING_COMPONENT_ORDER: PackagingComponentKey[] = [
 
 // The three surfaces a viewer meets, in the same reading order as the packaging
 // head-to-head (components/packaging-comparison.tsx). The head-to-head carries a
-// fourth Alignment tab on top of these three; a single video's report does not,
-// since a lone alignment score has nothing to be read against here.
+// fourth Alignment tab on top of these three; here alignment is the card above
+// the tab bar instead, since there is only one video's score to show and it
+// heads the section rather than competing with it.
 function PackagingComponentTabs({
   components,
   hookQuote = null,
