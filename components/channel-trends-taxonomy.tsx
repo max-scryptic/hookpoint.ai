@@ -252,7 +252,10 @@ export function AxisContrastCard({
         // band in the key brightens that band down every row and fades the
         // other, the same handle the radars keep above their charts.
         <BandHighlightGroup>
-          <div className="flex flex-col gap-2">
+          {/* The key stands further off the run than the rows stand off each
+              other, so it reads as the sentence the whole run is read against
+              rather than as another line of the first row. */}
+          <div className="flex flex-col gap-4">
             <BandDumbbellLegend topLabel={topLabel} bottomLabel={bottomLabel} />
             <div className="divide-y">
               {contrasts.map((row) => (
@@ -526,7 +529,11 @@ export function ExtremesRadarCard({
         // control for the shapes: pointing at a band brightens it down the run
         // and fades the two it is being compared with.
         <BandHighlightGroup>
-          <div className="flex flex-col gap-2">
+          {/* Same standoff the key keeps above the halves elsewhere on the
+              page: a key crowded onto the first axis caption reads as part of
+              it, and the first number a row prints sits at the top of its
+              track, right under that caption. */}
+          <div className="flex flex-col gap-4">
             <BandDumbbellLegend
               topLabel={topLabel}
               bottomLabel={bottomLabel}
