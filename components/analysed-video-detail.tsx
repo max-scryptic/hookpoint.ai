@@ -66,7 +66,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { cleanCopy } from "@/lib/copy-guardrails"
+import { cleanCopy, limitSentences } from "@/lib/copy-guardrails"
 import type { PacingAnalysis } from "@/lib/pacing-analysis"
 import {
   prioritizePackagingImprovements,
@@ -1139,7 +1139,8 @@ function HoldList({
 
 // The model's read of the three surfaces a viewer meets, one per tab, with the
 // alignment score this video was given at analysis time behind a fourth tab
-// after them.
+// after them, all of it headed by the two-sentence summary of the packaging as
+// a whole.
 function PackagingAlignmentSection({
   alignment,
   hasThumbnail,
@@ -1161,6 +1162,8 @@ function PackagingAlignmentSection({
 
   return (
     <div className="flex flex-col gap-4">
+      <PackagingSummary summary={alignment.overall} />
+
       {alignment.components ? (
         <PackagingComponentTabs
           components={alignment.components}
@@ -1196,14 +1199,35 @@ function PackagingAlignmentSection({
   )
 }
 
+// What the three surfaces add up to, in the box that heads the packaging tabs,
+// the same way the packaging head-to-head and the retention head-to-head head
+// their own sections (components/packaging-comparison.tsx,
+// components/retention-head-to-head.tsx).
+//
+// Two sentences is the whole budget (limitSentences, capped at
+// SUMMARY_SENTENCE_LIMIT), and the cap is the point rather than a safety net: a
+// creator opening this section wants the verdict at a glance, and a paragraph
+// walking through the title, then the thumbnail, then the hook only restates
+// what the three tabs under it already say, one surface per tab. The prompt is
+// asked for the short version too (PACKAGING_ALIGNMENT_PROMPT); this trims the
+// summaries stored before it was, which no prompt can reach.
+function PackagingSummary({ summary }: { summary: string }) {
+  if (!summary.trim()) return null
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <h3 className="text-sm font-medium">Summary</h3>
+      <p className="mt-2 text-sm text-muted-foreground">
+        {limitSentences(cleanCopy(summary))}
+      </p>
+    </div>
+  )
+}
+
 // How tightly this video's title, thumbnail and hook promise one thing, drawn
 // as the same readout channel trends puts behind a library-wide average and the
 // packaging head-to-head puts in each of its two columns
 // (components/packaging-alignment-score.tsx), so the number a creator meets here
-// is visibly the number those pages are averaging and ranking. It replaced a
-// written summary of the packaging: the per-surface tabs already say in words
-// what each surface does, and a paragraph restating all three said nothing they
-// did not.
+// is visibly the number those pages are averaging and ranking.
 //
 // It sits behind the fourth packaging tab, so it is normally framed by the same
 // badge the other three tabs open with; `titled` gives it the plain heading it

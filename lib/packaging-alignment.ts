@@ -43,9 +43,10 @@ export interface PackagingComponents {
 }
 
 export interface PackagingAlignment {
-  // The alignment summary: one or two sentences giving an overview of how the
-  // packaging holds together, briefly commenting on each component (title,
-  // thumbnail, hook).
+  // The alignment summary: at most two short sentences on how the packaging
+  // holds together as a whole. What each component (title, thumbnail, hook)
+  // does on its own belongs to that component's own feedback, so the summary
+  // stays a verdict rather than a walk through all three.
   overall: string
   // Per-component breakdown of what worked and what could be improved. Newly
   // generated alignments always include this.
