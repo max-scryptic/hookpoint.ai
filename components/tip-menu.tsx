@@ -10,21 +10,21 @@ import {
 } from "lucide-react"
 
 import { useSavedTips } from "@/components/saved-tips-provider"
+import { TipExamples } from "@/components/tip-examples"
 import { TipFeedbackDialog } from "@/components/tip-feedback-dialog"
+import { Button, buttonVariants } from "@/components/ui/button"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { Separator } from "@/components/ui/separator"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { canGenerateTipExamples } from "@/lib/tip-examples"
 import {
   tipCategoryForSection,
   tipFingerprint,
@@ -34,17 +34,26 @@ import {
 import { cn } from "@/lib/utils"
 
 // A "Try:" tip that can be acted on: the advice itself is the control. Clicking
-// it opens a small menu with the two things a creator can do with a tip, keep it
-// on their checklist or say it missed.
+// it opens the tip out into a card that shows what the advice actually looks
+// like once carried out, three worked examples tabbed through by approach, with
+// the two things a creator can do with a tip underneath: keep it on their
+// checklist, or say it missed.
 //
-// This replaces a pair of icon buttons that sat at the end of every tip. A
-// report can carry dozens of tips, and dozens of pairs of icons made the page
-// read like a toolbar rather than like advice; folding both into the tip means
-// nothing sits beside the words except the tip's own state.
+// The examples are the reason this is a card rather than the menu it used to
+// be. A tip is one line of advice, and the gap between agreeing with it and
+// doing it is the whole difficulty: "Open on the specific claim rather than the
+// setup" is easy to nod at and hard to write. So opening a tip answers the
+// question that follows it, in the creator's own subject matter, and the two
+// actions sit below that answer rather than being the only thing on offer.
+//
+// Everything about the trigger is unchanged: the advice is the clickable thing,
+// laid out as inline text so a long tip wraps mid sentence, and nothing sits
+// beside the words except the tip's own state.
 //
 // The path the tip was read on is captured at click time rather than passed in,
 // so no call site has to plumb it through: it is the page the creator is
-// looking at, which is exactly what the checklist wants to link back to.
+// looking at, which is what the checklist wants to link back to and what the
+// examples are grounded in.
 //
 // COPY GUARDRAIL: no em or en dashes (U+2014 / U+2013), ever, in any text in
 // this file. Hyphens are fine. Enforced by lib/__tests__/copy-guardrails.
@@ -108,9 +117,15 @@ export function TipMenu({
   const { savedFingerprints, markSaved, markRemoved } = useSavedTips()
   const fingerprint = useMemo(() => tipFingerprint(tip), [tip])
   const saved = savedFingerprints.has(fingerprint)
-  // Shown as the menu's heading, so the creator can see what kind of tip they
+  // Shown as the card's heading, so the creator can see what kind of tip they
   // are looking at before they keep it.
   const category = useMemo(() => tipCategoryForSection(section), [section])
+
+  const [open, setOpen] = useState(false)
+  // Read once, when the card is opened, rather than during render: the path is
+  // a browser fact, and a server render has no window to read it from. Both the
+  // examples and anything saved from this card record the same one.
+  const [sourcePath, setSourcePath] = useState("")
 
   const [saveError, setSaveError] = useState<string | null>(null)
   // One flag for both directions: keeping and removing are the same button, and
@@ -185,7 +200,7 @@ export function TipMenu({
           body: JSON.stringify({
             tip,
             section,
-            sourcePath: currentPath(),
+            sourcePath: sourcePath || currentPath(),
             reason,
             notes,
           }),
@@ -210,8 +225,14 @@ export function TipMenu({
 
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger
+      <Popover
+        open={open}
+        onOpenChange={(nextOpen) => {
+          if (nextOpen) setSourcePath(currentPath() ?? "")
+          setOpen(nextOpen)
+        }}
+      >
+        <PopoverTrigger
           // A span rather than a button, so the tip can be laid out as inline
           // text (see the class list below). nativeButton={false} tells Base UI
           // to supply the semantics the element no longer has for itself: the
@@ -219,8 +240,9 @@ export function TipMenu({
           nativeButton={false}
           render={
             <span
-              // The advice is the label; the menu is what opening it offers.
-              aria-label={`${tip} (tip options)`}
+              // The advice is the label; the examples and the two actions are
+              // what opening it offers.
+              aria-label={`${tip} (examples and tip options)`}
               className={cn(
                 // Truly inline, not inline-block: a button is an atomic box by
                 // default, so a long tip could not break across lines and got
@@ -244,60 +266,107 @@ export function TipMenu({
         >
           {label && <span className="font-medium">{label} </span>}
           {tip}
-        </DropdownMenuTrigger>
+        </PopoverTrigger>
 
-        <DropdownMenuContent align="start" className="w-auto min-w-52">
-          {/* The heading names the whole menu, so everything in it sits in one
-              group. The group is not decoration: the label reads its id from
-              the group above it and throws without one, which took the whole
-              page down the moment a tip was clicked. */}
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>
-              {TIP_CATEGORY_LABELS[category]} tip
-            </DropdownMenuLabel>
-            {/* A kept tip offers the way back out rather than restating that it
-                is kept: the mark on the tip already says that, so the menu is
-                left with something to do. */}
-            <DropdownMenuItem
+        {/* Wide enough for a quoted line of narration to read as one, and
+            capped against the viewport so a tip opened on a phone stays on
+            screen. The padding is per section rather than on the popup, so the
+            rule above the actions runs the full width of the card. */}
+        <PopoverContent
+          align="start"
+          aria-label={`Examples and options for the tip: ${tip}`}
+          className="w-[26rem] max-w-[calc(100vw-2rem)] p-0"
+        >
+          <div className="flex flex-col gap-3 p-4">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs font-medium text-muted-foreground">
+                {TIP_CATEGORY_LABELS[category]} tip
+              </span>
+              <span className="text-sm font-medium">
+                Three ways to put this into practice
+              </span>
+            </div>
+            {/* A tip long enough to be a paragraph is a report section that
+                leaked into a callout, and examples of it would be worth
+                neither the wait nor the spend, so the card is the two actions
+                alone. */}
+            {canGenerateTipExamples(tip) ? (
+              <TipExamples
+                tip={tip}
+                section={section}
+                sourcePath={sourcePath}
+              />
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                This tip is too long for worked examples.
+              </p>
+            )}
+          </div>
+
+          <Separator />
+
+          {/* The two things a creator can do with a tip, under the examples
+              rather than in place of them. Both stay usable while the examples
+              are still loading, and if they never arrive. */}
+          <div className="flex flex-wrap items-center gap-2 p-3">
+            <Button
+              size="sm"
+              variant={saved ? "outline" : "default"}
               disabled={isSaving}
               onClick={saved ? remove : save}
             >
-              {saved ? <BookmarkXIcon /> : <BookmarkPlusIcon />}
+              {saved ? (
+                <BookmarkXIcon data-icon="inline-start" />
+              ) : (
+                <BookmarkPlusIcon data-icon="inline-start" />
+              )}
               {saved ? "Remove from checklist" : "Add to checklist"}
-            </DropdownMenuItem>
+            </Button>
             {saved && (
-              <DropdownMenuItem render={<a href="/checklist" />}>
-                <ListChecksIcon />
-                Open your checklist
-              </DropdownMenuItem>
+              <a
+                href="/checklist"
+                className={cn(
+                  buttonVariants({ variant: "ghost", size: "sm" }),
+                  "gap-1",
+                )}
+              >
+                <ListChecksIcon data-icon="inline-start" />
+                Open checklist
+              </a>
             )}
-          </DropdownMenuGroup>
-          {/* Flagging is a one-way, one-time thing, so once it is done the item
-              goes rather than sitting there dead. The menu is then the checklist
-              alone, and the red mark on the tip is what says it was flagged. */}
-          {!flagged && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                variant="destructive"
+            {/* Flagging is a one-way, one-time thing, so once it is done the
+                button goes rather than sitting there dead. The red mark on the
+                tip is what says it was flagged. */}
+            {!flagged && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="ml-auto text-muted-foreground"
                 onClick={() => {
                   setFeedbackError(null)
+                  // The dialog takes the focus and the escape key, so the card
+                  // it was opened from gets out of its way.
+                  setOpen(false)
                   setDialogOpen(true)
                 }}
               >
-                <ThumbsDownIcon />
+                <ThumbsDownIcon data-icon="inline-start" />
                 Not useful
-              </DropdownMenuItem>
-            </>
+              </Button>
+            )}
+          </div>
+
+          {saveError && (
+            <p className="px-3 pb-3 text-xs text-destructive">{saveError}</p>
           )}
-        </DropdownMenuContent>
-      </DropdownMenu>
+        </PopoverContent>
+      </Popover>
       {/* What has already been done with this tip, sitting just outside the
           clickable advice. Nothing separates it from the trigger, so a mark
           stays on the same line as the tip's last word instead of wrapping off
           on its own. Colour is what separates the two marks at this size, green
           for kept and red for flagged, so a glance down a report reads without
-          opening menus. Flagging a tip does not fade the advice: the tip still
+          opening cards. Flagging a tip does not fade the advice: the tip still
           says what it says, and the mark beside it carries the state. */}
       {saved && (
         <TipStateMarker
@@ -312,10 +381,6 @@ export function TipMenu({
           label="Tip flagged as not useful"
           className="text-red-600 dark:text-red-400"
         />
-      )}
-
-      {saveError && (
-        <span className="ml-1 text-xs text-destructive">{saveError}</span>
       )}
 
       {dialogOpen && (

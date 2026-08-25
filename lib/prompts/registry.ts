@@ -39,6 +39,7 @@ import {
   RETENTION_ATTRIBUTION_PROMPT,
   SCRIPT_TAXONOMY_PROMPT,
 } from "@/lib/prompts/defaults/light-analysis"
+import { TIP_EXAMPLES_PROMPT } from "@/lib/prompts/defaults/tips"
 import { TIP_VOICE_PROMPT } from "@/lib/tip-voice"
 
 // The pipelines a prompt can belong to. Mirrors how the cost surfaces already
@@ -48,6 +49,7 @@ export const PROMPT_GROUPS = [
   "light_analysis",
   "deep_analysis",
   "comparison",
+  "tips",
   "shared",
 ] as const
 
@@ -57,6 +59,7 @@ export const PROMPT_GROUP_LABELS: Record<PromptGroup, string> = {
   light_analysis: "Light analysis",
   deep_analysis: "Deep analysis",
   comparison: "Video comparison",
+  tips: "Tips",
   shared: "Shared fragments",
 }
 
@@ -66,6 +69,7 @@ export const PROMPT_GROUP_DESCRIPTIONS: Record<PromptGroup, string> = {
   deep_analysis:
     "The opt-in pass over an uploaded source file: frames, audio and the retention curve read together.",
   comparison: "The head-to-head reports generated between two videos.",
+  tips: "Written on demand when a creator opens a tip, rather than as part of a run.",
   shared:
     "Rules quoted by other prompts rather than sent on their own. Editing one changes every prompt that references it.",
 }
@@ -268,6 +272,20 @@ const DEFINITIONS: readonly PromptDefinition[] = [
     source: "lib/retention-window-event-synthesis.ts",
     modelEnvVar: "OPENAI_EVENT_SYNTHESIS_MODEL",
     default: EVENT_SYNTHESIS_PROMPT,
+    fragments: [],
+  },
+
+  // --- Tips -----------------------------------------------------------------
+  {
+    key: "tip_examples",
+    label: "Tip examples",
+    group: "tips",
+    role: "developer",
+    description:
+      "Writes the three worked examples shown when a creator opens a \"Try:\" tip: the advice already carried out, in the words they would say or type.",
+    source: "lib/tip-examples-generation.ts",
+    modelEnvVar: "OPENAI_TIP_EXAMPLES_MODEL",
+    default: TIP_EXAMPLES_PROMPT,
     fragments: [],
   },
 
