@@ -70,6 +70,7 @@ const CHANNEL_TRENDS_SOURCE_FILES = [
   "lib/retention-sample-size.ts",
   "lib/script-comparison-report.ts",
   "lib/prompts/defaults/tips.ts",
+  "lib/tip-example-voice.ts",
   "lib/tip-examples.ts",
   "lib/tip-examples-generation.ts",
   "lib/tip-voice.ts",

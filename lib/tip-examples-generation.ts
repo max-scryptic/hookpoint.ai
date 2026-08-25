@@ -1,9 +1,17 @@
 // =============================================================================
 // WORKED EXAMPLES FOR A TIP - THE SERVER HALF
 //
-// Writing the three examples behind a "Try:" tip, and keeping them.
+// Writing the three examples behind a "Try:" tip when the tip arrived without
+// any, and keeping them.
 //
-// This is the only model call in the app a creator triggers directly, by
+// This is the fallback, not the main path. Every prompt that writes a tip now
+// writes that tip's examples in the same response, where the transcript, the
+// thumbnail and the evidence are still in front of the model, and those travel
+// with the report. What reaches this module is the remainder: tips in reports
+// generated before that existed, and the hand-written deep-analysis
+// recommendations for any branch whose examples have not been written by hand.
+//
+// It is the only model call in the app a creator triggers directly, by
 // clicking, so it is shaped around that rather than around a pipeline run:
 //
 //   - It is cached before it is generated. The same advice, read on the same
@@ -37,6 +45,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import {
   normaliseTipExamples,
   tipExamplesContextKey,
+  TIP_EXAMPLES_ARRAY_SCHEMA,
   TIP_EXAMPLES_COUNT,
   type TipExample,
 } from "@/lib/tip-examples"
@@ -99,23 +108,14 @@ export class TipExamplesRateLimitError extends Error {
   }
 }
 
+// The same array of examples the six tip-writing prompts ask for, wrapped in the
+// object this call returns on its own.
 const TIP_EXAMPLES_SCHEMA = {
   type: "object",
   additionalProperties: false,
   required: ["examples"],
   properties: {
-    examples: {
-      type: "array",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["label", "example"],
-        properties: {
-          label: { type: "string" },
-          example: { type: "string" },
-        },
-      },
-    },
+    examples: TIP_EXAMPLES_ARRAY_SCHEMA,
   },
 } as const
 

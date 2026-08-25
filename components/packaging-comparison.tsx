@@ -421,6 +421,10 @@ function SurfacePanel({
     tab.drivers.find((driver) => driver.tip)?.tip?.trim() ?? ""
   const tip =
     surfaceTip || driverTip || tab.recommendations[0]?.action.trim() || null
+  // The examples belong to the surface's own tip, which is the only advice here
+  // a model was asked to demonstrate. Where an older report falls back to a
+  // driver tip or a stored recommendation, the card asks for examples instead.
+  const examples = surfaceTip ? tab.read?.tipExamples : undefined
   return (
     <div className="flex w-full flex-col gap-4 rounded-xl border bg-card p-4">
       <SurfaceColumns
@@ -438,6 +442,7 @@ function SurfacePanel({
           section={`Packaging head-to-head: ${
             PACKAGING_REPORT_SURFACE_TAB_LABEL[tab.surface]
           }`}
+          examples={examples}
           actions={tipActions}
         >
           {tip}

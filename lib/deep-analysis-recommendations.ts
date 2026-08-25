@@ -67,6 +67,7 @@
 // with a copy-pasted tip teaches nothing.
 
 import { isNearDuplicateAdvice } from "@/lib/advice-similarity"
+import type { TipExample } from "@/lib/tip-examples"
 import type { RankedRetentionWindowEvent } from "@/lib/deep-analysis-insight-ranking"
 import type { AudioAnalysis } from "@/lib/retention-window-media-analysis"
 import type { PersistedRetentionWindow } from "@/lib/retention-windows"
@@ -93,6 +94,16 @@ export interface RecommendationCopy {
   // Always about their next videos, never about re-editing this one.
   action: string
   expectedPurpose: string
+  // Three worked examples of the action, shown when the uploader opens the tip.
+  //
+  // Written by hand, here, for the same reason the actions are: these tips are
+  // chosen by the branches below rather than by a model, so there is no call
+  // whose response could carry them, and a wording that never changes deserves
+  // examples that never change either. What they cannot be is grounded in this
+  // channel's own subject, which a model writing them beside the transcript
+  // would manage; they are concrete about a situation instead, so a reader can
+  // see the shape of the thing to do and map it onto their own video.
+  examples: readonly TipExample[]
 }
 
 export interface DeepAnalysisRecommendation extends RecommendationCopy {
@@ -134,17 +145,68 @@ const PRESERVE_PATTERN: RecommendationChoice = {
         "Do the same thing again when your next video reaches a moment like this: the same delivery, the same visual change, the same timing.",
       expectedPurpose:
         "Doing what worked again, on purpose, turns one good moment into a habit.",
+      examples: [
+        {
+          label: "Repeat the three beats",
+          example:
+            "Cut to a close-up, say the result in one line, then cut wide again, and make that same three beat move at the big moment of the next video.",
+        },
+        {
+          label: "Copy the timing",
+          example:
+            "Hold two seconds of silence before the reveal, show the reveal, then go straight into the next point with no comment over it.",
+        },
+        {
+          label: "Script the beat",
+          example:
+            "Write 'run the reveal move here' into the next script at the point the payoff lands, so the beat is planned rather than hoped for.",
+        },
+      ],
     },
     {
       action:
         "Write down what made a moment like this work, the set-up, the payoff and how long each one ran, then plan it into your next video.",
       expectedPurpose: "Once it is written down, a moment that worked is easy to build again.",
+      examples: [
+        {
+          label: "Three lines of notes",
+          example:
+            "Write down: setup ran twenty seconds, payoff ran five, and the payoff arrived before any explanation of it.",
+        },
+        {
+          label: "Name the move",
+          example:
+            "Give it a name you will recognise later, such as 'promise, attempt, result', and put that name at the top of the next script.",
+        },
+        {
+          label: "Keep a moments file",
+          example:
+            "Start one note called Moments That Worked and add the timestamp, what happened and how long it ran every time you spot one.",
+        },
+      ],
     },
     {
       action:
         "Put a moment like this near the start of your next video, while most people are still watching, so more of them get to see it.",
       expectedPurpose:
         "Where a strong moment sits decides how many people ever see it.",
+      examples: [
+        {
+          label: "Lead on the payoff",
+          example:
+            "Open on the strongest fifteen seconds, then say 'here is how that happened' and start the story from the beginning.",
+        },
+        {
+          label: "Before the setup",
+          example:
+            "Put the best demonstration inside the first minute and push the background you were going to open with underneath it.",
+        },
+        {
+          label: "Trail it early",
+          example:
+            "Show two seconds of the best moment at the top, then say 'we get there, but first the part that made it possible'.",
+        },
+      ],
     },
   ],
 }
@@ -163,16 +225,67 @@ const SUSTAIN_ATTENTION: RecommendationChoice = {
         "Plan a long section around the kind of thing that holds people in a stretch like this: a decision you work through out loud, or a question you leave open.",
       expectedPurpose:
         "Once you can name what holds people, you can build the next video around it.",
+      examples: [
+        {
+          label: "Decide out loud",
+          example:
+            "Say: 'I have two options here and I do not know which is right, so let me try the cheap one first and see what breaks.'",
+        },
+        {
+          label: "Open the question first",
+          example:
+            "Open the section with: 'By the end of this we will know whether the cheap version actually holds up', and answer it only at the end.",
+        },
+        {
+          label: "One long attempt",
+          example:
+            "Build a ten minute stretch as a single attempt with a result at the end, rather than as four separate tips in a row.",
+        },
+      ],
     },
     {
       action:
         "Leave one thing unanswered through a long stretch, so people in the middle of a video still want to see how it turns out.",
       expectedPurpose: "A question people want answered is what pulls them through a long middle.",
+      examples: [
+        {
+          label: "Name what is withheld",
+          example:
+            "Say: 'There is one number I am not telling you yet, and it is the reason I did this at all.'",
+        },
+        {
+          label: "Hold the result back",
+          example:
+            "Run the whole test on camera and keep the final figure off screen until the last section.",
+        },
+        {
+          label: "Promise a check later",
+          example:
+            "Say: 'We will come back at the end and see whether this held up', then make sure the ending actually does it.",
+        },
+      ],
     },
     {
       action:
         "Give more of your run time to material that works like this, and less to the parts around it.",
       expectedPurpose: "Time spent on what holds people is time they stay for.",
+      examples: [
+        {
+          label: "Double the strong part",
+          example:
+            "If the working-through section ran four minutes and held, plan eight next time and cut two minutes of intro to pay for it.",
+        },
+        {
+          label: "Cut the weakest block",
+          example:
+            "Drop the section you add out of habit, the news round-up or the channel update, and give its minutes to the part people stay for.",
+        },
+        {
+          label: "One subject per video",
+          example:
+            "Take the section that held and make it the whole video, instead of one of five things inside it.",
+        },
+      ],
     },
   ],
 }
@@ -184,16 +297,67 @@ const REPLACE_FREEZE: RecommendationChoice = {
       action:
         "Keep the picture moving through a stretch like this: plan some B-roll, a close-up, or a graphic to cut to instead of leaving one shot on screen.",
       expectedPurpose: "A picture that keeps changing gives people less reason to look away.",
+      examples: [
+        {
+          label: "Cut to the object",
+          example:
+            "While you explain the part, cut to a close-up of it turning in your hands, then back to you for the conclusion.",
+        },
+        {
+          label: "Screen recording over it",
+          example:
+            "Record your screen doing the thing you are describing and run it over the middle of the explanation.",
+        },
+        {
+          label: "Photo on the mention",
+          example:
+            "Put a photo of the finished result on screen the moment you mention it, and hold it for four or five seconds.",
+        },
+      ],
     },
     {
       action:
         "Film talking sections with a second camera angle, so you always have somewhere to cut when the main shot would sit still.",
       expectedPurpose: "A second angle turns a still shot into a cut you can make at any point.",
+      examples: [
+        {
+          label: "Phone as camera two",
+          example:
+            "Stand a phone on a tripod at forty five degrees, record every talking take on both, and cut to it whenever a shot runs long.",
+        },
+        {
+          label: "Wide and close",
+          example:
+            "Frame one camera wide enough to show your hands and the other tight on your face, and cut to the tight one on every key line.",
+        },
+        {
+          label: "Over the shoulder",
+          example:
+            "Put the second camera behind you looking down at the desk, so anything you explain while working has somewhere to cut.",
+        },
+      ],
     },
     {
       action:
         "Add a slow zoom or a reframe to any shot you plan to hold, so the screen keeps changing while you speak.",
       expectedPurpose: "Movement inside a shot does the job of a cut without needing one.",
+      examples: [
+        {
+          label: "Push in slowly",
+          example:
+            "Film wider than you publish, then push in by ten percent across the shot in the edit so the frame is never still.",
+        },
+        {
+          label: "Reframe on the point",
+          example:
+            "Jump the crop from wide to tight exactly as you reach the main point, so the change lands with the sentence.",
+        },
+        {
+          label: "Let the background move",
+          example:
+            "Sit where something behind you moves, a window, a screen, a machine running, so a held shot still has life in it.",
+        },
+      ],
     },
   ],
 }
@@ -205,16 +369,67 @@ const REMOVE_BLACK_FRAME: RecommendationChoice = {
       action:
         "Keep a picture on screen across a change like this instead of cutting to black, or let the black last only a few frames.",
       expectedPurpose: "A change people hardly notice is not a place they stop watching.",
+      examples: [
+        {
+          label: "Cut straight across",
+          example:
+            "Cut from the last frame of one section to the first frame of the next with nothing in between, the way a conversation changes subject.",
+        },
+        {
+          label: "Two frames at most",
+          example:
+            "If you want the beat, keep the black to two or three frames, short enough to read as a blink.",
+        },
+        {
+          label: "Dissolve instead",
+          example:
+            "Use a half second dissolve between the two shots, so there is always a picture on screen while the change happens.",
+        },
+      ],
     },
     {
       action:
         "Start the sound of the next section under the end of the one before it, so the audio carries people over the join.",
       expectedPurpose: "Sound that runs on across a join stops it feeling like the end.",
+      examples: [
+        {
+          label: "Sound arrives first",
+          example:
+            "Bring the next section's music or room tone up under your last sentence, so the sound changes before the picture does.",
+        },
+        {
+          label: "Speak over the join",
+          example:
+            "Record the first line of the new section and lay it across the last two seconds of the old one.",
+        },
+        {
+          label: "One music bed throughout",
+          example:
+            "Let a single music track run straight through the join instead of ending it with the section.",
+        },
+      ],
     },
     {
       action:
         "Make one short title card to use at every section break, with a line of text and a second of music.",
       expectedPurpose: "A break that looks planned reads as part of the video, not a stop.",
+      examples: [
+        {
+          label: "One card, one sting",
+          example:
+            "Build one card reading 'Part two: the test', held for a second over a short music sting, and reuse it at every break.",
+        },
+        {
+          label: "Number the parts",
+          example:
+            "Make cards that say 1, 2 and 3 in your channel's font, so a break reads as progress rather than as a stop.",
+        },
+        {
+          label: "Card over moving footage",
+          example:
+            "Put the section title over B-roll rather than a plain background, so nothing on screen ever comes to a halt.",
+        },
+      ],
     },
   ],
 }
@@ -226,16 +441,67 @@ const TRIM_SILENCE: RecommendationChoice = {
       action:
         "Cut the silence between sentences when you edit, and leave only the short pause a sentence needs.",
       expectedPurpose: "Cutting the empty moments keeps a point moving from start to finish.",
+      examples: [
+        {
+          label: "Close every gap",
+          example:
+            "Go through the talking track and pull each sentence up to the one before it, leaving about a quarter second of air.",
+        },
+        {
+          label: "Cut on the breath",
+          example:
+            "Make the cut just after the in-breath rather than before it, so the join still sounds like ordinary speech.",
+        },
+        {
+          label: "Work off the waveform",
+          example:
+            "Zoom into the waveform, delete every flat stretch longer than a thumb on screen, then listen back once for anything that now runs too fast.",
+        },
+      ],
     },
     {
       action:
         "Pick a limit for how long a gap between sentences can run, half a second works well, and close anything longer when you edit.",
       expectedPurpose: "A number to edit against catches gaps that a quick listen lets through.",
+      examples: [
+        {
+          label: "Half a second, flat",
+          example:
+            "Set the limit at half a second: anything longer gets closed, whatever it felt like while you were recording.",
+        },
+        {
+          label: "Use the silence detector",
+          example:
+            "Run your editor's silence detector at half a second and review what it marks, rather than hunting by ear.",
+        },
+        {
+          label: "One deliberate pause",
+          example:
+            "Allow yourself a single held pause per video, just before the result, and hold every other gap to the limit.",
+        },
+      ],
     },
     {
       action:
         "Know your next sentence before you stop talking, so the pauses you take while thinking never get recorded.",
       expectedPurpose: "Silence you never record is silence you never have to cut.",
+      examples: [
+        {
+          label: "Bullets beside the lens",
+          example:
+            "Put four bullets on a card next to the lens, so the next point is already in front of you when the last one ends.",
+        },
+        {
+          label: "Start the line again",
+          example:
+            "When you lose the thread, stop, wait three seconds, and take that sentence again from the top instead of thinking out loud.",
+        },
+        {
+          label: "Line by line",
+          example:
+            "Record a line, glance at your notes, record the next: a clean take beats a continuous one you have to repair.",
+        },
+      ],
     },
   ],
 }
@@ -248,16 +514,67 @@ const STEADY_THE_DELIVERY: RecommendationChoice = {
       action:
         "Speak at your normal pace when you explain something, or plan a shorter explanation.",
       expectedPurpose: "Your usual pace is the one people came to your channel for.",
+      examples: [
+        {
+          label: "Keep your usual pace",
+          example:
+            "Explain the hard part at the speed you tell a story, and let text on screen carry the detail instead of slowing your voice down.",
+        },
+        {
+          label: "Say the short version",
+          example:
+            "Cut the explanation to the three sentences that matter, say them at full pace, and move on.",
+        },
+        {
+          label: "Say it to someone",
+          example:
+            "Explain it out loud to someone before recording, then keep the wording you used, which will be quicker and plainer.",
+        },
+      ],
     },
     {
       action:
         "Split a long explanation into three or four steps, and give each step one sentence.",
       expectedPurpose: "Broken into steps, an explanation stops growing while you talk.",
+      examples: [
+        {
+          label: "Number them out loud",
+          example:
+            "Say: 'There are three parts to this. One, the cable. Two, the software. Three, the bit everyone gets wrong.'",
+        },
+        {
+          label: "One sentence a step",
+          example:
+            "Write the explanation as four single sentences in the script, and refuse to let a fifth in.",
+        },
+        {
+          label: "Step on screen",
+          example:
+            "Put the step number on screen as you start each one, so the structure is visible as well as spoken.",
+        },
+      ],
     },
     {
       action:
         "Practise an explanation once before you record it, so the take you keep is one where you already know what comes next.",
       expectedPurpose: "A quick practice run holds a pace that a first attempt loses.",
+      examples: [
+        {
+          label: "One dry run",
+          example:
+            "Say the explanation to the empty room once with the camera off, then record it straight afterwards.",
+        },
+        {
+          label: "Keep the second take",
+          example:
+            "Record it twice back to back and keep the second, which is almost always the quicker one.",
+        },
+        {
+          label: "Note the best phrasing",
+          example:
+            "After the practice run, note the phrase that came out best and use exactly that wording on the take.",
+        },
+      ],
     },
   ],
 }
@@ -270,16 +587,67 @@ const GIVE_THE_POINT_ROOM: RecommendationChoice = {
       action:
         "Slow down a little on a key point like this, or use simpler words so it is easy to follow at speed.",
       expectedPurpose: "Your usual pace is the one people are used to hearing from you.",
+      examples: [
+        {
+          label: "Everyday words",
+          example:
+            "Swap the technical phrase for the plain one: say 'it stops the picture juddering' rather than naming the setting.",
+        },
+        {
+          label: "Slow on the number",
+          example:
+            "Say the number itself slowly and clearly, then carry on at your usual speed.",
+        },
+        {
+          label: "One idea a breath",
+          example:
+            "Give each idea its own breath, so a fast delivery still arrives one thing at a time.",
+        },
+      ],
     },
     {
       action:
         "Stop for a second after a key point before you move on, so it has time to land.",
       expectedPurpose: "A pause after the point gives people a moment to take it in.",
+      examples: [
+        {
+          label: "Beat after the line",
+          example:
+            "Say the point, count one in your head before the next sentence, and leave that pause in the edit.",
+        },
+        {
+          label: "Hold the picture",
+          example:
+            "Stay on the shot for a second after the point with nothing spoken over it, so the line has somewhere to sit.",
+        },
+        {
+          label: "Say it once more",
+          example:
+            "Land the point, pause, then add: 'That is the whole trick, by the way.'",
+        },
+      ],
     },
     {
       action:
         "Break a heavy point into two sentences, and put the number or the name at the end of each one, where it is easiest to catch.",
       expectedPurpose: "Short sentences survive fast talking in a way that long ones do not.",
+      examples: [
+        {
+          label: "Number at the end",
+          example:
+            "Say: 'The whole job took one afternoon. The parts cost eleven pounds.'",
+        },
+        {
+          label: "Two short sentences",
+          example:
+            "Instead of one sentence carrying both facts, say: 'The pump failed first. Then the seal went.'",
+        },
+        {
+          label: "Name last",
+          example:
+            "Say: 'There is one setting that fixes this. It is called noise reduction.'",
+        },
+      ],
     },
   ],
 }
@@ -291,21 +659,89 @@ const INCREASE_VISUAL_PACING: RecommendationChoice = {
       action:
         "Plan at least one thing for people to look at during a stretch like this: B-roll, a closer crop, a demo, or a few words on screen.",
       expectedPurpose: "Something new to look at keeps a long talking stretch from feeling flat.",
+      examples: [
+        {
+          label: "Cut to the thing",
+          example:
+            "Halfway through the explanation, cut to twenty seconds of the thing actually running.",
+        },
+        {
+          label: "Show your own sketch",
+          example:
+            "Put the diagram you drew while planning on screen and talk over it.",
+        },
+        {
+          label: "Change the framing",
+          example:
+            "Move from a wide desk shot to a close-up of your hands for the middle of the section.",
+        },
+      ],
     },
     {
       action:
         "Put the numbers, names and steps you are talking about on screen as you say them.",
       expectedPurpose: "Words on screen give a talking section a second way to hold attention.",
+      examples: [
+        {
+          label: "Number in the corner",
+          example:
+            "As you say 'eleven pounds', put 11 pounds in the corner of the frame and leave it there for three seconds.",
+        },
+        {
+          label: "Caption the name",
+          example:
+            "When a part or a person is first mentioned, caption it with the name so nobody is guessing the spelling.",
+        },
+        {
+          label: "Build the list",
+          example:
+            "Stack the steps in the corner, adding each one as you reach it, so the screen shows how far through the section you are.",
+        },
+      ],
     },
     {
       action:
         "Mark the extra shots you will need next to your script before you film, so every couple of sentences has somewhere to cut to.",
       expectedPurpose: "Choosing what to cut to before you film is what makes the footage exist.",
+      examples: [
+        {
+          label: "Mark the margin",
+          example:
+            "Write B-roll in the margin beside every paragraph of the script, and do not start filming until each one has something written next to it.",
+        },
+        {
+          label: "Make a shot list",
+          example:
+            "Collect those margin notes into a list of ten cutaways and film all ten in one pass at the end of the day.",
+        },
+        {
+          label: "Always film these three",
+          example:
+            "Before you pack up, film the three you always need: hands working, the thing at rest, and the room.",
+        },
+      ],
     },
     {
       action:
         "Break a long explanation into two or three shorter parts, and change what fills the screen at each one.",
       expectedPurpose: "A new picture at each part shows people they are getting somewhere.",
+      examples: [
+        {
+          label: "A picture a part",
+          example:
+            "Part one on camera, part two over the screen recording, part three over the finished result.",
+        },
+        {
+          label: "Title between parts",
+          example:
+            "Drop a one second title between the parts, so a change of picture also reads as a change of subject.",
+        },
+        {
+          label: "Move between takes",
+          example:
+            "Film each part somewhere else in the room, so the background changes whenever the part does.",
+        },
+      ],
     },
   ],
 }
@@ -317,16 +753,67 @@ const REDUCE_VISUAL_PACING: RecommendationChoice = {
       action:
         "Cut less through a stretch like this: drop the cuts that add nothing, and let the shot that shows the most stay on screen long enough to take in.",
       expectedPurpose: "A picture people get time to read is a picture that does its job.",
+      examples: [
+        {
+          label: "Keep the best shot",
+          example:
+            "Pick the shot that shows the most and let it run eight or ten seconds while you explain.",
+        },
+        {
+          label: "Drop the decoration",
+          example:
+            "Take out the cuts that show nothing new, the stock clips and the reaction inserts, and keep the ones that show the work.",
+        },
+        {
+          label: "One cut a point",
+          example:
+            "Allow yourself a cut per point rather than a cut every few seconds.",
+        },
+      ],
     },
     {
       action:
         "Pick the one image that carries the point, hold it, and only cut when there is something new to show.",
       expectedPurpose: "One image held long enough is seen. Four flashed past are not.",
+      examples: [
+        {
+          label: "Hold the diagram",
+          example:
+            "Leave the diagram up for the whole explanation and point at parts of it, instead of cutting away and back.",
+        },
+        {
+          label: "Cut on new information",
+          example:
+            "Make the next cut when something changes in the story, not when the shot has simply been up a while.",
+        },
+        {
+          label: "Let the action finish",
+          example:
+            "Stay on the shot until the thing being done is done, even where that takes twenty seconds.",
+        },
+      ],
     },
     {
       action:
         "Save fast cutting for the parts that are about energy, and let the parts where you explain something run on a steady shot.",
       expectedPurpose: "Fast cutting works best when you save it for a reason.",
+      examples: [
+        {
+          label: "Montage the assembly",
+          example:
+            "Cut the build into a fifteen second montage, then hold a steady shot for the part where you explain what went wrong.",
+        },
+        {
+          label: "Two speeds a video",
+          example:
+            "Decide before you edit which two sections get fast cutting, and leave everything else on long shots.",
+        },
+        {
+          label: "Slow for the payoff",
+          example:
+            "Let the result arrive on one long shot with no cuts at all, so it feels unlike everything before it.",
+        },
+      ],
     },
   ],
 }
@@ -340,16 +827,67 @@ const SIGNPOST_TOPIC_SHIFT: RecommendationChoice = {
       action:
         "Tell people what is coming before you change subject, and why it matters to what they clicked for, then keep the new part short.",
       expectedPurpose: "A change people saw coming feels like part of the plan.",
+      examples: [
+        {
+          label: "Say what is coming",
+          example:
+            "Say: 'Before the results, one thing about the setup, because it changes how you read them. Two minutes, then we are back.'",
+        },
+        {
+          label: "Tie to the promise",
+          example:
+            "Say: 'This next part is why the cheap one won, so it is worth the detour.'",
+        },
+        {
+          label: "Name how long",
+          example:
+            "Say: 'Quick aside, thirty seconds, then straight back to the build.'",
+        },
+      ],
     },
     {
       action:
         "Open every new section with one line saying what the viewer gets out of it.",
       expectedPurpose: "A clear payoff gives people a reason to stay through the change.",
+      examples: [
+        {
+          label: "What you will know",
+          example:
+            "Say: 'By the end of this section you will know which of the three is worth buying.'",
+        },
+        {
+          label: "The question it answers",
+          example:
+            "Say: 'This part answers the thing everyone asks: does it work in the cold?'",
+        },
+        {
+          label: "Name the takeaway",
+          example:
+            "Say: 'Here is the setting that fixed it, and where to find it.'",
+        },
+      ],
     },
     {
       action:
         "Group related material together when you put the script in order, and move anything off topic to the end, where leaving costs you least.",
       expectedPurpose: "The order you choose decides how often people are asked to switch subject.",
+      examples: [
+        {
+          label: "One pile a subject",
+          example:
+            "Lay the script out as three blocks, everything about cost together and everything about speed together, with nothing shared between them.",
+        },
+        {
+          label: "Asides to the end",
+          example:
+            "Move the channel update and the sponsor answer to the last minute, after the payoff has landed.",
+        },
+        {
+          label: "Cut the fourth block",
+          example:
+            "Where a block fits none of your three, drop it and keep it for a video of its own.",
+        },
+      ],
     },
   ],
 }
@@ -361,16 +899,67 @@ const ADD_VISUAL_SUPPORT: RecommendationChoice = {
       action:
         "Show something on screen while you make a point like this: a quick demo, a graphic, or a change of camera framing.",
       expectedPurpose: "A point people can see as well as hear is easier to follow.",
+      examples: [
+        {
+          label: "Do it on camera",
+          example:
+            "Instead of saying the joint is weak, hold it up to the lens and pull it apart.",
+        },
+        {
+          label: "Graphic on the comparison",
+          example:
+            "Put a simple bar with the two numbers on screen the moment you compare them.",
+        },
+        {
+          label: "Cut to your hands",
+          example:
+            "Cut to a close-up of your hands doing the step as you describe it.",
+        },
+      ],
     },
     {
       action:
         "Show the thing you are describing happening, rather than describing it, whenever you can put it in front of the camera.",
       expectedPurpose: "Watching something happen is easier than picturing it from words.",
+      examples: [
+        {
+          label: "Film the failure",
+          example:
+            "Record the moment it breaks and play that, rather than telling people it broke.",
+        },
+        {
+          label: "Before and after",
+          example:
+            "Put the two versions side by side on screen and switch between them while you talk.",
+        },
+        {
+          label: "Run it live",
+          example:
+            "Do the test on camera in real time, even where it takes a minute, and speed it up in the edit.",
+        },
+      ],
     },
     {
       action:
         "Draw a simple diagram for an explanation with several parts, and reveal one part at a time as you reach it.",
       expectedPurpose: "A diagram that builds up in steps keeps the picture level with the words.",
+      examples: [
+        {
+          label: "Build it up",
+          example:
+            "Start with the empty box, add the input, then the output, revealing each part as you reach it.",
+        },
+        {
+          label: "Draw it by hand",
+          example:
+            "Sketch it on paper under a phone camera and let people watch the drawing appear.",
+        },
+        {
+          label: "Light up one part",
+          example:
+            "Keep the whole diagram on screen and brighten only the part you are talking about.",
+        },
+      ],
     },
   ],
 }
@@ -382,16 +971,67 @@ const REVIEW_TRANSITION: RecommendationChoice = {
       action:
         "Move straight into the next point at a moment like this, rather than talking your way into it.",
       expectedPurpose: "A quick hand-over gives people less of a gap to drift off in.",
+      examples: [
+        {
+          label: "Cut the run-up",
+          example:
+            "Delete the sentence starting 'so now that we have done that', and begin on the new point instead.",
+        },
+        {
+          label: "Cut on the point",
+          example:
+            "Cut from the last word of one point to the first word of the next, with nothing between them.",
+        },
+        {
+          label: "One word bridge",
+          example:
+            "Say: 'Right. Second problem.' and go straight into it.",
+        },
+      ],
     },
     {
       action:
         "Start each new section with the point itself, not with a warm-up sentence.",
       expectedPurpose: "A section that opens on its point never has to win people back.",
+      examples: [
+        {
+          label: "Point first",
+          example:
+            "Say: 'The cheap one lasted longer', then explain why, rather than working up to it.",
+        },
+        {
+          label: "Drop the throat clear",
+          example:
+            "Cut 'okay so, the next thing I wanted to talk about was' and start on the noun.",
+        },
+        {
+          label: "Answer it straight away",
+          example:
+            "Say: 'Does it survive a winter outside? No.'",
+        },
+      ],
     },
     {
       action:
         "Trim the end of a section as you edit, so one point finishes and the next begins with nothing in between.",
       expectedPurpose: "The join is where attention is weakest, so it is worth keeping short.",
+      examples: [
+        {
+          label: "Cut the trailing off",
+          example:
+            "Delete the last sentence of each section, which is usually a restatement of the one before it.",
+        },
+        {
+          label: "End on the finding",
+          example:
+            "Make the closing line of a section the finding itself, and cut on the word.",
+        },
+        {
+          label: "Play the joins alone",
+          example:
+            "Play only the joins back to back once, and trim any that take more than a second to get moving.",
+        },
+      ],
     },
   ],
 }
@@ -580,6 +1220,10 @@ export function compileDeepAnalysisRecommendations(params: {
       actionType,
       action: preferred.action,
       expectedPurpose: preferred.expectedPurpose,
+      // The examples belong to the wording, not to the branch, so they travel
+      // with whichever wording ends up on the page: the swap below moves all
+      // three together.
+      examples: preferred.examples,
       alternativeCopy: alternatives,
       rationale: event.narrative,
     }
@@ -620,8 +1264,16 @@ export function dedupeDeepAnalysisRecommendations(
     )
     if (sameMoment) continue
 
-    const { action, expectedPurpose, alternativeCopy = [] } = recommendation
-    const unsaid = [{ action, expectedPurpose }, ...alternativeCopy].find(
+    const {
+      action,
+      expectedPurpose,
+      examples,
+      alternativeCopy = [],
+    } = recommendation
+    const unsaid = [
+      { action, expectedPurpose, examples },
+      ...alternativeCopy,
+    ].find(
       (copy) =>
         !kept.some(
           (existing) =>
@@ -633,6 +1285,8 @@ export function dedupeDeepAnalysisRecommendations(
 
     recommendation.action = unsaid.action
     recommendation.expectedPurpose = unsaid.expectedPurpose
+    // A swapped wording demonstrates itself, never the wording it replaced.
+    recommendation.examples = unsaid.examples
     // Working state only: the wordings not used are of no interest to a
     // renderer, and this object is serialised into the page payload.
     delete recommendation.alternativeCopy

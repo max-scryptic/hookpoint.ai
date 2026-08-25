@@ -24,7 +24,10 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { canGenerateTipExamples } from "@/lib/tip-examples"
+import {
+  canGenerateTipExamples,
+  type TipExample,
+} from "@/lib/tip-examples"
 import {
   tipCategoryForSection,
   tipFingerprint,
@@ -104,10 +107,15 @@ function TipStateMarker({
 export function TipMenu({
   tip,
   section,
+  examples,
   label,
 }: {
   tip: string
   section: string
+  // The examples this tip was written with, where its report carries them.
+  // Passed to the panel below, which asks the server for them only when a tip
+  // arrives without any.
+  examples?: readonly TipExample[]
   // The word that introduces the tip, "Try:". It lives inside the trigger
   // rather than beside it so the label and the advice are one run of inline
   // text: a long tip wraps mid sentence instead of being pushed whole onto the
@@ -290,11 +298,12 @@ export function TipMenu({
                 leaked into a callout, and examples of it would be worth
                 neither the wait nor the spend, so the card is the two actions
                 alone. */}
-            {canGenerateTipExamples(tip) ? (
+            {canGenerateTipExamples(tip) || (examples?.length ?? 0) > 0 ? (
               <TipExamples
                 tip={tip}
                 section={section}
                 sourcePath={sourcePath}
+                examples={examples}
               />
             ) : (
               <p className="text-xs text-muted-foreground">

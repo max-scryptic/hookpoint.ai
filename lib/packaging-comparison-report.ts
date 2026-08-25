@@ -62,6 +62,11 @@ import { PACKAGING_COMPARISON_REPORT_SCHEMA_VERSION } from "@/lib/comparison-rep
 import { recordLlmCallCost, type LlmLogContext } from "@/lib/llm-calls"
 import { responsesCallCost, type ResponsesUsage } from "@/lib/llm-cost"
 import { resolvePrompt } from "@/lib/prompts/resolve"
+import {
+  tipExamplesField,
+  TIP_EXAMPLES_ARRAY_SCHEMA,
+  type TipExample,
+} from "@/lib/tip-examples"
 import { getOrGeneratePackagingAlignment } from "@/lib/packaging-alignments"
 import {
   emptyHookEvidence,
@@ -140,6 +145,13 @@ export interface PackagingReportSurfaceRead {
   // reports stored before schema version 5 predate it; the model always writes
   // one now.
   tip?: string
+  // Three worked examples of that tip, written in the same call, which is the
+  // one holding both thumbnails as images and both hooks. Only a surface tip
+  // carries them: the drivers are never shown to the reader, so examples of a
+  // driver tip would be paid for and never read. Absent, like the tip itself,
+  // where there is nothing to carry: a report stored before examples existed
+  // has the interface fill them in from /api/tips/examples on open.
+  tipExamples?: TipExample[]
 }
 
 // One ranked reason the stronger video is stronger.
@@ -263,6 +275,7 @@ const REPORT_SCHEMA = {
           "bRead",
           "whyItMatters",
           "tip",
+          "tipExamples",
         ],
         properties: {
           surface: { type: "string", enum: surfaceEnum },
@@ -271,6 +284,7 @@ const REPORT_SCHEMA = {
           bRead: { type: "string" },
           whyItMatters: { type: "string" },
           tip: { type: "string" },
+          tipExamples: TIP_EXAMPLES_ARRAY_SCHEMA,
         },
       },
     },
@@ -372,7 +386,10 @@ export function isPackagingComparisonReportOutput(
         // Optional so a report stored before schema version 5, when a surface
         // carried no tip of its own, still validates if it is ever fed back
         // through here.
-        (s.tip === undefined || typeof s.tip === "string")
+        (s.tip === undefined || typeof s.tip === "string") &&
+        // Examples arrived after the surface tip did, so a report stored
+        // without them validates too.
+        (s.tipExamples === undefined || Array.isArray(s.tipExamples))
       )
     })
   ) {
@@ -604,7 +621,9 @@ export async function generatePackagingComparisonReport(
     body: JSON.stringify({
       model,
       ...reasoningFor(model),
-      max_output_tokens: 4_000,
+      // Every surface now carries three worked examples of its tip on top of
+      // the reads, the drivers and the verdict.
+      max_output_tokens: 6_000,
       input: [
         {
           role: "developer",
@@ -684,8 +703,11 @@ export function normalizePackagingComparisonReport(
           bRead: surface.bRead.trim(),
           whyItMatters: surface.whyItMatters.trim(),
           // Dropped rather than stored empty, so the renderer's "has a tip"
-          // test is a plain presence check.
-          ...(tip.length > 0 ? { tip } : {}),
+          // test is a plain presence check. The examples demonstrate the tip,
+          // so they travel with it and go when it goes.
+          ...(tip.length > 0
+            ? { tip, ...tipExamplesField(surface.tipExamples) }
+            : {}),
         }
       })
       .filter(

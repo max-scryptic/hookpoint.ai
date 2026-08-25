@@ -14,9 +14,13 @@ import {
 } from "@/lib/tip-examples-generation"
 import { tipCategoryForSection, TIP_SECTION_MAX_LENGTH } from "@/lib/tips"
 
-// The three worked examples behind one "Try:" tip, written the first time
-// anybody opens it and read back from the cache after that (see
-// lib/tip-examples-generation.ts).
+// The three worked examples behind one "Try:" tip, for a tip that arrived
+// without any: a report generated before the examples existed, or a
+// deep-analysis tip whose hand-written branch has none. Everything else carries
+// its examples from the prompt that wrote the advice, and never reaches here.
+//
+// Written the first time anybody opens such a tip and read back from the cache
+// after that (see lib/tip-examples-generation.ts).
 //
 // The video the examples are grounded in is looked up here rather than sent by
 // the client: the request carries the path the tip was read on, the same one

@@ -3,10 +3,12 @@ import type { ReactNode } from "react"
 
 import { TipMenu } from "@/components/tip-menu"
 import { cleanCopy } from "@/lib/copy-guardrails"
+import type { TipExample } from "@/lib/tip-examples"
 
 export function TryCallout({
   children,
   section,
+  examples,
   actions = true,
 }: {
   children: ReactNode
@@ -15,6 +17,11 @@ export function TryCallout({
   // what part of a report it came from long after that report is closed, and so
   // a flag tells us which surface keeps producing advice that misses.
   section: string
+  // The worked examples this tip was written with, where the report carries
+  // them: the prompt that wrote the advice wrote three demonstrations of it in
+  // the same response. Passed straight through to the card behind the tip,
+  // which falls back to asking for them when a report predates them.
+  examples?: readonly TipExample[]
   // Whether the tip itself is clickable. The menu behind it belongs to the
   // creator reading their own report, so surfaces that show someone else's tips
   // (the admin evidence view) turn it off and render the advice as plain text.
@@ -40,7 +47,12 @@ export function TryCallout({
           sentence rather than sitting on separate lines. */}
       <span>
         {actions && typeof tip === "string" ? (
-          <TipMenu tip={tip} section={section} label="Try:" />
+          <TipMenu
+            tip={tip}
+            section={section}
+            examples={examples}
+            label="Try:"
+          />
         ) : (
           <>
             <span className="font-medium">Try: </span>

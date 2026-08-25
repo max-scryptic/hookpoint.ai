@@ -4,10 +4,17 @@
 -- setup"), and a creator reading it still has to work out what that actually
 -- looks like in their own video. Opening a tip now shows three concrete
 -- examples of following it, written for the subject the creator makes videos
--- about, and they are written by a model the first time somebody opens that
--- tip.
+-- about.
 --
--- This table is that generation, kept. Nothing here is a creator's own data:
+-- Almost every tip now arrives with its examples already written: the prompt
+-- that wrote the advice writes three demonstrations of it in the same response,
+-- where the transcript, the thumbnail and the evidence are still in front of
+-- the model, and they are stored with the report. This table serves the rest:
+-- tips in reports generated before that existed, and the hand-written
+-- deep-analysis tips, whose examples are written on demand instead.
+--
+-- This table is that on-demand generation, kept. Nothing here is a creator's
+-- own data:
 -- the same advice met on two reports, by two creators, is the same advice, so
 -- the examples are cached once and read back by everyone who opens it. The
 -- second reader of a tip costs nothing and, just as importantly, sees the same

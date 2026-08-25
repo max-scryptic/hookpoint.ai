@@ -46,6 +46,30 @@ export interface TipExample {
 // a fourth example is one more thing to read past rather than one more idea.
 export const TIP_EXAMPLES_COUNT = 3
 
+/**
+ * The JSON schema one example is asked for under, and the array of them a tip
+ * carries. Stated once and quoted into all seven schemas that ask for examples
+ * (the six prompts that write tips, and the on-demand fallback), so an example
+ * has one shape wherever it was written.
+ *
+ * No minItems or maxItems: OpenAI's strict mode rejects both, so the count is
+ * asked for in the prompt and enforced by normaliseTipExamples on the way back.
+ */
+export const TIP_EXAMPLE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["label", "example"],
+  properties: {
+    label: { type: "string" },
+    example: { type: "string" },
+  },
+} as const
+
+export const TIP_EXAMPLES_ARRAY_SCHEMA = {
+  type: "array",
+  items: TIP_EXAMPLE_SCHEMA,
+} as const
+
 // A tab label, so short enough to sit in a strip of three without wrapping.
 export const TIP_EXAMPLE_LABEL_MAX_LENGTH = 40
 
@@ -120,6 +144,19 @@ export function normaliseTipExamples(value: unknown): TipExample[] {
       ...entry,
       label: entry.label || `Example ${index + 1}`,
     }))
+}
+
+/**
+ * The examples as a field to spread beside a tip, or nothing at all.
+ *
+ * The three head-to-head reports store a section's tip by spreading it in only
+ * when there is one, so the renderer's "has a tip" test stays a plain presence
+ * check. The examples follow the same convention, and it is stated once here so
+ * all three do it the same way.
+ */
+export function tipExamplesField(value: unknown): { tipExamples?: TipExample[] } {
+  const examples = normaliseTipExamples(value)
+  return examples.length > 0 ? { tipExamples: examples } : {}
 }
 
 /**

@@ -13,6 +13,11 @@ import { responsesCallCost, type ResponsesUsage } from "@/lib/llm-cost"
 import { resolvePrompt } from "@/lib/prompts/resolve"
 import type { RetentionWindow } from "@/lib/retention-windows"
 import {
+  normaliseTipExamples,
+  TIP_EXAMPLES_ARRAY_SCHEMA,
+  type TipExample,
+} from "@/lib/tip-examples"
+import {
   transcriptForSegment,
   type TranscriptCue,
   type VideoDetails,
@@ -37,6 +42,11 @@ export type RetentionMomentKind = "hook" | "drop_off" | "gain" | "hold"
 // where no row ever carried advice. Every attribution stored at 7 was written
 // under that instruction, so their holds are silent for a reason that no longer
 // applies and they are regenerated.
+// NOT bumped to 9 for the worked examples now written beside every tip (see
+// lib/tip-example-voice.ts). A stored attribution's tips are still right, they
+// simply carry no examples, and opening one asks /api/tips/examples for the
+// three instead. A bump would regenerate every attribution in the product, at
+// our cost, to replace advice that was not wrong.
 export const RETENTION_ATTRIBUTION_SCHEMA_VERSION = 8
 
 // THE WARRANT
@@ -97,6 +107,12 @@ export interface RetentionMomentAttribution {
   // re-edit or an A/B against the current cut is not something they can act on;
   // the prompt below forbids that framing.
   tip: string | null
+  // Three worked examples of the tip, written in the same call so the
+  // transcript spoken around the moment is still in front of the model. Empty
+  // whenever there is no tip to demonstrate, and absent altogether on
+  // attributions stored before examples existed, which the interface fills in
+  // from /api/tips/examples when the tip is opened.
+  tipExamples?: TipExample[]
   // The model's own reading of how far the supplied transcript justifies the tip
   // it wrote, 0..1. Kept after the gate has been applied so an admin can see
   // that a moment was quiet by choice, and at what score, rather than for want
@@ -128,6 +144,7 @@ interface ModelMoment {
   momentIndex: number
   explanation: string
   tip: string | null
+  tipExamples: unknown
   tipWarrant: number
   confidence: number
 }
@@ -152,6 +169,7 @@ const ATTRIBUTION_SCHEMA = {
           "momentIndex",
           "explanation",
           "tip",
+          "tipExamples",
           "tipWarrant",
           "confidence",
         ],
@@ -159,6 +177,7 @@ const ATTRIBUTION_SCHEMA = {
           momentIndex: { type: "integer" },
           explanation: { type: "string" },
           tip: { type: ["string", "null"] },
+          tipExamples: TIP_EXAMPLES_ARRAY_SCHEMA,
           tipWarrant: { type: "number", minimum: 0, maximum: 1 },
           confidence: { type: "number", minimum: 0, maximum: 1 },
         },
@@ -256,7 +275,10 @@ export async function generateRetentionAttribution(
     },
     body: JSON.stringify({
       model,
-      max_output_tokens: Math.min(32_000, Math.max(4_000, moments.length * 500)),
+      // A moment that earns a tip now writes three worked examples with it, so
+      // the per moment allowance is up from 500. A truncated response is a
+      // failed analysis, and an unspent ceiling costs nothing.
+      max_output_tokens: Math.min(32_000, Math.max(6_000, moments.length * 700)),
       input: [
         {
           role: "developer",
@@ -342,6 +364,9 @@ export async function generateRetentionAttribution(
       // with no score behind it (a malformed entry, a moment the model skipped)
       // has nothing vouching for it, so it is treated as unwarranted.
       const tipWarrant = clamp01(analysis?.tipWarrant ?? 0)
+      // A tip the gate below drops takes its examples with it: they demonstrate
+      // advice that is no longer being given.
+      const keptTip = tip && tipWarrant >= MINIMUM_TIP_WARRANT ? tip : null
       return {
         kind: moment.kind,
         windowIndex: moment.windowIndex,
@@ -353,7 +378,8 @@ export async function generateRetentionAttribution(
         // fall back to a fixed "note what worked and reuse it" sentence. That
         // fallback fired precisely when the model had nothing to say, so it was
         // guaranteed to be filler every time it appeared.
-        tip: tip && tipWarrant >= MINIMUM_TIP_WARRANT ? tip : null,
+        tip: keptTip,
+        tipExamples: keptTip ? normaliseTipExamples(analysis?.tipExamples) : [],
         tipWarrant: tip ? tipWarrant : 0,
         confidence: clamp01(analysis?.confidence ?? 0),
       }

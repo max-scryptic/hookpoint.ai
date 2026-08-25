@@ -209,6 +209,7 @@ function ReportSection({
       {tip.length > 0 && (
         <TryCallout
           section={`Script head-to-head: ${clean(section.heading)}`}
+          examples={section.tipExamples}
           actions={tipActions}
         >
           {tip}

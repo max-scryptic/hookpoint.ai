@@ -18,12 +18,13 @@ import { tipFingerprint } from "@/lib/tips"
 // subject matter, so the tip arrives as something to copy rather than something
 // to interpret.
 //
-// The examples are written by a model the first time anybody opens a given tip
-// and cached server side after that (see lib/tip-examples-generation.ts), so
-// the request behind this is usually a cache read. It is still a round trip,
-// which is why nothing else in the popup waits on it: the two actions under
-// this panel are rendered and usable while it is still loading, and stay usable
-// if it fails.
+// Almost always the examples arrive with the tip, written by the same prompt
+// that wrote the advice, and this renders them with nothing to wait for. The
+// request below is the fallback for a tip that carries none: a report generated
+// before the examples existed, or a deep-analysis tip whose hand-written branch
+// has none. That path is a round trip, which is why nothing else in the card
+// waits on it: the two actions under this panel are usable while it is still
+// loading, and stay usable if it fails.
 //
 // COPY GUARDRAIL: no em or en dashes (U+2014 / U+2013), ever, in any text in
 // this file. Hyphens are fine. Enforced by lib/__tests__/copy-guardrails.
@@ -94,10 +95,21 @@ export function TipExamples({
   // server grounds the examples in: the video behind that report is what the
   // creator makes videos about.
   sourcePath,
+  // The examples the report already carries, where it carries them. Almost
+  // every tip written now does: the prompt that wrote the advice wrote its
+  // examples in the same response, with the transcript, the thumbnail and the
+  // evidence still in front of it. Then there is nothing to fetch and nothing
+  // to wait for, and the card opens with the examples already in it.
+  //
+  // The request below is what serves the rest: tips in reports generated before
+  // that existed, and the hand-written deep-analysis tips whose examples are
+  // written by hand only where a branch has them.
+  examples: provided,
 }: {
   tip: string
   section: string
   sourcePath: string
+  examples?: readonly TipExample[]
 }) {
   const key = cacheKey(tip, sourcePath)
   // Bumped by "Try again", which is the whole of retrying: the effect below
@@ -118,12 +130,14 @@ export function TipExamples({
   // makes reopening a tip instant: the popup unmounts its contents on close, so
   // this component is mounted fresh every time and would otherwise ask again.
   const settled = answer.key === key && answer.attempt === attempt
-  const examples = cache.get(key) ?? (settled ? answer.examples : null)
-  const error = settled ? answer.error : null
+  const carried = provided && provided.length > 0 ? provided : null
+  const examples = carried ?? cache.get(key) ?? (settled ? answer.examples : null)
+  const error = carried ? null : settled ? answer.error : null
 
   useEffect(() => {
-    // Already answered above, so there is nothing to ask.
-    if (cache.has(key)) return
+    // Written with the tip, or already answered above: either way there is
+    // nothing to ask for.
+    if (carried || cache.has(key)) return
 
     let active = true
     // Two callouts showing the same advice, opened in the same moment, share
@@ -165,7 +179,7 @@ export function TipExamples({
     return () => {
       active = false
     }
-  }, [key, attempt, tip, section, sourcePath])
+  }, [carried, key, attempt, tip, section, sourcePath])
 
   // Nothing settled and nothing cached: the request is still out. The skeleton
   // is the first paint of every tip opened for the first time.

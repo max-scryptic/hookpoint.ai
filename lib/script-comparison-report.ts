@@ -40,6 +40,11 @@ import { SCRIPT_COMPARISON_REPORT_SCHEMA_VERSION } from "@/lib/comparison-report
 import { recordLlmCallCost, type LlmLogContext } from "@/lib/llm-calls"
 import { responsesCallCost, type ResponsesUsage } from "@/lib/llm-cost"
 import { resolvePrompt } from "@/lib/prompts/resolve"
+import {
+  tipExamplesField,
+  TIP_EXAMPLES_ARRAY_SCHEMA,
+  type TipExample,
+} from "@/lib/tip-examples"
 import type { PackagingTaxonomy } from "@/lib/packaging-taxonomy"
 import { getOrGenerateScriptTaxonomy } from "@/lib/script-taxonomies"
 import { saveScriptComparisonReport } from "@/lib/video-comparisons"
@@ -89,6 +94,11 @@ export interface ScriptComparisonReportSection {
   // reports stored before schema version 2 predate it; the model always writes
   // one now.
   tip?: string
+  // Three worked examples of that tip, written in the same call so both
+  // transcripts are still in front of the model. Absent, like the tip itself,
+  // where there is nothing to carry: a report stored before examples existed
+  // has the interface fill them in from /api/tips/examples on open.
+  tipExamples?: TipExample[]
 }
 
 export interface ScriptComparisonReport {
@@ -159,6 +169,7 @@ const REPORT_SCHEMA = {
           "strongerSide",
           "body",
           "tip",
+          "tipExamples",
         ],
         properties: {
           heading: { type: "string" },
@@ -167,6 +178,7 @@ const REPORT_SCHEMA = {
           strongerSide: { type: "string", enum: ["a", "b", "neither"] },
           body: { type: "string" },
           tip: { type: "string" },
+          tipExamples: TIP_EXAMPLES_ARRAY_SCHEMA,
         },
       },
     },
@@ -209,7 +221,10 @@ function isModelReportOutput(value: unknown): value is ModelReportOutput {
         (s.strongerSide === undefined || isSideOrNeither(s.strongerSide)) &&
         // A report stored before schema version 2 carried no section tip, and
         // still validates if it is ever fed back through here.
-        (s.tip === undefined || typeof s.tip === "string")
+        (s.tip === undefined || typeof s.tip === "string") &&
+        // Examples arrived after the tip did, so a report stored without them
+        // validates too.
+        (s.tipExamples === undefined || Array.isArray(s.tipExamples))
       )
     })
   )
@@ -352,7 +367,10 @@ export async function generateScriptComparisonReport(
       // Six themes now carry two columns of points each on top of their
       // conclusion and their tip, so the ceiling that fitted the paragraph-only
       // shape would truncate a full report.
-      max_output_tokens: 3_000,
+      // Up from 3,000: three to six sections, each now carrying three worked
+      // examples of its tip on top of its two columns. A truncated response is
+      // a failed report.
+      max_output_tokens: 5_000,
       input: [
         {
           role: "developer",
@@ -423,8 +441,11 @@ export async function generateScriptComparisonReport(
             : {}),
           body: section.body.trim(),
           // Dropped rather than stored empty, so the renderer's "has a tip"
-          // test stays a simple presence check.
-          ...(tip.length > 0 ? { tip } : {}),
+          // test stays a simple presence check. The examples demonstrate the
+          // tip, so they travel with it and go when it goes.
+          ...(tip.length > 0
+            ? { tip, ...tipExamplesField(section.tipExamples) }
+            : {}),
         }
       })
       .filter((section) => section.heading.length > 0 && section.body.length > 0)

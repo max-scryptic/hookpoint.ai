@@ -27,6 +27,10 @@ export const PACING_PROMPT = [
   // stretch that keeps a useful tip, while one caught at render
   // time is a stretch that loses its tip altogether.
   "No two suggestions in your response may give the same advice. Two stretches often share a cause, and the second one still has to teach something the first did not: name a different action rather than restating the first suggestion in other words. Where you genuinely have nothing new to add about a stretch, say the one thing that is specific to it.",
+  // The examples travel with the suggestion because this call is
+  // the one holding the transcript of the stretch they have to be
+  // concrete about. See lib/tip-example-voice.ts.
+  "Every suggestion also carries three worked examples, in its examples field: what that advice looks like once carried out, in this channel's own subject matter. The rules that follow apply to those examples and to nothing else here. {{tip_example_voice}}",
   "Order stretches from most to least worth reviewing. Return fewer than 3 only when the video genuinely has no such areas, and never more than 5.",
   'Never output an em dash character (U+2014) anywhere in your response; if you would use one, rewrite the phrase with a comma, colon, parentheses, or two separate sentences instead.',
 ].join(" ")
@@ -38,6 +42,12 @@ export const RETENTION_ATTRIBUTION_PROMPT = [
   "Reason only from the supplied transcript, timestamps and retention numbers. Do not infer visuals, editing, music, thumbnails or vocal delivery; you cannot see or hear the video.",
   "{{tip_voice}}",
   "The explanation and the tip are written under different rules, so keep them apart. The explanation describes this video: it names what was said at that moment and may quote it. The tip never does; it is the advice for the next video, written to stand on its own.",
+  // The examples are written here, beside the transcript of the
+  // moment, rather than from the tip alone later. A moment with no
+  // tip has nothing to demonstrate, so it returns none: the
+  // warrant above decides whether there is advice at all, and the
+  // examples simply follow it. See lib/tip-example-voice.ts.
+  "A tip also carries three worked examples, in its tipExamples field: what that advice looks like once carried out, in this channel's own subject matter. Return an empty tipExamples list whenever tip is null, and exactly three whenever it is not. The rules that follow apply to those examples alone, not to the explanation or the tip. {{tip_example_voice}}",
   // The warrant. See THE WARRANT above for why a tip has to be
   // earned here rather than produced on demand.
   "Every moment gets an explanation. A tip is not owed one. You are reading a transcript with no picture and no sound, so a great many retention moments have a cause you cannot see: a held frame, a jump cut, a sponsor bumper, a graphic that did or did not land, a change in energy, a stretch where the picture stopped moving. Where that is the likelier story, the words in front of you cannot tell you what to advise, and a tip written anyway is a guess dressed up as analysis. Set tip to null and let the explanation stand on its own. Returning null is the expected outcome for a large share of moments and is never a failure to do the task.",
@@ -82,6 +92,10 @@ export const PACKAGING_ALIGNMENT_PROMPT = [
   // overall, summary and whatWorked are the opposite, and stay
   // descriptions of the packaging actually supplied.
   "Exactly one of these fields is advice: whatCouldBeBetter. It is shown to the uploader behind a \"Try:\" label as a tip, so it is written under the rules that follow, which apply to it and to nothing else here. {{tip_voice}} Your overall, summary and whatWorked fields are the opposite: those describe the title, thumbnail and hook you were actually given, so they refer to them freely.",
+  // The one call in the app that has actually looked at the
+  // thumbnail, so it is the one that can show what a better one
+  // would carry. See lib/tip-example-voice.ts.
+  "Each component also carries three worked examples of its whatCouldBeBetter point, in its examples field: what that advice looks like once carried out, in this channel's own subject matter. Write the title examples as titles ready to be typed, and the hook examples as opening lines ready to be said. Return an empty examples list only where whatCouldBeBetter is empty too. The rules that follow apply to those examples and to nothing else here. {{tip_example_voice}}",
   "If the hook transcript is empty, work from the title and thumbnail alone rather than inventing what was said.",
   'Never output an em dash character (U+2014) anywhere in your response; if you would use one, rewrite the phrase with a comma, colon, parentheses, or two separate sentences instead.',
 ].join(" ")
