@@ -73,12 +73,15 @@ async function requestExamples(
 function ExamplesSkeleton() {
   return (
     <div className="flex flex-col gap-3" aria-hidden="true">
+      {/* Three equal tabs, because that is what the strip now holds: the labels
+          are "Example 1 / 2 / 3" rather than phrases of differing length. */}
       <div className="flex gap-1">
-        <Skeleton className="h-7 w-24" />
         <Skeleton className="h-7 w-20" />
-        <Skeleton className="h-7 w-24" />
+        <Skeleton className="h-7 w-20" />
+        <Skeleton className="h-7 w-20" />
       </div>
       <div className="flex flex-col gap-1.5">
+        <Skeleton className="h-3.5 w-1/3" />
         <Skeleton className="h-3.5 w-full" />
         <Skeleton className="h-3.5 w-11/12" />
         <Skeleton className="h-3.5 w-2/3" />
@@ -203,22 +206,33 @@ export function TipExamples({
 
   return (
     <Tabs defaultValue="0" className="gap-2.5">
-      {/* One unwrapped row that scrolls sideways if the three labels are long,
-          so a set of wordy labels never widens the popup or stacks the strip
-          into three rows above a one-line example. */}
+      {/* The tabs are numbered rather than named, in every tip popup on every
+          report: a model-written label is a different length and a different
+          kind of phrase each time, so a strip of them read differently from one
+          card to the next and could push the row into a sideways scroll.
+          "Example 1 / 2 / 3" is the same three words everywhere, which leaves
+          the strip a place to move between examples rather than something to
+          read, and the approach each one takes is said above the example
+          itself, where there is room for it. */}
       <TabsList className="max-w-full overflow-x-auto">
-        {examples.map((example, index) => (
+        {examples.map((_, index) => (
           <TabsTrigger
             key={index}
             value={String(index)}
             className="px-2 py-1 text-xs"
           >
-            {example.label}
+            Example {index + 1}
           </TabsTrigger>
         ))}
       </TabsList>
       {examples.map((example, index) => (
-        <TabsContent key={index} value={String(index)}>
+        <TabsContent key={index} value={String(index)} className="flex flex-col gap-1.5">
+          {/* The approach this example takes, in the words the tip was written
+              with. It used to be the tab's own label; it reads here instead, as
+              a heading over the thing it describes. */}
+          <span className="text-xs font-medium text-muted-foreground">
+            {example.label}
+          </span>
           {/* The rule down the side is what marks this out as the thing itself
               rather than more advice about it: an example is read the way a
               quote is. */}
