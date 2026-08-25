@@ -49,8 +49,8 @@ const EVENT_DEFINITIONS: { label: string; description: string }[] = [
 ]
 
 // The info affordance next to the retention tabs. Answers the two questions a
-// reader has when a window sits there with no advice on it: how the moment was
-// picked, and why some windows carry a tip and others do not.
+// reader has about the lists under the curve: how each moment was picked, and
+// why a moment the curve plainly shows can be missing from every list.
 export function RetentionEventsInfo() {
   return (
     <Popover>
@@ -81,13 +81,18 @@ export function RetentionEventsInfo() {
           </ul>
         </div>
         <div className="flex flex-col gap-1 border-t pt-3">
-          <p className="font-medium text-foreground">When you get a tip</p>
+          <p className="font-medium text-foreground">
+            Why a window may be missing
+          </p>
           <p className="text-muted-foreground">
-            Light analysis reads the transcript alone, so a window only earns a
-            tip when the words themselves explain the moment. Deep analysis —
-            when a raw source file is uploaded and analysed — also reads the
-            frames, audio, cuts and pacing, so it can explain moments the script
-            cannot and leaves fewer windows silent.
+            Only windows that earned a tip are listed and marked on the curve. A
+            detected window with no advice behind it is dropped, since the curve
+            already shows what happened there. Light analysis reads the
+            transcript alone, so a window earns a tip only when the words
+            themselves explain the moment. Deep analysis, run when a raw source
+            file is uploaded, also reads the frames, audio, cuts and pacing, so
+            it can account for moments the script cannot and leaves fewer
+            windows out.
           </p>
         </div>
       </PopoverContent>

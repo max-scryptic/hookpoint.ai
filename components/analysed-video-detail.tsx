@@ -26,11 +26,12 @@ import {
   dedupePacingTips,
   dedupeSectionTips,
   type DeepWindowFeedback,
+  type RetentionSectionFeedback,
 } from "@/lib/report-tip-uniqueness"
 import {
   dedupeDeepFeedback,
   hasScriptFeedback,
-  hasWindowFeedback,
+  hasWindowTip,
 } from "@/lib/retention-window-feedback"
 import type { ScriptTaxonomy } from "@/lib/script-taxonomy"
 import type { DeepAnalysisEvidence } from "@/lib/deep-analysis-evidence"
@@ -331,6 +332,30 @@ function RetentionWindows({
         )
       })}
       </ul>
+    </div>
+  )
+}
+
+// What sits under the curve when every window the report found was dropped for
+// carrying no tip. Without it the section would simply end at the chart, leaving
+// a creator to guess whether the analysis had failed, was still running, or had
+// read the video and found nothing to say about it.
+//
+// The second sentence is the honest next step rather than an apology: a light
+// analysis reads the transcript alone, so the most common reason a whole curve
+// comes back silent is that the words never explain the moments.
+function NoRetentionTips({
+  deepAnalysisComplete,
+}: {
+  deepAnalysisComplete: boolean
+}) {
+  return (
+    <div className="rounded-xl border bg-muted/30 p-6 text-sm text-muted-foreground">
+      No moment on this curve produced advice worth acting on. The hook, the
+      drop-offs and the flat stretches were all read,{" "}
+      {deepAnalysisComplete
+        ? "and none of them gave the analysis enough to write a tip from."
+        : "but the script alone did not explain any of them well enough to write a tip from. Uploading the source file runs the deeper analysis over your frames, audio and cuts, which can account for moments the words cannot."}
     </div>
   )
 }
@@ -872,8 +897,10 @@ function DropList({
   highlightedId,
   footageTabsHint = false,
 }: {
-  // The significant *mid-video* drop-offs (kind = 'drop_off'). The Hook section
-  // above already covers the opening, so these never overlap it.
+  // The significant *mid-video* drop-offs (kind = 'drop_off') that carry a tip;
+  // the caller has already dropped the rest, and numbers the chart's markers off
+  // this same list. The Hook section above already covers the opening, so these
+  // never overlap it.
   drops: RetentionWindow[]
   transcript: TranscriptCue[]
   // AI explanations/tips keyed by the drop-off's windowIndex, when generated.
@@ -1076,10 +1103,10 @@ function HoldList({
   highlightedId,
   footageTabsHint = false,
 }: {
-  // Only the holds something was said about: the caller has already dropped any
-  // whose feedback is empty, since a hold with no reading behind it is not a
-  // finding (see where `holds` is built). Rows are numbered by position here, so
-  // this must be the same list the chart's hold markers were built from.
+  // Only the holds carrying a tip: the caller has already dropped the rest, the
+  // way it does for every retention list (see THE ROWS ARE THE TIPS, where
+  // `holds` is built). Rows are numbered by position here, so this must be the
+  // same list the chart's hold markers were built from.
   holds: RetentionWindow[]
   transcript: TranscriptCue[]
   attribution: Map<number, RetentionMomentAttribution>
@@ -1626,10 +1653,12 @@ export function AnalysedVideoDetail({
     return () => document.removeEventListener("pointerdown", handlePointerDown)
   }, [playbackWindow])
 
-  const hookWindows = retentionWindows.filter((w) => w.kind === "hook")
+  const detectedHooks = retentionWindows.filter((w) => w.kind === "hook")
   // The opening hook line, surfaced next to the purple "Hook" badge in the
   // packaging section above so it reads without hovering the retention list.
-  const firstHookWindow = hookWindows[0]
+  // Read off every hook window detected rather than off the rows below, since
+  // it quotes the opening rather than reporting a finding about it.
+  const firstHookWindow = detectedHooks[0]
   const hookQuote = firstHookWindow
     ? hookOpeningQuote(
         transcript,
@@ -1637,8 +1666,9 @@ export function AnalysedVideoDetail({
         firstHookWindow.toSeconds,
       )
     : null
-  const drops = retentionWindows.filter((w) => w.kind === "drop_off")
-  const gains = retentionWindows.filter((w) => w.kind === "gain")
+  const detectedDrops = retentionWindows.filter((w) => w.kind === "drop_off")
+  const detectedGains = retentionWindows.filter((w) => w.kind === "gain")
+  const detectedHolds = retentionWindows.filter((w) => w.kind === "hold")
 
   // Index the LLM attribution by kind + windowIndex so each hook/drop-off/gain card
   // can pick up its own explanation and tip.
@@ -1702,29 +1732,46 @@ export function AnalysedVideoDetail({
   )
   const dedupedPacingAnalysis = dedupePacingTips(pacingAnalysis, isFirstSaying)
 
-  // The holds worth a row. A hold's finding is the reading of *why* the stretch
-  // held; the "% held" figure beside it is not one on its own, since a flat
-  // stretch of a curve holds whoever is left by definition — near the end of a
-  // video that is a handful of viewers and always 100%. So a hold nothing was
-  // said about is dropped here rather than rendered as a timestamp over an empty
-  // body, and every count below reads off this list: the chart marks only these
-  // holds, the Holds tab appears only if one survived, and the rows are numbered
-  // by position in it.
+  // THE ROWS ARE THE TIPS. A window earns a place in these lists only when the
+  // analysis had advice to give about it, and every count below reads off the
+  // filtered lists: the chart marks only these windows, a retention tab appears
+  // only if one of its windows survived, and the rows are numbered by position
+  // in the list rather than by the index of the window on the curve.
   //
-  // The drop-offs, gains and hook windows keep their rows either way. Each of
-  // those *is* a measured event — this much was lost here, this much came back —
-  // so the row still tells the creator something the curve alone doesn't, with
-  // or without a reading of it. See hasWindowFeedback for why a window arrives
-  // with nothing said about it.
-  const holds = retentionWindows.filter(
-    (window) =>
-      window.kind === "hold" &&
-      hasWindowFeedback(
-        holdSection.attribution.get(window.windowIndex),
-        holdSection.deepFeedback.get(window.windowIndex) ?? [],
+  // The measurement on its own is not a finding. A creator looking at the curve
+  // can already see that retention fell at 1:29 and held flat at 8:40; what they
+  // came here for is what to do about it. A row that gives them a timestamp, a
+  // percentage they can read off the chart and a sentence restating both is
+  // noise between the rows that actually help, and it makes the report look
+  // longer than its analysis is. See hasWindowTip for the several reasons a
+  // window reaches this point with no tip on it.
+  const windowsWithTips = (
+    windows: RetentionWindow[],
+    section: RetentionSectionFeedback,
+  ) =>
+    windows.filter((window) =>
+      hasWindowTip(
+        section.attribution.get(window.windowIndex),
+        section.deepFeedback.get(window.windowIndex) ?? [],
       ),
-  )
-  const pacingStretches = pacingAnalysis?.slowOrRepetitiveStretches ?? []
+    )
+  const hookWindows = windowsWithTips(detectedHooks, hookSection)
+  const drops = windowsWithTips(detectedDrops, dropSection)
+  const gains = windowsWithTips(detectedGains, gainSection)
+  const holds = windowsWithTips(detectedHolds, holdSection)
+  // Same rule for the pacing list, which carries its tip inline rather than in a
+  // feedback block: a stretch whose suggestion the uniqueness pass blanked has
+  // nothing left to act on. Filtered off the deduped analysis so the rows and the
+  // chart's pacing markers are numbered off one list (see dedupePacingTips).
+  const pacingStretches = (
+    dedupedPacingAnalysis?.slowOrRepetitiveStretches ?? []
+  ).filter((stretch) => stretch.suggestion.trim() !== "")
+  const pacingAnalysisWithTips = dedupedPacingAnalysis
+    ? {
+        ...dedupedPacingAnalysis,
+        slowOrRepetitiveStretches: pacingStretches,
+      }
+    : null
   const defaultRetentionTab =
     hookWindows.length > 0
       ? "hook"
@@ -1797,7 +1844,10 @@ export function AnalysedVideoDetail({
             : undefined,
         }
       }),
-    ...drops.map((window) => {
+    // Numbered off `drops` — the drop-offs that earned a row — rather than off
+    // the window index, so "Significant drop-off 2" is the second row of the
+    // list the marker jumps to. Same for the gains and holds below.
+    ...drops.map((window, index) => {
       const said = transcriptForSegment(
         transcript,
         window.fromSeconds,
@@ -1807,7 +1857,7 @@ export function AnalysedVideoDetail({
       return {
         id: `drop-${window.windowIndex}`,
         kind: "drop" as const,
-        label: `Significant drop-off ${window.windowIndex + 1}`,
+        label: `Significant drop-off ${index + 1}`,
         fromSeconds: window.fromSeconds,
         toSeconds: window.toSeconds,
         metric: `−${(Math.abs(window.delta) * 100).toFixed(1)}%`,
@@ -1823,7 +1873,7 @@ export function AnalysedVideoDetail({
         transcript: said || undefined,
       }
     }),
-    ...gains.map((window) => {
+    ...gains.map((window, index) => {
       const said = transcriptForSegment(
         transcript,
         window.fromSeconds,
@@ -1833,7 +1883,7 @@ export function AnalysedVideoDetail({
       return {
         id: `gain-${window.windowIndex}`,
         kind: "gain" as const,
-        label: `Retention gain ${window.windowIndex + 1}`,
+        label: `Retention gain ${index + 1}`,
         fromSeconds: window.fromSeconds,
         toSeconds: window.toSeconds,
         metric: `+${(window.delta * 100).toFixed(1)}%`,
@@ -1841,9 +1891,6 @@ export function AnalysedVideoDetail({
         transcript: said || undefined,
       }
     }),
-    // Numbered off `holds` — the holds that earned a row — rather than off the
-    // window index, so "Audience hold 2" is the second row of the list the
-    // marker jumps to and not the second hold detected on the curve.
     ...holds.map((window, index) => {
       const said = transcriptForSegment(
         transcript,
@@ -1870,12 +1917,12 @@ export function AnalysedVideoDetail({
         transcript: said || undefined,
       }
     }),
-    // Built from the deduped analysis rather than the raw one, so a marker is
-    // numbered off the same ordered list its row is numbered off (see
-    // dedupePacingTips) and carries the suggestion the row actually shows. Read
-    // straight from the model instead, these markers were numbered by the
+    // Built from the deduped, tip-carrying stretches rather than the raw ones,
+    // so a marker is numbered off the same ordered list its row is numbered off
+    // (see dedupePacingTips) and carries the suggestion the row actually shows.
+    // Read straight from the model instead, these markers were numbered by the
     // model's own ranking while the rows below were numbered chronologically.
-    ...(dedupedPacingAnalysis?.slowOrRepetitiveStretches ?? []).map(
+    ...pacingStretches.map(
       (stretch, index) => ({
         id: `pacing-${stretch.startSeconds}-${stretch.endSeconds}`,
         kind: "pacing" as const,
@@ -2054,14 +2101,18 @@ export function AnalysedVideoDetail({
               }}
             />
 
+            {!defaultRetentionTab && (
+              <NoRetentionTips deepAnalysisComplete={deepAnalysisComplete} />
+            )}
+
             {defaultRetentionTab && (
               <Tabs
                 value={retentionTab ?? defaultRetentionTab}
                 onValueChange={(value) => setRetentionTab(value as string)}
               >
               {/* The info affordance sits inline to the right of the tabs, so
-                  the explanation of what each window is (and why some carry no
-                  tip) is one click from the list it describes. */}
+                  the explanation of how a window is picked (and what it takes
+                  to earn a tip) is one click from the list it describes. */}
               <div className="flex items-center gap-1">
                 <TabsList>
                   {hookWindows.length > 0 && (
@@ -2153,7 +2204,7 @@ export function AnalysedVideoDetail({
               {pacingStretches.length > 0 && (
                 <TabsContent value="pacing">
                   <PacingAnalysisSection
-                    analysis={dedupedPacingAnalysis}
+                    analysis={pacingAnalysisWithTips}
                     transcript={transcript}
                     hasTranscript={transcript.length > 0}
                     highlightedId={playbackWindow?.id ?? null}
