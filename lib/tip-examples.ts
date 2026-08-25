@@ -32,10 +32,11 @@ import { stripEmDashes } from "@/lib/copy-guardrails"
 /**
  * One worked example of following a tip.
  *
- * The label is what the tab reads, so it names the approach rather than
- * numbering it: three tabs reading "1 2 3" tell a creator nothing about which
- * one to look at, while "Straight to the number" / "Open on the obstacle" say
- * what the difference between them is before either is opened.
+ * The label names the approach the example takes ("Straight to the number",
+ * "Open on the obstacle"), and reads as a heading over the example itself. The
+ * tabs above it are numbered instead, the same three words in every popup, so
+ * the strip is a place to move between examples rather than three phrases of
+ * unpredictable length to read.
  */
 export interface TipExample {
   label: string
@@ -70,7 +71,8 @@ export const TIP_EXAMPLES_ARRAY_SCHEMA = {
   items: TIP_EXAMPLE_SCHEMA,
 } as const
 
-// A tab label, so short enough to sit in a strip of three without wrapping.
+// A one-line heading over an example, so short enough not to wrap inside the
+// popup.
 export const TIP_EXAMPLE_LABEL_MAX_LENGTH = 40
 
 // An example is a line to say or a shot to cut, not a paragraph. The prompt
@@ -119,8 +121,9 @@ function collapse(value: unknown): string {
  *
  * An entry with no example text is dropped rather than rendered empty. A label
  * that went missing falls back to the position, which reads as a plain "Example
- * 2" tab: worse than a named one, and still openable, which an unlabelled tab
- * is not. Anything past the third is dropped, since the strip is three wide.
+ * 2" heading over the example: worse than a named approach, and better than a
+ * blank line where one is expected. Anything past the third is dropped, since
+ * the strip is three wide.
  */
 export function normaliseTipExamples(value: unknown): TipExample[] {
   if (!Array.isArray(value)) return []
