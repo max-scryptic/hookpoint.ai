@@ -15,10 +15,9 @@
 --
 -- This table is that on-demand generation, kept. Nothing here is a creator's
 -- own data: the same advice met on two reports, by two creators, is the same
--- advice, so
--- the examples are cached once and read back by everyone who opens it. The
--- second reader of a tip costs nothing and, just as importantly, sees the same
--- three examples the first one did.
+-- advice, so the examples are cached once and read back by everyone who opens
+-- it. The second reader of a tip costs nothing and, just as importantly, sees
+-- the same three examples the first one did.
 --
 -- WHAT MAKES A CACHED ROW THE RIGHT ANSWER
 --
