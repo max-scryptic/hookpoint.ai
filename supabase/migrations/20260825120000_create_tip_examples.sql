@@ -14,8 +14,8 @@
 -- deep-analysis tips, whose examples are written on demand instead.
 --
 -- This table is that on-demand generation, kept. Nothing here is a creator's
--- own data:
--- the same advice met on two reports, by two creators, is the same advice, so
+-- own data: the same advice met on two reports, by two creators, is the same
+-- advice, so
 -- the examples are cached once and read back by everyone who opens it. The
 -- second reader of a tip costs nothing and, just as importantly, sees the same
 -- three examples the first one did.
@@ -40,10 +40,14 @@
 --                    into the key means an edit simply misses the cache and
 --                    the next open regenerates.
 --
--- Admin-only, like the cost log: RLS is enabled with no policies and no grants,
--- so anon and authenticated clients can read and write nothing. Every access
--- goes through the service-role client behind /api/tips/examples, which is what
--- also lets that route rate limit generation per creator.
+-- Admin-only, exactly like the cost log: RLS is enabled with no policies at
+-- all, so anon and authenticated clients match no row and can read and write
+-- nothing. That, rather than the table grants, is what locks it: this project
+-- carries default privileges that hand anon and authenticated the usual
+-- table privileges on anything created in public, which cost_logs sits under
+-- too, and which no grant statement here would undo. Every access goes through
+-- the service-role client behind /api/tips/examples, which is also what lets
+-- that route rate limit generation per creator.
 
 create table public.tip_examples (
   id uuid primary key default gen_random_uuid(),
