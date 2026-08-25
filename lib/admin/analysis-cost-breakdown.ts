@@ -35,6 +35,12 @@ export const ANALYSIS_COST_SECTION_LABELS: Record<AnalysisCostSection, string> =
     audio: "Audio",
     transcript_taxonomy: "Transcript taxonomy",
     event_synthesis: "Event synthesis",
+    // Never billed against a video: the examples behind a tip are written when
+    // a creator opens one, long after the run, and are logged against them
+    // rather than against the analysis (see lib/tip-examples-generation.ts). It
+    // is named here because the section type covers every call type, not
+    // because a line for it can appear on this tab.
+    tip_examples: "Tip examples",
     qencode_transcode: "Transcoding",
   }
 

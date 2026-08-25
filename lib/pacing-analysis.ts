@@ -1,6 +1,11 @@
 import { recordLlmCallCost, type LlmLogContext } from "@/lib/llm-calls"
 import { responsesCallCost, type ResponsesUsage } from "@/lib/llm-cost"
 import { resolvePrompt } from "@/lib/prompts/resolve"
+import {
+  normaliseTipExamples,
+  TIP_EXAMPLES_ARRAY_SCHEMA,
+  type TipExample,
+} from "@/lib/tip-examples"
 import type { TranscriptCue, VideoDetails } from "@/lib/youtube/youtube"
 
 export type PacingRate =
@@ -43,6 +48,11 @@ export interface PacingAnalysis {
     endSeconds: number
     reason: string
     suggestion: string
+    // Three worked examples of the suggestion, written in the same call so the
+    // transcript of the stretch is still in front of the model. Absent on
+    // analyses stored before they existed, which the interface fills in from
+    // /api/tips/examples when the tip is opened.
+    examples?: TipExample[]
   }>
   windows: PacingWindow[]
   model: string
@@ -84,6 +94,7 @@ interface ModelOutput {
     endSeconds: number
     reason: string
     suggestion: string
+    examples: unknown
   }>
   windows: ModelWindow[]
 }
@@ -118,12 +129,19 @@ const PACING_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["startSeconds", "endSeconds", "reason", "suggestion"],
+        required: [
+          "startSeconds",
+          "endSeconds",
+          "reason",
+          "suggestion",
+          "examples",
+        ],
         properties: {
           startSeconds: { type: "number" },
           endSeconds: { type: "number" },
           reason: { type: "string" },
           suggestion: { type: "string" },
+          examples: TIP_EXAMPLES_ARRAY_SCHEMA,
         },
       },
     },
@@ -292,9 +310,13 @@ export async function generatePacingAnalysis(
     },
     body: JSON.stringify({
       model,
+      // Every stretch now carries three worked examples as well as its
+      // suggestion, which is another 150 tokens or so each, so the floor is
+      // above what five of them can need. A truncated response is a failed
+      // analysis, and an unspent ceiling costs nothing.
       max_output_tokens: Math.min(
         32_000,
-        Math.max(4_000, windows.length * 450),
+        Math.max(6_000, windows.length * 450),
       ),
       input: [
         {
@@ -380,7 +402,15 @@ export async function generatePacingAnalysis(
     overallPacing: parsed.overallPacing,
     videoWidePatterns: parsed.videoWidePatterns,
     notableTransitions: parsed.notableTransitions,
-    slowOrRepetitiveStretches: parsed.slowOrRepetitiveStretches,
+    // Normalised rather than trusted: the examples are the one part of this
+    // response the interface renders verbatim, and a model that wrote four, or
+    // wrote one with no text in it, must not reach a tab strip built for three.
+    slowOrRepetitiveStretches: parsed.slowOrRepetitiveStretches.map(
+      (stretch) => ({
+        ...stretch,
+        examples: normaliseTipExamples(stretch.examples),
+      }),
+    ),
     windows: windows.map((window, index) => {
       const analysis = modelWindows.get(index)
       if (!analysis) throw new Error(`Missing pacing window ${index}`)

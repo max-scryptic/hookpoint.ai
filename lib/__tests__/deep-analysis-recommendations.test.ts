@@ -245,7 +245,11 @@ describe("compileDeepAnalysisRecommendations", () => {
     return {
       actionType: recommendation.actionType,
       copy: [
-        { action: recommendation.action, expectedPurpose: recommendation.expectedPurpose },
+        {
+          action: recommendation.action,
+          expectedPurpose: recommendation.expectedPurpose,
+          examples: recommendation.examples,
+        },
         ...(recommendation.alternativeCopy ?? []),
       ],
     }
@@ -283,6 +287,47 @@ describe("compileDeepAnalysisRecommendations", () => {
         )
       }
     }
+  })
+
+  // Opening a tip shows three worked examples of it, and these tips are chosen
+  // by the branches above rather than written by a model, so their examples are
+  // written by hand beside them. A wording that lost its examples would fall
+  // back to asking /api/tips/examples on every open, for advice whose
+  // demonstration never changes.
+  it("gives every wording three worked examples", () => {
+    for (const params of BRANCH_CASES) {
+      const { actionType, copy } = everyWording(params)
+      for (const { action, examples } of copy) {
+        expect(examples.length, `${actionType}: "${action}"`).toBe(3)
+        for (const example of examples) {
+          expect(example.label.trim().length).toBeGreaterThan(0)
+          expect(example.example.trim().length).toBeGreaterThan(0)
+          // The tab strip is three labels wide, so a label is the two to four
+          // words the shared example voice asks a model for.
+          expect(example.label.split(/\s+/).length).toBeLessThanOrEqual(4)
+          // An example is the advice carried out, never the advice restated.
+          expect(example.example).not.toMatch(/^(try|consider|make sure)\b/i)
+        }
+        // Three tabs reading the same thing are one example shown three times.
+        expect(new Set(examples.map((one) => one.label)).size).toBe(3)
+      }
+    }
+  })
+
+  // The examples demonstrate one wording, so when the uniqueness pass moves a
+  // window onto a different wording they have to move with it. A recommendation
+  // showing the examples of advice it is no longer giving is worse than one
+  // showing none.
+  it("swaps the examples with the wording they belong to", () => {
+    const first = slowlyCutWindow("window-1", 40, 0.9)
+    const second = slowlyCutWindow("window-2", 189, 0.8)
+    const groups = [first, second]
+    dedupeDeepAnalysisRecommendations(groups)
+    const [kept] = first
+    const [swapped] = second
+    expect(swapped.action).not.toBe(kept.action)
+    expect(swapped.examples).not.toEqual(kept.examples)
+    expect(swapped.examples.length).toBe(3)
   })
 
   // A branch's alternatives exist so a second window measuring the same thing

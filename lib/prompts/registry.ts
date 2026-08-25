@@ -39,6 +39,8 @@ import {
   RETENTION_ATTRIBUTION_PROMPT,
   SCRIPT_TAXONOMY_PROMPT,
 } from "@/lib/prompts/defaults/light-analysis"
+import { TIP_EXAMPLES_PROMPT } from "@/lib/prompts/defaults/tips"
+import { TIP_EXAMPLE_VOICE_PROMPT } from "@/lib/tip-example-voice"
 import { TIP_VOICE_PROMPT } from "@/lib/tip-voice"
 
 // The pipelines a prompt can belong to. Mirrors how the cost surfaces already
@@ -48,6 +50,7 @@ export const PROMPT_GROUPS = [
   "light_analysis",
   "deep_analysis",
   "comparison",
+  "tips",
   "shared",
 ] as const
 
@@ -57,6 +60,7 @@ export const PROMPT_GROUP_LABELS: Record<PromptGroup, string> = {
   light_analysis: "Light analysis",
   deep_analysis: "Deep analysis",
   comparison: "Video comparison",
+  tips: "Tips",
   shared: "Shared fragments",
 }
 
@@ -66,6 +70,7 @@ export const PROMPT_GROUP_DESCRIPTIONS: Record<PromptGroup, string> = {
   deep_analysis:
     "The opt-in pass over an uploaded source file: frames, audio and the retention curve read together.",
   comparison: "The head-to-head reports generated between two videos.",
+  tips: "The fallback that writes a tip's worked examples when the prompt that wrote the tip did not. Every prompt above that writes a tip now writes its examples too.",
   shared:
     "Rules quoted by other prompts rather than sent on their own. Editing one changes every prompt that references it.",
 }
@@ -106,6 +111,7 @@ export type PromptDefinition = {
 // their keys. A fragment is a prompt like any other: editable, versioned, and
 // resolved through the same path.
 export const TIP_VOICE_KEY = "tip_voice"
+export const TIP_EXAMPLE_VOICE_KEY = "tip_example_voice"
 export const COMPARABILITY_KEY = "comparability"
 
 const DEFINITIONS: readonly PromptDefinition[] = [
@@ -120,6 +126,18 @@ const DEFINITIONS: readonly PromptDefinition[] = [
     source: "lib/tip-voice.ts",
     modelEnvVar: null,
     default: TIP_VOICE_PROMPT,
+    fragments: [],
+  },
+  {
+    key: TIP_EXAMPLE_VOICE_KEY,
+    label: "Tip example voice",
+    group: "shared",
+    role: "fragment",
+    description:
+      "The rules every worked example behind a tip is written under: the advice already carried out, in the words the uploader would say or type. Quoted by every prompt that writes a tip, and by the on-demand examples prompt.",
+    source: "lib/tip-example-voice.ts",
+    modelEnvVar: null,
+    default: TIP_EXAMPLE_VOICE_PROMPT,
     fragments: [],
   },
   {
@@ -146,7 +164,7 @@ const DEFINITIONS: readonly PromptDefinition[] = [
     source: "lib/pacing-analysis.ts",
     modelEnvVar: "OPENAI_PACING_MODEL",
     default: PACING_PROMPT,
-    fragments: [TIP_VOICE_KEY],
+    fragments: [TIP_VOICE_KEY, TIP_EXAMPLE_VOICE_KEY],
   },
   {
     key: "retention_attribution",
@@ -158,7 +176,7 @@ const DEFINITIONS: readonly PromptDefinition[] = [
     source: "lib/retention-attribution.ts",
     modelEnvVar: "OPENAI_RETENTION_ATTRIBUTION_MODEL",
     default: RETENTION_ATTRIBUTION_PROMPT,
-    fragments: [TIP_VOICE_KEY],
+    fragments: [TIP_VOICE_KEY, TIP_EXAMPLE_VOICE_KEY],
   },
   {
     key: "packaging_alignment",
@@ -170,7 +188,7 @@ const DEFINITIONS: readonly PromptDefinition[] = [
     source: "lib/packaging-alignment.ts",
     modelEnvVar: "OPENAI_PACKAGING_MODEL",
     default: PACKAGING_ALIGNMENT_PROMPT,
-    fragments: [TIP_VOICE_KEY],
+    fragments: [TIP_VOICE_KEY, TIP_EXAMPLE_VOICE_KEY],
   },
   {
     key: "packaging_taxonomy",
@@ -271,6 +289,20 @@ const DEFINITIONS: readonly PromptDefinition[] = [
     fragments: [],
   },
 
+  // --- Tips -----------------------------------------------------------------
+  {
+    key: "tip_examples",
+    label: "Tip examples (on demand)",
+    group: "tips",
+    role: "developer",
+    description:
+      "Writes the three worked examples for a tip that arrived without any: an older report, or a hand-written deep-analysis tip. Tips written now carry their examples from the prompt that wrote them.",
+    source: "lib/tip-examples-generation.ts",
+    modelEnvVar: "OPENAI_TIP_EXAMPLES_MODEL",
+    default: TIP_EXAMPLES_PROMPT,
+    fragments: [TIP_EXAMPLE_VOICE_KEY],
+  },
+
   // --- Comparison reports ---------------------------------------------------
   {
     key: "script_comparison",
@@ -282,7 +314,7 @@ const DEFINITIONS: readonly PromptDefinition[] = [
     source: "lib/script-comparison-report.ts",
     modelEnvVar: "OPENAI_SCRIPT_COMPARISON_MODEL",
     default: SCRIPT_COMPARISON_PROMPT,
-    fragments: [COMPARABILITY_KEY, TIP_VOICE_KEY],
+    fragments: [COMPARABILITY_KEY, TIP_VOICE_KEY, TIP_EXAMPLE_VOICE_KEY],
   },
   {
     key: "packaging_comparison",
@@ -294,7 +326,7 @@ const DEFINITIONS: readonly PromptDefinition[] = [
     source: "lib/packaging-comparison-report.ts",
     modelEnvVar: "OPENAI_PACKAGING_COMPARISON_MODEL",
     default: PACKAGING_COMPARISON_PROMPT,
-    fragments: [COMPARABILITY_KEY, TIP_VOICE_KEY],
+    fragments: [COMPARABILITY_KEY, TIP_VOICE_KEY, TIP_EXAMPLE_VOICE_KEY],
   },
   {
     key: "retention_comparison",
@@ -306,7 +338,7 @@ const DEFINITIONS: readonly PromptDefinition[] = [
     source: "lib/retention-comparison-report.ts",
     modelEnvVar: "OPENAI_RETENTION_COMPARISON_MODEL",
     default: RETENTION_COMPARISON_PROMPT,
-    fragments: [TIP_VOICE_KEY],
+    fragments: [TIP_VOICE_KEY, TIP_EXAMPLE_VOICE_KEY],
   },
 ]
 

@@ -105,7 +105,10 @@ export function dedupeSectionTips(
 
     const moment = attribution.get(windowIndex)
     if (moment?.tip && !isFirstSaying(moment.tip)) {
-      attribution.set(windowIndex, { ...moment, tip: null })
+      // The examples go with the tip they demonstrate. Nothing renders them on
+      // their own, but a moment carrying three worked examples of advice it is
+      // no longer giving is a shape waiting to be misread.
+      attribution.set(windowIndex, { ...moment, tip: null, tipExamples: [] })
     }
   }
 
@@ -136,7 +139,10 @@ export function dedupePacingTips(
     slowOrRepetitiveStretches: [...analysis.slowOrRepetitiveStretches]
       .sort((a, b) => a.startSeconds - b.startSeconds)
       .map((stretch) =>
-        isFirstSaying(stretch.suggestion) ? stretch : { ...stretch, suggestion: "" },
+        isFirstSaying(stretch.suggestion)
+          ? stretch
+          : // The examples go with the suggestion they demonstrate.
+            { ...stretch, suggestion: "", examples: [] },
       ),
   }
 }

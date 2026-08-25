@@ -7,6 +7,13 @@
 //
 // COPY GUARDRAIL: no em or en dashes (U+2014 / U+2013), ever, in any text in
 // this file. Hyphens are fine.
+//
+// NOT A BUMP: the worked examples now written beside every section tip (see
+// lib/tip-example-voice.ts). A report stored without them renders exactly as it
+// did, and opening one of its tips asks /api/tips/examples for the three
+// instead, so bumping would send every stored report back through the generator
+// to buy a reader nothing they can see. This is the same call the packaging
+// report's version 6 note records for dropping the recommendations.
 
 // Bumped whenever the stored script report shape changes. Version 2 gave every
 // section its own "Try:" line, so each section of the head-to-head closes on

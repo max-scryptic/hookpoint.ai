@@ -297,6 +297,40 @@ describe("normalizeRetentionComparisonReport", () => {
     expect(report.model).toBe("gpt-4.1-mini")
   })
 
+  it("keeps the worked examples written with a tip, and drops them with it", () => {
+    const report = normalizeRetentionComparisonReport(
+      {
+        summary: "A verdict.",
+        sections: [
+          {
+            heading: "The openings",
+            body: "Video A kept more.",
+            tip: "Open on the payoff.",
+            tipExamples: [
+              { label: "Straight to the result", example: '"It held for six months."' },
+              { label: "Open on the obstacle", example: "  Everyone says   this cannot work.  " },
+              { label: "", example: "" },
+            ],
+          },
+          {
+            heading: "The endings",
+            body: "Video B fell away.",
+            tip: "",
+            // Examples with no tip left to demonstrate go with it.
+            tipExamples: [{ label: "Orphaned", example: "Never rendered." }],
+          },
+        ],
+      },
+      "gpt-4.1-mini",
+    )
+    expect(report.sections[0].tipExamples).toEqual([
+      { label: "Straight to the result", example: '"It held for six months."' },
+      { label: "Open on the obstacle", example: "Everyone says this cannot work." },
+    ])
+    expect(report.sections[1].tip).toBeUndefined()
+    expect(report.sections[1].tipExamples).toBeUndefined()
+  })
+
   it("drops a section with no heading or no body", () => {
     const report = normalizeRetentionComparisonReport(
       {

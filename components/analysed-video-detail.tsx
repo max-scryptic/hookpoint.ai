@@ -406,7 +406,10 @@ function PacingAnalysisSection({
               <p className="pl-10 text-sm">{stretch.reason}</p>
               {stretch.suggestion && (
                 <div className="pl-10">
-                  <RecommendationCallout section="Pacing">
+                  <RecommendationCallout
+                    section="Pacing"
+                    examples={stretch.examples}
+                  >
                     {stretch.suggestion}
                   </RecommendationCallout>
                 </div>
@@ -456,7 +459,10 @@ function ScriptFeedbackBody({
       <p className="text-sm">{cleanCopy(attribution.explanation)}</p>
       {attribution.tip && (
         <div className="mt-2">
-          <TryCallout section={`${section}: Script`}>
+          <TryCallout
+            section={`${section}: Script`}
+            examples={attribution.tipExamples}
+          >
             {attribution.tip}
           </TryCallout>
         </div>
@@ -523,7 +529,10 @@ function ActionableRecommendationBody({
 }) {
   return (
     <>
-      <TryCallout section={`${section}: Deep analysis`}>
+      <TryCallout
+        section={`${section}: Deep analysis`}
+        examples={recommendation.examples}
+      >
         {recommendation.action}
       </TryCallout>
       <p className="mt-1 text-xs text-muted-foreground">
@@ -552,7 +561,10 @@ function DeepFeedbackBody({
       <p className="text-sm">{cleanCopy(insight.narrative)}</p>
       {recommendation && (
         <div className="mt-2">
-          <TryCallout section={`${section}: Deep analysis`}>
+          <TryCallout
+            section={`${section}: Deep analysis`}
+            examples={recommendation.examples}
+          >
             {recommendation.action}
           </TryCallout>
         </div>
@@ -1426,7 +1438,11 @@ function PackagingComponentCard({
             </p>
           ))}
           {feedback.whatCouldBeBetter.slice(0, 1).map((point, index) => (
-            <TryCallout key={index} section={`Packaging: ${label}`}>
+            <TryCallout
+              key={index}
+              section={`Packaging: ${label}`}
+              examples={feedback.examples}
+            >
               {point}
             </TryCallout>
           ))}

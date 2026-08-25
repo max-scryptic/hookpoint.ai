@@ -75,6 +75,7 @@ function ReportSection({
       {tip.length > 0 && (
         <TryCallout
           section={`Retention head-to-head: ${clean(section.heading)}`}
+          examples={section.tipExamples}
           actions={tipActions}
         >
           {tip}

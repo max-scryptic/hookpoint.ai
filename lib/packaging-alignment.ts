@@ -12,6 +12,11 @@
 import { recordLlmCallCost, type LlmLogContext } from "@/lib/llm-calls"
 import { responsesCallCost, type ResponsesUsage } from "@/lib/llm-cost"
 import { resolvePrompt } from "@/lib/prompts/resolve"
+import {
+  normaliseTipExamples,
+  TIP_EXAMPLES_ARRAY_SCHEMA,
+  type TipExample,
+} from "@/lib/tip-examples"
 import type { PackagingTaxonomy } from "@/lib/packaging-taxonomy"
 import {
   transcriptForSegment,
@@ -32,6 +37,12 @@ export interface PackagingComponentFeedback {
   whatWorked: string[]
   // The most useful improvement for this component, when there is one.
   whatCouldBeBetter: string[]
+  // Three worked examples of that improvement, written in the same call, which
+  // is the only one in the app that has actually looked at the thumbnail.
+  // Empty where the component had no improvement to give, and absent on
+  // alignments stored before examples existed, which the interface fills in
+  // from /api/tips/examples when the tip is opened.
+  examples?: TipExample[]
 }
 
 export type PackagingComponentKey = "title" | "thumbnail" | "hook"
@@ -67,6 +78,7 @@ interface ModelComponentOutput {
   summary: string
   whatWorked: string[]
   whatCouldBeBetter: string[]
+  examples: unknown
 }
 
 interface ModelOutput {
@@ -103,7 +115,7 @@ export function prioritizePackagingImprovements(points: string[]): string[] {
 const COMPONENT_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["summary", "whatWorked", "whatCouldBeBetter"],
+  required: ["summary", "whatWorked", "whatCouldBeBetter", "examples"],
   properties: {
     summary: { type: "string" },
     whatWorked: {
@@ -116,6 +128,7 @@ const COMPONENT_SCHEMA = {
       items: { type: "string" },
       maxItems: 1,
     },
+    examples: TIP_EXAMPLES_ARRAY_SCHEMA,
   },
 } as const
 
@@ -166,10 +179,15 @@ function isModelOutput(value: unknown): value is ModelOutput {
 function toComponentFeedback(
   output: ModelComponentOutput,
 ): PackagingComponentFeedback {
+  const whatCouldBeBetter = output.whatCouldBeBetter.slice(0, 1)
   return {
     summary: output.summary,
     whatWorked: output.whatWorked.slice(0, 1),
-    whatCouldBeBetter: output.whatCouldBeBetter.slice(0, 1),
+    whatCouldBeBetter,
+    // Examples demonstrate the improvement, so a component that made no
+    // improvement point carries none whatever the model returned.
+    examples:
+      whatCouldBeBetter.length > 0 ? normaliseTipExamples(output.examples) : [],
   }
 }
 
@@ -200,7 +218,9 @@ export async function generatePackagingAlignment(
     },
     body: JSON.stringify({
       model,
-      max_output_tokens: 4_000,
+      // Three components, each now carrying three worked examples of its
+      // improvement as well as the improvement itself.
+      max_output_tokens: 6_000,
       input: [
         {
           role: "developer",
