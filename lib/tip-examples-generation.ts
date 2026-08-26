@@ -23,10 +23,9 @@
 //     rather than in memory, because there is more than one server.
 //   - The cache is best-effort in both directions. A read that fails generates;
 //     a write that fails is logged and the examples are still returned. The
-//     migration is applied by hand, out of band from the deploy (see
-//     scripts/check-applied-migrations.ts), so this code runs for a while
-//     against a database with no tip_examples table in it and must simply work,
-//     slightly more expensively, when it does.
+//     migration is applied by hand, out of band from the deploy, so this code
+//     runs for a while against a database with no tip_examples table in it and
+//     must simply work, slightly more expensively, when it does.
 //
 // The client-safe half (the shape of an example, its bounds, the normalisation
 // both sides share) is lib/tip-examples.ts. This module pulls the service-role
