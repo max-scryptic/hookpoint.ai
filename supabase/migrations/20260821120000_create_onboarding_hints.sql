@@ -5,7 +5,7 @@
 -- just left behind: the retention chart's highlights, which now play that
 -- moment back from the file, and the per-window tabs the analysis adds
 -- alongside "Script". Each one is retired the moment the creator uses the
--- thing it points at — at that point they know the feature is there and a
+-- thing it points at - at that point they know the feature is there and a
 -- second showing is just noise.
 --
 -- The absence of a row is what makes a hint pending, so a hint added to

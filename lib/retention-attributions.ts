@@ -13,6 +13,7 @@ import {
 } from "@/lib/retention-attribution"
 import type { RetentionWindow } from "@/lib/retention-windows"
 import type { TranscriptCue, VideoDetails } from "@/lib/youtube/youtube"
+import { scrubDashes } from "@/lib/copy-guardrails"
 
 const CLAIM_COLUMNS = {
   statusColumn: "retention_attribution_status",
@@ -35,9 +36,11 @@ export async function getRetentionAttribution(
     throw new Error(`Failed to load retention attribution: ${error.message}`)
   }
 
-  return (
+  // Model-written prose, rendered verbatim on the report, so it is scrubbed of
+  // dashes on the way out. See the copy guardrail in lib/copy-guardrails.ts.
+  return scrubDashes(
     (data as { retention_attribution: RetentionAttribution | null } | null)
-      ?.retention_attribution ?? null
+      ?.retention_attribution ?? null,
   )
 }
 
@@ -60,7 +63,7 @@ async function saveRetentionAttribution(
 
 // Loads a saved attribution if one exists; otherwise claims the right to
 // generate one and does so. Returns null (without calling OpenAI) when there's
-// nothing to attribute, or when another caller is already generating it —
+// nothing to attribute, or when another caller is already generating it -
 // callers treat null as "nothing to show yet", not a failure.
 export async function getOrGenerateRetentionAttribution(
   supabase: SupabaseClient,

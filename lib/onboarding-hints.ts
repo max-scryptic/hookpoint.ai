@@ -4,8 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 // one teaches.
 //
 // Each points at something the interface offers but does not announce, and each
-// is retired the moment the creator uses the thing it points at — starting an
-// analysis, clicking a highlight, opening a footage tab — since at that point
+// is retired the moment the creator uses the thing it points at - starting an
+// analysis, clicking a highlight, opening a footage tab - since at that point
 // they know it is there.
 //
 // A hint is pending while the creator has no row for it in onboarding_hints,
@@ -13,7 +13,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 export const ONBOARDING_HINTS = [
   // The two ways to start an analysis on the Analyse a Video page: paste a URL,
   // or open the actions menu on a row of your uploads. Shown side by side, and
-  // only to a creator who has not analysed anything yet — the row menu in
+  // only to a creator who has not analysed anything yet - the row menu in
   // particular gives no sign that it is where an analysis begins.
   "first_video_analysis",
   // The retention chart's highlights play their window back from the uploaded

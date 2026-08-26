@@ -6,7 +6,7 @@
 // alignment (lib/packaging-alignment.ts) and the categorical taxonomy
 // (lib/packaging-taxonomy.ts). New videos get both in one visit; videos whose
 // alignment predates the taxonomy are healed here with a taxonomy-only call
-// the next time their detail page loads — same opportunistic-backfill pattern
+// the next time their detail page loads - same opportunistic-backfill pattern
 // as the analytics summary.
 
 import type { SupabaseClient } from "@supabase/supabase-js"
@@ -21,6 +21,7 @@ import {
   isCurrentTaxonomy,
 } from "@/lib/packaging-taxonomy"
 import type { TranscriptCue, VideoDetails } from "@/lib/youtube/youtube"
+import { scrubDashes } from "@/lib/copy-guardrails"
 
 const CLAIM_COLUMNS = {
   statusColumn: "packaging_alignment_status",
@@ -43,9 +44,11 @@ export async function getPackagingAlignment(
     throw new Error(`Failed to load packaging alignment: ${error.message}`)
   }
 
-  return (
+  // Model-written prose, rendered verbatim on the report, so it is scrubbed of
+  // dashes on the way out. See the copy guardrail in lib/copy-guardrails.ts.
+  return scrubDashes(
     (data as { packaging_alignment: PackagingAlignment | null } | null)
-      ?.packaging_alignment ?? null
+      ?.packaging_alignment ?? null,
   )
 }
 

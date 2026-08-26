@@ -2,7 +2,7 @@
 // retention_window_snapshots/retention_window_audio/
 // retention_window_scene_cue_scans rows, once the source video is available.
 // Each harvested snapshot also gets deterministic (no LLM) OCR run on it
-// inline, right after extraction, using the JPEG bytes already in hand — see
+// inline, right after extraction, using the JPEG bytes already in hand - see
 // lib/media/ocr.ts.
 // Triggered best-effort from whichever async process finishes last (see
 // lib/retention-window-media-trigger.ts): the retention analysis, which
@@ -12,38 +12,38 @@
 //
 // Every row is processed independently and its own status updated as soon as
 // it succeeds or fails, so a partial run (a timeout, a single bad seek) never
-// strands the whole batch — rows left 'pending' just wait for the next trigger.
+// strands the whole batch - rows left 'pending' just wait for the next trigger.
 //
 // Three cost structures shape this module:
 //   • The source is decoded from the cheapest readable copy (the 360p
-//     analysis proxy when normalisation has produced one — see
+//     analysis proxy when normalisation has produced one - see
 //     resolveAnalysisSourceStoragePath), and copied onto local disk once per
 //     run when it fits (lib/media/local-source-cache.ts), so the dozens of
 //     ffmpeg invocations a run makes read local bytes instead of each
 //     re-seeking over HTTPS.
 //   • Scene-cue scans decode every frame of their range, and windows' padded
-//     ranges overlap heavily on a short video — so pending scans are merged
+//     ranges overlap heavily on a short video - so pending scans are merged
 //     into coalesced spans (mergeScanSpans), each span is decoded exactly
 //     once, and the master cue list is sliced back out per window
 //     (sliceSceneCues). One master timeline, per-window views of it.
 //   • Overlapping windows also derive snapshots at the same timestamps (their
 //     flanking pairs straddle the same cuts), so the JPEG grab + OCR for a
 //     given timestamp is computed once per run and shared across every row
-//     that wants it — only the per-row storage object and status write repeat.
+//     that wants it - only the per-row storage object and status write repeat.
 //
 // The scene-cue scan is folded into this same pass (not a separate trigger)
 // because it needs exactly the same source, over the same ranges, as the
-// audio extraction below it — see lib/media/scene-detection.ts for why it's
+// audio extraction below it - see lib/media/scene-detection.ts for why it's
 // scoped to a span rather than a whole-video decode.
 //
 // Scene-cue scans run *before* snapshots, not after: a window's snapshot
 // timestamps are derived from its detected cuts (see
-// buildSnapshotTimestampsFromSceneCues in lib/retention-window-media.ts) —
+// buildSnapshotTimestampsFromSceneCues in lib/retention-window-media.ts) -
 // flanking frames just before/after each real transition, instead of a blind
-// fixed-interval grid — so those rows can't be created until the scan for
+// fixed-interval grid - so those rows can't be created until the scan for
 // that window has actually run. A window with no cuts still gets a snapshot:
 // a single frame at its start when the scan confirmed it's static, or the
-// dense fixed grid when the scan *failed* (content unknown) — so a window is
+// dense fixed grid when the scan *failed* (content unknown) - so a window is
 // never left with no visual evidence just because ffmpeg errored once; see
 // getPendingRetentionWindowSceneCueScans in lib/video-scene-cues.ts for how a
 // failed scan itself gets retried.
@@ -136,7 +136,7 @@ export function defaultRetentionWindowMediaExtractionDeps(): RetentionWindowMedi
   }
 }
 
-// True when a source file is actually readable right now — the normalised
+// True when a source file is actually readable right now - the normalised
 // proxy or the original master, whichever resolvePlaybackStoragePath resolves
 // to. Extraction can run against either.
 export function isSourceFileReady(sourceFile: SourceFile | null): boolean {
@@ -155,12 +155,12 @@ export function isSourceFileReady(sourceFile: SourceFile | null): boolean {
 // the run's timeout budgets. The dividing line used is whether the master
 // fits the local-source-cache budget: a source too large to pull onto local
 // disk means every scene-cue scan streams the full-bitrate original over
-// HTTPS — observed in production to sit at frame 0 for the entire 240s scan
+// HTTPS - observed in production to sit at frame 0 for the entire 240s scan
 // timeout for a ~52Mbps 4K master, burning the whole serverless invocation
 // and failing every row, when the same rows extract in seconds from the 360p
 // proxy that arrives minutes later. Deferred rows just stay 'pending'; the
 // normalisation callback (or the next dashboard visit / retry) re-triggers
-// extraction once the proxy is ready — or against the master once
+// extraction once the proxy is ready - or against the master once
 // normalisation has conclusively failed and no proxy is coming.
 export function shouldDeferExtractionUntilAnalysisProxy(
   sourceFile: Pick<SourceFile, "normalisationStatus">,
@@ -195,14 +195,14 @@ export const SCAN_MERGE_GAP_SECONDS = 10
 // Ceiling on how long a single merged span may grow. Merging saves redundant
 // decoding, but it also concentrates cost into one ffmpeg pass and makes a
 // timeout fail *every* window in the span at once (all-or-nothing). Past this
-// length the scan's own timeout budget stops scaling anyway — the per-second
+// length the scan's own timeout budget stops scaling anyway - the per-second
 // budget in computeSceneCueScanTimeoutMs (60s floor + 3s/s, capped at 240s)
 // hits its cap right around 60s of footage, so a span longer than that is one
 // the timeout can no longer model and is just betting the decode fits. Capping
 // merges here keeps every span inside that modelled budget and bounds the
 // blast radius: an unbounded merge is exactly what produced a single ~83s span
 // that timed out and failed four windows together. A lone scan longer than the
-// cap still forms its own span — the cap only blocks *merging*, never splits a
+// cap still forms its own span - the cap only blocks *merging*, never splits a
 // scan.
 export const SCAN_MERGE_MAX_SPAN_SECONDS = 60
 
@@ -274,7 +274,7 @@ export function sliceSceneCues(
 }
 
 // Extracts every pending snapshot, audio, and scene-cue-scan row for one
-// video. Best-effort per row — an ffmpeg failure is recorded on that row and
+// video. Best-effort per row - an ffmpeg failure is recorded on that row and
 // the run continues. Never mints a signed read URL (or otherwise does any
 // work) when nothing is pending.
 export async function extractPendingRetentionWindowMedia(
@@ -326,11 +326,11 @@ export async function extractPendingRetentionWindowMedia(
   // Surface which copy this run decodes, and warn only on the genuinely slow
   // path. Deep analysis decodes frame-by-frame, so the copy's resolution drives
   // cost. Cheap copies: a dedicated analysis proxy, or the playback proxy when
-  // it's already that small — our single-rendition default, where one 360p
+  // it's already that small - our single-rendition default, where one 360p
   // proxy serves both playback and analysis, so no separate analysis output is
   // even asked for. Slow copies: a larger playback proxy whose analysis proxy
   // pull failed (see pullAnalysisProxy), or the original master when
-  // normalisation didn't run — both worth a warning so they don't stay silent.
+  // normalisation didn't run - both worth a warning so they don't stay silent.
   const analysisHeight = getAnalysisProxyTargetHeight()
   const separateAnalysisProxyExpected =
     analysisHeight > 0 && analysisHeight < getProxyTargetHeight()
@@ -346,7 +346,7 @@ export async function extractPendingRetentionWindowMedia(
     })
   } else {
     console.warn(
-      "Deep analysis decoding a large copy — no small analysis proxy available (slower, higher timeout risk)",
+      "Deep analysis decoding a large copy - no small analysis proxy available (slower, higher timeout risk)",
       {
         analysedVideoId: sourceFile.analysedVideoId,
         sizeBytes: analysisSource.sizeBytes,
@@ -391,7 +391,7 @@ export async function extractPendingRetentionWindowMedia(
         : initialPendingSnapshots
 
     // One OCR engine (the WASM core + trained language data load) for every
-    // snapshot in this run, not one per snapshot — recreating it per frame
+    // snapshot in this run, not one per snapshot - recreating it per frame
     // would pay that load cost repeatedly for no benefit. Engine setup itself
     // is best-effort: it's a deterministic add-on to a snapshot row, not a
     // prerequisite for it, so a broken/missing OCR runtime (a bad deploy, a
@@ -409,7 +409,7 @@ export async function extractPendingRetentionWindowMedia(
 
     // Overlapping windows derive snapshot rows at the same timestamps (their
     // flanking pairs straddle the same detected cuts), so the expensive part
-    // — the ffmpeg frame grab and its OCR — is computed once per distinct
+    // - the ffmpeg frame grab and its OCR - is computed once per distinct
     // timestamp and shared across every row that wants it. A shared failure
     // fails each sharing row this run; they retry as pending next trigger.
     const frameCache = new Map<
@@ -425,7 +425,7 @@ export async function extractPendingRetentionWindowMedia(
             timestampSeconds,
           )
           // Deterministic OCR is best-effort: a recognition failure shouldn't
-          // fail the whole frame, since the JPEG itself extracted fine — just
+          // fail the whole frame, since the JPEG itself extracted fine - just
           // leave ocrText null, the same tolerance ffmpeg's own volumedetect/
           // silencedetect measurements already get on the audio side.
           const ocrText = ocrEngine
@@ -535,14 +535,14 @@ export async function extractPendingRetentionWindowMedia(
     // It runs *last*, after the snapshot/audio harvest above, on purpose. A
     // full-video sparse scan is ~one ffmpeg decode per sampled minute, and on
     // an expensive-to-decode source that whole-video pass can exceed the
-    // serverless invocation budget on its own — and unlike the per-row harvest,
+    // serverless invocation budget on its own - and unlike the per-row harvest,
     // it's all-or-nothing (it only persists once every sample has run). Placed
     // before the harvest, a source slow enough to blow the budget here would
     // consume the whole invocation *before* a single snapshot/audio row was
     // extracted, restart from scratch on every resume, and leave the harvest
-    // (and everything downstream of it) stuck 'pending' forever — the budget
+    // (and everything downstream of it) stuck 'pending' forever - the budget
     // starved it just as surely as a throw would have. Running it after means
-    // the harvest — the media the rest of the pipeline actually depends on — is
+    // the harvest - the media the rest of the pipeline actually depends on - is
     // always attempted and its per-row progress persisted first; the baseline
     // then gets whatever budget is left, and its failing to finish costs only
     // itself.
@@ -574,7 +574,7 @@ async function scanMergedSpan(
   deps: RetentionWindowMediaExtractionDeps,
 ): Promise<void> {
   // Snapshots still get derived and created below even when the scan itself
-  // fails — from empty cues, which is exactly the fallback a window with
+  // fails - from empty cues, which is exactly the fallback a window with
   // genuinely zero detected cuts already gets (see
   // buildSnapshotTimestampsFromSceneCues). Without this, a single transient
   // ffmpeg failure (a network hiccup, a bad seek) would leave every window in
@@ -635,7 +635,7 @@ async function scanMergedSpan(
         spanCues == null,
       )
       // The scan's own status still faithfully reports failure when the
-      // ffmpeg call itself errored — snapshots existing doesn't mean cut
+      // ffmpeg call itself errored - snapshots existing doesn't mean cut
       // detection actually ran for this window, and a failed scan is what
       // makes it eligible for retry (see getPendingRetentionWindowSceneCueScans).
       await updateRetentionWindowSceneCueScanStatus(

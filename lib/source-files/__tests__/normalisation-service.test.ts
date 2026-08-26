@@ -231,7 +231,7 @@ describe("startNormalisation", () => {
       normalisation_status: "processing",
       normalisation_provider: "qencode",
       normalisation_task_token: "task-xyz",
-      // One 360p proxy by default, serving both playback and analysis — no
+      // One 360p proxy by default, serving both playback and analysis - no
       // separate analysis output when the playback proxy is already that small.
       proxy_storage_path: "user-1/vid-1/sf-1/proxy-360p.mp4",
       analysis_proxy_storage_path: null,
@@ -354,7 +354,7 @@ describe("startNormalisation", () => {
 
 describe("parseQencodeCallback", () => {
   // Qencode POSTs application/x-www-form-urlencoded fields, with the bulk of
-  // the payload nested in a JSON-encoded `status` string — not a JSON body.
+  // the payload nested in a JSON-encoded `status` string - not a JSON body.
   it("prefers our user_tag over Qencode's own system tag on each output", () => {
     // A real completed callback: Qencode stamps its own value into the system
     // `tag` field of every output and echoes the label we submitted into
@@ -468,7 +468,7 @@ describe("pickCallbackVideo", () => {
     expect(pickCallbackVideo([playback, analysis], "analysis")).toBe(analysis)
   })
 
-  it("falls back to height when tags are absent — tallest is playback, shortest analysis", () => {
+  it("falls back to height when tags are absent - tallest is playback, shortest analysis", () => {
     const p = { url: "p", tag: null, height: 1080 }
     const a = { url: "a", tag: null, height: 360 }
     // Order shuffled to prove it's height, not position, doing the work here.

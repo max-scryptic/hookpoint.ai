@@ -1,7 +1,7 @@
 // YouTube Reporting API client for thumbnail reach (impressions + CTR).
 //
 // These metrics are NOT served by the synchronous YouTube Analytics API
-// (reports.query) — every metrics/dimensions/filters shape there 400s "query is
+// (reports.query) - every metrics/dimensions/filters shape there 400s "query is
 // not supported". They live only in the YouTube *Reporting* API, which is a
 // different, asynchronous product: you register a reporting job once, YouTube
 // generates a daily CSV per day (first one lands ~24-48h after the job is
@@ -15,7 +15,7 @@
 //
 // Everything here is best-effort. A missing job, a report that hasn't been
 // generated yet, or a failed download all resolve to null reach so the caller's
-// KPI totals are never affected — reach simply stays blank until a report lands.
+// KPI totals are never affected - reach simply stays blank until a report lands.
 
 const REPORTING_API = "https://youtubereporting.googleapis.com/v1"
 
@@ -83,7 +83,7 @@ async function ensureReachJob(accessToken: string): Promise<string | null> {
     pageToken = json.nextPageToken
   }
 
-  // No existing job — register one. YouTube starts generating reports now.
+  // No existing job - register one. YouTube starts generating reports now.
   const createResponse = await fetch(`${REPORTING_API}/jobs`, {
     method: "POST",
     headers: {
@@ -107,7 +107,7 @@ async function ensureReachJob(accessToken: string): Promise<string | null> {
 }
 
 // Lists every report the job has produced, newest first, deduped to one report
-// per day (YouTube can reissue a corrected report for a day — keep the latest
+// per day (YouTube can reissue a corrected report for a day - keep the latest
 // createTime so a day is never double-counted).
 async function listReachReports(
   accessToken: string,
@@ -221,8 +221,8 @@ async function aggregateReports(
 
 // Builds the whole-channel reach map: every video that appears in the available
 // reports, keyed by video id, with summed impressions and impression-weighted
-// CTR. This is the natural granularity of the Reporting API — one download pass
-// yields reach for the entire channel at once — so callers fetch it once and
+// CTR. This is the natural granularity of the Reporting API - one download pass
+// yields reach for the entire channel at once - so callers fetch it once and
 // fan the results out across all of a user's analysed videos rather than paying
 // the download per video. Never throws: any failure, or a freshly created job
 // with no reports yet, resolves to an empty map so callers degrade gracefully.

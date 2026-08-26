@@ -1,7 +1,7 @@
 // Pure, dependency-free constants and types for the cost log, safe to import
 // from client components (the admin filters) as well as server code. The
 // write-side helpers live in lib/llm-calls.ts, which imports the service-role
-// client and must therefore never be pulled into a client bundle — keeping
+// client and must therefore never be pulled into a client bundle - keeping
 // these here is what lets the filter UI import the labels/types without
 // dragging that server-only code along.
 
@@ -17,7 +17,7 @@ export const COST_TYPE_LABELS: Record<CostType, string> = {
   qencode_transcode: "Qencode Transcode",
 }
 
-// The specific kind of LLM call — the variety of LLM work we do. Kept in sync
+// The specific kind of LLM call - the variety of LLM work we do. Kept in sync
 // with the call_type check constraint in the migration. Only meaningful for the
 // 'llm_call' cost type; a Qencode transcode has no call_type. The `_LABELS` map
 // is the human wording shown in the admin table and its type filter.
@@ -56,7 +56,7 @@ export const LLM_CALL_TYPE_LABELS: Record<LlmCallType, string> = {
 }
 
 // The two kinds of LLM work we bill for, one level above call_type: the
-// analysis pipeline a video goes through (light *and* deep — pacing, packaging,
+// analysis pipeline a video goes through (light *and* deep - pacing, packaging,
 // snapshots, audio, synthesis …) and the comparison reports generated between
 // two videos. Every LLM call belongs to exactly one, which is what lets the
 // admin cost surfaces filter and total them apart.
@@ -69,7 +69,7 @@ export const LLM_CALL_GROUP_LABELS: Record<LlmCallGroup, string> = {
   comparison: "comparisons",
 }
 
-// The comparison-report calls — every other LLM call type is analysis work.
+// The comparison-report calls - every other LLM call type is analysis work.
 const COMPARISON_LLM_CALL_TYPES = new Set<LlmCallType>([
   "script_comparison",
   "packaging_comparison",
@@ -94,8 +94,8 @@ export const LLM_CALL_TYPES_BY_GROUP: Record<LlmCallGroup, LlmCallType[]> = {
 }
 
 // The choices the admin cost-log "cost type" filter offers. It is one dropdown
-// over two underlying filters — the cost type and (for LLM calls) the call
-// group — so an admin can pick all LLM calls, just the analysis ones, just the
+// over two underlying filters - the cost type and (for LLM calls) the call
+// group - so an admin can pick all LLM calls, just the analysis ones, just the
 // comparison reports, or transcoding, without a second widget.
 export const COST_SCOPES = [
   "llm_call",
@@ -113,7 +113,7 @@ export const COST_SCOPE_LABELS: Record<CostScope, string> = {
   qencode_transcode: "Qencode Transcode",
 }
 
-// The dropdown value for a (cost type, call group) pair — the empty string when
+// The dropdown value for a (cost type, call group) pair - the empty string when
 // no cost filter is applied ("All cost types").
 export function costScopeValue(
   costType?: CostType,
@@ -160,7 +160,7 @@ export function callTypeInScope(
 // audio and event synthesis LLM calls plus the one-time Qencode transcode).
 export type AnalysisCostBucket = "light" | "deep"
 
-// The deep-dive LLM calls — everything else logged against a video is light.
+// The deep-dive LLM calls - everything else logged against a video is light.
 const DEEP_LLM_CALL_TYPES = new Set<LlmCallType>([
   "snapshot",
   "audio",

@@ -41,7 +41,7 @@ describe("normaliseTipExamples", () => {
   it("scrubs the em dashes a model writes, like every other rendered copy", () => {
     expect(
       normaliseTipExamples([
-        { label: "Open on the number", example: '"Eleven wins — no losses."' },
+        { label: "Open on the number", example: '"Eleven wins \u2014 no losses."' },
       ]),
     ).toEqual([
       { label: "Open on the number", example: '"Eleven wins - no losses."' },

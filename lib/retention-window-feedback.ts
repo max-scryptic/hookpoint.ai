@@ -3,9 +3,9 @@
 // window has any advice to give.
 //
 // This lives outside the detail component because the last question is asked
-// before a row exists rather than while one renders — a window with no tip on it
+// before a row exists rather than while one renders - a window with no tip on it
 // is dropped from its list, from the chart's markers and from the tab strip
-// together (see AnalysedVideoDetail) — and the answer has to be the same in all
+// together (see AnalysedVideoDetail) - and the answer has to be the same in all
 // four places as what WindowFeedback would actually draw.
 
 import type { RetentionMomentAttribution } from "@/lib/retention-attribution"
@@ -14,7 +14,7 @@ import type { DeepWindowFeedback } from "@/lib/report-tip-uniqueness"
 // Reduce a window's raw per-event deep feedback to just the entries that earn
 // their own tab. Only an insight that produced an actionable tip is worth a
 // tab (the reasoning is shown above the tip inside it), and each distinct tip
-// gets a single tab — several events in one window often synthesise the same
+// gets a single tab - several events in one window often synthesise the same
 // recommendation, and a tipless event would render an empty tab.
 export function dedupeDeepFeedback(
   deepFeedback: DeepWindowFeedback[],
@@ -29,7 +29,7 @@ export function dedupeDeepFeedback(
   })
 }
 
-// Whether the window's transcript reading is worth a showing of its own — the
+// Whether the window's transcript reading is worth a showing of its own - the
 // one that becomes the "Script" tab.
 export function hasScriptFeedback(
   attribution: RetentionMomentAttribution | undefined,

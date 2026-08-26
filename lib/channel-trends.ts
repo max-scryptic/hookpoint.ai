@@ -1,15 +1,15 @@
 // Data for the Channel Trends page (app/(app)/channel-trends): the size
 // of the user's accumulated cross-video event library plus per-kind trend
 // aggregations. Built over the same channel event records the synthesizer's
-// channelHistory summary uses (lib/channel-event-history.ts), but richer —
+// channelHistory summary uses (lib/channel-event-history.ts), but richer -
 // trends carry contributing video titles and example narratives so the page
-// can show its evidence — and the library's size drives the progressive
+// can show its evidence - and the library's size drives the progressive
 // unlock stages the page renders.
 //
 // Beyond the per-kind tallies, this module scores how RELEVANT each pattern
 // is, because raw frequency ranks the noisy event types first (scene cuts
 // appear everywhere on a cut-heavy channel, in drops and gains alike). Three
-// signals — all already stored per event — separate signal from style:
+// signals - all already stored per event - separate signal from style:
 //   breadth     recurrence across distinct videos, not raw event volume
 //   confidence  the synthesizer's own 0..1 "plausibly moved retention" score
 //   contrast    how lopsided the type is between drop-off and gain windows
@@ -53,7 +53,7 @@ import type { RetentionPoint } from "@/lib/youtube/youtube"
 // Trend confidence grows with library size: below EARLY the page only shows
 // the library filling up; from EARLY trends appear labelled as early signals;
 // from ESTABLISHED they're presented at full strength. EARLY deliberately sits
-// just above the synthesizer's own two-video minimum — a pattern needs a few
+// just above the synthesizer's own two-video minimum - a pattern needs a few
 // videos before a page dedicated to it reads as credible. ESTABLISHED is six
 // because that is where the band-split views stop being a rounding exercise:
 // six covered videos put three above the median and three below it, so the
@@ -90,18 +90,18 @@ export interface ChannelTrendEvent {
 export interface ChannelTrend {
   eventType: RetentionWindowEventType
   eventCount: number
-  // Distinct videos this event type appeared in for this window kind —
+  // Distinct videos this event type appeared in for this window kind -
   // recurrence across videos, not raw volume, is what makes a channel trend.
   videoCount: number
   // The individual occurrences behind eventCount, highest-confidence first,
-  // each attributed to its source video — the drill-down under the row. Capped
+  // each attributed to its source video - the drill-down under the row. Capped
   // at MAX_TREND_EVENTS, so eventCount can exceed events.length.
   events: ChannelTrendEvent[]
 }
 
 export interface ChannelKindTrends {
   eventCount: number
-  // Ordered by videoCount desc, then eventCount desc — most channel-wide first.
+  // Ordered by videoCount desc, then eventCount desc - most channel-wide first.
   trends: ChannelTrend[]
 }
 
@@ -119,13 +119,13 @@ export interface ChannelVideo {
   subscribersLost: number | null
   // YouTube publish date, from the stored video metadata.
   publishedAt: string | null
-  // When the analytics snapshot was taken — the "as of" moment views/day is
+  // When the analytics snapshot was taken - the "as of" moment views/day is
   // measured against, so a snapshot's age never skews the rate.
   analyticsFetchedAt: string | null
-  // Share (0..1) of snapshot views from Browse features + Suggested videos —
+  // Share (0..1) of snapshot views from Browse features + Suggested videos -
   // the packaging-earned surfaces; null when no traffic breakdown exists.
   browseSuggestedShare: number | null
-  // 0..100 — the average share of the video watched, from the same snapshot.
+  // 0..100 - the average share of the video watched, from the same snapshot.
   // The retention outcome the script taxonomy is contrasted against.
   averageViewPercentage: number | null
   // 0..1 impression-weighted thumbnail click-through, when YouTube's reporting
@@ -197,7 +197,7 @@ export interface ChannelSignatureRow {
   gainEventCount: number
   dropVideoCount: number
   gainVideoCount: number
-  // Distinct videos across both sides — what the verdict's evidence bar is
+  // Distinct videos across both sides - what the verdict's evidence bar is
   // measured against.
   videoCount: number
   verdict: SignatureVerdict
@@ -299,10 +299,10 @@ export interface ChannelRecurrenceRow {
   // Aligned with ChannelRecurrence.videos: oldest first.
   cells: ChannelRecurrenceCell[]
   hitCount: number
-  // Consecutive hits ending at the newest video — "still happening".
+  // Consecutive hits ending at the newest video - "still happening".
   currentStreak: number
   // Videos since the last hit (0 = the newest video hit; cells.length =
-  // never hit) — "hasn't shown up lately".
+  // never hit) - "hasn't shown up lately".
   videosSinceLastHit: number
 }
 
@@ -327,8 +327,8 @@ export interface ChannelRecurrence {
 // by topic, packaging and who the video reached, so the UI phrases these as
 // leads, never causes.
 
-// The section needs a few videos with subscriber data before a median rate —
-// and outliers against it — mean anything.
+// The section needs a few videos with subscriber data before a median rate -
+// and outliers against it - mean anything.
 export const SUBSCRIBER_MIN_COVERED_VIDEOS = 3
 // A magnet must convert at several times the channel's typical rate AND gain
 // a non-trivial absolute count; three subscribers on a hundred views is a
@@ -361,7 +361,7 @@ export interface SubscriberVideoRow {
 export type SubscriberPatternSide = Extract<RetentionWindowKind, "gain" | "hook">
 
 // One event type every magnet video had (in its gains or its hook) that the
-// rest of the covered library mostly lacked — the "what was different about
+// rest of the covered library mostly lacked - the "what was different about
 // that video" evidence, with receipts from the magnets themselves.
 export interface SubscriberPattern {
   eventType: RetentionWindowEventType
@@ -390,7 +390,7 @@ export interface ChannelSubscriberConversion {
 // Reach is views per day between publish and the analytics snapshot, because
 // raw view counts can't be compared across a library where one video is two
 // years old and another is two weeks old. Both numbers come from the same
-// snapshot, so the rate is internally consistent — but it still favours
+// snapshot, so the rate is internally consistent - but it still favours
 // recent uploads (views front-load), which the UI says out loud.
 //
 // The comparison itself is the same contrast move the retention machinery
@@ -538,7 +538,7 @@ export function buildChannelSnapshot(
 
 export interface ChannelTrendsData {
   stage: ChannelTrendsStage
-  // Distinct videos with a completed event synthesis — the library the
+  // Distinct videos with a completed event synthesis - the library the
   // progressive unlock is measured against.
   libraryVideoCount: number
   // Retention windows whose events have been synthesized, across all videos.
@@ -551,7 +551,7 @@ export interface ChannelTrendsData {
   // Per-type drop-vs-gain shares, most drop-heavy first; null when no drop or
   // gain events exist yet.
   signature: ChannelSignatureRow[] | null
-  // At most one fix, one strength and one hook pattern, in that order — only
+  // At most one fix, one strength and one hook pattern, in that order - only
   // those that cleared the insight gates.
   insights: ChannelInsight[]
   // At most one keep, fix and recover rule, each contrasted against audience
@@ -780,7 +780,7 @@ function sideInsight(
 }
 
 // Hook windows have no drop/gain polarity, so the hook insight is the opening
-// pattern that recurs broadly and confidently — contrast doesn't apply.
+// pattern that recurs broadly and confidently - contrast doesn't apply.
 function hookInsight(
   records: ChannelEventRecord[],
   libraryVideoCount: number,
@@ -1001,7 +1001,7 @@ function chronological(videos: ChannelVideo[]): ChannelVideo[] {
 
 // The recurrence strip: for the most channel-wide drop and gain patterns,
 // which of the most recent videos each one appeared in. This is what makes
-// change visible — a streak still running, or a pattern gone quiet after the
+// change visible - a streak still running, or a pattern gone quiet after the
 // creator acted on it.
 export function buildChannelRecurrence(
   records: ChannelEventRecord[],
@@ -1085,7 +1085,7 @@ function median(values: number[]): number {
 
 // The contrast pass behind "what your subscriber magnets did differently":
 // event types present in every magnet's gain or hook windows but rare across
-// the other covered videos. Drop-off events are excluded — something that
+// the other covered videos. Drop-off events are excluded - something that
 // showed up where viewers left is not a candidate explanation for gained
 // subscribers.
 function subscriberPatterns(
@@ -1568,7 +1568,7 @@ function browseSuggestedShare(
 }
 
 // Title, analysis date, analytics snapshot and packaging taxonomy for every
-// video the page touches — event attribution, the recurrence strip's
+// video the page touches - event attribution, the recurrence strip's
 // chronological columns, the subscriber conversion view and the packaging
 // patterns view all read from this. JSON-path selects keep the payload to the
 // fields used instead of shipping whole video_details/packaging_alignment

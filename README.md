@@ -40,8 +40,8 @@ This starter uses `@supabase/ssr` in:
 
 ## Database migrations
 
-Migrations live in `supabase/migrations` and are applied by hand — through the
-dashboard's SQL editor, `supabase db push`, or the Supabase MCP — separately
+Migrations live in `supabase/migrations` and are applied by hand - through the
+dashboard's SQL editor, `supabase db push`, or the Supabase MCP - separately
 from the deploy. Merging a pull request ships its code to production straight
 away, so a migration that is committed but not yet applied leaves the live app
 asking for schema the database does not have. That usually fails quietly: the

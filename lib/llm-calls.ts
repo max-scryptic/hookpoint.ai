@@ -1,4 +1,4 @@
-// Write-side helper for `cost_logs` — the account-wide, append-only log of
+// Write-side helper for `cost_logs` - the account-wide, append-only log of
 // every paid AI/media cost we incur (see the 20260720130000_create_cost_logs
 // migration). Every OpenAI call site and the Qencode transcoding callback logs
 // here as its cost settles, so the admin cost log can show exactly which calls
@@ -43,7 +43,7 @@ export interface RecordCostLogParams {
   // deleted. Usually left unset (the admin listing resolves it via users).
   userEmail?: string | null
   analysedVideoId?: string | null
-  // The broad category — an LLM call vs a Qencode transcode.
+  // The broad category - an LLM call vs a Qencode transcode.
   costType: CostType
   // The specific LLM call kind; null/absent for costs with no such breakdown
   // (e.g. a Qencode transcode).
@@ -58,7 +58,7 @@ export interface RecordCostLogParams {
   createdAt?: string
 }
 
-// Records one cost. Best-effort: never throws — a logging failure is swallowed
+// Records one cost. Best-effort: never throws - a logging failure is swallowed
 // (and logged) so it can't break the pipeline it is measuring. Pass `admin` to
 // reuse a service-role client the caller already holds; otherwise one is made.
 export async function recordCostLog(
@@ -114,7 +114,7 @@ export async function recordLlmCallCost(
 }
 
 // Convenience for a Qencode transcoding job: a 'qencode_transcode' cost with no
-// call type, model or tokens — just the derived dollar cost against the
+// call type, model or tokens - just the derived dollar cost against the
 // user/video whose upload was transcoded.
 export async function recordTranscodingCall(
   costUsd: number,

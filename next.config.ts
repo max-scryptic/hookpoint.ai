@@ -4,8 +4,8 @@ const nextConfig: NextConfig = {
   // The /dashboard prefix is gone: every screen that lived under it now sits at
   // the top level (/dashboard/analysed-videos → /analysed-videos) and the
   // dashboard index page itself no longer exists, so /dashboard sends people to
-  // Analyse a Video instead. These keep old links — a bookmark, an open tab, a
-  // link mailed out before the move — landing on the right screen.
+  // Analyse a Video instead. These keep old links - a bookmark, an open tab, a
+  // link mailed out before the move - landing on the right screen.
   //
   // Order matters: the two specific rules have to be matched before the
   // catch-all, which would otherwise rewrite /dashboard/tip-checklist to a
@@ -45,7 +45,7 @@ const nextConfig: NextConfig = {
   //
   // tesseract.js has the same problem one layer deeper: createWorker spawns
   // its worker-script via `new Worker(path.join(__dirname, ...))`, a
-  // runtime-computed path Turbopack can't statically resolve either — left
+  // runtime-computed path Turbopack can't statically resolve either - left
   // bundled, the worker thread gets handed a mangled (non-string) path
   // instead of the real file, so createOcrEngine throws
   // "The 'path' argument must be of type string. Received type number" in
@@ -63,17 +63,17 @@ const nextConfig: NextConfig = {
   //
   // Keyed on "/**/*" (every route), not just "/api/**/*": retention window
   // media extraction (which needs all of these) also runs via after() from
-  // the dashboard's analysed-video page route, not only from /api/* routes —
+  // the dashboard's analysed-video page route, not only from /api/* routes -
   // scoping this to /api/**/* left that page's serverless function without
   // tesseract's worker-script/WASM core/trained data. (The production
   // "createOcrEngine ... path argument must be of type string" error itself
-  // traced back to a separate bug — a bundler-rewritten `require.resolve` in
-  // lib/media/ocr.ts, see the comment there — but this route was still a real
+  // traced back to a separate bug - a bundler-rewritten `require.resolve` in
+  // lib/media/ocr.ts, see the comment there - but this route was still a real
   // gap in its own right once that's fixed.)
   //
   // The whole tesseract.js package is traced, not just its worker-script/**
   // subtree: that worker script is spawned via a runtime-computed path
-  // (new Worker(...)), so nft never walks its require() graph — and that graph
+  // (new Worker(...)), so nft never walks its require() graph - and that graph
   // reaches back out of worker-script/ into sibling src/constants/** and
   // src/utils/** (e.g. worker-script/utils/dump.js does
   // `require('../../constants/imageType')`). Shipping only worker-script/**

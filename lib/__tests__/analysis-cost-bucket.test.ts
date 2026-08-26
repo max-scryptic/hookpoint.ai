@@ -18,7 +18,7 @@ describe("analysisCostBucket", () => {
     expect(analysisCostBucket("llm_call", "packaging_taxonomy")).toBe("light")
   })
 
-  it("treats a Qencode transcode as deep — it only prepares a source file", () => {
+  it("treats a Qencode transcode as deep - it only prepares a source file", () => {
     expect(analysisCostBucket("qencode_transcode", null)).toBe("deep")
   })
 

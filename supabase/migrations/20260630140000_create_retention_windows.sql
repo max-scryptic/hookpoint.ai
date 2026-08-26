@@ -1,12 +1,12 @@
 -- Normalises the retention "windows" surfaced for each analysed video into a
 -- dedicated table, the same way pacing_windows holds per-window pacing rows.
 -- Three kinds share the table:
---   • hook     – the two fixed opening windows (Initial Hook, Hook Delivery),
+--   • hook     - the two fixed opening windows (Initial Hook, Hook Delivery),
 --                always reported, measuring only viewers lost.
---   • drop_off – the significant mid-video drop-offs worth a creator's
+--   • drop_off - the significant mid-video drop-offs worth a creator's
 --                attention (steeper than this video's own decline, or
 --                underperforming similar videos).
---   • gain     – the moments retention rose (re-watched / replayed segments).
+--   • gain     - the moments retention rose (re-watched / replayed segments).
 -- Storing them as rows lets us query and compare hooks, drops and gains across
 -- videos (e.g. the dashboard KPI totals) instead of re-deriving them from the
 -- raw curve every time. `delta` is the signed change in watch ratio across the

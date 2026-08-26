@@ -1,6 +1,6 @@
 // The wire format /api/analyze uses to report real progress while it runs.
 //
-// A fresh analysis is a long chain of work — YouTube reads, a DB write, then
+// A fresh analysis is a long chain of work - YouTube reads, a DB write, then
 // several LLM calls (pacing, retention attribution, packaging alignment, script
 // taxonomy). The client used to guess at all of that with a timer, which meant
 // the bar raced to its ceiling in a few seconds and then sat there for the whole
@@ -44,7 +44,7 @@ export type AnalysisStreamEvent =
   // The analysis succeeded; `result` is the same payload the route used to
   // return as plain JSON.
   | { type: "result"; result: unknown }
-  // The analysis failed after streaming began, so we can't use a status code —
+  // The analysis failed after streaming began, so we can't use a status code -
   // `status` mirrors the one the non-streaming route would have returned.
   | { type: "error"; status: number; error: string; message?: string }
 
@@ -110,7 +110,7 @@ export const FRESH_ANALYSIS_STAGES: readonly AnalysisStagePlanEntry[] = [
 // Replaying a saved analysis: the YouTube work is already done, so the plan is
 // just the parts that can still miss their cache. It shares the "lookup" prefix
 // with the fresh plan (same key, same window) because the route only discovers
-// which plan applies once that first stage's DB read comes back — see
+// which plan applies once that first stage's DB read comes back - see
 // AnalysisProgressReporter.usePlan.
 export const CACHED_ANALYSIS_STAGES: readonly AnalysisStagePlanEntry[] = [
   { key: "lookup", label: "Looking up your video…", end: 8, estimatedMs: 1200 },
@@ -139,7 +139,7 @@ export interface AnalysisProgressReporter {
   // reported are a shared prefix of both plans, so the bar never rewinds.
   usePlan(plan: readonly AnalysisStagePlanEntry[]): void
   // Enters a stage, emitting its window to the client. Unknown keys (a stage
-  // that isn't in the active plan) are ignored rather than throwing — progress
+  // that isn't in the active plan) are ignored rather than throwing - progress
   // reporting must never be able to fail an analysis.
   stage(key: AnalysisStageKey): void
   // Reports sub-progress within the current stage, 0 → 1. Used where a stage is
@@ -208,7 +208,7 @@ export function encodeAnalysisStreamEvent(event: AnalysisStreamEvent): string {
 
 // Incremental NDJSON reader for the browser side: a network chunk can split a
 // line anywhere (or carry several), so hold the tail until its newline arrives.
-// Malformed lines are dropped rather than thrown — a garbled progress tick must
+// Malformed lines are dropped rather than thrown - a garbled progress tick must
 // not take down an analysis that is otherwise fine.
 export function createAnalysisStreamParser(): {
   push(chunk: string): AnalysisStreamEvent[]

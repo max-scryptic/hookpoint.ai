@@ -10,7 +10,7 @@ const GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 // Persists a user's Google refresh token. Called from the auth callback right
 // after sign-in, which is the only moment Supabase surfaces the provider token.
 // Google only returns a refresh token when the OAuth request uses
-// access_type=offline + prompt=consent, so this may be null on repeat logins —
+// access_type=offline + prompt=consent, so this may be null on repeat logins -
 // in that case we keep whatever we already stored.
 export async function storeRefreshToken(
   userId: string,

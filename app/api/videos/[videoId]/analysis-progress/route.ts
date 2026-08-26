@@ -13,7 +13,7 @@ import { getLatestDeepAnalysisPipelineRun } from "@/lib/deep-analysis-pipeline-r
 
 // A poll that finds the pipeline stalled re-kicks it via after(), and that
 // resumed work (extraction/analysis/synthesis) runs within this invocation's
-// budget — so give it the same headroom as every other trigger point for this
+// budget - so give it the same headroom as every other trigger point for this
 // pipeline (see /api/analyze, /api/videos/:id/retry-deep-analysis).
 export const maxDuration = 300
 
@@ -75,7 +75,7 @@ export async function GET(
       // A ready source file whose stage breakdown we can't compute is still
       // being (or meant to be) analysed. Return a degraded-but-active read so
       // the card shows a generic "analysing" spinner rather than nothing at
-      // all — the blank-card failure mode that used to hide a broken pipeline.
+      // all - the blank-card failure mode that used to hide a broken pipeline.
       // Skip the resume kick: without the breakdown we can't tell what stalled,
       // and whatever broke the read would likely break the resumed stage too.
       console.error("Failed to compute deep analysis stages", error)
@@ -89,11 +89,11 @@ export async function GET(
     }
 
     // The original pipeline kickoff is a long best-effort after() callback.
-    // Large source files can exhaust that invocation partway through — stalling
+    // Large source files can exhaust that invocation partway through - stalling
     // at extraction (snapshots/audio), AI analysis, or the final event
     // synthesis. The server finishes those on its own now (the pass hands over
     // to a fresh invocation, and the watchdog sweep catches whatever stalls
-    // anyway), so this is no longer what rescues an analysis — it's the fast
+    // anyway), so this is no longer what rescues an analysis - it's the fast
     // path for the reader who happens to be watching, resuming within seconds
     // of a stall instead of on the sweep's cadence. Re-triggering is
     // idempotent: the pipeline-run lease makes an overlapping kick a no-op

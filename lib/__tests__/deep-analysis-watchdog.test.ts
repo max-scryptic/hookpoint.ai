@@ -13,8 +13,8 @@ const minutesAgo = (minutes: number) =>
 
 // A stand-in for the service-role client that answers each table with whatever
 // rows the test hands it. The PostgREST filters themselves aren't re-executed
-// here — they're the database's job, and the schema they run against is the one
-// thing a unit test can't stand in for — so each table's rows are given as the
+// here - they're the database's job, and the schema they run against is the one
+// thing a unit test can't stand in for - so each table's rows are given as the
 // filtered set: "these are the rows still waiting on a stage".
 function createAdminStub(
   tables: Record<string, Record<string, unknown>[]>,
@@ -142,7 +142,7 @@ describe("planDeepAnalysisSweep", () => {
           status: "running",
           started_at: minutesAgo(4),
           // A live pass bumps its lease on a heartbeat, so a fresh updated_at
-          // means someone is still working — not a stall.
+          // means someone is still working - not a stall.
           updated_at: minutesAgo(0),
         }),
       ],
@@ -201,7 +201,7 @@ describe("planDeepAnalysisSweep", () => {
   })
 
   it("does not read killed passes as a lack of progress", async () => {
-    // A pass killed mid-stage records nothing, so it says nothing either way —
+    // A pass killed mid-stage records nothing, so it says nothing either way -
     // counting it as a repeat reading would abandon a video that is simply
     // taking several invocations.
     const admin = sweepInput({

@@ -15,7 +15,7 @@ import {
   type LlmCallType,
 } from "@/lib/llm-call-types"
 
-// Per-request admin data behind an auth check — never statically prerender.
+// Per-request admin data behind an auth check - never statically prerender.
 export const dynamic = "force-dynamic"
 
 function parseCallType(value?: string): LlmCallType | undefined {
@@ -44,7 +44,7 @@ export default async function AdminLlmCallsPage({
     userId?: string
     videoId?: string
     // The cost-scope dropdown's value, e.g. "llm_call" or "llm_call:comparison"
-    // — one param covering both the cost type and the LLM call group.
+    // - one param covering both the cost type and the LLM call group.
     costType?: string
     callType?: string
     from?: string

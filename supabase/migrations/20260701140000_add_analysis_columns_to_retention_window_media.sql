@@ -5,7 +5,7 @@
 -- whether the media was successfully extracted from the source video.
 --
 -- A row can be `status = 'ready'` (extraction succeeded) while
--- `analysis_status = 'pending'` (analysis hasn't run yet) — that's the normal
+-- `analysis_status = 'pending'` (analysis hasn't run yet) - that's the normal
 -- state right after extraction. Rows start `analysis_status = 'pending'`
 -- alongside `status`, but analysis only actually runs once `status = 'ready'`
 -- (see lib/retention-window-media-analysis.ts), since there's nothing to

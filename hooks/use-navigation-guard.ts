@@ -3,9 +3,9 @@ import { useEffect } from "react"
 // Warns the user before they leave the page while `enabled` is true, covering
 // both kinds of departure:
 //
-//  1. Hard unloads — a reload, closing the tab, or navigating to another site —
+//  1. Hard unloads - a reload, closing the tab, or navigating to another site -
 //     via `beforeunload`, which shows the browser's native confirmation prompt.
-//  2. In-app (client-side) route changes — clicking a link that the Next.js
+//  2. In-app (client-side) route changes - clicking a link that the Next.js
 //     App Router handles without a full page load. `beforeunload` never fires
 //     for these, so we intercept the anchor click ourselves and ask for
 //     confirmation with `window.confirm`, aborting the navigation if declined.
@@ -28,7 +28,7 @@ export function useNavigationGuard(enabled: boolean, message: string) {
     // App Router's own click handler so a declined confirm can stop it.
     const handleClickCapture = (event: MouseEvent) => {
       // Respect modified clicks (open in new tab/window) and non-primary
-      // buttons — those don't navigate the current page, so there's nothing to
+      // buttons - those don't navigate the current page, so there's nothing to
       // warn about.
       if (
         event.defaultPrevented ||

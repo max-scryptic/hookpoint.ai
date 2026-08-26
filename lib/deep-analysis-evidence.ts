@@ -1,7 +1,7 @@
 // Aggregates every piece of "deep analysis" evidence a video's retention
-// windows have accumulated so far — synthesized events, clipped transcripts,
+// windows have accumulated so far - synthesized events, clipped transcripts,
 // harvested snapshots (with signed read URLs) and the harvested audio clip
-// (with a signed read URL) — grouped by window, for the analysis detail
+// (with a signed read URL) - grouped by window, for the analysis detail
 // page's evidence breakdown (components/deep-analysis-evidence.tsx).
 //
 // Purely read-only: it never triggers extraction/analysis/synthesis, just
@@ -35,6 +35,7 @@ import {
   getRetentionWindowCostsForVideo,
   type RetentionWindowCost,
 } from "@/lib/retention-window-costs"
+import { scrubDashes } from "@/lib/copy-guardrails"
 import { transcodingCostUsd } from "@/lib/transcoding-cost"
 import { getRetentionWindowMediaStorageProvider } from "@/lib/retention-window-media-config"
 import type { AudioAnalysis } from "@/lib/retention-window-media-analysis"
@@ -79,7 +80,7 @@ export interface DeepAnalysisAudioView extends RetentionWindowAudioClip {
 
 // This video's own averages across every scanned/analysed window, so each
 // window's editing and pacing can be read as a deviation from the creator's
-// norm rather than in absolute terms — the same baseline the event
+// norm rather than in absolute terms - the same baseline the event
 // synthesizer is handed (lib/retention-window-event-synthesis.ts). Fields are
 // null when nothing has been scanned/measured to average yet.
 export interface DeepAnalysisBaseline {
@@ -116,7 +117,7 @@ export interface WindowEvidence {
   baseline: DeepAnalysisBaseline
   // What each of this window's LLM calls cost, and their sum. Empty/0 for a
   // window analysed before cost tracking existed (or whose costing writes
-  // failed) — those simply render no cost figure.
+  // failed) - those simply render no cost figure.
   costs: RetentionWindowCost[]
   totalCostUsd: number
   feedback: DeepAnalysisInsightFeedback | null
@@ -135,7 +136,7 @@ export interface DeepAnalysisEvidence {
   transcodingCostUsd: number
   // Sum of every window's LLM spend.
   llmCostUsd: number
-  // transcodingCostUsd + llmCostUsd — the full cost of deep-analysing the video.
+  // transcodingCostUsd + llmCostUsd - the full cost of deep-analysing the video.
   totalCostUsd: number
 }
 
@@ -157,7 +158,7 @@ function windowDisplayLabel(window: PersistedRetentionWindow): string {
 // Loads a video's full evidence set and groups it by window, skipping any
 // window nothing has been harvested or synthesized for yet (e.g. a hook
 // window with no analysis range, or a window whose media is still pending).
-// Windows are ordered hook, then drop-off, then gain — each by windowIndex —
+// Windows are ordered hook, then drop-off, then gain - each by windowIndex -
 // matching the order the rest of the detail page presents them in.
 //
 // `transcodedDurationSeconds` is the duration of the video Qencode transcoded,
@@ -194,7 +195,7 @@ export async function getDeepAnalysisEvidence(
       ),
     ])
 
-  // The video-wide baseline, computed once and shared by every window — the
+  // The video-wide baseline, computed once and shared by every window - the
   // same averaging the synthesizer uses: editing over each analysed window's
   // own metrics, speech rate over whatever audio clips have analysed.
   const analysisRanges = windows
@@ -383,7 +384,11 @@ export async function getDeepAnalysisEvidence(
   const transcodingCost = transcodingCostUsd(transcodedDurationSeconds)
 
   return {
-    windows: result,
+    // Narratives, descriptions, transcript lines and OCR text are all rendered
+    // verbatim across the evidence tables, and every one of them is written by
+    // a model or read off the video itself, so the dashes come off the whole
+    // payload here rather than at each cell. See lib/copy-guardrails.ts.
+    windows: scrubDashes(result),
     transcodingCostUsd: transcodingCost,
     llmCostUsd,
     totalCostUsd: transcodingCost + llmCostUsd,

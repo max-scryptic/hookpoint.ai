@@ -25,14 +25,14 @@ import {
 // within this window without another round-trip.
 const CHART_WINDOW_DAYS = 180
 
-// Per-request admin data behind an auth check — never statically prerender.
+// Per-request admin data behind an auth check - never statically prerender.
 export const dynamic = "force-dynamic"
 
 // Total revenue across the whole app, formatted in the currency Stripe billed
 // in (GBP expected). "error" means the Stripe lookup failed and the figure is
 // unknown; a zero/absent history renders as £0.00.
 function formatMoneyMade(revenue: UserRevenue | "error"): string {
-  if (revenue === "error") return "—"
+  if (revenue === "error") return "-"
   const currency = (revenue.currency ?? "gbp").toUpperCase()
   if (currency === "GBP") return formatGbp(revenue.totalMinorUnits)
   return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(
@@ -43,7 +43,7 @@ function formatMoneyMade(revenue: UserRevenue | "error"): string {
 // Matches the per-user detail page: enough precision for sub-cent figures
 // without trailing noise on larger totals. "error" renders as an em dash.
 function formatUsd(value: number | "error"): string {
-  if (value === "error") return "—"
+  if (value === "error") return "-"
   if (value === 0) return "$0.00"
   if (value < 0.01) return `$${value.toFixed(4)}`
   return `$${value.toFixed(2)}`
@@ -120,7 +120,7 @@ function KpiTile({
 }
 
 // Admin landing page: headline counts grouped into Users, Video analysis and
-// Economics, plus the activity charts. Every load is best-effort — a failure in
+// Economics, plus the activity charts. Every load is best-effort - a failure in
 // any one section degrades that section rather than 500-ing the whole area.
 export default async function AdminDashboardPage() {
   let stats = {

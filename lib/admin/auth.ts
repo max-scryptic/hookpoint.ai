@@ -15,7 +15,7 @@ function hasSupabaseEnv() {
 
 // Resolves the current session only if it belongs to an admin. The /admin area
 // shares Supabase Auth (and the session cookie) with the main app, so simply
-// being signed in is not sufficient — we additionally require the
+// being signed in is not sufficient - we additionally require the
 // users.is_admin flag, which only the service-role client can set.
 export async function getAdminUser(): Promise<AdminUser | null> {
   if (!hasSupabaseEnv()) {
@@ -35,7 +35,7 @@ export async function getAdminUser(): Promise<AdminUser | null> {
   const { sub, email } = data.claims
 
   // RLS lets a user read their own profile row, so the regular client is enough
-  // to read the flag for the current user — no service role needed to gate.
+  // to read the flag for the current user - no service role needed to gate.
   const { data: profile, error: profileError } = await supabase
     .from("users")
     .select("is_admin")

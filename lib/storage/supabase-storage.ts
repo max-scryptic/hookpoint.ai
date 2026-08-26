@@ -8,7 +8,7 @@
 //
 // NOTE: createSignedUpload uses Supabase's signed-upload-URL flow, a single PUT.
 // It comfortably covers the MVP. For genuinely huge (30 GB) resumable uploads
-// the swap-in is a TUS-based provider implementing this same interface — nothing
+// the swap-in is a TUS-based provider implementing this same interface - nothing
 // upstream changes.
 
 import type { SupabaseClient } from "@supabase/supabase-js"

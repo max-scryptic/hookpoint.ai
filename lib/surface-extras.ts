@@ -20,7 +20,7 @@ import type {
 //
 // `onSettled` is called as each task lands (settled, not necessarily
 // successful), so /api/analyze can stream real progress through what is
-// otherwise the longest silent stretch of a fresh analysis — three LLM calls in
+// otherwise the longest silent stretch of a fresh analysis - three LLM calls in
 // parallel. It's fire-and-forget: a throwing reporter must not fail the extras.
 export async function loadSurfaceExtras(
   supabase: SupabaseClient,

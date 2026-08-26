@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     // session. Supabase never resurfaces it, so we persist it for later
     // server-side YouTube API calls. Failure here must not block sign-in.
     //
-    // Only the request that actually performed the exchange sees it — a
+    // Only the request that actually performed the exchange sees it - a
     // duplicate callback has no session of its own to read it from, which is
     // fine: the token from the winning exchange is already stored.
     const session = result.session

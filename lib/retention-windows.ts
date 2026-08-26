@@ -2,7 +2,7 @@
 // turns a raw retention curve into the discrete windows we persist. A video's
 // hook windows, significant drop-offs and retention gains are all derived from
 // the same curve, so we compute them once at analyse time and store them as
-// rows — mirroring how pacing windows are normalised — instead of re-deriving
+// rows - mirroring how pacing windows are normalised - instead of re-deriving
 // them on every read. All calls go through a user-scoped Supabase client, so
 // Row Level Security guarantees a user only ever touches their own rows.
 
@@ -37,7 +37,7 @@ export interface RetentionWindow {
   isAbnormallySteep: boolean | null
   outOfRange: boolean
   // The padded window this retention window should be harvested for
-  // thumbnails/audio over — wider than [fromSeconds, toSeconds], which records
+  // thumbnails/audio over - wider than [fromSeconds, toSeconds], which records
   // only the detected hook/drop/gain itself. Null when this row has no
   // analysis window of its own (see computeAnalysisWindow).
   analysisFromSeconds: number | null
@@ -78,8 +78,8 @@ const KINDS: RetentionWindowKind[] = ["hook", "drop_off", "gain", "hold"]
 // number the detail view lists under "Biggest drop-offs".
 const SIGNIFICANT_DROP_OFF_LIMIT = 4
 
-// Padding (seconds) applied around a drop-off/gain's anchor timestamp — the
-// midpoint of its detected [fromSeconds, toSeconds] step — to get the window
+// Padding (seconds) applied around a drop-off/gain's anchor timestamp - the
+// midpoint of its detected [fromSeconds, toSeconds] step - to get the window
 // that's actually harvested for thumbnails/audio. Chosen so the harvested
 // clip shows what led into the moment and what followed it.
 const DROP_OFF_PADDING_BEFORE_SECONDS = 30
@@ -92,7 +92,7 @@ const HOLD_PADDING_AFTER_SECONDS = 10
 // Longest analysis span a single hold may harvest. Holds are the one window
 // kind whose span is the full detected stretch rather than a point anchor ±
 // fixed padding, so on longer/coarsely-sampled videos an unbounded hold can run
-// well past what a single scene-cue scan can decode within budget — the scanner
+// well past what a single scene-cue scan can decode within budget - the scanner
 // caps *merged* spans at SCAN_MERGE_MAX_SPAN_SECONDS (60s) but never splits a
 // lone scan, and computeSceneCueScanTimeoutMs stops modelling usefully past
 // that point, so one long hold can mint an over-budget, unsplittable scan that
@@ -105,7 +105,7 @@ const HOLD_MAX_ANALYSIS_SPAN_SECONDS = 60
 
 // Derives the padded analysis window for a single retention window row, or
 // null when this row has no analysis window of its own:
-//   • hook     – its own fixed bounds, so the initial hook (0-10s) and hook
+//   • hook     - its own fixed bounds, so the initial hook (0-10s) and hook
 //                delivery (10-30s) are each harvested and analysed as a
 //                separate deep-analysis window. The opening line and how it's
 //                then grounded are the two highest-leverage stretches of a
@@ -113,13 +113,13 @@ const HOLD_MAX_ANALYSIS_SPAN_SECONDS = 60
 //                them into one 0-30s read. Clamped to [0, durationSeconds]:
 //                a video too short to reach a hook window drops it (returns
 //                null).
-//   • drop_off – 30s before to 10s after the anchor (the midpoint of the
+//   • drop_off - 30s before to 10s after the anchor (the midpoint of the
 //                detected step, since that step can itself span several
 //                seconds on longer videos).
-//   • gain     – 10s before to 20s after the anchor. Unlike drop-offs, gains
+//   • gain     - 10s before to 20s after the anchor. Unlike drop-offs, gains
 //                aren't gated to start after the hook, so the lower bound can
 //                clamp to 0 for an early gain.
-//   • hold     – the full detected stretch, padded 10s each side, but capped at
+//   • hold     - the full detected stretch, padded 10s each side, but capped at
 //                HOLD_MAX_ANALYSIS_SPAN_SECONDS (a centred slice) so a wide hold
 //                can't mint a single over-budget scene-cue scan.
 // The drop_off/gain cases clamp to [0, durationSeconds] around their anchor.
@@ -147,8 +147,8 @@ export function computeAnalysisWindow(
     // Cap the harvested span so a wide hold can't produce a single
     // over-budget scene-cue scan (see HOLD_MAX_ANALYSIS_SPAN_SECONDS). A hold
     // that already fits is kept as-is; a longer one collapses to a centred
-    // slice of that width, which stays within [from, to] — and therefore
-    // within [0, durationSeconds] — since the midpoint is at least half the
+    // slice of that width, which stays within [from, to] - and therefore
+    // within [0, durationSeconds] - since the midpoint is at least half the
     // cap from either padded edge.
     if (to - from <= HOLD_MAX_ANALYSIS_SPAN_SECONDS) {
       return { fromSeconds: from, toSeconds: to }
@@ -195,7 +195,7 @@ function mapRow(row: RetentionWindowRow): PersistedRetentionWindow {
 
 // Derives the full set of retention windows for a video from its curve: the two
 // fixed hook windows, the significant mid-video drop-offs, and the retention
-// gains — in that order, each indexed from zero within its kind.
+// gains - in that order, each indexed from zero within its kind.
 export function buildRetentionWindows(
   retention: RetentionPoint[],
   durationSeconds: number,
@@ -341,7 +341,7 @@ export async function getRetentionWindows(
 
 // Replaces a video's retention windows with `windows`. Upserts the new rows on
 // (analysed_video_id, kind, window_index), then prunes any rows a previous save
-// left behind — a re-analysis can yield fewer windows of a given kind, or none.
+// left behind - a re-analysis can yield fewer windows of a given kind, or none.
 // Returns the upserted rows (with their ids) so the caller can attach the
 // per-chunk snapshot/audio rows to them.
 export async function saveRetentionWindows(

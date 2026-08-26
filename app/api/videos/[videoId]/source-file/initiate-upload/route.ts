@@ -12,7 +12,7 @@ import { maxUploadBytesForPlan } from "@/lib/plans"
 // Body: { filename: string, mimeType?: string, fileSizeBytes?: number }
 // Creates a pending source-file record for the user's analysed video and returns
 // a signed direct-to-storage upload target. The browser uploads straight to
-// storage with the returned token/URL — bytes never pass through this server.
+// storage with the returned token/URL - bytes never pass through this server.
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ videoId: string }> },

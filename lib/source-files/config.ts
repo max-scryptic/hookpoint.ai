@@ -32,7 +32,7 @@ export function getMaxUploadBytes(): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 30 * 1024 * 1024 * 1024
 }
 
-// Target size of each multipart chunk, in bytes. Default 64 MiB — big enough to
+// Target size of each multipart chunk, in bytes. Default 64 MiB - big enough to
 // keep the part count modest for a 30 GB file (~480 parts) while small enough
 // that several upload in parallel without each one being a huge retry unit. The
 // provider may grow this to stay under S3's 10,000-part ceiling.

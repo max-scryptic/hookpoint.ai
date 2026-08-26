@@ -2,7 +2,7 @@
 -- we hand the original off to a managed transcoder (Qencode) which produces a
 -- 1080p H.264 "proxy" written back into the same bucket. Once the proxy lands we
 -- delete the (potentially 4K, multi-GB) original. The proxy then serves both
--- playback and the future frame/audio extraction — nothing downstream needs the
+-- playback and the future frame/audio extraction - nothing downstream needs the
 -- full-resolution master.
 --
 -- The original upload columns (storage_path, file_size_bytes) keep pointing at
@@ -39,7 +39,7 @@ alter table public.source_files
   add column original_deleted_at timestamptz;
 
 -- The callback looks rows up by the transcoder job id, so index it. Partial
--- index keeps it small — only rows with an in-flight/finished job have a token.
+-- index keeps it small - only rows with an in-flight/finished job have a token.
 create index source_files_normalisation_task_token_idx
   on public.source_files (normalisation_task_token)
   where normalisation_task_token is not null;

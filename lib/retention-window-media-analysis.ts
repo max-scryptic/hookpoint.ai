@@ -4,7 +4,7 @@
 // structured JSON output (json_schema, strict). Audio goes through Chat
 // Completions instead against an audio-capable model, since the Responses API
 // has no audio-input content type and audio-capable chat models don't support
-// json_schema — see callOpenAiChatCompletionsAudio below.
+// json_schema - see callOpenAiChatCompletionsAudio below.
 //
 // Snapshots are analysed one *window* at a time: every chunk harvested for
 // that window goes into a single vision call, so the model can describe
@@ -12,7 +12,7 @@
 // than judging isolated frames in a vacuum. Audio clips are already one row
 // per window, so each gets its own call.
 //
-// On-screen text is not asked of the vision model at all — it's already
+// On-screen text is not asked of the vision model at all - it's already
 // deterministic (retention_window_snapshots.ocr_text, extracted via
 // lib/media/ocr.ts) and handed to the model as ground-truth context instead,
 // the same don't-ask-a-model-to-guess-what-you-can-measure principle already
@@ -68,7 +68,7 @@ import {
 // Field names deliberately match the shape the product side already sketched
 // out for these two schemas (scene/face_visible/... and
 // speech_rate/average_volume/...) rather than the repo's usual camelCase, so
-// the persisted JSON is a stable, directly-consumable contract on its own —
+// the persisted JSON is a stable, directly-consumable contract on its own -
 // not just an internal TS shape.
 
 export type SnapshotScene =
@@ -102,8 +102,8 @@ export interface SnapshotAnalysis {
   description: string
   // The visual-packaging axes below mirror the thumbnail read
   // (lib/packaging-taxonomy.ts PackagingThumbnailDetail) so a window's frames
-  // can be judged on the same terms as the video's thumbnail — a face's pull,
-  // contrast/complexity, on-screen-text dominance — rather than the coarse
+  // can be judged on the same terms as the video's thumbnail - a face's pull,
+  // contrast/complexity, on-screen-text dominance - rather than the coarse
   // booleans above. Every ordinal is 0-10 scored on the frame in isolation.
   // Optional so reads of snapshot rows analysed before these fields existed
   // still typecheck (the same tolerance signal_timeline gets on the audio side);
@@ -125,7 +125,7 @@ export interface SnapshotAnalysis {
   brightness?: Brightness
 }
 
-// The subset a model call can actually judge by ear — loudness and silence
+// The subset a model call can actually judge by ear - loudness and silence
 // are measured deterministically instead (see AudioAnalysis below).
 interface AudioAnalysisModelOutput {
   music: boolean
@@ -145,7 +145,7 @@ export interface AudioAnalysis {
   notable_events: string[]
   model_analysis_status?: "ready" | "skipped"
   // Words per minute across the window's transcript (already stored in
-  // retention_window_transcripts) — derived, not asked of the audio model,
+  // retention_window_transcripts) - derived, not asked of the audio model,
   // since it's exact where a model's estimate would be a guess.
   speech_rate: number | null
   // ffmpeg volumedetect mean_volume in dB; null if measurement failed.
@@ -210,7 +210,7 @@ export interface AnalyzeAudioResult {
 export interface RetentionWindowMediaAnalyzer {
   // One call per window: every chunk's signed image URL in (plus its
   // deterministic OCR text, given as ground truth rather than asked of the
-  // model — see lib/media/ocr.ts), one analysis per chunkIndex out. Must
+  // model - see lib/media/ocr.ts), one analysis per chunkIndex out. Must
   // return an entry for every chunkIndex passed in.
   analyzeSnapshots(
     images: { chunkIndex: number; imageUrl: string; ocrText: string | null }[],
@@ -246,13 +246,13 @@ function groupByWindow(
 }
 
 // Analyses every snapshot/audio row for a video that has finished extraction
-// but not yet analysis. Best-effort per window/row — a bad OpenAI call fails
+// but not yet analysis. Best-effort per window/row - a bad OpenAI call fails
 // just that window's snapshots (or that one audio row) and the run continues,
 // the same failure-isolation extraction already uses.
 //
 // Rows are claimed (analysis_status flipped pending -> processing) before any
 // LLM call goes out, not just read, so a second trigger racing this one (this
-// function can be kicked off from several places for the same video — see
+// function can be kicked off from several places for the same video - see
 // lib/retention-window-media-trigger.ts) can't also pick up the same row and
 // pay for the same analysis twice.
 export async function analyzeRetentionWindowMedia(
@@ -289,7 +289,7 @@ export async function analyzeRetentionWindowMedia(
 
   // Every window's vision call is fully independent (own rows, own storage
   // objects), the same property that already makes extraction safe to run
-  // concurrently — running them one at a time here just adds wall-clock time
+  // concurrently - running them one at a time here just adds wall-clock time
   // for no correctness benefit.
   await runWithConcurrency(
     Array.from(groupByWindow(pendingSnapshots).values()),
@@ -736,11 +736,11 @@ export async function callOpenAiResponses(
 }
 
 // Audio input isn't accepted by the Responses API at all (only
-// input_text/input_image/input_file/etc. — see callOpenAiResponses above), so
+// input_text/input_image/input_file/etc. - see callOpenAiResponses above), so
 // the audio clip goes through Chat Completions instead, against an
-// audio-capable model. That family doesn't support response_format at all —
+// audio-capable model. That family doesn't support response_format at all -
 // not json_schema, and not even plain json_object (OpenAI rejects it with
-// "response_format of type json_object is not supported with this model") —
+// "response_format of type json_object is not supported with this model") -
 // so no response_format is sent, and the caller (parseAudioAnalysis)
 // re-checks the shape of whatever comes back instead of trusting a schema.
 async function callOpenAiChatCompletionsAudio(
@@ -780,7 +780,7 @@ async function callOpenAiChatCompletionsAudio(
 // Audio-capable chat models routinely wrap the requested JSON in a prose
 // preamble ("Thank you for sharing these details... {json}") or a ```json
 // fence despite being told not to, so the object is dug out of whatever comes
-// back rather than requiring the whole response to be JSON — a failed audio
+// back rather than requiring the whole response to be JSON - a failed audio
 // row is terminal (the claim query never reclaims it), so salvaging a
 // chatty-but-correct response is worth more than rejecting it. Returns null
 // when there's no object to find at all (a purely prose reply).

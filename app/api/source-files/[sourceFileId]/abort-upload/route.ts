@@ -29,7 +29,7 @@ export async function POST(
     const body = (await request.json()) as { uploadId?: unknown }
     if (typeof body?.uploadId === "string") uploadId = body.uploadId
   } catch {
-    // No body — abort a single-PUT upload (just clears the row/object).
+    // No body - abort a single-PUT upload (just clears the row/object).
   }
 
   try {

@@ -77,7 +77,7 @@ export function AnalyseVideoForm({
         return
       }
 
-      // Already analysed: don't re-spend quota — surface the saved results.
+      // Already analysed: don't re-spend quota - surface the saved results.
       if (data.alreadyAnalysed) {
         setAlreadyAnalysed({ videoId: data.videoId, title: data.title })
         setIsValidating(false)
@@ -85,7 +85,7 @@ export function AnalyseVideoForm({
       }
 
       // Brand-new analysis: hand off to the launcher, which shows the popup,
-      // runs /api/analyze, and redirects to the report once it resolves — so the
+      // runs /api/analyze, and redirects to the report once it resolves - so the
       // user never lands on an empty "analysing" page.
       setIsValidating(false)
       launcher?.startAnalysis(data.videoId)
@@ -117,7 +117,7 @@ export function AnalyseVideoForm({
         </Button>
         {/* Hung under the input rather than placed in the flow, so it floats
             over the list below instead of pushing the page down when it appears
-            — and leaves nothing to settle back when it goes. */}
+            - and leaves nothing to settle back when it goes. */}
         {showFirstAnalysisHint && firstAnalysisHint.pending && (
           <div className="absolute top-full left-0 z-20 mt-2 w-72 max-w-[80vw]">
             <HintCallout

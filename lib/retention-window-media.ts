@@ -1,10 +1,10 @@
 // Read/write helpers for the `retention_window_snapshots` and
-// `retention_window_audio` tables — the per-chunk-timestamp thumbnails and
+// `retention_window_audio` tables - the per-chunk-timestamp thumbnails and
 // per-window audio clips harvested from a retention window's padded analysis
 // range (analysisFromSeconds/analysisToSeconds, computed alongside the window
 // itself in lib/retention-windows.ts).
 //
-// Audio rows are created 'pending' as soon as a retention window is saved —
+// Audio rows are created 'pending' as soon as a retention window is saved -
 // the range is known immediately, independent of whether the source video
 // has been uploaded yet. Snapshot rows are different: their timestamps are
 // derived from the window's scene-cue scan (see
@@ -39,7 +39,7 @@ export interface RetentionWindowSnapshot {
   status: RetentionWindowMediaStatus
   error: string | null
   // Deterministic (no LLM) on-screen text recognized via tesseract.js at
-  // extraction time (see lib/media/ocr.ts) — null if recognition failed or
+  // extraction time (see lib/media/ocr.ts) - null if recognition failed or
   // the frame had no text confidently readable.
   ocrText: string | null
   analysisStatus: RetentionWindowAnalysisStatus
@@ -125,7 +125,7 @@ function mapAudioRow(row: AudioRow): RetentionWindowAudioClip {
 
 // Samples [fromSeconds, toSeconds] at a global grid of stepSeconds-wide
 // gridlines (multiples of stepSeconds measured from 0, not from fromSeconds),
-// always including the window's own start and end — e.g.
+// always including the window's own start and end - e.g.
 // buildChunkTimestamps(0, 30) => [0, 5, 10, 15, 20, 25, 30].
 //
 // Snapping the interior samples to a *global* phase rather than stepping from
@@ -160,10 +160,10 @@ function round(seconds: number): number {
 }
 
 // Creates the pending audio row for each of a video's retention windows that
-// has an analysis window (null bounds — see computeAnalysisWindow — are
+// has an analysis window (null bounds - see computeAnalysisWindow - are
 // skipped entirely), one row per window, from its
 // analysisFromSeconds/analysisToSeconds. Snapshot rows are *not* created
-// here — their timestamps depend on that window's scene-cue scan, which only
+// here - their timestamps depend on that window's scene-cue scan, which only
 // runs once the source video is readable (see
 // createRetentionWindowSnapshotsFromSceneCues below, called from
 // lib/retention-window-media-extraction.ts).
@@ -236,7 +236,7 @@ export async function createPendingRetentionWindowAudio(
 }
 
 // How far before/after a detected hard cut to place the two flanking
-// snapshots — small enough to land clearly on either side of the transition
+// snapshots - small enough to land clearly on either side of the transition
 // without ffmpeg's seek landing on the same frame for both.
 const CUT_SNAPSHOT_OFFSET_SECONDS = 1
 
@@ -249,7 +249,7 @@ const CUT_SNAPSHOT_OFFSET_SECONDS = 1
 // three "cuts" within a second on ordinary within-shot motion (a talking head
 // tilting or leaning), which would otherwise multiply into a wall of
 // near-duplicate frames straddling transitions that never happened. A genuine
-// fast-cut montage still survives — its cuts are thinned to one per 2s window
+// fast-cut montage still survives - its cuts are thinned to one per 2s window
 // and then spread by subsampleEvenly, rather than dropped.
 const CUT_CLUSTER_MIN_SEPARATION_SECONDS = 2 * CUT_SNAPSHOT_OFFSET_SECONDS
 
@@ -296,7 +296,7 @@ function subsampleEvenly(values: number[], max: number): number[] {
 //
 // N detected cuts split the window into N+1 segments, and each segment is a
 // single shot (no cut falls inside it, by definition), so one frame is enough
-// visual evidence for it — a second would just hand the vision model a
+// visual evidence for it - a second would just hand the vision model a
 // near-duplicate. That's why we don't flank *every* cut with a before-and-
 // after pair: doing so double-samples each interior segment, because the frame
 // just after cut i and the frame just before cut i+1 both land in the same
@@ -307,11 +307,11 @@ function subsampleEvenly(values: number[], max: number): number[] {
 // redundant mid-segment twins that appear once there are two or more cuts.
 //
 // How a window with *no* detected cuts is sampled depends on why it has none:
-//   • The scan ran and confidently found no cuts — a genuinely static shot (a
+//   • The scan ran and confidently found no cuts - a genuinely static shot (a
 //     talking head against a fixed background). One frame from the start of
 //     the window is enough visual evidence: the shot never changes, so extra
 //     frames would just hand the vision model near-duplicates.
-//   • The scan *failed* (scanFailed) — content is unknown, so hedge with the
+//   • The scan *failed* (scanFailed) - content is unknown, so hedge with the
 //     dense fixed grid (buildChunkTimestamps) rather than under-sampling a
 //     window that might actually contain cuts the scan never got to see.
 export function buildSnapshotTimestampsFromSceneCues(
@@ -460,7 +460,7 @@ export async function getPendingRetentionWindowAudio(
   return ((data ?? []) as AudioRow[]).map(mapAudioRow)
 }
 
-// Loads every snapshot row for a video regardless of status — used by event
+// Loads every snapshot row for a video regardless of status - used by event
 // synthesis (lib/retention-window-event-synthesis.ts) to check whether every
 // snapshot in a window has finished analysis (ready or failed) before
 // synthesizing that window's events.
@@ -486,7 +486,7 @@ export async function getRetentionWindowSnapshotsForVideo(
   return ((data ?? []) as SnapshotRow[]).map(mapSnapshotRow)
 }
 
-// Loads every audio row for a video regardless of status — same purpose as
+// Loads every audio row for a video regardless of status - same purpose as
 // getRetentionWindowSnapshotsForVideo, for the audio side.
 export async function getRetentionWindowAudioForVideo(
   supabase: SupabaseClient,

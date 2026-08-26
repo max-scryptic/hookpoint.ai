@@ -15,7 +15,7 @@ import { getMyChannelDetails } from "@/lib/youtube/youtube"
 // rarely, so a day is plenty.
 export const CHANNEL_AVATAR_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000
 
-// How long to wait before looking again when we have no picture at all — an
+// How long to wait before looking again when we have no picture at all - an
 // account with no channel, a revoked Google grant, or a YouTube outage on the
 // first attempt. Shorter than the interval above so a channel connected moments
 // later doesn't stay invisible for a day, long enough that a permanent "no

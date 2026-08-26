@@ -1,5 +1,5 @@
 // Read/write helpers for `retention_window_event_synthesis` and
-// `retention_window_events` — the cross-modal, timestamped, narrated events
+// `retention_window_events` - the cross-modal, timestamped, narrated events
 // a text-only LLM call synthesizes per window from evidence that's already
 // been computed (retention delta, transcript, scene-cue metrics, per-snapshot
 // vision analysis, audio analysis). See
@@ -46,7 +46,7 @@ function mapSynthesisRow(
 }
 
 // Creates the pending event-synthesis job for each of a video's retention
-// windows that has an analysis window, one row per window — mirrors
+// windows that has an analysis window, one row per window - mirrors
 // createPendingRetentionWindowSceneCueScans. The job itself doesn't run
 // until its window's scene-cue scan, every snapshot, and its audio clip have
 // all settled (see synthesizeRetentionWindowEvents), but the row can be
@@ -114,7 +114,7 @@ export async function createPendingRetentionWindowEventSynthesis(
 }
 
 // A failed job older than this is retried automatically, the same
-// stale-failure tolerance getPendingRetentionWindowSceneCueScans uses — a
+// stale-failure tolerance getPendingRetentionWindowSceneCueScans uses - a
 // transient failure (an OpenAI outage, a malformed response) shouldn't
 // permanently strand a window without events.
 const SYNTHESIS_RETRY_STALE_MS = 10 * 60 * 1000
@@ -205,7 +205,7 @@ export interface SynthesizedEvent {
   primaryEvidence: RetentionWindowEventPrimaryEvidence
   // How strongly the supplied evidence supports both that this moment happened
   // and that it plausibly moved retention, 0..1. Lets the product surface and
-  // rank the events worth raising instead of every plausible one — the same
+  // rank the events worth raising instead of every plausible one - the same
   // 0..1 confidence the script-only retention attribution already carries.
   confidence: number
 }

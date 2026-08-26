@@ -208,7 +208,7 @@ describe("dedupeAdjacentVisualFrames", () => {
       visualFrame({ chunkIndex: 0, analysis: { camera_movement: "static" } }),
       // A real cut's far side: the model tagged the movement, so it stays.
       visualFrame({ chunkIndex: 1, analysis: { camera_movement: "cut" } }),
-      // Back to static but now a graphic's OCR text appears — still distinct.
+      // Back to static but now a graphic's OCR text appears - still distinct.
       visualFrame({
         chunkIndex: 2,
         ocrText: "SALE 50% OFF",

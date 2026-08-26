@@ -6,7 +6,7 @@
 
 :root {
   /*
-   * Viewlio brand theme — carried over from Viewlio unchanged, and the
+   * Viewlio brand theme - carried over from Viewlio unchanged, and the
    * palette the Viewlio mark was drawn against.
    * Brand blue (hue ~264) drives primary actions (buttons, focus rings, links);
    * brand lavender/purple (hue ~292) carries accents, the sidebar highlight and
@@ -16,10 +16,10 @@
   /*
    * Light mode runs a three-tier surface scale so nothing blends into the
    * page:
-   *   1. --background  — a brand-lavender tinted page (the darkest tier).
-   *   2. --card/--popover/--sidebar — pure white; primary cards, filter
+   *   1. --background  - a brand-lavender tinted page (the darkest tier).
+   *   2. --card/--popover/--sidebar - pure white; primary cards, filter
    *      controls and empty-state panels sit here so they "pop" off the page.
-   *   3. --muted/--secondary — a soft grey used for sub-cards (stat tiles),
+   *   3. --muted/--secondary - a soft grey used for sub-cards (stat tiles),
    *      segmented-control tracks and other widgets nested inside white cards.
    * The page tier is kept meaningfully darker than the grey tier so a white
    * surface reads as clearly elevated above both.
@@ -193,7 +193,7 @@ body {
 }
 
 /*
- * Indeterminate progress bar — a sliding sliver that loops while we wait on a
+ * Indeterminate progress bar - a sliding sliver that loops while we wait on a
  * task of unknown duration (e.g. fetching + analysing a video's retention).
  */
 @keyframes indeterminate-progress {
@@ -210,7 +210,7 @@ body {
 }
 
 /*
- * Coach-mark pulse — a ring that swells out of a retention marker and fades,
+ * Coach-mark pulse - a ring that swells out of a retention marker and fades,
  * for as long as a one-time hint is pointing at it. Scaled about the marker's
  * own centre, which the element sets as its transform-origin in the SVG's user
  * space, so this works wherever on the curve the marker happens to sit.
@@ -251,13 +251,13 @@ body {
  * once it has arrived: curves draw themselves, bars grow out of the left, rows
  * rise into place. The whole set is gated three ways.
  *
- *   1. `scripting: enabled` — the hidden starting states below are only safe to
+ *   1. `scripting: enabled` - the hidden starting states below are only safe to
  *      set if the observer in components/landing/landing-reveal.tsx can run to
  *      undo them. With JavaScript off none of these rules apply at all, and the
  *      page is simply a static one.
- *   2. `prefers-reduced-motion: no-preference` — a reader who has asked for
+ *   2. `prefers-reduced-motion: no-preference` - a reader who has asked for
  *      less motion gets the same page with none of it.
- *   3. A `.landing-reveal` ancestor — every inner piece is written as a
+ *   3. A `.landing-reveal` ancestor - every inner piece is written as a
  *      descendant of one, so a visual dropped somewhere without a reveal
  *      wrapper still renders fully drawn rather than invisible.
  *

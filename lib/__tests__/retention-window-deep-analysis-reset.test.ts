@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import type { StorageProvider } from "@/lib/storage"
 
 // The re-pend half of the reset is covered by each of these modules' own tests;
-// stubbing them keeps this file on the one thing only the reset can get wrong —
+// stubbing them keeps this file on the one thing only the reset can get wrong -
 // what survives the wipe.
 vi.mock("@/lib/retention-window-media", () => ({
   createPendingRetentionWindowAudio: vi.fn(async () => {}),

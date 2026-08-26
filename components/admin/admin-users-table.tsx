@@ -36,8 +36,8 @@ import { cn } from "@/lib/utils"
 const SORT_OPTIONS = [
   { value: "joined-desc", label: "Newest first" },
   { value: "joined-asc", label: "Oldest first" },
-  { value: "name-asc", label: "Name (A–Z)" },
-  { value: "name-desc", label: "Name (Z–A)" },
+  { value: "name-asc", label: "Name (A-Z)" },
+  { value: "name-desc", label: "Name (Z-A)" },
   { value: "plan-desc", label: "Plan (high to low)" },
   { value: "plan-asc", label: "Plan (low to high)" },
 ] as const
@@ -143,8 +143,8 @@ function UserCell({ user, href }: { user: AdminUserRow; href: string }) {
   )
 }
 
-// The read-only members table. Admin status is intentionally not editable here —
-// it is granted directly in the database — so this surface only reports each
+// The read-only members table. Admin status is intentionally not editable here -
+// it is granted directly in the database - so this surface only reports each
 // account's plan and join date. Each row links through to the user's detail
 // page (KPIs, plan/billing and cost-log breakdown); admins are listed
 // separately and are intentionally not clickable.
@@ -172,7 +172,7 @@ export function AdminUsersTable({ users }: { users: AdminUserRow[] }) {
 
   return (
     <div className="space-y-4">
-      {/* Count on the left, search + sort on the right — inline, matching the
+      {/* Count on the left, search + sort on the right - inline, matching the
           filter-bar conventions used elsewhere in the admin surface. */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">{countLabel}</p>

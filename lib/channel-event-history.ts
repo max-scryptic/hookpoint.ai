@@ -1,5 +1,5 @@
 // Aggregates the retention-window events synthesized across a user's OTHER
-// deeply-analysed videos into a compact, prompt-sized channel summary — the
+// deeply-analysed videos into a compact, prompt-sized channel summary - the
 // "cross-video intelligence" the paid plans advertise. Handed to the event
 // synthesizer (lib/retention-window-event-synthesis.ts) so a window's events
 // can be framed against what habitually moves retention on this channel, not
@@ -19,7 +19,7 @@ import type {
 } from "@/lib/retention-window-events"
 import type { RetentionWindowKind } from "@/lib/retention-windows"
 
-// One historical event joined to its window's kind — the minimal shape the
+// One historical event joined to its window's kind - the minimal shape the
 // summariser needs, regardless of where the rows came from.
 export interface ChannelEventRecord {
   analysedVideoId: string
@@ -47,7 +47,7 @@ export interface ChannelEventTypeTrend {
 
 export interface ChannelKindHistory {
   eventCount: number
-  // Ordered by videoCount desc, then eventCount desc — the most channel-wide
+  // Ordered by videoCount desc, then eventCount desc - the most channel-wide
   // recurring causes first.
   trends: ChannelEventTypeTrend[]
   // The highest-confidence narratives for this kind, as concrete examples of
@@ -64,7 +64,7 @@ export interface ChannelEventHistory {
   holds: ChannelKindHistory | null
 }
 
-// One or zero other videos is anecdote, not a channel trend — below this the
+// One or zero other videos is anecdote, not a channel trend - below this the
 // history is withheld entirely rather than lending false authority.
 const MIN_OTHER_VIDEOS = 2
 // Newest-first cap on the event rows fetched, bounding both the query and the
@@ -124,7 +124,7 @@ function summarizeKind(
 }
 
 // Pure aggregation over already-loaded records. Returns null when fewer than
-// MIN_OTHER_VIDEOS distinct videos contribute — the caller treats null as "no
+// MIN_OTHER_VIDEOS distinct videos contribute - the caller treats null as "no
 // channel history yet" and the synthesizer prompt says the same.
 export function summarizeChannelEvents(
   records: ChannelEventRecord[],
@@ -149,7 +149,7 @@ interface ChannelEventHistoryRow {
   primary_evidence: RetentionWindowEventPrimaryEvidence
   confidence: number | null
   // PostgREST embeds the many-to-one join as an object, but loosely-typed
-  // clients can surface it as a single-element array — accept both.
+  // clients can surface it as a single-element array - accept both.
   retention_windows:
     | {
         kind: string
@@ -176,7 +176,7 @@ function embeddedWindow(row: ChannelEventHistoryRow) {
 }
 
 // Loads the user's synthesized events joined to their window's kind, newest
-// first — the raw records both the synthesizer's channelHistory summary and
+// first - the raw records both the synthesizer's channelHistory summary and
 // the Channel Trends page (lib/channel-trends.ts) aggregate over. Pass
 // excludeAnalysedVideoId when the caller is analysing a video, so it never
 // reads its own (possibly stale) events back as channel context.

@@ -228,8 +228,8 @@ describe("dedupePacingTips", () => {
     expect(result?.slowOrRepetitiveStretches[1].suggestion).toBe("")
   })
 
-  // The report renders these stretches twice — as numbered rows in the pacing
-  // list and as markers on the retention chart — and both number them by
+  // The report renders these stretches twice - as numbered rows in the pacing
+  // list and as markers on the retention chart - and both number them by
   // position in this array. Neither sorts it again, so if this pass stopped
   // ordering them the two would silently disagree about which stretch is
   // "Pacing opportunity 2".

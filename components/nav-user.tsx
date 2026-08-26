@@ -33,7 +33,7 @@ export function NavUser({
   user: {
     email: string
     // The connected YouTube channel's profile picture. Absent until the channel
-    // is connected, or while YouTube can't be reached — the initials below
+    // is connected, or while YouTube can't be reached - the initials below
     // stand in for it.
     avatarUrl?: string | null
   }

@@ -221,7 +221,7 @@ describe("getDeepAnalysisProgress", () => {
     )
 
     // A scan that just failed is still eligible for its own automatic retry
-    // (see SCAN_RETRY_STALE_MS) — the system hasn't given up on it yet, so
+    // (see SCAN_RETRY_STALE_MS) - the system hasn't given up on it yet, so
     // the checklist shouldn't show a red X for it before that grace period
     // has actually elapsed.
     expect(progress.stages).toMatchObject({

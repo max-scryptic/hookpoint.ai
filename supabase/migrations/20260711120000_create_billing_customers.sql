@@ -1,7 +1,7 @@
 -- Maps each app user to their Stripe Customer and caches the default card on
 -- file so the billing settings page can render "Visa •••• 4242" without a live
 -- Stripe API call on every render. The card fields are a read-through cache kept
--- in sync by the Stripe webhook (app/api/stripe/webhook) — Stripe remains the
+-- in sync by the Stripe webhook (app/api/stripe/webhook) - Stripe remains the
 -- source of truth, and no raw card data (PAN/CVC) is ever stored here.
 --
 -- Like public.google_credentials this table is deliberately locked down: RLS is

@@ -27,7 +27,7 @@ import { getChannelAvatarUrl } from "@/lib/youtube/channel-avatar"
 // Reconcile the stored subscription against Stripe before we resolve the plan.
 // Webhooks are the primary path for keeping the projection fresh, but a missed
 // customer.subscription.updated event leaves the pricing cards showing stale
-// state — e.g. offering "Downgrade to Free" for a plan Stripe has already
+// state - e.g. offering "Downgrade to Free" for a plan Stripe has already
 // scheduled to cancel, which then dead-ends in the portal. This is the one
 // surface a subscriber lands on to change plans, so reconcile on load. No-op
 // for Free users (no subscription to sync) and best-effort: a Stripe/DB hiccup

@@ -1,6 +1,6 @@
 -- Surface-level analysis additions. All of these are derived purely from the
--- YouTube Data/Analytics APIs and the caption transcript — no source-file
--- upload required — so they are stored directly on the analysed_videos row
+-- YouTube Data/Analytics APIs and the caption transcript - no source-file
+-- upload required - so they are stored directly on the analysed_videos row
 -- (as pacing_analysis originally was) rather than in their own normalized
 -- tables. The user can promote any of these to a dedicated table later if a
 -- feature earns it.

@@ -61,7 +61,7 @@ function emptyCues(): SceneCueScanResult {
 describe("buildSnapshotTimestampsFromSceneCues", () => {
   it("samples a single frame at the window start when the scan confirmed no cuts", () => {
     // A confirmed-static shot never visually changes, so one frame from the
-    // start of the window is enough — no grid of near-duplicates.
+    // start of the window is enough - no grid of near-duplicates.
     expect(buildSnapshotTimestampsFromSceneCues(0, 30, emptyCues())).toEqual([0])
     // The lone frame tracks the window's actual start, not a global gridline.
     expect(
@@ -118,7 +118,7 @@ describe("buildSnapshotTimestampsFromSceneCues", () => {
   it("samples each scene segment once instead of double-sampling the middle", () => {
     // The reported case: two sequential cuts (facecam -> screen -> facecam)
     // carve the window into three segments. Flanking every cut would yield four
-    // frames — 6, 8 and 22, 24 — but 8 and 22 both sit inside the same middle
+    // frames - 6, 8 and 22, 24 - but 8 and 22 both sit inside the same middle
     // (screen) segment, a near-duplicate pair. One frame per segment keeps the
     // head frame (6), the middle screen frame (8), and the trailing facecam
     // frame (24): three snapshots, not four.
@@ -169,7 +169,7 @@ describe("buildSnapshotTimestampsFromSceneCues", () => {
     }
 
     // Exactly 2s apart, so both survive clustering: a leading frame at 10-1=9,
-    // then one per cut at 10+1=11 and 12+1=13 — one frame for each of the three
+    // then one per cut at 10+1=11 and 12+1=13 - one frame for each of the three
     // segments the two cuts carve out.
     expect(buildSnapshotTimestampsFromSceneCues(0, 30, cues)).toEqual([
       9, 11, 13,
@@ -224,7 +224,7 @@ describe("collapseClusteredCuts", () => {
 
   it("measures separation from the last kept cut, not the previous input", () => {
     // A steady 1s-apart run: 0 kept, 1 dropped (<2 from 0), 2 kept (>=2 from 0),
-    // 3 dropped (<2 from 2), 4 kept — thinned to a spread, not collapsed to one.
+    // 3 dropped (<2 from 2), 4 kept - thinned to a spread, not collapsed to one.
     expect(
       collapseClusteredCuts([
         { atSeconds: 0 },

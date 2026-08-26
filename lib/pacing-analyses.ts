@@ -6,6 +6,7 @@ import {
   type PacingWindow,
 } from "@/lib/pacing-analysis"
 import type { TranscriptCue, VideoDetails } from "@/lib/youtube/youtube"
+import { scrubDashes } from "@/lib/copy-guardrails"
 
 interface PacingAnalysisRow {
   id: string
@@ -89,7 +90,11 @@ export async function getPacingAnalysis(
     }),
   )
 
-  return {
+  // The prose here is model-written throughout (the overall read, each
+  // transition, each stretch's reason), and the report renders it verbatim, so
+  // the dashes come off the whole payload once, here, rather than at each of
+  // the places it is read out. See the copy guardrail in lib/copy-guardrails.ts.
+  return scrubDashes({
     overallPacing: analysis.overall_pacing,
     videoWidePatterns: analysis.video_wide_patterns,
     notableTransitions: analysis.notable_transitions,
@@ -97,7 +102,7 @@ export async function getPacingAnalysis(
     windows,
     model: analysis.model,
     generatedAt: analysis.generated_at,
-  }
+  })
 }
 
 export async function savePacingAnalysis(
@@ -188,7 +193,7 @@ const PACING_CLAIM_STALE_MS = 10 * 60 * 1000
 // callers racing each other (this can be triggered from /api/analyze, the
 // dashboard page's render, or a second tab/refresh) can't both call OpenAI
 // for the same video. Returns false when another caller already holds the
-// claim — the losing caller should just skip generating.
+// claim - the losing caller should just skip generating.
 async function claimPacingAnalysis(
   supabase: SupabaseClient,
   userId: string,
@@ -216,7 +221,7 @@ async function claimPacingAnalysis(
   return (data?.length ?? 0) > 0
 }
 
-// Releases a claim taken by claimPacingAnalysis. 'done' clears it entirely —
+// Releases a claim taken by claimPacingAnalysis. 'done' clears it entirely -
 // pacing_analyses having a row is the source of truth for "already
 // generated" from then on. 'failed' leaves a marker so the next attempt is
 // allowed to retry immediately rather than waiting out the staleness window.
@@ -243,7 +248,7 @@ async function releasePacingAnalysisClaim(
 // Loads a saved pacing analysis if one already exists; otherwise claims the
 // right to generate one and does so, saving the result before returning it.
 // Returns null (without calling OpenAI) when a transcript isn't available, or
-// when another caller is already generating this video's pacing analysis —
+// when another caller is already generating this video's pacing analysis -
 // callers should treat null as "nothing to show yet", not as a failure.
 export async function getOrGeneratePacingAnalysis(
   supabase: SupabaseClient,
