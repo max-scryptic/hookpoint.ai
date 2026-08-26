@@ -16,6 +16,7 @@ import { useAnalysisLauncher } from "@/components/analysis-launcher"
 import {
   AnchoredHintCallout,
   HintCallout,
+  HintTargetGlow,
   useOnboardingHint,
 } from "@/components/onboarding-hints"
 import { VideoThumbnail } from "@/components/video-thumbnail"
@@ -160,16 +161,7 @@ function VideoActions({
         }
       >
         <MoreVerticalIcon className="size-4" />
-        {anchorsFirstAnalysisHint && (
-          // A ring breathing around the button itself, so the eye is drawn to
-          // the control and not only to the bubble explaining it. Faint on
-          // purpose: a solid dot in the corner read as an unread badge rather
-          // than as a pointer at the menu.
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute -inset-0.5 animate-pulse rounded-lg ring-2 ring-primary/40"
-          />
-        )}
+        <HintTargetGlow shown={anchorsFirstAnalysisHint} />
       </DropdownMenuTrigger>
       {anchorsFirstAnalysisHint && (
         <AnchoredHintCallout anchorRef={triggerRef}>

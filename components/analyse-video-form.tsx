@@ -5,7 +5,11 @@ import Link from "next/link"
 import { CircleCheckIcon } from "lucide-react"
 
 import { useAnalysisLauncher } from "@/components/analysis-launcher"
-import { HintCallout, useOnboardingHint } from "@/components/onboarding-hints"
+import {
+  HintCallout,
+  HintTargetGlow,
+  useOnboardingHint,
+} from "@/components/onboarding-hints"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { parseVideoId } from "@/lib/youtube/youtube"
@@ -98,20 +102,30 @@ export function AnalyseVideoForm({
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-2">
       <div className="relative flex items-start gap-2">
-        <Input
-          type="url"
-          inputMode="url"
-          value={url}
-          onChange={(event) => {
-            setUrl(event.target.value)
-            if (error) setError(null)
-            if (alreadyAnalysed) setAlreadyAnalysed(null)
-          }}
-          placeholder="Paste a YouTube video URL from your channel"
-          aria-invalid={error ? true : undefined}
-          aria-label="YouTube video URL"
-          className="h-9"
-        />
+        {/* The box wears the coach mark's glow while the hint is up, so the eye
+            is drawn to the thing the bubble is talking about. Wrapped rather
+            than glowing itself: the overlay needs something positioned to sit
+            over, and the input keeps its own border and focus ring. */}
+        <div className="relative min-w-0 flex-1">
+          <Input
+            type="url"
+            inputMode="url"
+            value={url}
+            onChange={(event) => {
+              setUrl(event.target.value)
+              if (error) setError(null)
+              if (alreadyAnalysed) setAlreadyAnalysed(null)
+            }}
+            placeholder="Paste a YouTube video URL from your channel"
+            aria-invalid={error ? true : undefined}
+            aria-label="YouTube video URL"
+            className="h-9"
+          />
+          <HintTargetGlow
+            shown={showFirstAnalysisHint && firstAnalysisHint.pending}
+            className="rounded-xl"
+          />
+        </div>
         <Button type="submit" size="lg" disabled={!canSubmit}>
           {isValidating ? "Checking…" : "Analyse Video"}
         </Button>

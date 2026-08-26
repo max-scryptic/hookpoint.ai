@@ -172,6 +172,38 @@ export function AnchoredHintCallout({
   )
 }
 
+// The mark worn by the control a hint bubble points at: a primary-coloured
+// outline breathing around it, so the eye is drawn to the thing being explained
+// and not only to the bubble explaining it. Faint on purpose - a solid badge
+// beside a control reads as an unread count rather than as a pointer at it.
+//
+// Laid over the control as an absolutely positioned overlay, so nothing about
+// the control's own box (its border, its focus ring, its size) has to change to
+// wear one. The caller therefore needs a positioned ancestor around the
+// control, usually the wrapper the bubble is already hung off, and can move the
+// glow off the control's edges and match its corners with `className`.
+export function HintTargetGlow({
+  shown = true,
+  className,
+}: {
+  // Whether the hint this belongs to is still pending. Passed rather than
+  // implied so the glow appears and goes with the bubble it belongs to, on the
+  // one element that bubble points at.
+  shown?: boolean
+  className?: string
+}) {
+  if (!shown) return null
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "hint-target-glow pointer-events-none absolute -inset-0.5 rounded-lg",
+        className,
+      )}
+    />
+  )
+}
+
 // The coach mark itself: a small primary-coloured bubble with a one-line
 // explanation and a way to wave it off without using the feature. Positioning
 // belongs to the caller - this only draws the bubble and, where the caller asks

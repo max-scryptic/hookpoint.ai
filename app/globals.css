@@ -244,6 +244,44 @@ body {
 }
 
 /*
+ * Coach-mark glow - the breathing blue outline drawn around whatever a hint
+ * bubble is pointing at, so the eye finds the control itself and not only the
+ * bubble explaining it. Worn by an overlay laid over the control (see
+ * HintTargetGlow in components/onboarding-hints.tsx), which is why the whole
+ * mark is drawn outside the box: an outline that follows the overlay's radius,
+ * and a soft primary bloom around it that swells and settles.
+ *
+ * The ring is an outline rather than a Tailwind `ring-*`, since that is itself
+ * a box-shadow and the bloom below would replace it.
+ */
+@keyframes hint-target-glow {
+  0%,
+  100% {
+    opacity: 0.6;
+    box-shadow: 0 0 6px 0 color-mix(in oklch, var(--primary) 22%, transparent);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 16px 3px color-mix(in oklch, var(--primary) 42%, transparent);
+  }
+}
+
+.hint-target-glow {
+  outline: 2px solid color-mix(in oklch, var(--primary) 45%, transparent);
+  animation: hint-target-glow 2.4s ease-in-out infinite;
+}
+
+/* A repeating swell is exactly what reduced motion asks us not to draw. Hold
+ * the glow still instead, so the control is still marked out. */
+@media (prefers-reduced-motion: reduce) {
+  .hint-target-glow {
+    animation: none;
+    opacity: 0.9;
+    box-shadow: 0 0 12px 2px color-mix(in oklch, var(--primary) 35%, transparent);
+  }
+}
+
+/*
  * ---------------------------------------------------------------------------
  * Landing page motion
  * ---------------------------------------------------------------------------

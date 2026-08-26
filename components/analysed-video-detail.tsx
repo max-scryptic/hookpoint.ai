@@ -43,6 +43,7 @@ import {
 } from "@/components/retention-chart"
 import {
   HintCallout,
+  HintTargetGlow,
   useOnboardingHint,
 } from "@/components/onboarding-hints"
 import {
@@ -799,7 +800,9 @@ function WindowFeedback({
     return (
       <Tabs defaultValue="script" className="gap-2" onValueChange={onTabChange}>
         {header(
-          <div className="relative">
+          // Sized to the tab strip (w-fit), so the glow hung on it traces the
+          // tabs rather than the width of the header row they sit in.
+          <div className="relative w-fit">
             <TabsList>
               <TabsTrigger value="script">Script</TabsTrigger>
               {uniqueDeep.map(({ insight }, index) => (
@@ -809,6 +812,9 @@ function WindowFeedback({
                 </TabsTrigger>
               ))}
             </TabsList>
+            <HintTargetGlow
+              shown={anchorsFootageTabsHint && footageTabsHint.pending}
+            />
             <FootageTabsHintCallout
               shown={anchorsFootageTabsHint && footageTabsHint.pending}
               onDismiss={footageTabsHint.dismiss}
@@ -844,7 +850,7 @@ function WindowFeedback({
         onValueChange={onTabChange}
       >
         {header(
-          <div className="relative">
+          <div className="relative w-fit">
             <TabsList>
               {uniqueDeep.map(({ insight }, index) => (
                 <TabsTrigger key={insight.id} value={`deep-${insight.id}`}>
@@ -853,6 +859,9 @@ function WindowFeedback({
                 </TabsTrigger>
               ))}
             </TabsList>
+            <HintTargetGlow
+              shown={anchorsFootageTabsHint && footageTabsHint.pending}
+            />
             <FootageTabsHintCallout
               shown={anchorsFootageTabsHint && footageTabsHint.pending}
               onDismiss={footageTabsHint.dismiss}
