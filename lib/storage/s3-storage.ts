@@ -5,7 +5,7 @@
 // parallel, which is what lets a multi-GB upload actually fill the user's uplink.
 //
 // All signing happens here, server-side, with the service credentials. The
-// browser only ever receives short-lived, single-object presigned URLs — it never
+// browser only ever receives short-lived, single-object presigned URLs - it never
 // sees the keys and the bucket stays private.
 
 import {

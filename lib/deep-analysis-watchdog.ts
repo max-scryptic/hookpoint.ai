@@ -5,10 +5,10 @@
 // budget) the run row is left 'running' until the staleness sweep reclaims it,
 // and its unfinished rows sit 'pending' with nothing left to claim them. The
 // only thing that ever picked them back up was a browser polling
-// /api/videos/:id/analysis-progress — so an analysis finished only if its owner
+// /api/videos/:id/analysis-progress - so an analysis finished only if its owner
 // happened to sit on (or come back to) the report page. Production runs show
 // exactly that: a run dying in `extraction`, no activity for eight minutes, then
-// a 19-second run — the one the returning user's poll kicked off — finishing
+// a 19-second run - the one the returning user's poll kicked off - finishing
 // everything.
 //
 // This module is the sweep that replaces that user. It answers two questions
@@ -25,7 +25,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { DEEP_ANALYSIS_STALE_RUN_MS } from "@/lib/deep-analysis-pipeline-runs"
 
 // Don't re-kick a video whose pass started moments ago. A pass claims the
-// pipeline lease as its first act, so an overlapping kick is already a no-op —
+// pipeline lease as its first act, so an overlapping kick is already a no-op -
 // this just keeps the sweep from generating pointless invocations while a
 // continuation chain is mid-hand-over.
 export const DEEP_ANALYSIS_RESUME_COOLDOWN_MS = 90_000
@@ -45,7 +45,7 @@ export const DEEP_ANALYSIS_GIVE_UP_ERROR =
   "Deep analysis stopped making progress and was abandoned"
 
 // How many videos one sweep may act on. Each becomes its own invocation, so
-// this caps the fan-out of a single tick rather than the total backlog — a
+// this caps the fan-out of a single tick rather than the total backlog - a
 // deeper backlog is worked off over successive ticks.
 export const DEEP_ANALYSIS_SWEEP_LIMIT = 5
 
@@ -98,7 +98,7 @@ export interface StalledDeepAnalysis {
   // Rows still waiting on a stage, across every deep-analysis table.
   unsettledRows: number
   // When the most recent pass for this video started, or null if none ever ran
-  // — a video whose trigger never fired at all, which the sweep also rescues.
+  // - a video whose trigger never fired at all, which the sweep also rescues.
   lastRunStartedAt: string | null
 }
 
@@ -125,7 +125,7 @@ interface PipelineRunRow {
 
 // Counts the rows still waiting on some stage of this video's deep analysis.
 // Zero means the pipeline has genuinely finished (every row settled, ready or
-// failed) — the same condition the report page reads as a complete checklist.
+// failed) - the same condition the report page reads as a complete checklist.
 export async function countUnsettledDeepAnalysisWork(
   supabase: SupabaseClient,
   userId: string,
@@ -213,7 +213,7 @@ async function listRecentRunsByVideo(
   let result = await select(`${columns}, unsettled_after`)
   // unsettled_after arrives with the autonomous-completion migration, and code
   // and schema don't deploy in lockstep. Without it the sweep simply can't tell
-  // a stuck video from a slow one, so it keeps resuming rather than giving up —
+  // a stuck video from a slow one, so it keeps resuming rather than giving up -
   // the same behaviour as before this column existed.
   if (
     result.error &&
@@ -236,7 +236,7 @@ async function listRecentRunsByVideo(
 // Whether the last few settled passes each left exactly the same amount of work
 // behind. A pass records what it couldn't finish (`unsettled_after`), so equal
 // readings across consecutive passes mean the remaining rows are ones no stage
-// can claim — re-running is pure cost. Passes that recorded nothing (killed
+// can claim - re-running is pure cost. Passes that recorded nothing (killed
 // before they could) say nothing either way and are ignored rather than counted
 // as no-progress.
 function hasStoppedMakingProgress(runs: PipelineRunRow[]): boolean {
@@ -255,7 +255,7 @@ function hasStoppedMakingProgress(runs: PipelineRunRow[]): boolean {
 // them into the ones worth resuming and the ones worth giving up on.
 //
 // Left alone: a video with a live pipeline lease (something is working on it), a
-// video whose pass started within the cooldown, and one already given up on —
+// video whose pass started within the cooldown, and one already given up on -
 // that last one waits for its owner's explicit retry rather than being ground
 // through the same failure every five minutes.
 export async function planDeepAnalysisSweep(
@@ -326,7 +326,7 @@ export async function planDeepAnalysisSweep(
       // A video still being transcoded is a special case of "no progress": a
       // large master's extraction deliberately waits for the 360p proxy, so
       // every pass until the transcode lands leaves exactly the same work
-      // behind. That's the pipeline doing the right thing, not a stuck video —
+      // behind. That's the pipeline doing the right thing, not a stuck video -
       // giving up on it would fail an analysis that was always going to start
       // late.
       const transcodeInFlight =

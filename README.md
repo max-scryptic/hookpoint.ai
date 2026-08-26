@@ -40,8 +40,8 @@ This starter uses `@supabase/ssr` in:
 
 ## Database migrations
 
-Migrations live in `supabase/migrations` and are applied by hand — through the
-dashboard's SQL editor, `supabase db push`, or the Supabase MCP — separately
+Migrations live in `supabase/migrations` and are applied by hand - through the
+dashboard's SQL editor, `supabase db push`, or the Supabase MCP - separately
 from the deploy. Merging a pull request ships its code to production straight
 away, so a migration that is committed but not yet applied leaves the live app
 asking for schema the database does not have. That usually fails quietly: the
@@ -57,7 +57,7 @@ turns into a failed run rather than a mystery. It needs one repository secret:
   Project Settings → Database. The direct host is IPv6-only, which GitHub's
   runners cannot reach.
 
-Migrations are matched by name — the filename without its leading timestamp —
+Migrations are matched by name - the filename without its leading timestamp -
 because a migration applied through the dashboard or the MCP is recorded under
 the timestamp of the moment it ran rather than the one in its filename. So
 don't rename a migration once it has been applied.

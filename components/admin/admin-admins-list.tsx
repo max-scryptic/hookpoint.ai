@@ -23,7 +23,7 @@ function initials(value: string): string {
 
 // A read-only roster of the accounts flagged is_admin. Admin access can only be
 // granted directly in the database (the column is not writable from the app), so
-// this is purely informational — there is no promote/demote control anywhere in
+// this is purely informational - there is no promote/demote control anywhere in
 // the UI.
 export function AdminAdminsList({
   admins,

@@ -21,7 +21,7 @@ describe("fetchChannelThumbnailReach", () => {
   it("reuses an existing job and aggregates impression-weighted CTR per video", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
-      // jobs.list — an existing reach job is found, so no create call.
+      // jobs.list - an existing reach job is found, so no create call.
       .mockResolvedValueOnce(
         json({
           jobs: [
@@ -30,7 +30,7 @@ describe("fetchChannelThumbnailReach", () => {
           ],
         }),
       )
-      // reports.list for job-reach — two days.
+      // reports.list for job-reach - two days.
       .mockResolvedValueOnce(
         json({
           reports: [
@@ -65,12 +65,12 @@ describe("fetchChannelThumbnailReach", () => {
       impressions: 4000,
       impressionClickThroughRate: 0.07,
     })
-    // vid-2 appears in only one day — still surfaced from the same one download.
+    // vid-2 appears in only one day - still surfaced from the same one download.
     expect(reach.get("vid-2")).toEqual({
       impressions: 500,
       impressionClickThroughRate: 0.2,
     })
-    // No POST — the existing job was reused.
+    // No POST - the existing job was reused.
     const methods = fetchMock.mock.calls.map((call) => call[1]?.method ?? "GET")
     expect(methods).not.toContain("POST")
   })
@@ -78,11 +78,11 @@ describe("fetchChannelThumbnailReach", () => {
   it("creates the job when none exists and returns empty with no reports yet", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
-      // jobs.list — no reach job present.
+      // jobs.list - no reach job present.
       .mockResolvedValueOnce(json({ jobs: [] }))
-      // jobs.create — returns the new job id.
+      // jobs.create - returns the new job id.
       .mockResolvedValueOnce(json({ id: "job-new" }))
-      // reports.list — a brand-new job has no reports for ~24-48h.
+      // reports.list - a brand-new job has no reports for ~24-48h.
       .mockResolvedValueOnce(json({ reports: [] }))
 
     const reach = await fetchChannelThumbnailReach("token")

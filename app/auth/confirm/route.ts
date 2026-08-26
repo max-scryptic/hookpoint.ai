@@ -7,14 +7,14 @@ import { NextResponse, type NextRequest } from "next/server"
 // Supports two link shapes so it works regardless of how the Supabase email
 // template is configured:
 //
-//   1. token_hash + verifyOtp — the preferred flow. Unlike the PKCE code
+//   1. token_hash + verifyOtp - the preferred flow. Unlike the PKCE code
 //      exchange it does not depend on a browser-side code_verifier cookie, so
 //      the link works even when opened in a new tab, app, or different browser
 //      than the one used to sign up. Requires a custom email template whose
 //      link points here directly, e.g.
 //        {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/analyse-video
 //
-//   2. code + exchangeCodeForSession — the fallback for the *default* email
+//   2. code + exchangeCodeForSession - the fallback for the *default* email
 //      template, whose {{ .ConfirmationURL }} routes through Supabase's
 //      /auth/v1/verify endpoint and redirects back here with a PKCE ?code=.
 //      That exchange needs the code_verifier cookie, so it only succeeds when

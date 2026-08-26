@@ -214,7 +214,7 @@ describe("computeAnalysisWindow", () => {
   })
 
   it("caps a wide hold to a centred slice so its scan stays within budget", () => {
-    // Padded span would be 80-320 (240s) — far past a single scan's budget.
+    // Padded span would be 80-320 (240s) - far past a single scan's budget.
     // It collapses to a 60s slice centred on the hold's midpoint (200).
     const window = computeAnalysisWindow("hold", 0, 90, 310, 400)
     expect(window).toEqual({ fromSeconds: 170, toSeconds: 230 })

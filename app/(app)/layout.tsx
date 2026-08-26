@@ -11,7 +11,7 @@ import { NotificationAlerts } from "@/components/notification-alerts"
 // Shared shell for every signed-in app route. The (app) group is a route group,
 // so it adds no URL segment: the pages beneath it live at /analyse-video,
 // /analysed-videos and so on. Keeping the sidebar provider, the sidebar itself
-// and the inset here — rather than re-declaring them in each page — means
+// and the inset here - rather than re-declaring them in each page - means
 // Next.js preserves them across navigations: clicking between tabs only swaps
 // the page content instead of tearing down and rebuilding the whole shell every
 // time. Auth is enforced once here so individual pages don't each repeat the

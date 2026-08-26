@@ -3,8 +3,8 @@
 // actually spent (see lib/retention-window-costs.ts).
 //
 // The Responses API (vision + event synthesis) and Chat Completions (audio)
-// report usage in different shapes — and the audio model bills audio input
-// tokens at a different rate from text — so both are normalised to the same
+// report usage in different shapes - and the audio model bills audio input
+// tokens at a different rate from text - so both are normalised to the same
 // text/audio × input/output buckets before the per-model rate card is applied.
 //
 // The rates below are ESTIMATES. Exact rate cards for the mini/audio models
@@ -35,7 +35,7 @@ export interface LlmCallCost {
 
 // Usage as returned by POST /v1/responses (vision + event synthesis). Every
 // field is optional because a stubbed/older response may omit the block
-// entirely — a missing usage block yields a zero-token, $0 cost.
+// entirely - a missing usage block yields a zero-token, $0 cost.
 export interface ResponsesUsage {
   input_tokens?: number
   output_tokens?: number
@@ -77,7 +77,7 @@ const DEFAULT_PRICING: Record<string, ModelPricing> = {
 const warnedModels = new Set<string>()
 
 // Parsed fresh each call (not memoised) so an env override applied at runtime,
-// or between tests, takes effect immediately — cost calls are infrequent
+// or between tests, takes effect immediately - cost calls are infrequent
 // enough (a handful per window) that re-parsing a small JSON blob is nothing.
 function pricingTable(): Record<string, ModelPricing> {
   const raw = process.env.OPENAI_MODEL_PRICING_JSON
@@ -164,7 +164,7 @@ export function chatCompletionsCallCost(
   })
 }
 
-// Sums two costs for the same model — used to fold a retried call's spend into
+// Sums two costs for the same model - used to fold a retried call's spend into
 // the first attempt's (the first attempt is billed even when its response was
 // unparseable and had to be re-asked).
 export function addLlmCallCost(a: LlmCallCost, b: LlmCallCost): LlmCallCost {

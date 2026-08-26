@@ -27,7 +27,7 @@ export interface AnalysisClaimColumns {
 // Atomically claims the right to generate this analysis for `analysedVideoId`.
 // The UPDATE only lands when nothing else is already claiming it (no status
 // yet, a previous attempt failed, or a stale abandoned claim). Returns false
-// when another caller already holds the claim — the loser should skip
+// when another caller already holds the claim - the loser should skip
 // generating and let the winner's result surface on the next read.
 export async function claimAnalysis(
   supabase: SupabaseClient,
@@ -57,7 +57,7 @@ export async function claimAnalysis(
   return (data?.length ?? 0) > 0
 }
 
-// Releases a claim taken by claimAnalysis. 'done' clears it entirely — the
+// Releases a claim taken by claimAnalysis. 'done' clears it entirely - the
 // result column being non-null is the source of truth for "already generated"
 // from then on. 'failed' leaves a marker so the next attempt can retry
 // immediately rather than waiting out the staleness window.

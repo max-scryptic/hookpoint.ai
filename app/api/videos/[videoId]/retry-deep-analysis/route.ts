@@ -10,7 +10,7 @@ import { triggerRetentionWindowMediaExtraction } from "@/lib/retention-window-me
 import { abandonInFlightDeepAnalysisPipelineRun } from "@/lib/deep-analysis-pipeline-runs"
 
 // Extraction runs in the background via after() once the response is sent, but
-// still within this invocation's time budget — give it room beyond the default,
+// still within this invocation's time budget - give it room beyond the default,
 // matching every other trigger point for this pipeline (see /api/analyze).
 export const maxDuration = 300
 
@@ -19,7 +19,7 @@ export const maxDuration = 300
 // row the pipeline in lib/retention-window-media-trigger.ts has written so
 // far, then re-kicks that same pipeline against the still-uploaded source
 // file. The source file itself and the video's light analysis (retention
-// curve, transcript, pacing) are untouched — only re-running /api/analyze
+// curve, transcript, pacing) are untouched - only re-running /api/analyze
 // redoes those.
 export async function POST(
   _request: NextRequest,
@@ -61,7 +61,7 @@ export async function POST(
     // Abandon any run still holding the one-running-per-video lease before
     // re-triggering: a run whose invocation died leaves the row 'running' until
     // the staleness sweep reclaims it, and until then the re-trigger's claim
-    // would no-op against the partial unique index — so a retry on a stuck
+    // would no-op against the partial unique index - so a retry on a stuck
     // pipeline would silently do nothing. Clearing it here makes the retry take
     // effect immediately rather than only once STALE_RUN_MS elapses.
     await resetDeepAnalysis(supabase, user.id, analysedVideo.id)

@@ -211,7 +211,7 @@ export function AdminActivityCharts({
 
   return (
     <div className="space-y-4">
-      {/* Active users first, then videos analysed — each spans the full width,
+      {/* Active users first, then videos analysed - each spans the full width,
           with its own range filters docked to the right of the header. */}
       <Card>
         <CardHeader>

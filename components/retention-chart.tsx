@@ -31,13 +31,13 @@ const PLOT_H = HEIGHT - PAD.top - PAD.bottom
 
 // Width of the vertical lines that mark the start/end of a selected insight
 // window. Drawn in user units (not a non-scaling stroke) so the stroke can be
-// kept fully inside the plot, letting an edge sitting on a boundary — such as
-// the hook's 0:00 start — line up with the axis instead of poking past it.
+// kept fully inside the plot, letting an edge sitting on a boundary - such as
+// the hook's 0:00 start - line up with the axis instead of poking past it.
 const WINDOW_EDGE_WIDTH = 1.5
 
 // A one-time coach mark drawn at one of the markers on the curve. `insightId`
-// names the marker it points at — that one pulses for as long as the hint
-// stands — and `render` draws the bubble, given the arrow placement the anchor
+// names the marker it points at - that one pulses for as long as the hint
+// stands - and `render` draws the bubble, given the arrow placement the anchor
 // worked out, so the copy stays with whoever is teaching rather than here.
 export type RetentionChartHint = {
   insightId: string
@@ -53,8 +53,8 @@ const HINT_MARKER_GAP = 18
 // arrow directly over the marker.
 const HINT_ARROW_INSET = 25
 
-// A marker high on the curve — a hook window, most often, sitting at ~100%
-// retention — leaves no room above it, so the bubble drops below instead. Read
+// A marker high on the curve - a hook window, most often, sitting at ~100%
+// retention - leaves no room above it, so the bubble drops below instead. Read
 // as a percentage of the chart's height.
 const HINT_FLIP_BELOW_PERCENT = 45
 
@@ -272,7 +272,7 @@ export function RetentionChart({
     <div className="relative rounded-xl border bg-card p-4">
       {/* The plot and the coach mark that can float over it share one box. The
           SVG keeps its 1000×300 aspect at any width, so a marker's position in
-          the viewBox is the same percentage of this box — which is all the
+          the viewBox is the same percentage of this box - which is all the
           bubble below needs to line itself up with one. */}
       <div className="relative">
         <svg

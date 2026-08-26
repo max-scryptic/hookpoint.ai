@@ -149,7 +149,7 @@ export async function listAnalysedVideoIds(
 // duplication collapsed and profanity bleep markers ("[ __ ]") replaced with
 // "****".
 // Rows analysed before either cleanup was added still hold the raw cues, so we
-// heal them on read and persist the result back (best-effort) — fixing legacy
+// heal them on read and persist the result back (best-effort) - fixing legacy
 // analyses permanently without re-spending the YouTube quota a full re-analysis
 // would cost. Only the transcript column is touched, so `date_analysed` and
 // list ordering stay put.
@@ -170,7 +170,7 @@ export async function healCachedTranscript(
       .eq("user_id", userId)
       .eq("video_id", videoId)
     if (error) {
-      // Healing is best-effort — never block serving the (cleaned) transcript
+      // Healing is best-effort - never block serving the (cleaned) transcript
       // on a write failure; we'll simply re-clean it on the next read.
       console.error("Failed to persist healed transcript", error)
     }

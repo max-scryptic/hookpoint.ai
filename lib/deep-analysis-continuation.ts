@@ -11,8 +11,8 @@
 // A pass that ends with work still pending now asks for its own continuation:
 // it POSTs to /api/deep-analysis/continue, which starts the pipeline again with
 // a full budget. The chain is bounded (see MAX_ATTEMPTS) and every link is
-// idempotent — the pipeline-run lease keeps two passes off the same video, and
-// each stage only claims rows that are still pending — so the worst case of a
+// idempotent - the pipeline-run lease keeps two passes off the same video, and
+// each stage only claims rows that are still pending - so the worst case of a
 // duplicate dispatch is a no-op pass, not double work.
 
 import { getAppBaseUrl } from "@/lib/source-files/normalisation-config"
@@ -30,7 +30,7 @@ const DISPATCH_TIMEOUT_MS = 10_000
 // Every secret this deployment accepts on its internal deep-analysis endpoints.
 // DEEP_ANALYSIS_WORKER_SECRET is the dedicated one; the cron secret is accepted
 // too so a deployment can be driven by a single configured value (the database
-// watchdog calls in with it — see the pg_cron job in supabase/migrations).
+// watchdog calls in with it - see the pg_cron job in supabase/migrations).
 // Order matters: the first entry is what outgoing dispatches present.
 export function getDeepAnalysisWorkerSecrets(): string[] {
   return [

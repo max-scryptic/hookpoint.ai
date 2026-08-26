@@ -12,7 +12,7 @@ import {
 // "Processing…" spinner for the uploaded tick without the user reloading.
 //
 // Deliberately narrow: just the two id lists that drive those two indicators.
-// The alternative — re-rendering the route — would re-read every analysed video
+// The alternative - re-rendering the route - would re-read every analysed video
 // with its full retention curve and transcript on every tick, which is far too
 // much to pay for a flag flipping.
 export async function GET() {

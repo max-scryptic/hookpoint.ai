@@ -98,7 +98,7 @@ describe("saveRetentionWindowTranscripts", () => {
     try {
       const { supabase, upserts } = makeFakeSupabase()
       // With a budget of one, the mandatory hook is kept and the drop-off is
-      // not — so only the hook's row is pended for a taxonomy; the drop-off's
+      // not - so only the hook's row is pended for a taxonomy; the drop-off's
       // stays null ("not part of deep analysis").
       const hook = makeWindow({ id: "hook-1", kind: "hook", windowIndex: 0 })
       const dropOff = makeWindow({ id: "drop-1", kind: "drop_off" })

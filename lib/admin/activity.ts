@@ -22,7 +22,7 @@ export type VideosByDayPoint = {
   // Light (YouTube-API) analyses started that day.
   light: number
   // Deep analyses that day, counted as source files whose bytes actually
-  // landed in storage — mirrors the dashboard's "source files uploaded" metric.
+  // landed in storage - mirrors the dashboard's "source files uploaded" metric.
   deep: number
 }
 
@@ -50,10 +50,10 @@ export function recentUtcDates(days: number, now: Date = new Date()): string[] {
 }
 
 // Counts distinct active *non-admin* users per day over the last `days` days.
-// Admin activity is deliberately excluded — the chart is about real end users,
+// Admin activity is deliberately excluded - the chart is about real end users,
 // and admins signing in to inspect the app would otherwise inflate the numbers.
 // Because user_daily_activity holds exactly one row per user per day, counting
-// non-admin rows per activity_date already yields the distinct-user count — no
+// non-admin rows per activity_date already yields the distinct-user count - no
 // dedupe needed.
 export async function getDailyActiveUsers(
   days = 30,
@@ -99,7 +99,7 @@ export async function getDailyActiveUsers(
 // Counts videos analysed per day over the last `days` days, split into light
 // (analysed_videos) and deep (landed source_files) series. Light uses
 // date_analysed; deep uses the source file's created_at, filtered to the states
-// where bytes actually landed — consistent with the dashboard KPIs.
+// where bytes actually landed - consistent with the dashboard KPIs.
 export async function getVideosAnalysedByDay(
   days = 30,
   now: Date = new Date(),

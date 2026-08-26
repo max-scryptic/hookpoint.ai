@@ -12,7 +12,7 @@ import {
 // the server page and the client-side panel can share one rule (and so it can
 // be unit tested without a database).
 
-// The minimum a row needs to expose to be totalled — deliberately structural so
+// The minimum a row needs to expose to be totalled - deliberately structural so
 // this module doesn't have to reach into the admin (server-only) read helpers.
 export interface CostLogBreakdownInput {
   costType: CostType
@@ -36,7 +36,7 @@ export interface CostLogBreakdownEntry {
 // Per-cost-type spend for the given rows, largest first, so the summary line
 // can break the total down by type. Summed from the same (capped) rows the
 // caller lists, so the parts always add up to the total it shows. Both LLM
-// groups are always reported once any LLM cost is present — a $0.00 comparison
+// groups are always reported once any LLM cost is present - a $0.00 comparison
 // figure is itself the answer to "what did comparisons cost", and keeping both
 // makes the line's shape stable as filters change.
 export function costLogBreakdown(

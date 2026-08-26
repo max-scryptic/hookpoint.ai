@@ -1,4 +1,4 @@
-// Read/write helpers for the `source_files` table — the metadata record for a
+// Read/write helpers for the `source_files` table - the metadata record for a
 // raw video file a user uploads as the source of an analysed YouTube video.
 //
 // Two client styles are used intentionally:
@@ -50,7 +50,7 @@ export interface SourceFile {
   // --- Normalisation (360p proxy transcode) ---
   proxyStoragePath: string | null
   proxySizeBytes: number | null
-  // 360p analysis proxy produced by the same transcode job — the low-res
+  // 360p analysis proxy produced by the same transcode job - the low-res
   // copy frame/audio/scene-cue extraction decodes instead of the playback
   // proxy. Null when the analysis output failed or hasn't landed yet.
   analysisProxyStoragePath: string | null
@@ -159,9 +159,9 @@ export function resolvePlaybackStoragePath(
 }
 
 // The object key extraction (frames/audio/scene-cue scans) should decode, plus
-// its storage-reported size when known. Prefers the 360p analysis proxy —
+// its storage-reported size when known. Prefers the 360p analysis proxy -
 // several-fold cheaper to decode than the playback proxy, with no quality the
-// extraction actually needs lost — falling back to whatever playback resolves
+// extraction actually needs lost - falling back to whatever playback resolves
 // to (playback proxy or original) while the analysis proxy doesn't exist.
 // Consulted at 'ready' only, for the same never-point-at-an-unwritten-object
 // reason as resolvePlaybackStoragePath.
@@ -346,7 +346,7 @@ export async function listReadySourceFileVideoIds(
 // A ready source file, pared down to just what the analysed-videos list needs to
 // decide whether a video's deep analysis is still running: the analysed-video
 // row it belongs to, its YouTube id (for flagging the row), and its
-// transcoding (normalisation) status — one of the pipeline's stages.
+// transcoding (normalisation) status - one of the pipeline's stages.
 export interface ReadySourceFileSummary {
   analysedVideoId: string
   youtubeVideoId: string
@@ -413,7 +413,7 @@ export async function getSourceFileByNormalisationTaskToken(
 
 // Fetches the source file belonging to an analysed video (one per video),
 // without an owner to scope by. Used by the server-to-server deep-analysis
-// endpoints — the continuation worker and the watchdog sweep — which act on
+// endpoints - the continuation worker and the watchdog sweep - which act on
 // videos whose owner isn't present to authenticate, and therefore run through
 // the service-role admin client (RLS would otherwise hide the row). Every other
 // caller should scope by user: prefer getSourceFileForVideo.

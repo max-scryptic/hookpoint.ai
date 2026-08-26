@@ -1,6 +1,6 @@
 -- Stores the thumbnails and audio clips harvested from a retention window's
 -- analysis_from_seconds/analysis_to_seconds range (see the previous migration),
--- ready for a later AI-analysis pass (not implemented yet — this only persists
+-- ready for a later AI-analysis pass (not implemented yet - this only persists
 -- the media).
 --
 -- retention_window_snapshots holds one row per 5-second chunk timestamp within

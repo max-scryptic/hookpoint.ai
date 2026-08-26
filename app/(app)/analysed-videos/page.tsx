@@ -27,7 +27,7 @@ async function loadAnalysedVideos(
     const supabase = await createClient()
     // Bring every row's view/comment counts and KPI totals up to date before
     // reading them, so the table prints today's numbers rather than the ones
-    // each video had when it was analysed. Throttled and best-effort — most
+    // each video had when it was analysed. Throttled and best-effort - most
     // loads skip the YouTube round-trip entirely, and a failure just serves the
     // last numbers we have.
     await refreshAnalysedVideoStats(supabase, userId)
@@ -43,7 +43,7 @@ async function loadAnalysedVideos(
 // those are still being deep-analysed. Returns the YouTube video IDs whose raw
 // file has finished uploading (used to flag rows with the "uploaded" tick) and
 // the subset still processing post-upload (used to show a "Processing…"
-// indicator instead of the tick). The list still renders if this fails — videos
+// indicator instead of the tick). The list still renders if this fails - videos
 // just won't be flagged. The browser polls the same read
 // (/api/videos/processing-status) onwards from this snapshot, so rows settle
 // without a reload as each pipeline finishes.

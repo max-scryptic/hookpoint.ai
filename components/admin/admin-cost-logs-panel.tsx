@@ -88,7 +88,7 @@ function FilterDropdown<T extends string>({
 // video-detail pages. Unlike the main cost-log page (which filters server-side
 // via the URL because it queries across every user), these detail views already
 // have the full row set for one user/one video in hand, so filtering happens
-// in-memory — that keeps the surrounding tab state intact and needs no query
+// in-memory - that keeps the surrounding tab state intact and needs no query
 // params threaded through the page. The user filter is never shown here (the
 // scope is already a single user); the video filter is shown on the user page
 // and hidden on the single-video page via `showVideoFilter`.
@@ -107,7 +107,7 @@ export function AdminCostLogsPanel({
   const [range, setRange] = useState<DateRange>()
 
   // The cost type and (for LLM calls) the call group the picked scope filters
-  // by — one dropdown driving two row predicates.
+  // by - one dropdown driving two row predicates.
   const { costType, callGroup } = costScopeFilters(costScope)
 
   // The videos offered in the filter, derived from the rows themselves so every
@@ -240,7 +240,7 @@ export function AdminCostLogsPanel({
       </div>
 
       {/* The spend breakdown sits inline beside the grand total rather than in
-          its own KPI cards — it reads at a glance without eating vertical
+          its own KPI cards - it reads at a glance without eating vertical
           space. Shared with the account-wide cost-log page so both read the
           same, and it tracks whatever filters are applied here. */}
       <CostLogSummary

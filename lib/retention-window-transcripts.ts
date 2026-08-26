@@ -1,4 +1,4 @@
-// Read/write helpers for the `retention_window_transcripts` table — the
+// Read/write helpers for the `retention_window_transcripts` table - the
 // transcript text spoken during a retention window's padded analysis range
 // (analysisFromSeconds/analysisToSeconds, computed alongside the window
 // itself in lib/retention-windows.ts).
@@ -18,7 +18,7 @@ import { transcriptForSegment, type TranscriptCue } from "@/lib/youtube/youtube"
 
 // The per-window transcript taxonomy lifecycle (see
 // lib/retention-window-transcript-taxonomy.ts). null means "not part of deep
-// analysis" — the resting state for windows deep analysis did not select.
+// analysis" - the resting state for windows deep analysis did not select.
 export type RetentionWindowTaxonomyStatus =
   | "pending"
   | "processing"
@@ -54,7 +54,7 @@ const COLUMNS =
   "id, retention_window_id, from_seconds, to_seconds, transcript, taxonomy_status, taxonomy, taxonomy_error, taxonomy_model"
 
 // A claimed 'processing' row older than this is treated as abandoned (its
-// invocation died mid-call) and eligible to be re-claimed — the same staleness
+// invocation died mid-call) and eligible to be re-claimed - the same staleness
 // tolerance the media analysis claims use.
 const TAXONOMY_CLAIM_STALE_MS = 10 * 60 * 1000
 
@@ -74,8 +74,8 @@ function mapRow(row: TranscriptRow): RetentionWindowTranscript {
 
 // Clips `cues` to each window's analysisFromSeconds/analysisToSeconds and
 // upserts the resulting text, one row per window. Windows with no analysis
-// window (null bounds — see computeAnalysisWindow) are skipped, and any row a
-// previous save left behind for them is removed — mirroring how
+// window (null bounds - see computeAnalysisWindow) are skipped, and any row a
+// previous save left behind for them is removed - mirroring how
 // createPendingRetentionWindowAudio prunes stale audio rows.
 export async function saveRetentionWindowTranscripts(
   supabase: SupabaseClient,
@@ -87,7 +87,7 @@ export async function saveRetentionWindowTranscripts(
   const rows: Record<string, unknown>[] = []
   const windowIdsWithoutAnalysisWindow: string[] = []
 
-  // Only the bounded deep-analysis set gets a per-window transcript taxonomy —
+  // Only the bounded deep-analysis set gets a per-window transcript taxonomy -
   // the same selection (over the same passed windows) that
   // createPendingRetentionWindowAudio uses to gate media harvest, so a window
   // gets a transcript taxonomy exactly when it also gets snapshots/audio. Every
@@ -230,7 +230,7 @@ export async function rependRetentionWindowTranscriptTaxonomies(
 
 // Atomically claims every window transcript row awaiting a taxonomy for this
 // video (taxonomy_status 'pending', or a 'processing' row whose claim went
-// stale), flipping it to 'processing' and returning the claimed rows — the same
+// stale), flipping it to 'processing' and returning the claimed rows - the same
 // update-and-return claim the media analysis uses, so two overlapping pipeline
 // triggers can't pay for the same window's taxonomy twice. Runs with the admin
 // client from the deep-analysis pipeline.

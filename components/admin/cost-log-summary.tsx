@@ -22,7 +22,7 @@ function formatUsd(value: number): string {
 // Rendered by both the account-wide cost-log page (server-filtered) and the
 // per-user/per-video panel (filtered in memory), so the two always read the
 // same. Totals are summed from the rows passed in, which are the same rows the
-// table lists — so the parts always add up to what is on screen.
+// table lists - so the parts always add up to what is on screen.
 export function CostLogSummary({
   rows,
   totalCostUsd,

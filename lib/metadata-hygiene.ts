@@ -1,6 +1,6 @@
 // Deterministic, API-only checks on a video's metadata "hygiene": the title,
 // description, chapters and hashtags. None of this needs an LLM or the source
-// file — it's a cheap, always-available surface pass that flags packaging
+// file - it's a cheap, always-available surface pass that flags packaging
 // basics a creator can fix in the Studio in seconds. Computed on render from
 // the VideoDetails we already store, so there's nothing to persist.
 
@@ -17,7 +17,7 @@ export interface HygieneCheck {
 
 export interface MetadataHygiene {
   // How many checks came back "good", out of the total scored (info checks are
-  // excluded from the denominator — they're observations, not pass/fail).
+  // excluded from the denominator - they're observations, not pass/fail).
   goodCount: number
   scoredCount: number
   checks: HygieneCheck[]
@@ -43,7 +43,7 @@ function countTimestamps(text: string): number {
 }
 
 // Chapters only activate when the description has a 0:00 line and at least three
-// timestamps in ascending order — mirroring YouTube's own requirement.
+// timestamps in ascending order - mirroring YouTube's own requirement.
 function hasChapters(description: string): boolean {
   const hasZero = /(?:^|\s)0:00(?=\s|$)/m.test(description)
   return hasZero && countTimestamps(description) >= 3

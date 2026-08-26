@@ -43,7 +43,7 @@ describe("sweepStaleLocalSources", () => {
     expect(await exists(stale)).toBe(false)
   })
 
-  it("leaves a fresh cache dir alone — it may still be a live run's own file", async () => {
+  it("leaves a fresh cache dir alone - it may still be a live run's own file", async () => {
     const fresh = await makeCacheDir(30 * 1000)
 
     await sweepStaleLocalSources()

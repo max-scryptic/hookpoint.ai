@@ -1,6 +1,6 @@
 // Downloads a source video to the function's own disk (os.tmpdir()) for the
-// duration of one extraction run. Every ffmpeg invocation in a run — scene-cue
-// scans, one process per thumbnail, audio clips — otherwise opens its own
+// duration of one extraction run. Every ffmpeg invocation in a run - scene-cue
+// scans, one process per thumbnail, audio clips - otherwise opens its own
 // HTTPS connection and range-seeks into the signed URL; paying one download
 // up front turns all of those into local reads, which is dramatically cheaper
 // for the dozens of invocations a multi-window run makes.
@@ -12,7 +12,7 @@
 // up front and while streaming, and the file is deleted at the end of the run
 // that created it. That run-end cleanup can't be relied on alone, though: a
 // run killed by the 300s function timeout is SIGKILLed before its finally
-// block, leaking its cached file — so acquireLocalSource also sweeps stale
+// block, leaking its cached file - so acquireLocalSource also sweeps stale
 // leaked files up front (see sweepStaleLocalSources) to keep a warm instance's
 // /tmp from filling up and forcing every later run onto the slow HTTPS-stream
 // fallback.
@@ -32,9 +32,9 @@ const CACHE_DIR_PREFIX = "viewlio-source-"
 
 // A cached file belongs to exactly one extraction run and is deleted in that
 // run's finally block. Any cache directory older than this can therefore only
-// be a leak from an invocation that was killed before its cleanup ran — most
+// be a leak from an invocation that was killed before its cleanup ran - most
 // often the 300s serverless function timeout, after which SIGKILL skips every
-// finally — never a file a live run still holds, since no invocation outlives
+// finally - never a file a live run still holds, since no invocation outlives
 // the 300s budget by anything close to this margin. Kept comfortably above
 // that budget so the sweep can never race a run that's still reading its own
 // cached copy (a long scan reads the file without touching its mtime).
@@ -50,13 +50,13 @@ export interface LocalSourceHandle {
 // Reclaims cache directories left behind by invocations that were killed
 // before their own cleanup ran. Without this the ~hundreds-of-MB files a
 // timed-out run leaks accumulate in the shared 512MB /tmp of a warm instance
-// until the next download fails with ENOSPC — at which point every run falls
+// until the next download fails with ENOSPC - at which point every run falls
 // back to streaming the full proxy over HTTPS (frame-by-frame scene scans then
 // sit at frame 0 and time out), and each of those timed-out runs is itself
 // killed before cleanup, so the instance never recovers on its own. Running
 // this at the start of every acquire makes the fallback self-healing: a run
 // that finds a wedged instance clears the stale files first and caches
-// normally again. Best-effort throughout — a file another run legitimately
+// normally again. Best-effort throughout - a file another run legitimately
 // still owns is younger than STALE_LOCAL_SOURCE_MS and left untouched, and any
 // per-entry error is swallowed so a sweep can never fail an extraction.
 export async function sweepStaleLocalSources(
@@ -83,7 +83,7 @@ export async function sweepStaleLocalSources(
             await rm(full, { recursive: true, force: true })
           }
         } catch {
-          // Raced with another run's own cleanup, or already gone — either way
+          // Raced with another run's own cleanup, or already gone - either way
           // there's nothing left to reclaim here.
         }
       }),
@@ -93,7 +93,7 @@ export async function sweepStaleLocalSources(
 export async function acquireLocalSource(
   url: string,
   options: {
-    // Storage-reported size when known — lets an oversized source skip the
+    // Storage-reported size when known - lets an oversized source skip the
     // download without wasting bandwidth on a doomed attempt.
     sizeHintBytes: number | null
     maxBytes: number

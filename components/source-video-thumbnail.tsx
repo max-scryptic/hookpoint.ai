@@ -63,8 +63,8 @@ function useSourcePlayback(videoId: string) {
 }
 
 // The static packaging thumbnail shown at the top of the analysis. It no longer
-// swaps itself out for the source video — playback now happens in the floating
-// SourceVideoPlayer that appears over the retention chart — so this stays a
+// swaps itself out for the source video - playback now happens in the floating
+// SourceVideoPlayer that appears over the retention chart - so this stays a
 // constant reference image for the video's packaging.
 export function SourceVideoThumbnail({
   thumbnailUrl,
@@ -117,8 +117,8 @@ export function SourceVideoPlayer({
   const isEngaged = Boolean(playbackWindow) || scrubTime != null
   const isVisible = isEngaged && Boolean(playbackUrl)
   // Only intercept pointer events (for the native video controls) while an
-  // insight is actively selected and on screen. During a scrub preview — or
-  // whenever the player is faded out — it stays click-through so the chart
+  // insight is actively selected and on screen. During a scrub preview - or
+  // whenever the player is faded out - it stays click-through so the chart
   // underneath keeps receiving pointer moves and marker clicks.
   const isInteractive = isVisible && Boolean(playbackWindow)
 
@@ -173,7 +173,7 @@ export function SourceVideoPlayer({
   }, [playbackUrl, playbackWindow, scrubTime])
 
   // With an insight selected but no uploaded source file to play, there's no
-  // video to float here — yet the reader still needs an obvious way to turn the
+  // video to float here - yet the reader still needs an obvious way to turn the
   // highlight back off. Occupy the same sticky slot the player would, offering a
   // labelled dismiss control that mirrors the player's own close button so the
   // gesture is the same whether or not a raw file has been uploaded.

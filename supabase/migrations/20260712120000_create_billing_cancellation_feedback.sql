@@ -1,7 +1,7 @@
 -- Captures why a user cancelled their paid plan. When someone downgrades to
 -- Free the UI asks them to pick a reason (and optionally leave notes) before the
 -- cancellation is scheduled; that response is recorded here for later reference
--- and churn analysis. This is an append-only log — a user can cancel, resume and
+-- and churn analysis. This is an append-only log - a user can cancel, resume and
 -- cancel again, so multiple rows per user are expected and intentional.
 --
 -- Like the other billing tables this is deliberately locked down: RLS is enabled

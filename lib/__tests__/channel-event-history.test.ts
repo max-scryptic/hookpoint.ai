@@ -21,7 +21,7 @@ describe("summarizeChannelEvents", () => {
     expect(summarizeChannelEvents([])).toBeNull()
   })
 
-  it("returns null when only one other video has events — anecdote, not a trend", () => {
+  it("returns null when only one other video has events - anecdote, not a trend", () => {
     expect(
       summarizeChannelEvents([
         record({ analysedVideoId: "av-1" }),

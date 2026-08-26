@@ -18,6 +18,7 @@ import {
   type ScriptTaxonomy,
 } from "@/lib/script-taxonomy"
 import type { TranscriptCue, VideoDetails } from "@/lib/youtube/youtube"
+import { scrubDashes } from "@/lib/copy-guardrails"
 
 const CLAIM_COLUMNS = {
   statusColumn: "script_taxonomy_status",
@@ -40,9 +41,11 @@ export async function getScriptTaxonomy(
     throw new Error(`Failed to load script taxonomy: ${error.message}`)
   }
 
-  return (
+  // Model-written prose, rendered verbatim on the report, so it is scrubbed of
+  // dashes on the way out. See the copy guardrail in lib/copy-guardrails.ts.
+  return scrubDashes(
     (data as { script_taxonomy: ScriptTaxonomy | null } | null)
-      ?.script_taxonomy ?? null
+      ?.script_taxonomy ?? null,
   )
 }
 
@@ -67,7 +70,7 @@ async function saveScriptTaxonomy(
 // otherwise (missing or stale) claims the right to generate one and does so,
 // saving the result before returning it. Returns null (without calling OpenAI)
 // when there's no transcript to read, or when another caller is already
-// generating it — callers should treat null as "nothing to show yet", not as a
+// generating it - callers should treat null as "nothing to show yet", not as a
 // failure. Any generation failure serves the existing stored taxonomy (which
 // may be an out-of-date one) rather than sinking the caller, and the backfill
 // is retried on the next visit.

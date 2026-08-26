@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
   const priceId = getStripePriceId(planId, period)
   if (!priceId) {
     // The plan exists but its Stripe Price hasn't been configured in this
-    // environment — surface a clear 400 rather than a cryptic Stripe error.
+    // environment - surface a clear 400 rather than a cryptic Stripe error.
     return NextResponse.json(
       { error: "That plan isn't available for purchase yet." },
       { status: 400 },

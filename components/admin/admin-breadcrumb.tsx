@@ -35,7 +35,7 @@ const USER_DETAIL_PATTERN = /^\/admin\/users\/([^/]+)$/
 
 // A video's detail page hangs off the owning user, e.g.
 // "Dashboard / Users / User detail / <video title>". The user crumb becomes a
-// link back to their detail page, and the trailing crumb names the video —
+// link back to their detail page, and the trailing crumb names the video -
 // supplied by the page via the breadcrumb context since the pathname only
 // carries the opaque id.
 const VIDEO_DETAIL_PATTERN = /^\/admin\/users\/([^/]+)\/videos\/[^/]+$/
@@ -110,7 +110,7 @@ function buildTrail(pathname: string, dynamicLabel: string | null): Crumb[] {
 }
 
 // Breadcrumb for the admin header, derived from the current route. Kept in sync
-// with the admin sidebar nav so the crumb always names the page you're on — the
+// with the admin sidebar nav so the crumb always names the page you're on - the
 // same "section / page" trail the front-end shows above each dashboard screen.
 export function AdminBreadcrumb() {
   const pathname = usePathname()

@@ -1,8 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 // The calendar day, in UTC, that a timestamp falls on, as an ISO date string
-// (YYYY-MM-DD). We deliberately bucket on UTC everywhere — the recording path
-// here and the admin aggregation both use it — so a day means the same thing on
+// (YYYY-MM-DD). We deliberately bucket on UTC everywhere - the recording path
+// here and the admin aggregation both use it - so a day means the same thing on
 // both sides regardless of where the request was served.
 export function utcDateString(now: Date = new Date()): string {
   return now.toISOString().slice(0, 10)

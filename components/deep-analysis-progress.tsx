@@ -30,7 +30,7 @@ const POLL_INTERVAL_MS = 4000
 // route sets when it couldn't compute the per-stage breakdown but a source
 // file is still ready (e.g. a transient DB error or schema drift). `degraded`
 // still counts as analysing, so the report keeps showing its processing badge
-// instead of nothing at all — the failure mode that once left an in-flight
+// instead of nothing at all - the failure mode that once left an in-flight
 // upload with no visible indication anywhere.
 export interface DeepAnalysisProgressResponse extends ProgressResponse {
   pipelineRun?: DeepAnalysisPipelineRunSummary | null
@@ -42,9 +42,9 @@ export interface DeepAnalysisProgressResponse extends ProgressResponse {
 // spinner/failure indicator off it without re-deriving the rules.
 export interface DeepAnalysisStatus {
   // The pipeline is running (or we can't yet tell, but a source file is ready
-  // and nothing says it finished) — show a spinner.
+  // and nothing says it finished) - show a spinner.
   analysing: boolean
-  // The latest run ended in failure and produced no complete result — prompt a
+  // The latest run ended in failure and produced no complete result - prompt a
   // retry instead of a silent green check.
   failed: boolean
   // Full per-stage breakdown when the endpoint could compute it; null while
@@ -81,19 +81,19 @@ const STAGE_LABELS: {
 // DeepAnalysisStatusProvider below) so the header's processing badge and the
 // source-file card's failure prompt read the same data without double-polling.
 // Keeps polling while a run is in flight and while the endpoint is unreachable
-// (it may recover), and stops once the run has settled or failed — the resting
+// (it may recover), and stops once the run has settled or failed - the resting
 // "Source file ready" row covers steady state. Bump `restartToken` to start a
 // fresh poll after a manual retry.
 //
 // `initialProgress` is the server's own read of the same thing, taken in the
 // render that produced the page. Seeding the first reading with it means the
-// card is right in the first paint — a video that is analysing shows its
+// card is right in the first paint - a video that is analysing shows its
 // spinner immediately instead of a poll interval later, and one that isn't
 // never flashes a spinner it has to take back.
 //
 // When a run finishes while the page is open it also refreshes the route once.
 // Everything else about a finished deep analysis is server-rendered and gated on
-// the pipeline having settled — most visibly the report's deep-analysis
+// the pipeline having settled - most visibly the report's deep-analysis
 // insights, which the page only loads once progress is complete. Without that
 // refresh the processing badge would clear and the insights the run produced
 // still wouldn't appear until the user reloaded by hand.
@@ -116,8 +116,8 @@ function useDeepAnalysisProgress(
     reading.videoId === videoId && reading.restartToken === restartToken
   const progress = sameRun ? reading.progress : null
   const unreachable = sameRun ? reading.unreachable : false
-  // A restart — a manual "retry deep analysis", or an upload that just landed
-  // — is this page kicking off a run itself, so we know one is in flight before
+  // A restart - a manual "retry deep analysis", or an upload that just landed
+  // - is this page kicking off a run itself, so we know one is in flight before
   // any poll comes back to say so. Treat that gap as analysing rather than
   // leaving the card blank until the first reading arrives (or, if the endpoint
   // is briefly unreachable, for as long as it stays down).
@@ -155,7 +155,7 @@ function useDeepAnalysisProgress(
         const data = (await res.json()) as DeepAnalysisProgressResponse
         if (cancelled) return
         recordProgress(data)
-        // Stop once the run has genuinely settled, or failed outright — either
+        // Stop once the run has genuinely settled, or failed outright - either
         // way there's no more live work to reflect. A degraded read is not
         // settled: we still can't see the stages, so keep watching for recovery.
         const complete = data.complete && !data.degraded
@@ -189,8 +189,8 @@ function useDeepAnalysisProgress(
 
   // Analysing whenever a run is genuinely in flight, one has just been kicked
   // off from this page, or the endpoint gave a degraded read (or stopped
-  // answering after a reading we did get) — anything but a confirmed settled
-  // state — and never while we're showing a failure to retry.
+  // answering after a reading we did get) - anything but a confirmed settled
+  // state - and never while we're showing a failure to retry.
   //
   // With no reading at all and no restart behind us we say nothing rather than
   // guess: the server seeds the first reading, so "unknown" now only means a
@@ -237,7 +237,7 @@ const DeepAnalysisStatusContext =
   createContext<DeepAnalysisStatusValue>(IDLE_STATUS)
 
 // Owns the report page's single deep-analysis poll and hands it to everything
-// on the page that reflects it — chiefly the source-file card at the foot of
+// on the page that reflects it - chiefly the source-file card at the foot of
 // the report, which shows the "Processing…" badge while the pipeline runs and
 // prompts a retry when a run failed. Consumers sit in different subtrees, so
 // without this they'd poll the same endpoint twice over and each fire their own
@@ -287,7 +287,7 @@ export function DeepAnalysisProcessingBadge() {
 }
 
 // The bare per-stage checklist. Presentational only: given a stage snapshot it
-// renders each labelled stage with its status icon. Admin-facing only — the
+// renders each labelled stage with its status icon. Admin-facing only - the
 // report itself says no more than "Processing…", so a reader waiting on their
 // analysis isn't watching a list of pipeline internals tick over.
 export function DeepAnalysisStageChecklist({

@@ -31,7 +31,7 @@ describe("planMultipartParts", () => {
   })
 
   it("grows the part size to stay under the 10,000-part ceiling", () => {
-    // 30 GiB with a tiny 5 MiB target would need ~6,144 parts — under the cap, so
+    // 30 GiB with a tiny 5 MiB target would need ~6,144 parts - under the cap, so
     // it stays at 5 MiB. Push past the cap to force growth.
     const huge = 30 * GiB
     const plan = planMultipartParts(huge, MIN_PART_SIZE_BYTES)

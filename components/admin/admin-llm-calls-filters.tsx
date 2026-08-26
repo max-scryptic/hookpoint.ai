@@ -55,7 +55,7 @@ function toDateRange(from?: string, to?: string): DateRange | undefined {
 // front-end video browser uses: dropdown radio menus for the single-choice
 // filters and the shared date-range picker for the datetime window. Filtering is
 // server-side, so every change pushes the choices into the URL query, which the
-// server page reads and re-queries — no separate "apply" step, matching the
+// server page reads and re-queries - no separate "apply" step, matching the
 // instant filtering on the front-end.
 export function AdminLlmCallsFilters({
   userOptions,
@@ -85,7 +85,7 @@ export function AdminLlmCallsFilters({
     const params = new URLSearchParams()
     if (next.userId) params.set("userId", next.userId)
     if (next.videoId) params.set("videoId", next.videoId)
-    // The scope rides in the long-standing costType param — it is still the
+    // The scope rides in the long-standing costType param - it is still the
     // cost-type filter, now with the LLM groups folded into it.
     if (next.costScope) params.set("costType", next.costScope)
     if (next.callType) params.set("callType", next.callType)

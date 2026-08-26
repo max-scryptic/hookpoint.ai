@@ -55,7 +55,7 @@ import {
 } from "@/lib/youtube/youtube"
 
 // Extraction runs in the background via after() once the response is sent, but
-// still within this invocation's time budget — give it room beyond the default.
+// still within this invocation's time budget - give it room beyond the default.
 export const maxDuration = 300
 
 // Thrown to unwind the analysis to the stream writer with the status/copy the
@@ -94,7 +94,7 @@ function assertNotAbandoned(signal: AbortSignal): void {
 // lib/analysis-progress-stream.ts): a "stage" event each time the analysis
 // enters or advances through a step, then exactly one terminal "result" or
 // "error" event. The client drives its progress bar off those stage events, so
-// the bar tracks the actual work — most of which is LLM calls at the tail —
+// the bar tracks the actual work - most of which is LLM calls at the tail -
 // instead of a timer that races to the end and waits. Failures we can detect
 // before any work starts (no session, unusable body) are still plain JSON error
 // responses with a real status code.
@@ -243,7 +243,7 @@ async function runAnalysis(
   // what it made and nothing else.
   run: AnalysisRunRecord,
 ): Promise<unknown> {
-  // Replay a saved analysis when we have one — calling YouTube costs quota.
+  // Replay a saved analysis when we have one - calling YouTube costs quota.
   reporter.stage("lookup")
   const cached = await getAnalysedVideo(supabase, userId, videoId)
   if (cached?.videoDetails && cached.retention) {
@@ -421,7 +421,7 @@ async function runAnalysis(
         )
         reporter.advance(0.9)
         // The source video may already be uploaded and normalised (this
-        // analyze call can come after the upload) — if so, kick off
+        // analyze call can come after the upload) - if so, kick off
         // extraction now instead of waiting on the normalisation callback.
         const sourceFile = await getSourceFileForVideo(
           supabase,
@@ -462,7 +462,7 @@ async function runAnalysis(
   }
 
   // The video row failed to save, so there's nothing to claim/save a pacing
-  // analysis against — fall back to generating one just for this response.
+  // analysis against - fall back to generating one just for this response.
   if (!videoPersisted && transcript.length > 0) {
     reporter.stage("pacing")
     try {

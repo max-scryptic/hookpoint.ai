@@ -1,4 +1,4 @@
-// LLM read of a video's "packaging" — its title, thumbnail and opening hook —
+// LLM read of a video's "packaging" - its title, thumbnail and opening hook -
 // and how well the three align. This is a surface-level feature: the thumbnail
 // is fetched as an image URL from the Data API, the title is metadata, and the
 // hook is the first ~30 seconds of the caption transcript, so none of it needs

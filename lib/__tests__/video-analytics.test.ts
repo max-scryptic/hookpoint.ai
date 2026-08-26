@@ -15,7 +15,7 @@ afterEach(() => {
   mockedReach.mockReset()
 })
 
-// A summary analysed a while ago whose reach is still null — due for a retry.
+// A summary analysed a while ago whose reach is still null - due for a retry.
 function staleSummary(): VideoAnalyticsSummary {
   return {
     views: 100,
@@ -102,7 +102,7 @@ describe("backfillChannelThumbnailReach", () => {
     const rows = [
       { id: "a", video_id: "vid-1", analytics_summary: staleSummary() },
       { id: "b", video_id: "vid-2", analytics_summary: staleSummary() },
-      // vid-3 has no reach in the report yet — stays null but is stamped.
+      // vid-3 has no reach in the report yet - stays null but is stamped.
       { id: "c", video_id: "vid-3", analytics_summary: staleSummary() },
     ]
     const updates: CapturedUpdate[] = []
@@ -140,7 +140,7 @@ describe("backfillChannelThumbnailReach", () => {
       "token",
     )
 
-    // No reach to fill and the null was attempted recently — leave it alone.
+    // No reach to fill and the null was attempted recently - leave it alone.
     expect(updates).toHaveLength(0)
   })
 })

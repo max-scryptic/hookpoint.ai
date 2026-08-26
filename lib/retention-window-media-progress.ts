@@ -1,13 +1,13 @@
-// Aggregates a video's "deep analysis" pipeline — transcoding the raw upload,
+// Aggregates a video's "deep analysis" pipeline - transcoding the raw upload,
 // scanning each window for scene cues, harvesting the resulting
 // snapshots/audio, running AI analysis over the harvested media
 // (lib/retention-window-media-analysis.ts), then synthesizing cross-modal
-// events from that analysis (lib/retention-window-event-synthesis.ts) — into
+// events from that analysis (lib/retention-window-event-synthesis.ts) - into
 // a small set of stage statuses the source-file card can poll and render as
 // a checklist. Transcript clipping isn't included here: it runs
 // synchronously off the YouTube captions API while retention windows are
 // saved (see lib/retention-window-transcripts.ts), so by the time a source
-// file even exists to poll about, it has already settled — there's nothing
+// file even exists to poll about, it has already settled - there's nothing
 // left to report progress on.
 
 import type { SupabaseClient } from "@supabase/supabase-js"
@@ -36,7 +36,7 @@ export interface DeepAnalysisProgress {
   // False when there's nothing to poll about yet (no source file, or it
   // hasn't finished uploading/validating). `stages` is null in that case.
   active: boolean
-  // True once every stage has settled (ready or failed) — the caller can stop
+  // True once every stage has settled (ready or failed) - the caller can stop
   // polling.
   complete: boolean
   stages: DeepAnalysisStages | null
@@ -59,7 +59,7 @@ function normalisationToStageStatus(
 }
 
 // total===0 means there was nothing to harvest for this video (e.g. no window
-// ended up with an analysis range) — treat that as settled rather than stuck
+// ended up with an analysis range) - treat that as settled rather than stuck
 // waiting on rows that will never appear. A row-level failure only fails the
 // whole stage if *every* row failed; a handful of bad seeks shouldn't block
 // the rest of the report on an otherwise-successful harvest.
@@ -113,13 +113,13 @@ function countSceneCueScansByStatus(
 }
 
 // Analysis only ever runs on a row once extraction has succeeded
-// (status = 'ready') — see claimRetentionWindowSnapshotsPendingAnalysis/
+// (status = 'ready') - see claimRetentionWindowSnapshotsPendingAnalysis/
 // claimRetentionWindowAudioPendingAnalysis. So a row whose extraction is still
 // pending counts as analysis-pending too (nothing to analyse yet), and a row
 // whose extraction failed counts as analysis-failed (it never will have
 // anything to analyse), rather than leaving either stuck 'pending' forever.
 // 'processing' (a claim held while an LLM call is in flight) counts the same
-// as 'pending' here — it's still unsettled, not a real outcome.
+// as 'pending' here - it's still unsettled, not a real outcome.
 function countByAnalysisStatus(
   rows: { status: string; analysis_status: string }[],
 ): { total: number; pending: number; failed: number } {
@@ -139,11 +139,11 @@ function countByAnalysisStatus(
 }
 
 // Only window transcript rows that are part of deep analysis carry a
-// taxonomy_status (the rest are null — see saveRetentionWindowTranscripts), so a
+// taxonomy_status (the rest are null - see saveRetentionWindowTranscripts), so a
 // null row is excluded from the total entirely rather than counted as pending.
 // 'skipped' (an empty transcript that settled with nothing to read) and 'ready'
 // are both done; 'pending'/'processing' are unsettled; 'failed' is a real
-// outcome. total===0 means no window was selected for a taxonomy — settled.
+// outcome. total===0 means no window was selected for a taxonomy - settled.
 function countByTaxonomyStatus(
   rows: { taxonomy_status: string | null }[],
 ): { total: number; pending: number; failed: number } {
@@ -171,12 +171,12 @@ function isStageSettled(status: DeepAnalysisStageStatus): boolean {
 //
 // The pipeline's kickoff is a single best-effort after() callback (see
 // lib/retention-window-media-trigger.ts), and a large source file can exhaust
-// that invocation partway through — stalling at extraction (snapshots/audio),
+// that invocation partway through - stalling at extraction (snapshots/audio),
 // media analysis, or the final event synthesis. Two server-side mechanisms
 // finish it from there: the pass hands its leftovers to a fresh invocation
 // before its budget runs out, and the watchdog sweep
 // (lib/deep-analysis-watchdog.ts) resumes whatever stalled anyway. Neither
-// needs a browser — an analysis no longer waits for its owner to come back.
+// needs a browser - an analysis no longer waits for its owner to come back.
 //
 // This poll stays a resume trigger all the same, because it's the one that
 // fires within seconds rather than on the sweep's cadence: for the user who IS
@@ -187,21 +187,21 @@ function isStageSettled(status: DeepAnalysisStageStatus): boolean {
 // lease (claimDeepAnalysisPipelineRun) makes an overlapping kick a no-op while
 // a run is genuinely still in flight, its staleness sweep reclaims a run whose
 // invocation died, and every stage only ever claims rows that are still
-// pending — so a repeated kick resumes a stalled run's leftover work without
+// pending - so a repeated kick resumes a stalled run's leftover work without
 // redoing anything that already settled.
 export function shouldResumeDeepAnalysis(progress: DeepAnalysisProgress): boolean {
   return progress.active && progress.stages != null && !progress.complete
 }
 
 // Given a user's ready source files, returns the set of analysed-video ids whose
-// deep-analysis pipeline is still in flight — i.e. the raw file has landed but
+// deep-analysis pipeline is still in flight - i.e. the raw file has landed but
 // the deeper analysis hasn't finished. This is the cheap, list-friendly answer
 // to "is this video still processing?" without computing the full per-stage
 // breakdown (getDeepAnalysisProgress) for every video, which would be one fan-out
 // of queries per video.
 //
 // It leans on two facts about the pipeline: transcoding (normalisation) is its
-// first stage, and event synthesis is its terminal one — and synthesis jobs are
+// first stage, and event synthesis is its terminal one - and synthesis jobs are
 // created eagerly at analyse time (see createPendingRetentionWindowEventSynthesis),
 // so a settled set of synthesis rows means every upstream stage that fed them has
 // settled too. A video is therefore still processing when its transcoding hasn't
@@ -265,7 +265,7 @@ export interface VideoProcessingStatus {
 }
 
 // The whole-list answer to "which of this user's videos have a raw file, and
-// which of those are still being deep-analysed?" — the pair the analysed-videos
+// which of those are still being deep-analysed?" - the pair the analysed-videos
 // table needs to draw its uploaded tick and its "Processing…" badge.
 //
 // Shared by the page's server render and the status endpoint the table polls
@@ -291,7 +291,7 @@ export async function getVideoProcessingStatus(
 
 // Loads the current stage statuses for a video whose source file has finished
 // uploading. Callers must have already confirmed `sourceFile.uploadStatus ===
-// "ready"` — this only reports on what happens after that point.
+// "ready"` - this only reports on what happens after that point.
 export async function getDeepAnalysisProgress(
   supabase: SupabaseClient,
   userId: string,
@@ -392,8 +392,8 @@ export async function getDeepAnalysisProgress(
   )
 
   // Snapshot rows don't exist until a window's scene-cue scan has actually
-  // produced them (their timestamps are derived from its detected cuts — see
-  // createRetentionWindowSnapshotsFromSceneCues) — so a snapshot count of
+  // produced them (their timestamps are derived from its detected cuts - see
+  // createRetentionWindowSnapshotsFromSceneCues) - so a snapshot count of
   // zero only means "nothing to harvest" once every scan has settled. While
   // scans are still in flight, report snapshots as in-progress instead of
   // misreading "no rows yet" as "already done".
@@ -412,7 +412,7 @@ export async function getDeepAnalysisProgress(
     // Same "no rows yet" ambiguity as snapshots above: snapshot rows (and
     // thus their analysis_status) don't exist until the scan has produced
     // them, so a zero count here only means "already done" once snapshots
-    // itself has settled — otherwise report in-progress instead of flashing
+    // itself has settled - otherwise report in-progress instead of flashing
     // ready before the scan/harvest has even started.
     snapshotAnalysis: isStageSettled(snapshots)
       ? deriveMediaStageStatus(
@@ -434,7 +434,7 @@ export async function getDeepAnalysisProgress(
     // Transcript rows exist immediately (no extraction to wait on), and only
     // the deep-analysis-selected ones carry a taxonomy_status, so a zero total
     // here genuinely means "no window selected for a taxonomy" and needs no
-    // extra gating — the same as event synthesis below.
+    // extra gating - the same as event synthesis below.
     transcriptTaxonomy: deriveMediaStageStatus(
       transcriptTaxonomyCounts.total,
       transcriptTaxonomyCounts.pending,
@@ -442,7 +442,7 @@ export async function getDeepAnalysisProgress(
     ),
     // Unlike snapshots, event-synthesis jobs are created eagerly (at analyze
     // time, alongside audio/scene-cue-scan jobs) rather than derived from a
-    // prior step — so a zero count here needs no extra gating, it really
+    // prior step - so a zero count here needs no extra gating, it really
     // does mean "nothing to synthesize" (e.g. no window had an analysis
     // window at all).
     eventSynthesis: deriveMediaStageStatus(

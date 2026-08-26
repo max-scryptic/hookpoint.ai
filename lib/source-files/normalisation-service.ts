@@ -4,7 +4,7 @@
 // Two halves, mirroring the upload service:
 //   • startNormalisation   - runs in the complete-upload request once the file
 //     validates. Hands Qencode a signed read URL of the original and records
-//     the job token. Best-effort: a Qencode hiccup never fails the upload —
+//     the job token. Best-effort: a Qencode hiccup never fails the upload -
 //     the original stays as the fallback and the row is marked 'failed' for a
 //     later retry.
 //   • applyNormalisationCallback - runs in the (unauthenticated) Qencode status
@@ -46,7 +46,7 @@ const NORMALISATION_PROVIDER = "qencode"
 
 // `tag` values set on each Qencode format so the completion callback can tell
 // the outputs apart (Qencode echoes them back on each entry of the status
-// payload's `videos` array) — more robust than relying on output order or on
+// payload's `videos` array) - more robust than relying on output order or on
 // Qencode reporting a height per video.
 const PLAYBACK_OUTPUT_TAG = "playback"
 const ANALYSIS_OUTPUT_TAG = "analysis"
@@ -82,7 +82,7 @@ export function buildProxyObjectPath(
 // Kicks off the 360p transcode for a validated source file. Returns the source
 // file, updated with the in-flight normalisation state when a job was started,
 // or unchanged when normalisation is disabled or can't run. Never throws on a
-// transcoder failure — it records 'failed' and returns so the upload completes.
+// transcoder failure - it records 'failed' and returns so the upload completes.
 export async function startNormalisation(
   supabase: SupabaseClient,
   storage: StorageProvider,
@@ -99,7 +99,7 @@ export async function startNormalisation(
   const proxyPath = buildProxyObjectPath(sourceFile.storagePath, targetHeight)
   // A smaller analysis proxy can ride along in the same job as a second output.
   // Skipped when disabled (height 0) or when it wouldn't actually be smaller
-  // than the playback proxy — a duplicate output would also collide on the
+  // than the playback proxy - a duplicate output would also collide on the
   // height-tagged object path. At the default 360p playback height this is the
   // no-op case: one 360p rendition is produced and serves analysis too. It only
   // kicks in when the playback proxy is raised above the analysis height.
@@ -174,7 +174,7 @@ export async function startNormalisation(
 export interface NormalisationCallbackVideo {
   url: string
   // The `tag` we set on the format when submitting the job, echoed back by
-  // Qencode (as `tag` or `user_tag`) — the reliable way to tell the playback
+  // Qencode (as `tag` or `user_tag`) - the reliable way to tell the playback
   // proxy from the analysis proxy. Null for a provider/event that dropped it.
   tag: string | null
   height: number | null
@@ -214,7 +214,7 @@ export function parseQencodeCallback(
       const parsed = JSON.parse(fields.status)
       if (parsed && typeof parsed === "object") status = parsed
     } catch {
-      // Not JSON — fall through with an empty status object.
+      // Not JSON - fall through with an empty status object.
     }
   }
 
@@ -243,7 +243,7 @@ export function parseQencodeCallback(
     // over `tag` (which Qencode overwrites with its own system value). Reading
     // them the other way round matched our label only when the system tag
     // happened to be absent, which is why the analysis proxy was never
-    // identified — and pulled — on a real callback.
+    // identified - and pulled - on a real callback.
     const tag = video.user_tag ?? video.tag
     videos.push({
       url: video.url,
@@ -257,8 +257,8 @@ export function parseQencodeCallback(
 
 // Picks one callback output by its format tag, with two ordered fallbacks for
 // callbacks that dropped the tags: by height (playback is the tallest output,
-// analysis the shortest), then — only when exactly the two outputs we asked
-// for came back — by submission position (playback first, analysis second).
+// analysis the shortest), then - only when exactly the two outputs we asked
+// for came back - by submission position (playback first, analysis second).
 // With a single output it's the required playback proxy and there's no
 // analysis proxy to report.
 export function pickCallbackVideo(
@@ -268,8 +268,8 @@ export function pickCallbackVideo(
   const tagged = videos.find((video) => video.tag === which)
   if (tagged) return tagged
 
-  // No tags to go on. With a single output, assume it's the playback proxy —
-  // the required one — and report no analysis proxy at all.
+  // No tags to go on. With a single output, assume it's the playback proxy -
+  // the required one - and report no analysis proxy at all.
   if (videos.length <= 1) {
     return which === PLAYBACK_OUTPUT_TAG ? (videos[0] ?? null) : null
   }
@@ -368,7 +368,7 @@ export async function applyNormalisationCallback(
 
   // The analysis proxy is strictly best-effort: it's only asked for when the
   // playback proxy is larger than it (not at the default single 360p rendition),
-  // and extraction falls back to the playback proxy when it's absent — so a
+  // and extraction falls back to the playback proxy when it's absent - so a
   // failed pull here must not fail normalisation. It just clears the recorded
   // path so nothing ever reads a missing/empty object. Its absence used to be
   // silent, which is how a larger playback proxy could end up decoded unnoticed;
@@ -383,17 +383,17 @@ export async function applyNormalisationCallback(
   } else if (analysisProxy.reason === "not-requested") {
     // The default single-rendition setup: no separate analysis proxy was asked
     // for because the playback proxy is already small enough to serve analysis.
-    // Expected, not a fallback — just note it.
-    console.info("No separate analysis proxy — playback proxy serves analysis", {
+    // Expected, not a fallback - just note it.
+    console.info("No separate analysis proxy - playback proxy serves analysis", {
       analysedVideoId: sourceFile.analysedVideoId,
       sourceFileId: sourceFile.id,
     })
   } else {
     // A separate analysis proxy was wanted (the playback proxy is larger) but
     // couldn't be produced, so deep analysis will decode the larger playback
-    // proxy — the expensive fallback, worth surfacing.
+    // proxy - the expensive fallback, worth surfacing.
     console.warn(
-      "No analysis proxy after normalisation — deep analysis will decode the larger playback proxy",
+      "No analysis proxy after normalisation - deep analysis will decode the larger playback proxy",
       {
         analysedVideoId: sourceFile.analysedVideoId,
         sourceFileId: sourceFile.id,
@@ -458,7 +458,7 @@ type AnalysisProxyResult =
 
 // Pulls the 360p analysis proxy into our bucket and verifies it landed with
 // real content. Never throws: every failure path returns a reason so the
-// caller can record "no analysis proxy" (and why) and move on — extraction
+// caller can record "no analysis proxy" (and why) and move on - extraction
 // falls back to the playback proxy regardless.
 async function pullAnalysisProxy(
   storage: StorageProvider,
@@ -486,7 +486,7 @@ async function pullAnalysisProxy(
   }
 }
 
-// Compact, log-safe view of a callback's outputs (no signed URLs) — the shape
+// Compact, log-safe view of a callback's outputs (no signed URLs) - the shape
 // needed to tell why output matching picked what it did: how many outputs came
 // back and each one's tag/height.
 function summariseCallbackVideos(

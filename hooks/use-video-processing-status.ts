@@ -9,8 +9,8 @@ const POLL_INTERVAL_MS = 6000
 
 // Safety net for a pipeline that never settles (e.g. a run whose invocation died
 // leaving rows pending with nothing to pick them up), so a tab left open on such
-// a video doesn't poll for the rest of the day. Any fresh server render — a
-// reload, or navigating back to the page — starts a new budget.
+// a video doesn't poll for the rest of the day. Any fresh server render - a
+// reload, or navigating back to the page - starts a new budget.
 const MAX_POLL_MS = 30 * 60 * 1000
 
 function statusSignature(status: VideoProcessingStatus): string {
@@ -28,7 +28,7 @@ function statusSignature(status: VideoProcessingStatus): string {
 // as a response comes back with nothing left in flight.
 //
 // Only the two id sets are re-read (never the whole route): everything else in a
-// row — title, views, when it was analysed — is fixed at analyse time, and
+// row - title, views, when it was analysed - is fixed at analyse time, and
 // re-rendering the page to learn that one flag flipped would re-read every
 // analysed video's retention curve and transcript on every tick.
 export function useVideoProcessingStatus(
@@ -101,7 +101,7 @@ export function useVideoProcessingStatus(
           }
         }
       } catch {
-        // A failed poll leaves the last known state on screen and tries again —
+        // A failed poll leaves the last known state on screen and tries again -
         // the pipeline is still running either way.
       } finally {
         inFlight = false
@@ -113,7 +113,7 @@ export function useVideoProcessingStatus(
       if (document.visibilityState !== "visible") return
       if (timer) clearTimeout(timer)
       // Catch up straight away on returning to the tab, but never faster than
-      // the normal cadence — otherwise flicking between tabs becomes a burst of
+      // the normal cadence - otherwise flicking between tabs becomes a burst of
       // requests.
       if (Date.now() - lastPolledAt >= POLL_INTERVAL_MS) void poll()
       else schedule()

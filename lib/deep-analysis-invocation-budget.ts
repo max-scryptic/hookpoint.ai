@@ -6,7 +6,7 @@
 // /api/analyze, the normalisation callback, /api/deep-analysis/continue, …).
 // When a pass overruns that, the platform kills the process outright: no
 // catch block runs, the pipeline-run row is left 'running' until the staleness
-// sweep reclaims it, and — before this module existed — nothing on the server
+// sweep reclaims it, and - before this module existed - nothing on the server
 // ever picked the remaining work back up. Recovery depended on a human opening
 // the report page so its progress poll re-kicked the pipeline.
 //

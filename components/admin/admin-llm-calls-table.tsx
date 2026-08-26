@@ -110,7 +110,7 @@ export function AdminLlmCallsTable({
                       {row.videoTitle ?? "View video"}
                     </Link>
                   ) : (
-                    <span className="text-muted-foreground">—</span>
+                    <span className="text-muted-foreground">-</span>
                   )}
                 </TableCell>
               )}
@@ -119,16 +119,16 @@ export function AdminLlmCallsTable({
                 {row.callType ? (
                   LLM_CALL_TYPE_LABELS[row.callType] ?? row.callType
                 ) : (
-                  <span className="text-muted-foreground">—</span>
+                  <span className="text-muted-foreground">-</span>
                 )}
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">
-                {row.model ?? "—"}
+                {row.model ?? "-"}
               </TableCell>
               <TableCell className="text-right text-sm tabular-nums text-muted-foreground">
                 {row.callType
                   ? `${row.inputTokens.toLocaleString()} / ${row.outputTokens.toLocaleString()}`
-                  : "—"}
+                  : "-"}
               </TableCell>
               <TableCell className="text-right font-medium tabular-nums">
                 {formatUsd(row.costUsd)}

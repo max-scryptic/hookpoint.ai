@@ -49,7 +49,7 @@ async function loadRecentVideos(userId: string): Promise<VideosResult> {
 }
 
 // Best-effort fetch of the user's analysed video IDs. The list still renders if
-// this fails — videos just won't be flagged as analysed. Null says the read
+// this fails - videos just won't be flagged as analysed. Null says the read
 // failed, which an empty array must not be confused with: "nothing analysed
 // yet" is what the first-analysis coach marks key off, and a failed read would
 // otherwise put them in front of a creator with a hundred analyses behind them.
@@ -64,7 +64,7 @@ async function loadAnalysedVideoIds(userId: string): Promise<string[] | null> {
 }
 
 // The one-time coach marks this creator has still to meet, read on the server so
-// the first paint already knows which — if any — to draw. Best-effort: the page
+// the first paint already knows which - if any - to draw. Best-effort: the page
 // is worth more than a hint, so a failed read simply shows none.
 async function loadPendingHints(userId: string): Promise<OnboardingHint[]> {
   try {
@@ -107,7 +107,7 @@ export default async function Page({
 
   // Nothing on this page says that an analysis starts either by pasting a URL or
   // from a row's actions menu, and the menu especially gives no sign of it. So a
-  // creator with no analyses behind them gets a coach mark on each — until they
+  // creator with no analyses behind them gets a coach mark on each - until they
   // start one, or wave the pair off.
   const isFirstAnalysis =
     analysedVideoIds !== null && analysedVideoIds.length === 0

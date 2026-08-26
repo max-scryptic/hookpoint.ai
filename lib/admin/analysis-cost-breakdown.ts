@@ -18,7 +18,7 @@ import {
 // cost type (which has no call_type of its own).
 export type AnalysisCostSection = LlmCallType | "qencode_transcode"
 
-// Short, tab-local section labels — the account-wide cost log uses the longer
+// Short, tab-local section labels - the account-wide cost log uses the longer
 // "Light analysis · pacing" wording, but inside a bucket's own tab that prefix
 // is redundant, so each section is named for the work it does.
 export const ANALYSIS_COST_SECTION_LABELS: Record<AnalysisCostSection, string> =
@@ -72,7 +72,7 @@ export interface AnalysisCostBreakdown {
   totalCostUsd: number
 }
 
-// The order sections are presented in within each bucket — the order the
+// The order sections are presented in within each bucket - the order the
 // pipeline runs them in, so the breakdown reads top-to-bottom as the work
 // happens rather than in whatever order the rows came back.
 const SECTION_ORDER: AnalysisCostSection[] = [
@@ -111,7 +111,7 @@ function sectionForRow(row: CostLogRow): AnalysisCostSection | null {
 // Loads and rolls up a video's cost_logs into per-section lines and bucket
 // totals. The lookup is scoped to the owning user so an admin viewing one
 // account can never fold in another account's spend. A query failure resolves
-// to an empty breakdown (all zeroes) rather than throwing — a missing cost
+// to an empty breakdown (all zeroes) rather than throwing - a missing cost
 // roll-up should never sink the evidence tabs it sits above.
 export async function getAnalysisCostBreakdown(
   userId: string,

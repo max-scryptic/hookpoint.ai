@@ -356,8 +356,8 @@ const PAIR_ADVICE_PROMPTS = [
   { key: "script_comparison", file: "lib/script-comparison-report.ts" },
 ]
 
-const EM_DASH = "—"
-const EN_DASH = "–"
+const EM_DASH = "\u2014"
+const EN_DASH = "\u2013"
 
 describe("comparability guardrail", () => {
   for (const { key, file } of PAIR_ADVICE_PROMPTS) {

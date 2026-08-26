@@ -1,6 +1,6 @@
 // Pure helpers for planning a multipart upload. Kept provider-agnostic and free
-// of any SDK/IO so the part arithmetic — the bit that's easy to get subtly wrong
-// against S3's limits — is unit-testable on its own.
+// of any SDK/IO so the part arithmetic - the bit that's easy to get subtly wrong
+// against S3's limits - is unit-testable on its own.
 //
 // S3 multipart rules we have to respect:
 //   • At most 10,000 parts per upload.
@@ -29,7 +29,7 @@ export function planMultipartParts(
   targetPartSizeBytes: number,
 ): MultipartPlan {
   if (!Number.isFinite(totalSizeBytes) || totalSizeBytes <= 0) {
-    // Nothing to size against — treat as a single empty part so callers don't
+    // Nothing to size against - treat as a single empty part so callers don't
     // have to special-case zero. (Initiation guards against unknown sizes.)
     return { partSizeBytes: MIN_PART_SIZE_BYTES, totalParts: 1 }
   }

@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react"
 
 // Lets a server-rendered admin page hand the header breadcrumb a dynamic leaf
-// label it can't derive from the pathname alone — e.g. a video's title. The
+// label it can't derive from the pathname alone - e.g. a video's title. The
 // provider wraps both the shell header (which reads the label) and the page
 // content (whose client component sets it), so the trailing crumb can name the
 // actual record you're viewing rather than a generic placeholder.

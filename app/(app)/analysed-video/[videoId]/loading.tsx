@@ -11,7 +11,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 // Shown briefly while the analysed-video server component renders. By the time a
 // user reaches this route the analysis has already run (the Analyse a Video form
 // awaits /api/analyze before navigating) or the video was analysed previously,
-// so this is a fast cache read — we just want a neutral skeleton that mirrors the
+// so this is a fast cache read - we just want a neutral skeleton that mirrors the
 // report layout, never an "analysing" state, so opening an already-analysed video
 // slides straight into the finished UI.
 //

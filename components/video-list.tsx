@@ -126,7 +126,7 @@ function VideoActions({
   video: RecentVideo
   isAnalysed: boolean
   // Whether this row is the one carrying the first-analysis coach mark. Only
-  // one row wears it — the first on show — since the menu it points at is the
+  // one row wears it - the first on show - since the menu it points at is the
   // same on every row.
   anchorsFirstAnalysisHint?: boolean
 }) {
@@ -136,7 +136,7 @@ function VideoActions({
   const launcher = useAnalysisLauncher()
   const useLauncher = !isAnalysed && launcher !== null
   // Opening the menu is the whole of what the coach mark asks for, so that is
-  // what retires it — for the URL box's twin above as well as this one. See
+  // what retires it - for the URL box's twin above as well as this one. See
   // ONBOARDING_HINTS in lib/onboarding-hints.ts.
   const firstAnalysisHint = useOnboardingHint("first_video_analysis")
   // What the coach mark hangs off, when this is the row wearing it.
@@ -178,7 +178,7 @@ function VideoActions({
             arrow={{ side: "top", align: "end" }}
             onDismiss={firstAnalysisHint.dismiss}
           >
-            Open it on any upload and choose Analyse video — that is how you
+            Open it on any upload and choose Analyse video - that is how you
             start one from this list.
           </HintCallout>
         </AnchoredHintCallout>
@@ -186,7 +186,7 @@ function VideoActions({
       {/* Width sizes to content (w-auto) instead of matching the tiny icon
           trigger, so labels like "Analyse video" stay on one line. */}
       <DropdownMenuContent align="end" className="w-auto">
-        {/* Already-analysed videos can only be viewed — re-analysing would spend
+        {/* Already-analysed videos can only be viewed - re-analysing would spend
             API quota to reproduce results we've already cached. A brand-new
             analysis hands off to the launcher so the user gets the spinner popup
             and is redirected to the report once it's ready, rather than landing
@@ -235,7 +235,7 @@ export function VideoList({
   // to show them.
   showAnalysedColumn?: boolean
   // Whether this creator has yet to analyse anything, and so is owed the coach
-  // mark pointing at the first row's actions menu — nothing else in the table
+  // mark pointing at the first row's actions menu - nothing else in the table
   // says that an analysis starts there.
   showFirstAnalysisHint?: boolean
 }) {

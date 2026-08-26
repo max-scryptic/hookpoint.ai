@@ -208,7 +208,7 @@ export type AdminStats = {
   totalDeepCreditsUsed: number
 }
 
-// Upload states where the raw bytes have genuinely landed in storage — i.e. a
+// Upload states where the raw bytes have genuinely landed in storage - i.e. a
 // source file was really uploaded for deep analysis. Mirrors
 // DEEP_ANALYSIS_UPLOAD_STATES in lib/admin/activity.ts: "pending"/"uploading"
 // haven't landed yet and "failed" never will, so none of those count.
@@ -216,7 +216,7 @@ const DEEP_ANALYSIS_UPLOAD_STATES = ["uploaded", "processing", "ready"]
 
 // Aggregate counts for the admin dashboard. Counts use head+exact so no row
 // data is transferred; the credits total needs the column values, so those rows
-// are fetched and summed here. Deep-analysis tables are optional enhancements —
+// are fetched and summed here. Deep-analysis tables are optional enhancements -
 // a query failure there logs and reports zero rather than sinking the whole
 // dashboard.
 export async function getAdminStats(): Promise<AdminStats> {

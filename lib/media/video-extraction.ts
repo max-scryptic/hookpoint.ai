@@ -228,7 +228,7 @@ export async function measureAudioSignalBuckets(
 
 // These are deterministic acoustic measurements, not something worth asking a
 // model to estimate by ear (an LLM "listening" to a clip has no way to
-// actually measure dB or silence duration — it would just be fabricating a
+// actually measure dB or silence duration - it would just be fabricating a
 // plausible-sounding number). ffmpeg's own filters give exact values for the
 // price of one extra decode pass.
 export function buildAudioStatsArgs(sourceUrl: string): string[] {
@@ -272,7 +272,7 @@ export function parseAudioSignalStats(
 }
 
 // Measures loudness and silence ratio for an already-extracted audio clip
-// (not the source video — this runs against the harvested per-window .mp3
+// (not the source video - this runs against the harvested per-window .mp3
 // file). Best-effort: callers should treat a rejection the same as "stats
 // unavailable" rather than failing the whole analysis.
 export async function measureAudioClipStats(

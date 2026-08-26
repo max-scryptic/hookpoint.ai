@@ -9,7 +9,7 @@ import {
 import type { AnalysisCostLine } from "@/lib/admin/analysis-cost-breakdown"
 
 // Enough precision for the sub-cent figures a single video's calls cost,
-// without trailing noise on larger totals — matches the deep-analysis evidence
+// without trailing noise on larger totals - matches the deep-analysis evidence
 // cost formatting so both tabs read the same.
 function formatUsd(value: number): string {
   if (value <= 0) return "$0"
@@ -23,7 +23,7 @@ function formatTokens(value: number): string {
 
 // The cost KPIs at the top of an analysis tab: a single row with a prominent
 // "Total" tile on the left for the bucket's grand total, then the per-section
-// breakdown (pacing, packaging, …) filling the rest of the row — each with its
+// breakdown (pacing, packaging, …) filling the rest of the row - each with its
 // own spend, how many calls it took, and the tokens it moved. The total is
 // tinted and pulled out to its own column so it reads apart from the component
 // costs, giving an admin an at-a-glance read of what this slice cost and where
