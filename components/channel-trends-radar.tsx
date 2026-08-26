@@ -147,28 +147,16 @@ function anchorFor(cosine: number): "start" | "middle" | "end" {
   return "middle"
 }
 
-// The three shapes, told apart by weight and dash before any hue comes into it.
-// The winners are the only solid, filled and dotted-vertex shape, because they
-// are the thing being read; the losers are dashed and hollow; the library
-// average is a fine dotted outline with no vertices at all, because it is a
-// baseline rather than a third competitor. That ordering is what a greyscale
-// print or a colour-blind reader goes on, and it survives on its own.
-//
-// The winners then also carry --chart-1, the blue the analysed video page draws
-// its retention curve in and the same tint the paired bars and the retention
-// curve give their top band. One hue, on the shape the eye should land on, in
-// every chart on the page. The other two stay neutral: three hues this close in
-// the palette would read as three shades of the same purple at these stroke
-// widths, and would collapse into each other under the fade below.
-//
-// highlightTone is the tone a band takes while it is the one picked out. The
-// winners hold their blue rather than dropping back to neutral; the other two
-// lift from muted to full foreground, the only contrast step they have.
+// The three shapes, told apart without a single hue. The winners are the only
+// solid, filled and dotted-vertex shape, because they are the thing being read;
+// the losers are dashed and hollow; the library average is a fine dotted
+// outline with no vertices at all, because it is a baseline rather than a third
+// competitor. Weight and dash carry all of it, so a greyscale print or a
+// colour-blind reader loses nothing.
 const BAND_STYLE: Record<
   TrendBand,
   {
     tone: string
-    highlightTone: string
     fillOpacity: number
     strokeOpacity: number
     strokeWidth: number
@@ -177,8 +165,7 @@ const BAND_STYLE: Record<
   }
 > = {
   top: {
-    tone: "text-chart-1",
-    highlightTone: "text-chart-1",
+    tone: "text-foreground",
     fillOpacity: 0.12,
     strokeOpacity: 0.8,
     strokeWidth: 1.6,
@@ -186,7 +173,6 @@ const BAND_STYLE: Record<
   },
   bottom: {
     tone: "text-muted-foreground",
-    highlightTone: "text-foreground",
     fillOpacity: 0,
     strokeOpacity: 0.75,
     strokeWidth: 1.2,
@@ -195,7 +181,6 @@ const BAND_STYLE: Record<
   },
   library: {
     tone: "text-muted-foreground",
-    highlightTone: "text-foreground",
     fillOpacity: 0,
     strokeOpacity: 0.55,
     strokeWidth: 1,
@@ -239,7 +224,7 @@ function bandStyleFor(
   }
   return {
     ...style,
-    tone: style.highlightTone,
+    tone: "text-foreground",
     fillOpacity: Math.max(style.fillOpacity, 0.07),
     strokeOpacity: 1,
     strokeWidth: style.strokeWidth + 0.5,

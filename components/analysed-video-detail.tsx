@@ -143,17 +143,12 @@ const TAB_FOR_INSIGHT_KIND: Record<
 // the list below is tinted in that insight's colour so the reader can see which
 // item the moment they clicked relates to. The tint fades out again (via the
 // always-on `transition-colors`) once the selection is cleared.
-//
-// Third and last place an insight's colour is set, after the marker tone and
-// the badge in components/retention-chart.tsx. All three read from the same
-// scale step per kind, so a marker, its chip and the row it selects are one
-// colour; move one and move the other two.
 const ROW_HIGHLIGHT: Record<"hook" | "drop" | "gain" | "hold" | "pacing", string> = {
   hook: "bg-yellow-50 ring-1 ring-inset ring-yellow-400/40 dark:bg-yellow-500/10",
   drop: "bg-red-50 ring-1 ring-inset ring-red-400/40 dark:bg-red-500/10",
   gain: "bg-emerald-50 ring-1 ring-inset ring-emerald-400/40 dark:bg-emerald-500/10",
   hold: "bg-teal-50 ring-1 ring-inset ring-teal-400/40 dark:bg-teal-500/10",
-  pacing: "bg-purple-50 ring-1 ring-inset ring-purple-400/40 dark:bg-purple-500/10",
+  pacing: "bg-blue-50 ring-1 ring-inset ring-blue-400/40 dark:bg-blue-500/10",
 }
 
 function rowHighlightClass(
