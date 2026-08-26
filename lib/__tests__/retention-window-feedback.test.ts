@@ -7,7 +7,7 @@ import type { RetentionMomentAttribution } from "@/lib/retention-attribution"
 import {
   dedupeDeepFeedback,
   hasScriptFeedback,
-  hasWindowFeedback,
+  hasWindowTip,
 } from "@/lib/retention-window-feedback"
 
 function insight(
@@ -90,25 +90,46 @@ describe("hasScriptFeedback", () => {
   })
 })
 
-describe("hasWindowFeedback", () => {
+describe("hasWindowTip", () => {
   it("is false for a window neither pass said anything about", () => {
-    expect(hasWindowFeedback(undefined, [])).toBe(false)
+    expect(hasWindowTip(undefined, [])).toBe(false)
   })
 
   it("is false when the deep insights all lost their recommendations", () => {
     // What the report's uniqueness pass leaves behind when a window's only tip
     // repeats one made higher up the page: the insight stays, its tip does not,
     // and no tab is drawn for it.
-    expect(hasWindowFeedback(undefined, [{ insight: insight() }])).toBe(false)
+    expect(hasWindowTip(undefined, [{ insight: insight() }])).toBe(false)
   })
 
-  it("is true on the script reading alone", () => {
-    expect(hasWindowFeedback(attribution(), [])).toBe(true)
+  it("is false for an explanation with no tip under it", () => {
+    // The reason a window can be read, explained, and still not earn a row: the
+    // creator can see the drop on the curve already, so a restatement of it is
+    // not a finding.
+    expect(hasWindowTip(attribution(), [])).toBe(false)
+    expect(hasWindowTip(attribution({ tip: "   " }), [])).toBe(false)
+  })
+
+  it("is true on the script tip alone", () => {
+    expect(
+      hasWindowTip(attribution({ tip: "Cut the recap and open on the play" }), []),
+    ).toBe(true)
+  })
+
+  it("is false for a tip whose explanation never renders", () => {
+    // Nothing draws a script tip without the reading above it, so a row kept for
+    // one would show its header over an empty body.
+    expect(
+      hasWindowTip(
+        attribution({ explanation: "", tip: "Cut the recap" }),
+        [],
+      ),
+    ).toBe(false)
   })
 
   it("is true on a deep insight that kept its tip", () => {
     expect(
-      hasWindowFeedback(undefined, [
+      hasWindowTip(undefined, [
         { insight: insight(), recommendation: recommendation("Plan a long section") },
       ]),
     ).toBe(true)

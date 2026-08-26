@@ -1,12 +1,12 @@
 // What a retention window's feedback amounts to once the report's dedupe passes
 // have run over it: which of its deep insights earn a tab, and whether the
-// window has anything to say at all.
+// window has any advice to give.
 //
 // This lives outside the detail component because the last question is asked
-// before a row exists rather than while one renders — a hold with nothing said
-// about it is dropped from the list, from the chart's markers and from the tab
-// strip together (see AnalysedVideoDetail) — and the answer has to be the same
-// in all four places as what WindowFeedback would actually draw.
+// before a row exists rather than while one renders — a window with no tip on it
+// is dropped from its list, from the chart's markers and from the tab strip
+// together (see AnalysedVideoDetail) — and the answer has to be the same in all
+// four places as what WindowFeedback would actually draw.
 
 import type { RetentionMomentAttribution } from "@/lib/retention-attribution"
 import type { DeepWindowFeedback } from "@/lib/report-tip-uniqueness"
@@ -37,23 +37,33 @@ export function hasScriptFeedback(
   return attribution != null && attribution.explanation !== ""
 }
 
-// Whether the window has any feedback left to show: a transcript reading, or at
-// least one deep insight that survived the dedupe. False means every branch of
-// WindowFeedback renders its header and nothing under it.
+// Whether the window has a tip on it: a "Try:" line the creator can act on,
+// written either from the transcript or from one of the deep insights that
+// survived the dedupe. This is what decides whether the window gets a row at
+// all, so an explanation with no advice under it counts as nothing: the reader
+// already has the curve, and a timestamp restating what it shows is not a
+// finding.
 //
-// A window can arrive here empty for reasons that are working as intended. Deep
-// analysis is capped, and reserves only the single strongest hold per video (see
-// selectDeepAnalysisWindows), so the rest never get frames or audio read at all.
-// The script pass skips any window carrying fewer than MINIMUM_TRANSCRIPT_WORDS
-// and drops the tips it wrote without warrant (see THE WARRANT in
-// lib/retention-attribution.ts). And the report's own uniqueness pass strips a
-// recommendation that repeats one made higher up the page. Any of those can
-// leave a window with a measurement and no reading of it.
-export function hasWindowFeedback(
+// A window can arrive here tipless for reasons that are all working as intended.
+// Deep analysis is capped, and reserves only the single strongest hold per video
+// (see selectDeepAnalysisWindows), so the rest never get frames or audio read at
+// all. The script pass skips any window carrying fewer than
+// MINIMUM_TRANSCRIPT_WORDS and drops the tips it wrote without warrant (see THE
+// WARRANT in lib/retention-attribution.ts). And the report's own uniqueness pass
+// strips a recommendation that repeats one made higher up the page, which is the
+// one case where the advice is still on the report, a screen further up, rather
+// than missing from it.
+export function hasWindowTip(
   attribution: RetentionMomentAttribution | undefined,
   deepFeedback: DeepWindowFeedback[],
 ): boolean {
+  // The script tip counts only where the reading it sits under is itself shown:
+  // an attribution with no explanation renders nothing at all (AttributionNote
+  // and the Script tab both open with it), so its tip would never reach the
+  // page, and keeping the row for it would put back the empty body this check
+  // exists to prevent.
   return (
-    hasScriptFeedback(attribution) || dedupeDeepFeedback(deepFeedback).length > 0
+    (hasScriptFeedback(attribution) && (attribution.tip ?? "").trim() !== "") ||
+    dedupeDeepFeedback(deepFeedback).length > 0
   )
 }
