@@ -201,42 +201,30 @@ export function RetentionChart({
     ? insights.find((insight) => insight.id === hint.insightId)
     : undefined
 
-  // How each kind of insight is coloured, in the two places it shows up: `band`
-  // paints the marker bead and the window wash on the chart, `badge` is the
-  // chip beside it in the list below.
-  //
-  // The band tones are theme tokens (see the --insight-* block in
-  // app/globals.css) rather than literal hexes, so they shift with the theme
-  // the way the rest of the chart does; the badges stay on the Tailwind scale
-  // every other chip in the app is built from. The two are set from the same
-  // scale step, so keep them in step when either moves.
   const insightTone = {
     hook: {
-      band: "var(--insight-hook)",
+      band: "#facc15",
       badge: "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-300",
       name: "Hook",
     },
     drop: {
-      band: "var(--insight-drop)",
+      band: "#ef4444",
       badge: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300",
       name: "Drop-offs",
     },
     gain: {
-      band: "var(--insight-gain)",
+      band: "#22c55e",
       badge: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
       name: "Gains",
     },
     hold: {
-      band: "var(--insight-hold)",
+      band: "#14b8a6",
       badge: "bg-teal-100 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300",
       name: "Holds",
     },
-    // Purple, not blue: the retention line is --chart-1 (hue 264), so a blue
-    // pacing marker read as part of the curve instead of as a call-out on it.
     pacing: {
-      band: "var(--insight-pacing)",
-      badge:
-        "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300",
+      band: "#3b82f6",
+      badge: "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300",
       name: "Pacing",
     },
   } as const
@@ -328,7 +316,7 @@ export function RetentionChart({
                 dx="0"
                 dy="1"
                 stdDeviation="1"
-                floodColor="var(--chart-marker-shadow)"
+                floodColor="#0f172a"
                 floodOpacity="0.35"
               />
             </filter>
