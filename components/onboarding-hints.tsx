@@ -172,6 +172,32 @@ export function AnchoredHintCallout({
   )
 }
 
+// How long one swell of the glow takes, in milliseconds. Kept in step with the
+// --hint-target-glow-cycle the animation runs on in app/globals.css.
+const GLOW_CYCLE_MS = 2400
+
+// Starts one glow on the same beat as every other glow on the page.
+//
+// A CSS animation starts when it is applied, so two glows that appear at
+// different moments - one on the URL box, there from the first paint, one on a
+// table row that renders once its data lands - breathe permanently out of step,
+// which reads as two unrelated things blinking rather than as one mark worn by
+// several. Starting each animation a negative delay in, by however far the page
+// already is through the current cycle, puts them all at the same point of the
+// same swell: with the offset measured against the document's time origin - the
+// one clock everything on the page shares - each glow's phase works out to the
+// current time modulo the cycle, whenever it happens to join.
+//
+// A ref callback rather than an effect, so the phase is set in the same commit
+// that attaches the node (no first frame drawn on the wrong beat), and only
+// then - re-applying the delay on a later render would shift a running
+// animation rather than align it, since the delay counts from where the
+// animation began and not from now.
+const startGlowInPhase = (glow: HTMLSpanElement | null) => {
+  if (!glow) return
+  glow.style.animationDelay = `-${performance.now() % GLOW_CYCLE_MS}ms`
+}
+
 // The mark worn by the control a hint bubble points at: a primary-coloured
 // outline breathing around it, so the eye is drawn to the thing being explained
 // and not only to the bubble explaining it. Faint on purpose - a solid badge
@@ -179,9 +205,11 @@ export function AnchoredHintCallout({
 //
 // Laid over the control as an absolutely positioned overlay, so nothing about
 // the control's own box (its border, its focus ring, its size) has to change to
-// wear one. The caller therefore needs a positioned ancestor around the
-// control, usually the wrapper the bubble is already hung off, and can move the
-// glow off the control's edges and match its corners with `className`.
+// wear one. The overlay sits exactly on the control's box, so the ring starts
+// at the control's edge rather than floating off it. The caller therefore needs
+// a positioned ancestor around the control, usually the wrapper the bubble is
+// already hung off, and matches its corners with `className` where the control
+// is not the default `rounded-lg`.
 export function HintTargetGlow({
   shown = true,
   className,
@@ -195,9 +223,10 @@ export function HintTargetGlow({
   if (!shown) return null
   return (
     <span
+      ref={startGlowInPhase}
       aria-hidden="true"
       className={cn(
-        "hint-target-glow pointer-events-none absolute -inset-0.5 rounded-lg",
+        "hint-target-glow pointer-events-none absolute inset-0 rounded-lg",
         className,
       )}
     />

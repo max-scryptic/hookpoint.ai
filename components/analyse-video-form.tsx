@@ -123,7 +123,6 @@ export function AnalyseVideoForm({
           />
           <HintTargetGlow
             shown={showFirstAnalysisHint && firstAnalysisHint.pending}
-            className="rounded-xl"
           />
         </div>
         <Button type="submit" size="lg" disabled={!canSubmit}>

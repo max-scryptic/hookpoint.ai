@@ -251,24 +251,33 @@ body {
  * mark is drawn outside the box: an outline that follows the overlay's radius,
  * and a soft primary bloom around it that swells and settles.
  *
+ * The overlay sits exactly on the control's box and the outline is drawn with
+ * no offset, so the ring hugs the control's edge - a gap between the two would
+ * read as a box floating around the control rather than as the control lit up.
+ *
  * The ring is an outline rather than a Tailwind `ring-*`, since that is itself
  * a box-shadow and the bloom below would replace it.
  */
 @keyframes hint-target-glow {
   0%,
   100% {
-    opacity: 0.6;
-    box-shadow: 0 0 6px 0 color-mix(in oklch, var(--primary) 22%, transparent);
+    opacity: 0.45;
+    box-shadow: 0 0 4px 0 color-mix(in oklch, var(--primary) 12%, transparent);
   }
   50% {
-    opacity: 1;
-    box-shadow: 0 0 16px 3px color-mix(in oklch, var(--primary) 42%, transparent);
+    opacity: 0.85;
+    box-shadow: 0 0 10px 1px color-mix(in oklch, var(--primary) 26%, transparent);
   }
 }
 
 .hint-target-glow {
-  outline: 2px solid color-mix(in oklch, var(--primary) 45%, transparent);
-  animation: hint-target-glow 2.4s ease-in-out infinite;
+  /* One full swell. HintTargetGlow works its starting phase out against this
+   * same figure to keep every glow on the page on one beat - keep the two in
+   * step. */
+  --hint-target-glow-cycle: 2.4s;
+  outline: 1.5px solid color-mix(in oklch, var(--primary) 38%, transparent);
+  outline-offset: 0;
+  animation: hint-target-glow var(--hint-target-glow-cycle) ease-in-out infinite;
 }
 
 /* A repeating swell is exactly what reduced motion asks us not to draw. Hold
@@ -276,8 +285,8 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .hint-target-glow {
     animation: none;
-    opacity: 0.9;
-    box-shadow: 0 0 12px 2px color-mix(in oklch, var(--primary) 35%, transparent);
+    opacity: 0.75;
+    box-shadow: 0 0 8px 1px color-mix(in oklch, var(--primary) 20%, transparent);
   }
 }
 
