@@ -8,6 +8,7 @@ import {
   dedupeDeepFeedback,
   hasScriptFeedback,
   hasWindowTip,
+  resolveWindowFeedback,
 } from "@/lib/retention-window-feedback"
 
 function insight(
@@ -87,6 +88,55 @@ describe("hasScriptFeedback", () => {
 
   it("is true for an explanation with no tip behind it", () => {
     expect(hasScriptFeedback(attribution())).toBe(true)
+  })
+})
+
+describe("resolveWindowFeedback", () => {
+  it("drops a script reading with no tip under it, deep tabs or not", () => {
+    // The case the report grew when deep analysis finished: the transcript pass
+    // explained the window but had no advice to give, so the frames and the
+    // audio are the only things worth a tab and the first of them leads.
+    const deepFeedback: DeepWindowFeedback[] = [
+      {
+        insight: insight({ id: "a", eventType: "topic_shift" }),
+        recommendation: recommendation("Open on the trade itself"),
+      },
+      {
+        insight: insight({ id: "b" }),
+        recommendation: recommendation("Cut to the chart while you talk"),
+      },
+    ]
+    const resolved = resolveWindowFeedback(attribution(), deepFeedback)
+    expect(resolved.script).toBeNull()
+    expect(resolved.deep.map((entry) => entry.insight.id)).toEqual(["a", "b"])
+
+    expect(resolveWindowFeedback(attribution(), []).script).toBeNull()
+    expect(resolveWindowFeedback(attribution({ tip: "  " }), []).script).toBeNull()
+  })
+
+  it("keeps a script reading that carries a tip of its own", () => {
+    const withTip = attribution({ tip: "Cut the recap and open on the play" })
+    expect(resolveWindowFeedback(withTip, []).script).toBe(withTip)
+  })
+
+  it("drops a script tip a deep tab already carries", () => {
+    // Both passes reached the same advice; the one that can show its frames
+    // keeps it, and the script reading is left with nothing to add.
+    const tip = "Cut to the chart while you talk"
+    const resolved = resolveWindowFeedback(attribution({ tip }), [
+      { insight: insight(), recommendation: recommendation(tip) },
+    ])
+    expect(resolved.script).toBeNull()
+    expect(resolved.deep).toHaveLength(1)
+  })
+
+  it("drops a tip whose explanation never renders", () => {
+    expect(
+      resolveWindowFeedback(
+        attribution({ explanation: "", tip: "Cut the recap" }),
+        [],
+      ).script,
+    ).toBeNull()
   })
 })
 

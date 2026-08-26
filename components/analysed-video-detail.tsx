@@ -29,9 +29,8 @@ import {
   type RetentionSectionFeedback,
 } from "@/lib/report-tip-uniqueness"
 import {
-  dedupeDeepFeedback,
-  hasScriptFeedback,
   hasWindowTip,
+  resolveWindowFeedback,
 } from "@/lib/retention-window-feedback"
 import type { ScriptTaxonomy } from "@/lib/script-taxonomy"
 import type { DeepAnalysisEvidence } from "@/lib/deep-analysis-evidence"
@@ -460,7 +459,7 @@ function AttributionNote({
   attribution,
   section,
 }: {
-  attribution: RetentionMomentAttribution | undefined
+  attribution: RetentionMomentAttribution | null | undefined
   section: string
 }) {
   if (!attribution || attribution.explanation === "") return null
@@ -651,22 +650,6 @@ function deepFeedbackTabLabel(
   return matchingFeedback.length > 1 ? `${label} ${duplicateIndex + 1}` : label
 }
 
-// Whether one of the window's deep tabs already carries this tip, in which case
-// the Script tab drops its own copy of it: a tip measured off the frames and the
-// audio is the better-evidenced version of the same advice, and it is the one
-// that can show its working. lib/report-tip-uniqueness.ts settles this for the
-// report as a whole, in the same direction and against near-duplicates rather
-// than exact ones; this is the last check before the tabs are built.
-function deepFeedbackCarriesTip(
-  deepFeedback: DeepWindowFeedback[],
-  tip: string,
-): boolean {
-  const wanted = tip.trim()
-  return deepFeedback.some(
-    ({ recommendation }) => recommendation?.action.trim() === wanted,
-  )
-}
-
 // Whether a window's feedback renders as a tab switcher rather than as a single
 // flat block - the same condition WindowFeedback branches on below, asked ahead
 // of the render. The footage-tabs hint needs it: there is no point offering to
@@ -675,10 +658,8 @@ function rendersFeedbackTabs(
   attribution: RetentionMomentAttribution | undefined,
   deepFeedback: DeepWindowFeedback[],
 ): boolean {
-  const uniqueDeep = dedupeDeepFeedback(deepFeedback)
-  return hasScriptFeedback(attribution)
-    ? uniqueDeep.length > 0
-    : uniqueDeep.length > 1
+  const { script, deep } = resolveWindowFeedback(attribution, deepFeedback)
+  return (script != null ? 1 : 0) + deep.length > 1
 }
 
 // Which row of a list carries the footage-tabs coach mark: the first one in it
@@ -749,13 +730,14 @@ function FootageTabsHintCallout({
 // quote) rather than below it. `header` is given the tab list to place in that
 // row - or null when there are no tabs to show - and returns the full header.
 //
-// The Script tab carries the transcript reading of the window: its explanation
-// always, and its tip only when the transcript earned one - see THE WARRANT in
-// lib/retention-attribution.ts. Each *unique* deep tip synthesised from the
-// window's events then earns its own additional tab (reasoning above the tip);
-// duplicate and tipless events are dropped so the switcher only ever holds
-// distinct, actionable feedback. When just one source of feedback survives, it
-// renders flat below the header exactly as before.
+// The Script tab carries the transcript reading of the window - its explanation
+// and the tip under it - but only where the transcript earned a tip of its own
+// (see THE WARRANT in lib/retention-attribution.ts) that no deep tab already
+// says better. Each *unique* deep tip synthesised from the window's events then
+// earns its own tab (reasoning above the tip); duplicate and tipless events are
+// dropped so the switcher only ever holds distinct, actionable feedback. When
+// just one source of feedback survives, it renders flat below the header
+// exactly as before. resolveWindowFeedback settles all of this.
 function WindowFeedback({
   header,
   attribution,
@@ -783,18 +765,15 @@ function WindowFeedback({
       footageTabsHint.dismiss()
     }
   }
-  const uniqueDeep = dedupeDeepFeedback(deepFeedback)
+  // The window's feedback as it will actually be shown: the script reading only
+  // where it still has a tip of its own to give, and one entry per distinct deep
+  // tip. Everything tipless has already been dropped, so nothing below has to
+  // ask again whether a tab is worth drawing.
+  const { script, deep: uniqueDeep } = resolveWindowFeedback(
+    attribution,
+    deepFeedback,
+  )
   const hasDeep = uniqueDeep.length > 0
-  // The window's script feedback as it will actually be shown, or undefined when
-  // there is none to show. A tip a deep tab already carries is dropped from it;
-  // the explanation stays either way, so only the duplicated "Try:" line goes.
-  const scriptSource = hasScriptFeedback(attribution) ? attribution : undefined
-  const script =
-    scriptSource != null &&
-    scriptSource.tip != null &&
-    deepFeedbackCarriesTip(uniqueDeep, scriptSource.tip)
-      ? { ...scriptSource, tip: null }
-      : scriptSource
 
   if (script && hasDeep) {
     return (
