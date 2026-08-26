@@ -27,6 +27,7 @@ import {
   type BillingSnapshot,
 } from "@/lib/billing/entitlements"
 import { syncCurrentSubscriptionForUser } from "@/lib/billing/subscriptions"
+import { getChannelAvatarUrl } from "@/lib/youtube/channel-avatar"
 import { getGoogleAccessToken } from "@/lib/youtube/google-auth"
 import {
   getMyChannelDetails,
@@ -120,20 +121,26 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     requireAuthenticatedUser(),
   ])
   await syncBillingReturn(user.id, searchParams)
-  const [billingSnapshot, connectedAccount, paymentCard, invoices] =
-    await Promise.all([
-      loadBillingSnapshot(user.id),
-      loadConnectedAccount(user.id),
-      loadPaymentCard(user.id),
-      loadBillingInvoices(user.id),
-    ])
+  const [
+    billingSnapshot,
+    connectedAccount,
+    paymentCard,
+    invoices,
+    channelAvatarUrl,
+  ] = await Promise.all([
+    loadBillingSnapshot(user.id),
+    loadConnectedAccount(user.id),
+    loadPaymentCard(user.id),
+    loadBillingInvoices(user.id),
+    getChannelAvatarUrl(user.id),
+  ])
   const billingEnabled = isStripeEnabled()
 
   return (
     <SidebarProvider defaultOpen={defaultOpen}>
       <AppSidebar
         showUpgradeToPro={billingSnapshot?.planId === "free"}
-        user={user}
+        user={{ ...user, avatarUrl: channelAvatarUrl }}
       />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">

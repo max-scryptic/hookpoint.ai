@@ -7,6 +7,7 @@ import { listSavedTipFingerprints } from "@/lib/tips"
 import { SavedTipsProvider } from "@/components/saved-tips-provider"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { NotificationAlerts } from "@/components/notification-alerts"
+import { getChannelAvatarUrl } from "@/lib/youtube/channel-avatar"
 
 // Shared shell for every signed-in app route. The (app) group is a route group,
 // so it adds no URL segment: the pages beneath it live at /analyse-video,
@@ -25,6 +26,12 @@ export default async function AppLayout({
     getSidebarDefaultOpen(),
     requireAuthenticatedUser(),
   ])
+  // The connected channel's picture for the sidebar footer. Started here so it
+  // overlaps the reads below instead of adding a hop after them; it is a single
+  // row read on every render but the first one after its cache lapses, and it
+  // resolves to null rather than throwing when YouTube can't be reached.
+  const channelAvatarUrl = getChannelAvatarUrl(user.id)
+
   let showUpgradeToPro = false
   try {
     const entitlement = await getEntitlement(user.id)
@@ -47,7 +54,10 @@ export default async function AppLayout({
 
   return (
     <SidebarProvider defaultOpen={defaultOpen}>
-      <AppSidebar showUpgradeToPro={showUpgradeToPro} user={user} />
+      <AppSidebar
+        showUpgradeToPro={showUpgradeToPro}
+        user={{ ...user, avatarUrl: await channelAvatarUrl }}
+      />
       <SidebarInset>
         <SavedTipsProvider initialFingerprints={savedTipFingerprints}>
           {children}
