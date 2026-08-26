@@ -47,19 +47,48 @@ const PLOT_H = HEIGHT - PAD.top - PAD.bottom
 // Same order of weight the radars use for the same three bands.
 type Band = "top" | "bottom" | "average"
 
+// Only the top band carries a hue, and it carries the same --chart-1 the
+// analysed video page draws its retention curve in, so a reader moving between
+// the two pages sees one blue meaning "the retention line to read".
+//
+// The other two stay on the neutral tone deliberately. These three bands are a
+// rank, not three identities, and rank is what weight and dash encode: solid
+// and heaviest down to fine and dotted reads as an order at a glance, where
+// three hues would have to be looked up in the key every time. One hue on the
+// line the eye should land on gets the shared theme without giving that up.
+// It also keeps highlightFor below working: fading is the only channel those
+// two neutral lines have, and it survives dimming in a way a hue does not.
+//
+// highlightStroke is what a band draws as while it is the one picked out. The
+// top band holds its own blue rather than jumping to the neutral tone; the
+// other two lift from muted to full foreground, which is the only contrast
+// step available to them.
 const BAND_STYLE: Record<
   Band,
-  { stroke: string; opacity: number; width: number; dash?: string }
+  {
+    stroke: string
+    highlightStroke: string
+    opacity: number
+    width: number
+    dash?: string
+  }
 > = {
-  top: { stroke: "var(--foreground)", opacity: 0.9, width: 2.5 },
+  top: {
+    stroke: "var(--chart-1)",
+    highlightStroke: "var(--chart-1)",
+    opacity: 0.9,
+    width: 2.5,
+  },
   bottom: {
     stroke: "var(--muted-foreground)",
+    highlightStroke: "var(--foreground)",
     opacity: 0.85,
     width: 2,
     dash: "8 6",
   },
   average: {
     stroke: "var(--muted-foreground)",
+    highlightStroke: "var(--foreground)",
     opacity: 0.6,
     width: 1.75,
     dash: "2 5",
@@ -96,7 +125,7 @@ function bandStyleFor(
   }
   return {
     ...style,
-    stroke: "var(--foreground)",
+    stroke: style.highlightStroke,
     opacity: 1,
     width: style.width + 0.5,
   }

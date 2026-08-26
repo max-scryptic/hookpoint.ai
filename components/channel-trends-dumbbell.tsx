@@ -183,8 +183,12 @@ export function BandDumbbell({
             className={`absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[1.5px] border-muted-foreground/70 bg-card ${BAND_TRANSITION} ${markFade("bottom", highlighted)}`}
             style={{ left: bandOffset(bottomValue) }}
           />
+          {/* The only mark on the row carrying a hue, and it is the --chart-1
+              blue the retention curves use for their own top band. The run
+              behind it and the other two marks stay neutral: they are a rank
+              around this one, not three things to tell apart by colour. */}
           <span
-            className={`absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground/80 ${BAND_TRANSITION} ${markFade("top", highlighted)}`}
+            className={`absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-chart-1 ${BAND_TRANSITION} ${markFade("top", highlighted)}`}
             style={{ left: bandOffset(topValue) }}
           />
           <span
@@ -225,7 +229,7 @@ function LegendSwatch({
     <span
       className={
         band === "top"
-          ? `size-2.5 shrink-0 rounded-full bg-foreground/80 ${fade}`
+          ? `size-2.5 shrink-0 rounded-full bg-chart-1 ${fade}`
           : `size-2.5 shrink-0 rounded-full border-[1.5px] border-muted-foreground/70 bg-card ${fade}`
       }
     />
