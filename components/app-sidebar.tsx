@@ -89,6 +89,9 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   showUpgradeToPro?: boolean
   user?: {
     email: string | null
+    // The connected YouTube channel's picture, loaded by the server component
+    // rendering this sidebar (see lib/youtube/channel-avatar.ts).
+    avatarUrl?: string | null
   }
 }
 
@@ -125,7 +128,7 @@ export function AppSidebar({
       <SidebarFooter>
         <NavUser
           showUpgradeToPro={showUpgradeToPro}
-          user={{ email: userEmail }}
+          user={{ email: userEmail, avatarUrl: user?.avatarUrl ?? null }}
         />
       </SidebarFooter>
       <SidebarRail />

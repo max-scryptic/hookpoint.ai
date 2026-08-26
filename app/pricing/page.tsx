@@ -22,6 +22,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { requireAuthenticatedUser } from "@/lib/auth"
+import { getChannelAvatarUrl } from "@/lib/youtube/channel-avatar"
 
 // Reconcile the stored subscription against Stripe before we resolve the plan.
 // Webhooks are the primary path for keeping the projection fresh, but a missed
@@ -83,12 +84,13 @@ export default async function PricingPage() {
     cancelAtPeriodEnd,
   } = await loadCurrentPlan(user.id)
   const billingEnabled = isStripeEnabled()
+  const channelAvatarUrl = await getChannelAvatarUrl(user.id)
 
   return (
     <SidebarProvider defaultOpen={defaultOpen}>
       <AppSidebar
         showUpgradeToPro={currentPlanId === "free"}
-        user={user}
+        user={{ ...user, avatarUrl: channelAvatarUrl }}
       />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">

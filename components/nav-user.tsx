@@ -32,7 +32,10 @@ export function NavUser({
   showUpgradeToPro: boolean
   user: {
     email: string
-    avatar?: string
+    // The connected YouTube channel's profile picture. Absent until the channel
+    // is connected, or while YouTube can't be reached - the initials below
+    // stand in for it.
+    avatarUrl?: string | null
   }
 }) {
   const { isMobile } = useSidebar()
@@ -57,8 +60,8 @@ export function NavUser({
             }
           >
             <Avatar>
-              {user.avatar ? (
-                <AvatarImage src={user.avatar} alt={displayEmail} />
+              {user.avatarUrl ? (
+                <AvatarImage src={user.avatarUrl} alt="" />
               ) : null}
               <AvatarFallback>{avatarFallback}</AvatarFallback>
             </Avatar>
@@ -77,8 +80,8 @@ export function NavUser({
               <DropdownMenuLabel className="p-0 font-normal">
                 <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                   <Avatar>
-                    {user.avatar ? (
-                      <AvatarImage src={user.avatar} alt={displayEmail} />
+                    {user.avatarUrl ? (
+                      <AvatarImage src={user.avatarUrl} alt="" />
                     ) : null}
                     <AvatarFallback>{avatarFallback}</AvatarFallback>
                   </Avatar>
