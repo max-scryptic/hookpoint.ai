@@ -33,11 +33,22 @@ function insertingHints(error: { code?: string; message: string } | null) {
 
 describe("onboarding hint keys", () => {
   it("accepts only known hints", () => {
-    expect(isOnboardingHint("first_video_analysis")).toBe(true)
+    expect(isOnboardingHint("first_video_analysis_url")).toBe(true)
+    expect(isOnboardingHint("first_video_analysis_row_menu")).toBe(true)
     expect(isOnboardingHint("retention_insight_playback")).toBe(true)
     expect(isOnboardingHint("deep_analysis_window_tabs")).toBe(true)
     expect(isOnboardingHint("retention_insight_playback ")).toBe(false)
     expect(isOnboardingHint(null)).toBe(false)
+  })
+
+  // The two ways of starting a first analysis were one key until they were
+  // split, which is what made closing either coach mark close the other. They
+  // must stay two: a single key here is that bug coming back.
+  it("keys the two first-analysis coach marks separately", () => {
+    expect(isOnboardingHint("first_video_analysis")).toBe(false)
+    expect(
+      ONBOARDING_HINTS.filter((hint) => hint.startsWith("first_video_analysis")),
+    ).toEqual(["first_video_analysis_url", "first_video_analysis_row_menu"])
   })
 })
 
@@ -54,7 +65,11 @@ describe("getPendingOnboardingHints", () => {
         selectingHints({ data: [{ hint: "retention_insight_playback" }] }),
         "user-1",
       ),
-    ).resolves.toEqual(["first_video_analysis", "deep_analysis_window_tabs"])
+    ).resolves.toEqual([
+      "first_video_analysis_url",
+      "first_video_analysis_row_menu",
+      "deep_analysis_window_tabs",
+    ])
   })
 
   // A row for a hint that has since been retired from the interface is left in

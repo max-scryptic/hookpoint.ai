@@ -107,8 +107,9 @@ export default async function Page({
 
   // Nothing on this page says that an analysis starts either by pasting a URL or
   // from a row's actions menu, and the menu especially gives no sign of it. So a
-  // creator with no analyses behind them gets a coach mark on each - until they
-  // start one, or wave the pair off.
+  // creator with no analyses behind them gets a coach mark on each, and each is
+  // waved off on its own: they point at two different controls, so closing one
+  // says nothing about the other.
   const isFirstAnalysis =
     analysedVideoIds !== null && analysedVideoIds.length === 0
 
