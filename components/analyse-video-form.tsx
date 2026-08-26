@@ -24,15 +24,16 @@ export function AnalyseVideoForm({
 }: {
   // Whether this creator has yet to analyse anything, and so is owed the coach
   // mark that says a pasted link is one of the two ways to start. The other one
-  // lives on the uploads list below; both answer to the same hint, so using
-  // either way puts both away. See ONBOARDING_HINTS in lib/onboarding-hints.ts.
+  // lives on the uploads list below and answers to its own hint, so each bubble
+  // is waved off on its own and using one way to start leaves the other's coach
+  // mark standing. See ONBOARDING_HINTS in lib/onboarding-hints.ts.
   showFirstAnalysisHint?: boolean
 }) {
   // The launcher owns the "analysing your video" popup and the redirect to the
   // report once /api/analyze resolves (see AnalysisLauncherProvider). The form
   // just validates the URL, then hands the video off to it.
   const launcher = useAnalysisLauncher()
-  const firstAnalysisHint = useOnboardingHint("first_video_analysis")
+  const firstAnalysisHint = useOnboardingHint("first_video_analysis_url")
   const [url, setUrl] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [alreadyAnalysed, setAlreadyAnalysed] =
@@ -51,9 +52,10 @@ export function AnalyseVideoForm({
     setError(null)
     setAlreadyAnalysed(null)
     setIsValidating(true)
-    // Submitting a link is the lesson the coach mark was teaching, so it goes
+    // Submitting a link is the lesson this coach mark was teaching, so it goes
     // now rather than on the way back: whether the video validates or not, the
-    // creator has found this box.
+    // creator has found this box. Only this one goes: the uploads list below
+    // still has its own thing to say about starting from a row.
     firstAnalysisHint.dismiss()
 
     try {

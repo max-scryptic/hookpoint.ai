@@ -136,10 +136,11 @@ function VideoActions({
   // render outside the launcher) just link straight to the cached report.
   const launcher = useAnalysisLauncher()
   const useLauncher = !isAnalysed && launcher !== null
-  // Opening the menu is the whole of what the coach mark asks for, so that is
-  // what retires it - for the URL box's twin above as well as this one. See
+  // Opening the menu is the whole of what this coach mark asks for, so that is
+  // what retires it. Only this one: the URL box's coach mark above is a
+  // separate hint about a separate control, and stands or goes on its own. See
   // ONBOARDING_HINTS in lib/onboarding-hints.ts.
-  const firstAnalysisHint = useOnboardingHint("first_video_analysis")
+  const firstAnalysisHint = useOnboardingHint("first_video_analysis_row_menu")
   // What the coach mark hangs off, when this is the row wearing it.
   const triggerRef = useRef<HTMLButtonElement>(null)
 
@@ -231,7 +232,7 @@ export function VideoList({
   // says that an analysis starts there.
   showFirstAnalysisHint?: boolean
 }) {
-  const firstAnalysisHint = useOnboardingHint("first_video_analysis")
+  const firstAnalysisHint = useOnboardingHint("first_video_analysis_row_menu")
   const showHint = showFirstAnalysisHint && firstAnalysisHint.pending
 
   if (videos.length === 0) {

@@ -12,10 +12,17 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 // which means a key added here ships as "not yet seen" for every account.
 export const ONBOARDING_HINTS = [
   // The two ways to start an analysis on the Analyse a Video page: paste a URL,
-  // or open the actions menu on a row of your uploads. Shown side by side, and
-  // only to a creator who has not analysed anything yet - the row menu in
-  // particular gives no sign that it is where an analysis begins.
-  "first_video_analysis",
+  // or open the actions menu on a row of your uploads. Both are shown to a
+  // creator who has not analysed anything yet - the row menu in particular
+  // gives no sign that it is where an analysis begins.
+  //
+  // One key each, rather than one for the pair, because they point at two
+  // different controls and a creator waving one bubble off is saying something
+  // about that control alone. Sharing a key meant closing either coach mark
+  // took the other down with it, so dismissing the menu's bubble also silently
+  // withdrew the answer to "what do I do with this box".
+  "first_video_analysis_url",
+  "first_video_analysis_row_menu",
   // The retention chart's highlights play their window back from the uploaded
   // footage. Points at the first highlight on the curve.
   "retention_insight_playback",
