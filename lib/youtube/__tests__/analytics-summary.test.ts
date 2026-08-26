@@ -75,7 +75,7 @@ describe("getVideoAnalyticsSummary", () => {
       { source: "RELATED_VIDEO", views: 300 },
     ])
 
-    // Reach is NOT an Analytics report — it comes from the Reporting API and is
+    // Reach is NOT an Analytics report - it comes from the Reporting API and is
     // populated separately (backfillChannelThumbnailReach). This summary carries
     // null reach and only makes the two Analytics calls (totals + traffic).
     expect(summary.impressions).toBeNull()

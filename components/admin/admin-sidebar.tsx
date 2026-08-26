@@ -69,7 +69,7 @@ function SidebarBrand() {
   )
 }
 
-// The collapsible admin sidebar — the same Sidebar primitives (and icon-only
+// The collapsible admin sidebar - the same Sidebar primitives (and icon-only
 // collapse behaviour) the front-end AppSidebar uses, so the two surfaces feel
 // like one product. Nav items and the footer are admin-specific.
 export function AdminSidebar({

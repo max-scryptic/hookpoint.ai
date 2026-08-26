@@ -6,7 +6,7 @@ import { getStripe } from "@/lib/stripe/stripe"
 import { getOrCreateStripeCustomer } from "@/lib/stripe/customers"
 
 // POST /api/billing/portal
-// Opens the Stripe Customer Portal — a Stripe-hosted page where the user can
+// Opens the Stripe Customer Portal - a Stripe-hosted page where the user can
 // update or remove their card and view/download past invoices. Returns the
 // hosted URL for the client to redirect to. Any changes made there flow back to
 // our DB via the webhook.

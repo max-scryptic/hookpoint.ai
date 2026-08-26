@@ -317,7 +317,7 @@ describe("buildChannelPlaybook", () => {
 
 describe("buildSubscriberConversion", () => {
   // Three ordinary converters around 1/1k and one video converting at 10× the
-  // median with a healthy absolute count — the motivating "+30 vs +2" case.
+  // median with a healthy absolute count - the motivating "+30 vs +2" case.
   const magnetVideos = [
     video("v-1", "Ordinary one", null, { views: 2000, subscribersGained: 2 }),
     video("v-2", "Ordinary two", null, { views: 3000, subscribersGained: 3 }),
@@ -419,7 +419,7 @@ describe("buildSubscriberConversion", () => {
         eventType: "on_screen_text_change",
         confidence: 0.7,
       }),
-      // Scene cuts appear in the magnet AND most others — style, not a lead.
+      // Scene cuts appear in the magnet AND most others - style, not a lead.
       record({ analysedVideoId: "v-4", windowKind: "gain", eventType: "scene_cut" }),
       record({ analysedVideoId: "v-1", windowKind: "gain", eventType: "scene_cut" }),
       record({ analysedVideoId: "v-2", windowKind: "gain", eventType: "scene_cut" }),
@@ -855,7 +855,7 @@ describe("packagingFeatures", () => {
 
 describe("buildPackagingPatterns", () => {
   // All published the same day with a snapshot ten days later, so views/day
-  // is just views/10: 100, 50, 20, 10 — high band {r-1, r-2}, low {r-3, r-4}.
+  // is just views/10: 100, 50, 20, 10 - high band {r-1, r-2}, low {r-3, r-4}.
   const reachExtras = {
     publishedAt: "2026-01-01T00:00:00Z",
     analyticsFetchedAt: "2026-01-11T00:00:00Z",

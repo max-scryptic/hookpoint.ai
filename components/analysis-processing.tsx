@@ -36,7 +36,7 @@ const INITIAL_PROGRESS = 4
 // How aggressively the bar approaches the current stage's end. The eased
 // fraction is 1 - e^(-DECAY × elapsed/estimated), so a stage that takes exactly
 // as long as we estimated lands ~90% of the way through its slice, and one that
-// runs long keeps inching forward instead of freezing — without ever spilling
+// runs long keeps inching forward instead of freezing - without ever spilling
 // into the next stage's slice.
 const STAGE_EASE_DECAY = 2.4
 

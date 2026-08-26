@@ -14,7 +14,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 // Loading boundary for /video-planner. There is no ancestor boundary above it
 // to fall back on, so without this file the previous page would stay frozen on
 // screen until Video Planner resolved. This page is static "coming soon"
-// content with no data fetch, so we render its full chrome and card here — the
+// content with no data fetch, so we render its full chrome and card here - the
 // swap to the real page is seamless.
 export default function Loading() {
   return (

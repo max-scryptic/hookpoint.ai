@@ -9,7 +9,7 @@ export const PROCESSING_REFRESH_INTERVAL_MS = 8000
 
 // Safety net for a pipeline that never settles. Every stage that fails records
 // a real outcome, so a video normally leaves the processing set one way or the
-// other — but a run whose invocation died can leave rows pending with nothing
+// other - but a run whose invocation died can leave rows pending with nothing
 // to pick them up, which would otherwise keep an open tab re-rendering the
 // route forever. After this much continuous polling we stop and leave the page
 // as-is; a manual reload (or revisiting the page) starts a fresh budget.
@@ -23,9 +23,9 @@ export const PROCESSING_REFRESH_MAX_MS = 30 * 60 * 1000
 // user reloading the page.
 //
 // `router.refresh()` is used rather than a bespoke status endpoint because the
-// processing flag isn't the only thing that changes when a pipeline finishes —
+// processing flag isn't the only thing that changes when a pipeline finishes -
 // the surrounding data does too (event counts, costs, whether a deep-analysis
-// section should appear at all) — and refreshing re-reads all of it from the one
+// section should appear at all) - and refreshing re-reads all of it from the one
 // server source of truth while preserving client state, so filters, search
 // text, and the current page survive the update.
 //
@@ -74,7 +74,7 @@ export function useProcessingRefresh(
       if (stopped || budgetSpent()) return
       if (document.visibilityState !== "visible") return
       // Catch up on returning to the tab, but never faster than the normal
-      // cadence — flicking between tabs shouldn't re-render the route each time.
+      // cadence - flicking between tabs shouldn't re-render the route each time.
       if (Date.now() - lastRefreshedAt >= intervalMs) refresh()
     }
 

@@ -76,7 +76,7 @@ async function loadBillingSnapshot(
 }
 
 // Best-effort load of the user's saved card. Billing being unconfigured, or a
-// Stripe/DB hiccup, must not take down the settings page — fall back to "no card
+// Stripe/DB hiccup, must not take down the settings page - fall back to "no card
 // on file", which is also the correct state before a card is ever added.
 async function loadPaymentCard(userId: string): Promise<BillingCard | null> {
   if (!isStripeEnabled()) return null

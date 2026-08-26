@@ -2,8 +2,8 @@
 -- dashboard can chart daily active users over time.
 --
 -- Why a dedicated table instead of auth.users.last_sign_in_at: that column only
--- ever holds the *most recent* sign-in, and — because this app uses long-lived
--- Google OAuth sessions — it rarely updates for an already-signed-in user (the
+-- ever holds the *most recent* sign-in, and - because this app uses long-lived
+-- Google OAuth sessions - it rarely updates for an already-signed-in user (the
 -- session refreshes silently without a fresh sign-in). It therefore cannot
 -- answer "how many distinct users were active each day". This table captures one
 -- row per user per UTC day; it is upserted at most once per user per day from

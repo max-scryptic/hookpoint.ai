@@ -97,7 +97,7 @@ async function ensureComparisonReports(
   present: ReportReadiness,
 ): Promise<ReportReadiness> {
   // A written head-to-head is generated once and read for months, so the view
-  // counts it reasons about — which side won, and by how much — must not be
+  // counts it reasons about - which side won, and by how much - must not be
   // whatever the two videos had on the day they were analysed. Force a refresh
   // of both sides' stored numbers first, ignoring the usual throttle: this runs
   // once per deliberate press of the button, and a stale figure baked into the

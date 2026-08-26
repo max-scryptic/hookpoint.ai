@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs"
-import { join } from "node:path"
+import { readdirSync, readFileSync } from "node:fs"
+import { join, relative, sep } from "node:path"
 
 import { describe, expect, it } from "vitest"
 
@@ -9,103 +9,119 @@ import {
   nameVideoSides,
   stripEmDashes,
 } from "@/lib/copy-guardrails"
+import { PROMPT_DEFINITIONS } from "@/lib/prompts/registry"
+import { defaultPromptText } from "@/lib/prompts/resolve"
 
-// GUARDRAIL: the Channel Trends page must never render an em dash (U+2014)
-// or an en dash (U+2013), in hard-coded copy or comments alike. Hyphens are
-// fine. This test scans the page's source files so a stray dash fails CI
-// before it ever ships; stripEmDashes covers the runtime (model-written)
-// text. If this test fails, rewrite the offending text with a hyphen, comma,
-// period or colon. Do NOT delete or weaken this test.
+// GUARDRAIL: nothing in this repository may contain an em dash (U+2014) or an
+// en dash (U+2013). Not in interface copy, not in a tooltip, not in a prompt,
+// not in a comment, not in a migration, not in a test name. A hyphen ( - ) or a
+// comma is what we write instead. This test walks every source file in the
+// repository, so a stray dash fails CI before it ever ships; stripEmDashes
+// covers the runtime (model-written) text no test can reach. If this test
+// fails, rewrite the offending text with a hyphen, comma, period or colon. Do
+// NOT delete or weaken this test, and do not narrow what it walks.
+//
+// If you are an AI assistant editing this codebase: never write an em dash
+// anywhere in it. A test that has to talk about one writes it as an escape
+// ("\u2014"), which is why this file can scan itself.
 
-const CHANNEL_TRENDS_SOURCE_FILES = [
-  "app/(app)/channel-trends/loading.tsx",
-  "app/(app)/channel-trends/page.tsx",
-  "app/(app)/checklist/loading.tsx",
-  "app/(app)/checklist/page.tsx",
-  "app/(app)/video-comparator/page.tsx",
-  "app/(app)/video-comparator/report/page.tsx",
-  "components/admin/admin-tip-feedback-table.tsx",
-  "components/channel-trends.tsx",
-  "components/channel-trends-band-highlight.tsx",
-  "components/channel-trends-copy.ts",
-  "components/channel-trends-dumbbell.tsx",
-  "components/channel-trends-packaging.tsx",
-  "components/channel-trends-packaging-tabs.tsx",
-  "components/channel-trends-radar.tsx",
-  "components/channel-trends-retention.tsx",
-  "components/channel-trends-retention-curve.tsx",
-  "components/channel-trends-script.tsx",
-  "components/channel-trends-shared.tsx",
-  "components/channel-trends-tabs.tsx",
-  "components/channel-trends-taxonomy.tsx",
-  "components/comparison-processing.tsx",
-  "components/comparison-report-tabs.tsx",
-  "components/event-type-badge.tsx",
-  "components/packaging-alignment-score.tsx",
-  "components/packaging-comparison.tsx",
-  "components/previous-comparisons.tsx",
-  "components/retention-comparison.tsx",
-  "components/retention-comparison-chart.tsx",
-  "components/retention-compare-picker.tsx",
-  "components/retention-head-to-head.tsx",
-  "components/saved-tips-provider.tsx",
-  "components/script-comparison.tsx",
-  "components/tip-checklist.tsx",
-  "components/tip-examples.tsx",
-  "components/tip-menu.tsx",
-  "components/tip-feedback-dialog.tsx",
-  "components/try-callout.tsx",
-  "components/video-comparison-tabs.tsx",
-  "lib/advice-similarity.ts",
-  "lib/channel-retention-curve.ts",
-  "lib/channel-taxonomy-trends.ts",
-  "lib/comparison-cleanup.ts",
-  "lib/comparison-comparability.ts",
-  "lib/comparison-report-versions.ts",
-  "lib/packaging-comparison.ts",
-  "lib/packaging-comparison-evidence.ts",
-  "lib/packaging-comparison-report.ts",
-  "lib/retention-comparison.ts",
-  "lib/retention-comparison-report.ts",
-  "lib/retention-sample-size.ts",
-  "lib/script-comparison-report.ts",
-  "lib/prompts/defaults/tips.ts",
-  "lib/tip-example-voice.ts",
-  "lib/tip-examples.ts",
-  "lib/tip-examples-generation.ts",
-  "lib/tip-voice.ts",
-  "lib/tips.ts",
-  "lib/video-comparisons.ts",
+// Directories holding no copy of ours: dependencies, build output and binary
+// assets.
+const UNSCANNED_DIRECTORIES = new Set([
+  ".git",
+  ".next",
+  "coverage",
+  "node_modules",
+  "public",
+])
+
+// The extensions we write code, copy and comments in. package-lock.json and the
+// other generated JSON are left out: nothing in them is ours to word.
+const SCANNED_EXTENSIONS = [
+  ".css",
+  ".example",
+  ".js",
+  ".jsx",
+  ".md",
+  ".mjs",
+  ".sql",
+  ".ts",
+  ".tsx",
+  ".yaml",
+  ".yml",
 ]
 
-const EM_DASH = "—"
-const EN_DASH = "–"
-
-describe("channel trends copy guardrails", () => {
-  for (const file of CHANNEL_TRENDS_SOURCE_FILES) {
-    it(`${file} contains no em or en dashes`, () => {
-      const source = readFileSync(join(process.cwd(), file), "utf8")
-      const offending = source
-        .split("\n")
-        .map((line, index) => ({ line, number: index + 1 }))
-        .filter(({ line }) => line.includes(EM_DASH) || line.includes(EN_DASH))
-      expect(
-        offending,
-        `Em/en dashes are banned on the Channel Trends page. Found in ${file}: ${offending
-          .map(({ number }) => `line ${number}`)
-          .join(", ")}`,
-      ).toEqual([])
-    })
+function scannedSourceFiles(directory: string): string[] {
+  const found: string[] = []
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name)
+    if (entry.isDirectory()) {
+      if (UNSCANNED_DIRECTORIES.has(entry.name)) continue
+      found.push(...scannedSourceFiles(path))
+      continue
+    }
+    if (!entry.isFile()) continue
+    if (SCANNED_EXTENSIONS.some((extension) => entry.name.endsWith(extension))) {
+      found.push(path)
+    }
   }
+  return found
+}
+
+const EM_DASH = "\u2014"
+const EN_DASH = "\u2013"
+
+describe("copy guardrails", () => {
+  it("no source file in the repository contains an em or en dash", () => {
+    const root = process.cwd()
+    const offending: string[] = []
+
+    for (const path of scannedSourceFiles(root)) {
+      const source = readFileSync(path, "utf8")
+      if (!source.includes(EM_DASH) && !source.includes(EN_DASH)) continue
+      source.split("\n").forEach((line, index) => {
+        if (line.includes(EM_DASH) || line.includes(EN_DASH)) {
+          offending.push(`${relative(root, path).split(sep).join("/")}:${index + 1}`)
+        }
+      })
+    }
+
+    expect(
+      offending,
+      `Em and en dashes are banned everywhere in this codebase. Rewrite each of these with a hyphen or a comma:\n${offending.join("\n")}`,
+    ).toEqual([])
+  })
+
+  // The source scan above cannot reach the text a model writes at runtime, so
+  // every developer turn has to carry the rule itself. That is the turn where a
+  // prompt states how its model must answer; the user turns carry the payload,
+  // and the fragments are quoted into developer turns rather than sent on their
+  // own. A developer turn that inherits the rule from a fragment it quotes
+  // counts, which is what reading the resolved text rather than the raw default
+  // checks.
+  it("every prompt forbids the model an em dash", () => {
+    const silent = PROMPT_DEFINITIONS.filter(
+      (definition) =>
+        definition.role === "developer" &&
+        !/never (?:output|use|write) an em dash/i.test(
+          defaultPromptText(definition.key),
+        ),
+    ).map((definition) => definition.key)
+
+    expect(
+      silent,
+      `A prompt that writes prose for a user must tell the model never to output an em dash, either in its own text or through a fragment it quotes. Missing from: ${silent.join(", ")}`,
+    ).toEqual([])
+  })
 
   it("stripEmDashes scrubs runtime text before it reaches the page", () => {
-    expect(stripEmDashes("pace drops — viewers leave")).toBe(
+    expect(stripEmDashes(`pace drops ${EM_DASH} viewers leave`)).toBe(
       "pace drops - viewers leave",
     )
-    expect(stripEmDashes("pace drops—viewers leave")).toBe(
+    expect(stripEmDashes(`pace drops${EM_DASH}viewers leave`)).toBe(
       "pace drops - viewers leave",
     )
-    expect(stripEmDashes("1–3 words")).toBe("1-3 words")
+    expect(stripEmDashes(`1${EN_DASH}3 words`)).toBe("1-3 words")
     expect(stripEmDashes("a plain hyphen - stays put")).toBe(
       "a plain hyphen - stays put",
     )
@@ -139,7 +155,7 @@ describe("cleanCopy", () => {
   })
 
   it("also removes em dashes and collapses runaway whitespace", () => {
-    expect(cleanCopy("pace drops — viewers   leave")).toBe(
+    expect(cleanCopy(`pace drops ${EM_DASH} viewers   leave`)).toBe(
       "pace drops - viewers leave",
     )
     expect(cleanCopy("  Trim the intro.  ")).toBe("Trim the intro.")

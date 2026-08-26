@@ -11,7 +11,7 @@ import {
 // Placeholder for the video tables (Analyse a Video + Analysed Videos) shown while
 // the list data loads. It mirrors the real filter bar + table layout so a route's
 // loading.tsx can render the page's static chrome immediately and leave only this
-// region as a skeleton — when the data lands the populated table drops straight in
+// region as a skeleton - when the data lands the populated table drops straight in
 // with no layout shift. The column set matches both tables; the slightly different
 // header labels between them don't matter at skeleton size.
 export function VideoTableSkeleton({ rows = 6 }: { rows?: number }) {
@@ -31,7 +31,7 @@ export function VideoTableSkeleton({ rows = 6 }: { rows?: number }) {
 }
 
 // Just the bordered table portion of the skeleton, without the filter bar. Used by
-// VideoBrowser to fill the results region while it buffers a page from YouTube — the
+// VideoBrowser to fill the results region while it buffers a page from YouTube - the
 // filter bar there is already the real, interactive one, so only the table swaps to
 // a skeleton and back.
 export function VideoTableRowsSkeleton({ rows = 6 }: { rows?: number }) {

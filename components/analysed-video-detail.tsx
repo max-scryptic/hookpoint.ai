@@ -166,7 +166,7 @@ function rowHighlightClass(
 // the top of the screen.
 const HIGHLIGHT_SCROLL_DURATION_MS = 900
 
-// Standard ease-in-out cubic: slow start, quick middle, slow settle — the shape
+// Standard ease-in-out cubic: slow start, quick middle, slow settle - the shape
 // that reads as a deliberate glide rather than a snap.
 function easeInOutCubic(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
@@ -277,7 +277,7 @@ function RetentionWindows({
                       {index + 1}
                     </span>
                     <span className="font-mono text-sm">
-                      {formatTimestamp(window.fromSeconds)} –{" "}
+                      {formatTimestamp(window.fromSeconds)} -{" "}
                       {formatTimestamp(window.toSeconds)}
                     </span>
                     <ScriptSegmentTooltip
@@ -304,7 +304,7 @@ function RetentionWindows({
                         {index + 1}
                       </span>
                       <span className="font-mono text-sm">
-                        {formatTimestamp(window.fromSeconds)} –{" "}
+                        {formatTimestamp(window.fromSeconds)} -{" "}
                         {formatTimestamp(window.toSeconds)}
                       </span>
                       <ScriptSegmentTooltip
@@ -419,7 +419,7 @@ function PacingAnalysisSection({
                   {index + 1}
                 </span>
                 <span className="font-mono text-sm">
-                  {formatTimestamp(stretch.startSeconds)} –{" "}
+                  {formatTimestamp(stretch.startSeconds)} -{" "}
                   {formatTimestamp(stretch.endSeconds)}
                 </span>
                 <ScriptSegmentTooltip
@@ -570,7 +570,7 @@ function ActionableRecommendationBody({
 // The deep (multimodal) insight plus its actionable recommendation, formatted
 // identically to ScriptFeedbackBody so every tab reads the same: the white
 // evidence line, then the blue "Try:" tip. No bordered box, evidence-source
-// caption or expected-purpose subtext — those would make the deep tab look
+// caption or expected-purpose subtext - those would make the deep tab look
 // unlike the Script tab it sits beside.
 function DeepFeedbackBody({
   insight,
@@ -667,7 +667,7 @@ function deepFeedbackCarriesTip(
 }
 
 // Whether a window's feedback renders as a tab switcher rather than as a single
-// flat block — the same condition WindowFeedback branches on below, asked ahead
+// flat block - the same condition WindowFeedback branches on below, asked ahead
 // of the render. The footage-tabs hint needs it: there is no point offering to
 // explain tabs on a report that has none.
 function rendersFeedbackTabs(
@@ -683,7 +683,7 @@ function rendersFeedbackTabs(
 // Which row of a list carries the footage-tabs coach mark: the first one in it
 // that actually grew tabs, or -1 where none did. Only the open retention tab's
 // list is mounted, so each list answering for itself leaves exactly one bubble
-// on screen — on something the creator can see.
+// on screen - on something the creator can see.
 function firstTabbedRowIndex(
   windows: RetentionWindow[],
   attribution: Map<number, RetentionMomentAttribution>,
@@ -702,7 +702,7 @@ function firstTabbedRowIndex(
 // The mark a footage tab wears until the creator opens one: a small pulsing
 // dot, the same signal an unread item carries elsewhere. Paired with the
 // callout hung under the first of these strips, which is what actually says
-// what the tabs are — a dot on its own can only draw the eye, not explain.
+// what the tabs are - a dot on its own can only draw the eye, not explain.
 function NewFootageTabDot({ shown }: { shown: boolean }) {
   if (!shown) return null
   return (
@@ -716,7 +716,7 @@ function NewFootageTabDot({ shown }: { shown: boolean }) {
 // The callout that explains those dots, hung off the tab strip it points at the
 // way the chart's coach mark hangs off its marker: absolutely placed, so it
 // floats over the row's feedback instead of pushing the lists down the page
-// when it appears — and leaves nothing to settle back when it goes.
+// when it appears - and leaves nothing to settle back when it goes.
 //
 // It sits below the strip rather than above it so the tabs themselves stay
 // clickable: opening one is what the hint is asking for.
@@ -746,10 +746,10 @@ function FootageTabsHintCallout({
 // A window's feedback block, rendered together with the row's header so the
 // Script/deep tab switcher can sit inline on the top row (after the transcript
 // quote) rather than below it. `header` is given the tab list to place in that
-// row — or null when there are no tabs to show — and returns the full header.
+// row - or null when there are no tabs to show - and returns the full header.
 //
 // The Script tab carries the transcript reading of the window: its explanation
-// always, and its tip only when the transcript earned one — see THE WARRANT in
+// always, and its tip only when the transcript earned one - see THE WARRANT in
 // lib/retention-attribution.ts. Each *unique* deep tip synthesised from the
 // window's events then earns its own additional tab (reasoning above the tip);
 // duplicate and tipless events are dropped so the switcher only ever holds
@@ -770,7 +770,7 @@ function WindowFeedback({
   section: string
   // Whether this row is the one carrying the footage-tabs coach mark. Every
   // tabbed row wears the dots, but the bubble that explains them belongs on
-  // exactly one of them — the first in the list on show, chosen by the list.
+  // exactly one of them - the first in the list on show, chosen by the list.
   anchorsFootageTabsHint?: boolean
 }) {
   // Until the creator has opened one, the tabs the deeper analysis added are
@@ -950,7 +950,7 @@ function DropList({
                       {index + 1}
                     </span>
                     <span className="font-mono text-sm">
-                      {formatTimestamp(drop.fromSeconds)} –{" "}
+                      {formatTimestamp(drop.fromSeconds)} -{" "}
                       {formatTimestamp(drop.toSeconds)}
                     </span>
                     <ScriptSegmentTooltip
@@ -1068,7 +1068,7 @@ function GainList({
                       {index + 1}
                     </span>
                     <span className="font-mono text-sm">
-                      {formatTimestamp(gain.fromSeconds)} –{" "}
+                      {formatTimestamp(gain.fromSeconds)} -{" "}
                       {formatTimestamp(gain.toSeconds)}
                     </span>
                     <ScriptSegmentTooltip
@@ -1149,7 +1149,7 @@ function HoldList({
                       {index + 1}
                     </span>
                     <span className="font-mono text-sm">
-                      {formatTimestamp(hold.fromSeconds)} –{" "}
+                      {formatTimestamp(hold.fromSeconds)} -{" "}
                       {formatTimestamp(hold.toSeconds)}
                     </span>
                     <ScriptSegmentTooltip
@@ -1515,7 +1515,7 @@ function PointsCard({
 // Metadata hygiene (deterministic checks)
 // ---------------------------------------------------------------------------
 
-// A coloured dot alone left readers guessing — nothing on the card said what
+// A coloured dot alone left readers guessing - nothing on the card said what
 // green meant. A familiar icon per status carries the verdict visually: a tick
 // for fine, a warning triangle for worth fixing, a bulb for optional. The
 // plain-language word stays as the icon's accessible name so colour and glyph
@@ -1569,7 +1569,7 @@ function MetadataHygieneSection({ video }: { video: VideoDetails }) {
               <Icon className={`mt-0.5 size-4 shrink-0 ${tone}`} />
               <span className="min-w-0 text-sm font-medium">
                 {check.label}
-                <span className="sr-only"> — {label}</span>
+                <span className="sr-only"> - {label}</span>
               </span>
               <p className="col-start-2 text-sm text-muted-foreground">
                 {check.detail}
@@ -1630,13 +1630,13 @@ export function AnalysedVideoDetail({
   // The two things a finished analysis of an upload leaves behind that nothing
   // on the page otherwise announces: highlights that play their moment back,
   // and the tabs it adds to each window. Each is pointed at once and never
-  // again — see ONBOARDING_HINTS in lib/onboarding-hints.ts.
+  // again - see ONBOARDING_HINTS in lib/onboarding-hints.ts.
   const playbackHint = useOnboardingHint("retention_insight_playback")
   const footageTabsHint = useOnboardingHint("deep_analysis_window_tabs")
 
   // Dismiss the open insight (returning the video to its thumbnail) when the
-  // user clicks anywhere outside the video/chart area — not just inside the
-  // chart itself — so scrolling down and clicking elsewhere on the page
+  // user clicks anywhere outside the video/chart area - not just inside the
+  // chart itself - so scrolling down and clicking elsewhere on the page
   // closes it the same way clicking off inside the chart already does.
   useEffect(() => {
     if (!playbackWindow) return
@@ -1793,7 +1793,7 @@ export function AnalysedVideoDetail({
 
   // Whether any window below actually renders a tab switcher. The footage tabs
   // only appear where the deeper analysis reached distinct, actionable
-  // conclusions, so a report can have a finished analysis and still show none —
+  // conclusions, so a report can have a finished analysis and still show none -
   // and a callout explaining tabs that aren't there would be worse than silence.
   //
   // Where they do appear, the list on show hangs the callout off its own first
@@ -1844,7 +1844,7 @@ export function AnalysedVideoDetail({
             : undefined,
         }
       }),
-    // Numbered off `drops` — the drop-offs that earned a row — rather than off
+    // Numbered off `drops` - the drop-offs that earned a row - rather than off
     // the window index, so "Significant drop-off 2" is the second row of the
     // list the marker jumps to. Same for the gains and holds below.
     ...drops.map((window, index) => {
@@ -2035,8 +2035,8 @@ export function AnalysedVideoDetail({
               starts over the empty top-right of the chart (its highest point,
               page-wise) and, once the page scrolls far enough that it would slide
               off the top, pins just below the top of the viewport and rides down
-              with the scroll — staying visible while the reader works through a
-              long list — until the bottom of this section scrolls past. */}
+              with the scroll - staying visible while the reader works through a
+              long list - until the bottom of this section scrolls past. */}
           <div className="relative flex flex-col gap-3">
             {video.thumbnailUrl && (
               <div className="pointer-events-none absolute inset-0 z-20">

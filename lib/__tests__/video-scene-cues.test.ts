@@ -153,7 +153,7 @@ function makeFakeSupabase(seedRows: Record<string, unknown>[] = []) {
             return Promise.resolve({ error: null }).then(resolve)
           }
           // A bare delete (no upsert/update payload, no gte/in terminator hit)
-          // — used by replaceRetentionWindowSceneCues' clear step.
+          // - used by replaceRetentionWindowSceneCues' clear step.
           if (!builder._select) {
             deletes.push({ table, retentionWindowId: pendingWindowId })
           }

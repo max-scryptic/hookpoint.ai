@@ -33,7 +33,7 @@ import {
 import { formatGbp, monthlyEquivalentPence } from "@/lib/plans"
 import { cn } from "@/lib/utils"
 
-// Per-request admin data behind an auth check — never statically prerender.
+// Per-request admin data behind an auth check - never statically prerender.
 export const dynamic = "force-dynamic"
 
 function initials(value: string): string {
@@ -95,7 +95,7 @@ function KpiCard({
 function formatMoneyMade(
   revenue: { totalMinorUnits: number; currency: string | null } | null | "error",
 ): string {
-  if (revenue === "error") return "—"
+  if (revenue === "error") return "-"
   if (!revenue) return formatGbp(0)
   const currency = (revenue.currency ?? "gbp").toUpperCase()
   if (currency === "GBP") return formatGbp(revenue.totalMinorUnits)
@@ -159,12 +159,12 @@ function PlanOverview({ snapshot }: { snapshot: BillingSnapshot | null }) {
     ? snapshot.billingPeriod === "annual"
       ? "Annual"
       : "Monthly"
-    : "—"
+    : "-"
 
   const priceValue = (() => {
     if (isFree || !snapshot.billingPeriod) return "Free"
     const perMonth = monthlyEquivalentPence(snapshot.plan, snapshot.billingPeriod)
-    if (perMonth == null) return "—"
+    if (perMonth == null) return "-"
     return `${formatGbp(perMonth)}/mo`
   })()
 
@@ -176,8 +176,8 @@ function PlanOverview({ snapshot }: { snapshot: BillingSnapshot | null }) {
   const cycleEnd = isPaid ? snapshot.subscriptionPeriodEnd : snapshot.periodEnd
   const cycleValue =
     cycleStart && cycleEnd
-      ? `${formatDate(cycleStart)} – ${formatDate(cycleEnd)}`
-      : "—"
+      ? `${formatDate(cycleStart)} - ${formatDate(cycleEnd)}`
+      : "-"
 
   const renewsCaption = isCancelling
     ? "Access ends"
@@ -223,7 +223,7 @@ function PlanOverview({ snapshot }: { snapshot: BillingSnapshot | null }) {
   )
 }
 
-// Admin user detail: everything relevant about one account in a single view —
+// Admin user detail: everything relevant about one account in a single view -
 // headline KPIs, plan/billing state, and the full breakdown of the paid costs
 // they've driven. All data is fetched server-side via the service-role client
 // (behind the admin auth check), the same way the other admin surfaces read.
@@ -242,7 +242,7 @@ export default async function AdminUserDetailPage({
 
   // Billing is an optional enhancement here: a lookup failure should still let
   // the rest of the page render rather than 500 the whole view. The same goes
-  // for the Stripe-backed payment history and revenue total — a failed/absent
+  // for the Stripe-backed payment history and revenue total - a failed/absent
   // Stripe lookup falls back rather than sinking the page.
   const [
     kpis,

@@ -84,7 +84,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 
 // A first visit that backfills retention windows also triggers extraction in
 // the background via after() (see triggerRetentionWindowMediaExtraction),
-// which still runs within this render's invocation time budget — give it the
+// which still runs within this render's invocation time budget - give it the
 // same headroom /api/analyze and the normalisation callback grant themselves,
 // so a video with several windows to scan isn't killed mid-extraction and
 // left with rows stuck 'pending' forever.
@@ -102,8 +102,8 @@ type AnalysisResult =
       packagingAlignment: PackagingAlignment | null
       scriptTaxonomy: ScriptTaxonomy | null
       analyticsSummary: VideoAnalyticsSummary | null
-      // The analysed_videos row's own UUID — distinct from the route's YouTube
-      // video id — that retention_windows and everything derived from them are
+      // The analysed_videos row's own UUID - distinct from the route's YouTube
+      // video id - that retention_windows and everything derived from them are
       // keyed on. Null when the video row itself failed to save, in which case
       // there's nothing for deep-analysis evidence to look up.
       analysedVideoId: string | null
@@ -331,12 +331,12 @@ async function analyse(
         }
       }
     } catch (saveError) {
-      // Saving is best-effort — never block showing the analysis on a DB write.
+      // Saving is best-effort - never block showing the analysis on a DB write.
       console.error("Failed to save analysed video", saveError)
     }
 
     // The video row failed to save, so there's nothing to claim/save a pacing
-    // analysis against — fall back to generating one just for this response.
+    // analysis against - fall back to generating one just for this response.
     if (!videoPersisted && transcript.length > 0) {
       try {
         pacingAnalysis = await generatePacingAnalysis(video, transcript, {
@@ -349,7 +349,7 @@ async function analyse(
 
     // The surface extras need a persisted row to claim/cache against. When the
     // save failed there's nothing to attach them to, so skip them for this
-    // render — they'll be generated on the next visit once the row exists.
+    // render - they'll be generated on the next visit once the row exists.
     const extras = analysedVideoId
       ? await loadSurfaceExtras(
           supabase,
@@ -466,7 +466,7 @@ export default async function Page({
     result.status === "ok" && !reportUnlocked && !canUploadSourceFile
 
   // The one-time coach marks this creator has still to meet, read here so the
-  // first paint already knows which — if any — to draw. Best-effort: a report
+  // first paint already knows which - if any - to draw. Best-effort: a report
   // is worth more than a hint, so a failed read simply shows none.
   let pendingHints: OnboardingHint[] = []
   if (result.status === "ok") {
@@ -479,7 +479,7 @@ export default async function Page({
   }
 
   // Only surface the deep-analysis evidence section once the pipeline has
-  // fully settled for this video — every window's snapshots/audio have been
+  // fully settled for this video - every window's snapshots/audio have been
   // harvested and analysed, and events have been synthesized from all of it.
   // Showing it any earlier just flashes an empty-looking "0 events" card
   // before there's anything to actually show.
@@ -529,13 +529,13 @@ export default async function Page({
       console.error("Failed to load deep analysis evidence", error)
     }
   } else if (result.status === "ok") {
-    // No fully-uploaded source file, so there is nothing to analyse yet — the
+    // No fully-uploaded source file, so there is nothing to analyse yet - the
     // idle reading the progress endpoint gives for exactly this case.
     initialDeepAnalysisProgress = { active: false, complete: true, stages: null }
   }
 
   // Whether this video's footage has been through the deeper analysis and
-  // settled — the render in which the report gains the playable highlights and
+  // settled - the render in which the report gains the playable highlights and
   // the per-window footage tabs, and so the render its coach marks wait for.
   // The ready-file check carries the weight: `complete` is also how the idle
   // reading above describes a video with no footage at all.

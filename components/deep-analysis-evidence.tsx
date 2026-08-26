@@ -152,7 +152,7 @@ const KIND_TABS: {
 
 // The deep-analysis evidence generated for a video, grouped by retention
 // window: the synthesized cross-modal events plus every raw component that
-// fed them — retention metrics, transcript, snapshots and audio. Rendered
+// fed them - retention metrics, transcript, snapshots and audio. Rendered
 // below the raw source file card once any of that evidence exists, so there
 // is full oversight of exactly what the pipeline produced for each window.
 export function DeepAnalysisEvidence({
@@ -165,7 +165,7 @@ export function DeepAnalysisEvidence({
   videoId: string
   // Hides the per-window "was this useful?" feedback control. The feedback API
   // is scoped to the signed-in user's own videos, so it can't be submitted from
-  // an admin viewing someone else's analysis — the admin oversight view passes
+  // an admin viewing someone else's analysis - the admin oversight view passes
   // this to render the evidence read-only.
   readOnly?: boolean
   // Splits the per-window evidence across a tab per window rather than stacking
@@ -176,7 +176,7 @@ export function DeepAnalysisEvidence({
 }) {
   if (evidence.windows.length === 0) return null
 
-  // The sections that actually have windows, in the fixed KIND_TABS order — an
+  // The sections that actually have windows, in the fixed KIND_TABS order - an
   // empty kind (a video with no gains, say) never adds a dead tab.
   const activeKinds = KIND_TABS.filter((tab) =>
     evidence.windows.some((item) => item.window.kind === tab.kind),
@@ -285,7 +285,7 @@ function VideoCostSummary({
   )
 }
 
-// The one-line summary of a window — kind, label, time range, retention delta
+// The one-line summary of a window - kind, label, time range, retention delta
 // and a roll-up of what evidence it carries. Shared by the stacked collapsible
 // card (as its trigger) and the tabbed layout (as the panel header) so both
 // read identically.
@@ -301,7 +301,7 @@ function WindowSummary({ item }: { item: WindowEvidence }) {
       </span>
       <h3 className="text-sm font-medium">{item.displayLabel}</h3>
       <span className="font-mono text-xs text-muted-foreground">
-        {formatTimestamp(from)} – {formatTimestamp(to)}
+        {formatTimestamp(from)} - {formatTimestamp(to)}
       </span>
       <span
         className={`font-mono text-xs ${window.kind === "hold" ? "text-teal-600 dark:text-teal-400" : window.delta >= 0 ? "text-emerald-600 dark:text-emerald-500" : "text-destructive"}`}
@@ -546,7 +546,7 @@ function readySnapshots(
 }
 
 // Two analysed frames share a visual state when every categorical judgment and
-// the deterministic OCR text match — the same collapse the synthesizer uses to
+// the deterministic OCR text match - the same collapse the synthesizer uses to
 // avoid re-reading an unchanged shot (isSameVisualState there). Replicated
 // locally so this preview stays self-contained and easy to delete.
 function sameVisualState(a: ReadySnapshot, b: ReadySnapshot): boolean {
@@ -616,7 +616,7 @@ const TEXT_PRESENCE_LABELS: Record<TextPresence, string> = {
 }
 
 // The single event whose evidence most explains the window, preferring higher
-// confidence and, on a tie, a non-verbal cause over a transcript one — this is
+// confidence and, on a tie, a non-verbal cause over a transcript one - this is
 // what the card's headline would lead with.
 function dominantEvent(
   events: WindowEvidence["events"],
@@ -654,7 +654,7 @@ function joinClauses(parts: string[]): string {
 
 // Plain-language, number-free descriptions of what each modality is doing,
 // stated relative to the rest of the video where there's a baseline to compare
-// against. Deliberately no raw figures (wpm, ×-norm, %) — those read like a
+// against. Deliberately no raw figures (wpm, ×-norm, %) - those read like a
 // metrics dump; the reader wants to know a signal moved and in which direction,
 // not the underlying value. Each returns null when its modality has nothing
 // notable to say, and each stays window-specific through the direction and
@@ -858,7 +858,7 @@ function takeawayFor({
     }
   }
 
-  // No non-verbal event led, but the editing departs from this video's norm —
+  // No non-verbal event led, but the editing departs from this video's norm -
   // the baseline is doing the work the events couldn't.
   const edit = editPhrase(editing, baseline)
   if (edit) {
@@ -1253,12 +1253,12 @@ function RetentionSection({ window }: { window: WindowEvidence["window"] }) {
         )}
         <Field
           label="Window"
-          value={`${formatTimestamp(window.fromSeconds)} – ${formatTimestamp(window.toSeconds)}`}
+          value={`${formatTimestamp(window.fromSeconds)} - ${formatTimestamp(window.toSeconds)}`}
         />
         {window.analysisFromSeconds != null && window.analysisToSeconds != null && (
           <Field
             label="Analysis range"
-            value={`${formatTimestamp(window.analysisFromSeconds)} – ${formatTimestamp(window.analysisToSeconds)}`}
+            value={`${formatTimestamp(window.analysisFromSeconds)} - ${formatTimestamp(window.analysisToSeconds)}`}
           />
         )}
       </dl>
@@ -1313,7 +1313,7 @@ function statusLabel(status: string): string {
 
 // The structured read of this window's transcript (lib/retention-window-transcript-taxonomy.ts),
 // on the same closed axes the whole-video script taxonomy uses. Shown in full
-// when ready; otherwise the section states why there's nothing to show — a null
+// when ready; otherwise the section states why there's nothing to show - a null
 // status means the window wasn't part of deep analysis at all.
 function TranscriptTaxonomySection({
   taxonomy,

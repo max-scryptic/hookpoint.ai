@@ -22,7 +22,7 @@ export type AdminVideoAnalysis = {
   // When the user uploaded the raw source file for this video (the prerequisite
   // for deep analysis), or null when no raw file has been uploaded yet.
   rawFileUploadedAt: string | null
-  // Whether the deep-analysis pipeline is still running for this video — the raw
+  // Whether the deep-analysis pipeline is still running for this video - the raw
   // file has landed but the deeper analysis hasn't finished. Drives the admin
   // table's "Processing…" spinner.
   processing: boolean
@@ -69,17 +69,17 @@ export async function getUserVideoAnalyses(
     throw new Error(`Failed to load analysed videos: ${videos.error.message}`)
   }
   if (events.error) {
-    // Events are an optional enrichment — a failure there should still let the
+    // Events are an optional enrichment - a failure there should still let the
     // video list render (with zero counts) rather than sink the tab.
     console.error("Failed to load retention events for user", events.error)
   }
   if (costs.error) {
-    // Costs are likewise an enrichment — a failure leaves the list rendering
+    // Costs are likewise an enrichment - a failure leaves the list rendering
     // with zero spend rather than sinking the tab.
     console.error("Failed to load video costs for user", costs.error)
   }
   if (sourceFiles.error) {
-    // Raw-file upload dates are an enrichment too — a failure leaves the list
+    // Raw-file upload dates are an enrichment too - a failure leaves the list
     // rendering with blank upload dates rather than sinking the tab.
     console.error("Failed to load source files for user", sourceFiles.error)
   }
@@ -141,7 +141,7 @@ export async function getUserVideoAnalyses(
     }
   }
 
-  // Which of the ready-file videos are still being deep-analysed. Best-effort —
+  // Which of the ready-file videos are still being deep-analysed. Best-effort -
   // a failure here just leaves every row un-flagged rather than sinking the tab.
   let processingIds = new Set<string>()
   try {

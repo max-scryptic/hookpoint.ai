@@ -1,8 +1,8 @@
 -- Per-window cost accounting for the deep-analysis pipeline. Each retention
--- window drives up to three billed LLM calls — the snapshot vision call, the
+-- window drives up to three billed LLM calls - the snapshot vision call, the
 -- audio call, and the cross-modal event-synthesis call (see
 -- lib/retention-window-media-analysis.ts and
--- lib/retention-window-event-synthesis.ts) — and this table records the token
+-- lib/retention-window-event-synthesis.ts) - and this table records the token
 -- usage and derived dollar cost of each, one row per (window, step).
 --
 -- One row per step rather than a single JSONB blob on retention_windows so a

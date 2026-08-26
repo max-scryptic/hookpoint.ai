@@ -2,7 +2,7 @@
 -- for a YouTube video they've analysed. The file bytes themselves live in object
 -- storage (the `source-files` bucket); this table only ever holds the storage
 -- pointer plus validation state. The raw file is uploaded direct-to-storage via
--- a server-minted signed URL — it never passes through the app server.
+-- a server-minted signed URL - it never passes through the app server.
 --
 -- A source file belongs to exactly one analysed video (the per-user YouTube
 -- video record). `youtube_video_id` is denormalised alongside the FK so the

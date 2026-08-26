@@ -2,8 +2,8 @@
 // browser measured for it, compare that duration to the YouTube-reported
 // duration, run the soft filename/title similarity check, and return the verdict.
 //
-// Duration is measured client-side — the browser already holds the file, so it
-// can read the duration for free before/after upload — and passed in here. We no
+// Duration is measured client-side - the browser already holds the file, so it
+// can read the duration for free before/after upload - and passed in here. We no
 // longer shell out to ffprobe over a signed URL. That keeps validation a fast,
 // pure, synchronous computation that runs inline in the complete-upload request:
 // there is no long-running step that can overrun the function's time budget and
@@ -38,7 +38,7 @@ export interface ValidationContext {
   // The YouTube video title, used for the soft filename similarity check.
   videoTitle: string
   // Duration (seconds) the browser measured for the uploaded file, or null when
-  // it couldn't be read — e.g. an .mkv, which most browsers can't decode.
+  // it couldn't be read - e.g. an .mkv, which most browsers can't decode.
   uploadedDurationSeconds: number | null
 }
 
@@ -76,7 +76,7 @@ export function computeValidationOutcome(
   deps: ValidationDeps,
 ): ValidationOutcome {
   // The filename/title similarity is independent of the file bytes, so compute
-  // it up front — it's reported even when the duration can't be checked.
+  // it up front - it's reported even when the duration can't be checked.
   const filenameSimilarityScore = computeFilenameSimilarity(
     ctx.originalFilename,
     ctx.videoTitle,
@@ -89,7 +89,7 @@ export function computeValidationOutcome(
   const uploadedDuration = ctx.uploadedDurationSeconds
   // We can't run the duration check when the browser couldn't measure the file
   // (e.g. .mkv) or when we have no reliable YouTube duration to compare against.
-  // Don't block the user — accept the file but flag it so they can confirm it's
+  // Don't block the user - accept the file but flag it so they can confirm it's
   // the right source.
   if (
     uploadedDuration == null ||

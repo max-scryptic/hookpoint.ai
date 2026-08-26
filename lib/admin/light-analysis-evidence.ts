@@ -1,4 +1,4 @@
-// Aggregates every piece of "light analysis" evidence a video has accumulated —
+// Aggregates every piece of "light analysis" evidence a video has accumulated -
 // the source-file-free reads the initial analysis produces from the video's
 // metadata, thumbnail and caption transcript alone: its pacing analysis, its
 // packaging alignment and the categorical packaging taxonomy generated
@@ -33,7 +33,7 @@ export interface LightAnalysisEvidence {
   retention: RetentionAttribution | null
 }
 
-// True when at least one light-analysis read exists — used by the detail page
+// True when at least one light-analysis read exists - used by the detail page
 // to choose between the evidence sections and a "nothing generated yet" empty
 // state.
 export function hasLightAnalysisEvidence(
@@ -49,7 +49,7 @@ export function hasLightAnalysisEvidence(
 
 // Loads a video's light-analysis reads in one round-trip. Each read is
 // independent, so a failure in one (they throw on a query error) is caught and
-// downgraded to null rather than sinking the others — an admin should still see
+// downgraded to null rather than sinking the others - an admin should still see
 // the pacing analysis even if, say, the packaging column can't be read.
 export async function getLightAnalysisEvidence(
   supabase: SupabaseClient,

@@ -1,4 +1,4 @@
-// Structured, categorical read of ONE retention window's spoken transcript —
+// Structured, categorical read of ONE retention window's spoken transcript -
 // the per-window companion to the whole-video script taxonomy
 // (lib/script-taxonomy.ts). Where the script taxonomy reads the content and
 // emotional texture of the entire script, this reads the same texture for the
@@ -51,7 +51,7 @@ export const WINDOW_TRANSCRIPT_TAXONOMY_SCHEMA_VERSION = 1
 
 // --- window-specific vocabulary ---------------------------------------------
 
-// How the emotional energy of the spoken words moves across this one window —
+// How the emotional energy of the spoken words moves across this one window -
 // the short-span analog of the script taxonomy's whole-video arcShape.
 export const EMOTIONAL_TRAJECTORIES = [
   "steady",
@@ -512,7 +512,7 @@ export function defaultRetentionWindowTranscriptTaxonomyDeps(): RetentionWindowT
 
 // Generates a transcript taxonomy for every window whose transcript row is
 // pending taxonomy (only the deep-analysis-selected windows are ever marked
-// pending — see saveRetentionWindowTranscripts). Best-effort per row: a bad
+// pending - see saveRetentionWindowTranscripts). Best-effort per row: a bad
 // OpenAI call fails just that window's taxonomy and the run continues, the same
 // failure-isolation the media analysis and event synthesis already use.
 //
@@ -546,7 +546,7 @@ export async function analyzeRetentionWindowTranscriptTaxonomies(
           transcript: row.transcript,
         })
 
-        // An empty transcript yields no taxonomy — a real, settled outcome, not
+        // An empty transcript yields no taxonomy - a real, settled outcome, not
         // a failure. Mark it 'skipped' so it neither blocks the pipeline nor is
         // retried forever.
         if (!result) {

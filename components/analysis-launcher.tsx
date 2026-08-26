@@ -230,7 +230,7 @@ export function AnalysisLauncherProvider({
 
 // Reads /api/analyze's newline-delimited progress stream, pushing each stage
 // event at the popup as it arrives. Resolves to null when the analysis
-// succeeded, or to the failure to show otherwise — including the case where the
+// succeeded, or to the failure to show otherwise - including the case where the
 // stream ends without a terminal event, which means the connection dropped
 // mid-analysis and we must not pretend the report is ready.
 async function consumeAnalysisStream(

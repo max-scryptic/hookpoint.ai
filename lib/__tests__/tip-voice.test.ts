@@ -28,8 +28,8 @@ const TIP_PROMPT_KEYS = [
   "script_comparison", // section tips
 ]
 
-const EM_DASH = "—"
-const EN_DASH = "–"
+const EM_DASH = "\u2014"
+const EN_DASH = "\u2013"
 
 describe("tip voice", () => {
   for (const key of TIP_PROMPT_KEYS) {

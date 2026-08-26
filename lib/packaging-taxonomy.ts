@@ -1,4 +1,4 @@
-// Structured, categorical read of a video's packaging — the countable
+// Structured, categorical read of a video's packaging - the countable
 // companion to lib/packaging-alignment.ts. The alignment is prose written for
 // one video's detail page; the taxonomy is a fixed vocabulary (title style,
 // thumbnail composition, promise type, hook delivery, topics) so packaging
@@ -9,7 +9,7 @@
 // Same surface-level inputs as the alignment (title, thumbnail image, first
 // ~30s of transcript), so old videos can be backfilled without their source
 // file. Stored inside the packaging_alignment JSONB column rather than its
-// own column — the two are generated and read together.
+// own column - the two are generated and read together.
 //
 // The v1 taxonomy (the flat fields below) answers "what kind of packaging is
 // this". The v2 `detail` block answers "why would it earn a click" on a set
@@ -287,7 +287,7 @@ export interface PackagingTaxonomy {
   thumbnailTextWordCount: number
   promiseType: PromiseType
   hookDelivery: HookDelivery
-  // 0..1 — how tightly title, thumbnail and hook communicate one promise.
+  // 0..1 - how tightly title, thumbnail and hook communicate one promise.
   alignmentScore: number
   // 1-3 short lowercase content tags (e.g. "gear reviews", "productivity"),
   // consistent nouns rather than full phrases, for grouping videos by topic.

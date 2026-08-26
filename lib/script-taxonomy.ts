@@ -1,4 +1,4 @@
-// Structured, categorical read of a video's SCRIPT — the countable companion to
+// Structured, categorical read of a video's SCRIPT - the countable companion to
 // the packaging taxonomy (lib/packaging-taxonomy.ts), but for the spoken
 // content of the whole video rather than its title/thumbnail/hook. Where the
 // pacing analysis (lib/pacing-analysis.ts) reads the script's *tempo* (how fast

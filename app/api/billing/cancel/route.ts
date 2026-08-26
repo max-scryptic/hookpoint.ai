@@ -11,7 +11,7 @@ import { getPlan } from "@/lib/plans"
 
 // POST /api/billing/cancel
 // Schedules the user's paid plan to move to Free at the end of the current
-// billing period — the "Downgrade to Free" action. Mutates Stripe directly
+// billing period - the "Downgrade to Free" action. Mutates Stripe directly
 // (cancel_at_period_end = true) rather than sending the user through the
 // portal's hosted cancel flow, so the semantics are deterministic and don't
 // depend on the Customer Portal's cancellation policy. Returns no redirect URL;
@@ -20,7 +20,7 @@ import { getPlan } from "@/lib/plans"
 //
 // The body carries the cancellation survey: a required `reason` (one of the
 // known codes) and optional `notes`. We validate the reason, schedule the
-// cancellation, then record the feedback — best-effort, so a feedback write
+// cancellation, then record the feedback - best-effort, so a feedback write
 // failure never blocks the cancellation the user just confirmed.
 export async function POST(request: Request) {
   if (!isStripeEnabled()) {

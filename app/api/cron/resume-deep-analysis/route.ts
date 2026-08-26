@@ -25,11 +25,11 @@ export const dynamic = "force-dynamic"
 // GET /api/cron/resume-deep-analysis
 // The scheduled watchdog: finds deep analyses that stalled with nothing working
 // on them and starts them again. This is what makes a deep analysis finish on
-// its own — before it existed, a pipeline whose invocation was killed mid-stage
+// its own - before it existed, a pipeline whose invocation was killed mid-stage
 // (routine for a long video) waited for its owner to reopen the report page,
 // because that page's progress poll was the only thing that ever re-kicked it.
 //
-// Called on a schedule by the database (a pg_cron job invoking pg_net — see
+// Called on a schedule by the database (a pg_cron job invoking pg_net - see
 // supabase/migrations/20260818120000_deep_analysis_autonomous_completion.sql),
 // which authenticates with the shared secret as a bearer token. Any scheduler
 // that can present that secret works the same way.

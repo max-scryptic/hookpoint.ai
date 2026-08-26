@@ -40,7 +40,7 @@ export interface PlanFeature {
   tooltip?: string
 }
 
-// The explanatory copy for the "Cross-video intelligence" plan feature —
+// The explanatory copy for the "Cross-video intelligence" plan feature -
 // shown as a tooltip wherever that bullet appears.
 export const CROSS_VIDEO_TOOLTIP =
   "Every deep analysis adds its retention events to a private library of your content. As the library grows, your analyses draw on patterns and trends from across your whole channel, not just the video in front of them."

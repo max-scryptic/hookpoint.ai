@@ -5,7 +5,7 @@ import { useState } from "react"
 import { ImageOffIcon } from "lucide-react"
 
 // YouTube's Data API returns thumbnail URLs for every upload we can see,
-// including private and scheduled ones — but i.ytimg.com only *serves* those
+// including private and scheduled ones - but i.ytimg.com only *serves* those
 // images once the video is publicly visible. For a private or scheduled upload
 // the URL is well-formed and 404s, and there is no authenticated way to read the
 // bytes back (thumbnails.set is upload-only, and the API exposes no download

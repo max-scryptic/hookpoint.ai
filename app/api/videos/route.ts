@@ -9,14 +9,14 @@ import {
   type RecentVideosOrder,
 } from "@/lib/youtube/youtube"
 
-// Keep page sizes bounded — search.list allows up to 50 per page.
+// Keep page sizes bounded - search.list allows up to 50 per page.
 const MAX_PAGE_SIZE = 50
 
 // GET /api/videos?pageToken=&q=&maxResults=
 // Returns one page of the signed-in user's uploads plus the cursors for the
 // adjacent pages. Each call hits the YouTube API; the client calls this again
 // whenever the search query changes or the user pages forward/back. Date-range
-// and privacy filtering happen client-side — search.list with forMine=true
+// and privacy filtering happen client-side - search.list with forMine=true
 // rejects publishedAfter/publishedBefore and never returns privacy status.
 export async function GET(request: NextRequest) {
   const supabase = await createClient()

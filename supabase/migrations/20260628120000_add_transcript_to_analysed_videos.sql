@@ -1,6 +1,6 @@
 -- Adds a transcript column to analysed_videos. Fetching a video's caption track
--- costs YouTube Data API quota (captions.list + captions.download), so — like
--- the retention curve — we persist the parsed, timestamped transcript once and
+-- costs YouTube Data API quota (captions.list + captions.download), so - like
+-- the retention curve - we persist the parsed, timestamped transcript once and
 -- replay it instead of re-spending quota on every view.
 --
 -- Stored as JSONB: an array of { startSeconds, endSeconds, text } cues. Nullable

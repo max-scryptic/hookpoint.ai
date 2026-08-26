@@ -246,7 +246,7 @@ describe("analyzeRetentionWindowTranscriptTaxonomies", () => {
       retention_window_transcripts: [transcriptRow({ transcript: "" })],
       retention_windows: [WINDOW_ROW],
     })
-    // An empty transcript yields no taxonomy — the generator returns null.
+    // An empty transcript yields no taxonomy - the generator returns null.
     const generate = vi.fn(async () => null)
     const deps: RetentionWindowTranscriptTaxonomyDeps = {
       generator: { generate },

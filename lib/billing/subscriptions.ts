@@ -80,7 +80,7 @@ export async function syncCurrentSubscriptionForUser(
 }
 
 // Clears a scheduled cancellation so the paid plan continues past the current
-// period — the inverse of the portal's subscription_cancel flow. Reconciles the
+// period - the inverse of the portal's subscription_cancel flow. Reconciles the
 // local projection immediately so callers can render the resumed state without
 // waiting for the webhook. Returns false when the user has no subscription.
 export async function resumeSubscriptionForUser(
@@ -97,7 +97,7 @@ export async function resumeSubscriptionForUser(
   return true
 }
 
-// Schedules a cancellation at the end of the current period — the "Downgrade to
+// Schedules a cancellation at the end of the current period - the "Downgrade to
 // Free" action. Backs the in-app cancel rather than the portal's hosted flow so
 // the outcome is deterministic (always cancel-at-period-end, keeping paid access
 // until the period closes) regardless of how the Stripe Customer Portal's

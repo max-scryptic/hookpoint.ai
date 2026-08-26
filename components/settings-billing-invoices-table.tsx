@@ -19,7 +19,7 @@ import type { BillingInvoice } from "@/lib/stripe/invoices"
 
 // The user-facing invoices table on the billing settings page. Split out from
 // the (server-rendered) settings page so it can paginate client-side at the
-// shared app-wide page size. Callers guarantee a non-empty list — the empty
+// shared app-wide page size. Callers guarantee a non-empty list - the empty
 // state lives in the settings page alongside its illustration.
 export function SettingsBillingInvoicesTable({
   invoices,

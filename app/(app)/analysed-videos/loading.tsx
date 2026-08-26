@@ -9,7 +9,7 @@ import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 
 // Shown while the analysed-videos server component fetches the list. The static
-// chrome here — header, breadcrumb, title and description — is identical to the
+// chrome here - header, breadcrumb, title and description - is identical to the
 // loaded page (app/(app)/analysed-videos/page.tsx), so on navigation the page
 // appears fully formed straight away and only the table region swaps from this
 // skeleton to the real data once the fetch resolves. The sidebar shell lives in

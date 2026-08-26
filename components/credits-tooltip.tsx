@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/tooltip"
 
 // Wraps a label with a small info affordance whose tooltip carries the given
-// explanatory copy — the shared treatment for any plan-feature term that needs
+// explanatory copy - the shared treatment for any plan-feature term that needs
 // a definition. Pass the visible label as children.
 export function InfoTooltip({
   content,
@@ -44,7 +44,7 @@ export function InfoTooltip({
 
 // The credits-specific instance, used everywhere credits are surfaced so the
 // explanation (1 credit = 1 minute of raw source video analysed) stays
-// consistent — pass the visible label as children, e.g.
+// consistent - pass the visible label as children, e.g.
 // <CreditsTooltip>140 credits / month</…>.
 export function CreditsTooltip({
   children,

@@ -1,5 +1,5 @@
 // Read/write helpers for `retention_window_scene_cue_scans` and
-// `video_scene_cues` — the deterministic (non-LLM) cut/freeze/black
+// `video_scene_cues` - the deterministic (non-LLM) cut/freeze/black
 // timestamps an ffmpeg pass over a retention window's own analysis range
 // produces (lib/media/scene-detection.ts).
 //
@@ -9,8 +9,8 @@
 // producing structured timestamps instead of a stored media file. The
 // detected events land in video_scene_cues tagged with the window that
 // produced them, so cut-count/cuts-per-minute/freeze-and-black coverage for
-// any [from, to] range — a window's own span, or an approximate video-wide
-// baseline averaged across every window scanned so far — are computed on
+// any [from, to] range - a window's own span, or an approximate video-wide
+// baseline averaged across every window scanned so far - are computed on
 // read (see computeSceneCueMetrics/computeAverageSceneCueMetrics below)
 // instead of re-scanning per query.
 
@@ -59,7 +59,7 @@ function mapScanRow(row: SceneCueScanRow): RetentionWindowSceneCueScan {
 // Creates the pending scene-cue-scan row for each of a video's retention
 // windows that has an analysis window, one row per window (mirrors
 // createPendingRetentionWindowAudio). Windows with no analysis window
-// (null bounds — see computeAnalysisWindow) are skipped, and any row a
+// (null bounds - see computeAnalysisWindow) are skipped, and any row a
 // previous save left behind for them is removed, the same way a shrunk or
 // removed analysis window prunes its stale audio row.
 export async function createPendingRetentionWindowSceneCueScans(
@@ -126,7 +126,7 @@ export async function createPendingRetentionWindowSceneCueScans(
 
 // A failed scan older than this is retried automatically, rather than
 // staying 'failed' until the next full re-analyze resets it back to
-// 'pending' — a transient ffmpeg error (a network hiccup, a bad seek)
+// 'pending' - a transient ffmpeg error (a network hiccup, a bad seek)
 // shouldn't permanently strand a window without cut data. Bounded rather
 // than immediate so a source that's genuinely broken (e.g. an unreachable
 // signed URL) doesn't get re-attempted by every trigger that fires for the
@@ -173,7 +173,7 @@ export interface RetentionWindowSceneCueScanStatusRow {
   motionBuckets: MotionBucket[]
 }
 
-// Loads just the status of every window's scene-cue scan for a video — used
+// Loads just the status of every window's scene-cue scan for a video - used
 // by event synthesis (lib/retention-window-event-synthesis.ts) to check
 // whether a window's scan has settled (ready or failed) before synthesizing
 // its events. The actual detected cues come from getVideoSceneCues below.
@@ -352,7 +352,7 @@ export async function getVideoSceneCues(
 export interface SceneCueMetrics {
   cutCount: number
   cutsPerMinute: number | null
-  // Fraction (0-1) of the range spent frozen/black — an overlap sum, clamped
+  // Fraction (0-1) of the range spent frozen/black - an overlap sum, clamped
   // to the range itself, in case a span starts before or ends after it.
   freezeCoverage: number
   blackCoverage: number
@@ -370,7 +370,7 @@ function overlapSeconds(
 }
 
 // Derives cut-count/cuts-per-minute/freeze-and-black coverage for
-// [fromSeconds, toSeconds] from an already-loaded set of cues — computed on
+// [fromSeconds, toSeconds] from an already-loaded set of cues - computed on
 // the go from whichever windows have been scanned, rather than stored as a
 // precomputed aggregate.
 export function computeSceneCueMetrics(

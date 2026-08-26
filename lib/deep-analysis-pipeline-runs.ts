@@ -15,7 +15,7 @@ export interface DeepAnalysisPipelineRun {
 
 // 'paused' is a pass that ran out of invocation budget and handed the rest of
 // the work to a fresh invocation (see lib/deep-analysis-continuation.ts). It's a
-// settled run — it holds no lease — but unlike 'failed' it means the analysis is
+// settled run - it holds no lease - but unlike 'failed' it means the analysis is
 // still on its way, so the report keeps showing its processing badge rather than
 // a retry prompt.
 export type DeepAnalysisPipelineRunStatus =
@@ -37,15 +37,15 @@ export interface DeepAnalysisPipelineRunSummary {
 // next claim treats it as dead and reclaims it. A pipeline invocation runs
 // under a fixed serverless budget (maxDuration = 300s at every trigger point),
 // so a lease untouched for meaningfully longer than that budget cannot still
-// have a live invocation behind it — its process was killed mid-stage, leaving
+// have a live invocation behind it - its process was killed mid-stage, leaving
 // the row 'running' forever with nothing to finish it.
 //
 // This has to stay comfortably above HEARTBEAT_INTERVAL_MS: a live stage bumps
 // updated_at on that heartbeat, so the window only needs to outlast one missed
 // beat (plus jitter) to avoid reclaiming a run that's genuinely still working.
-// It was 15 minutes before the heartbeat existed — necessary then, because a
+// It was 15 minutes before the heartbeat existed - necessary then, because a
 // long extraction stage bumped updated_at only at its start and would have been
-// mistaken for dead — but that also meant a genuinely dead lease froze every
+// mistaken for dead - but that also meant a genuinely dead lease froze every
 // resume (and the manual retry) for a full 15 minutes, so a large source file
 // that can't finish a stage in one invocation crawled forward one invocation
 // per 15 minutes, indistinguishable from permanently stuck. With the heartbeat
@@ -100,7 +100,7 @@ export async function claimDeepAnalysisPipelineRun(
 // stage boundary that would otherwise move updated_at, so without a heartbeat a
 // live run and a dead one look identical to the staleness sweep. Each beat is
 // scoped to status = 'running' so it never resurrects a run that finished or was
-// reclaimed in the meantime, and its own failures are swallowed — a missed beat
+// reclaimed in the meantime, and its own failures are swallowed - a missed beat
 // just brings the lease one step closer to looking stale, which is safe.
 function startLeaseHeartbeat(
   admin: SupabaseClient,
@@ -117,7 +117,7 @@ function startLeaseHeartbeat(
         () => {},
       )
   }, HEARTBEAT_INTERVAL_MS)
-  // Never let the heartbeat keep the process alive on its own — the awaited
+  // Never let the heartbeat keep the process alive on its own - the awaited
   // stage is what holds it open; the timer is cleared the moment that settles.
   timer.unref?.()
   return () => clearInterval(timer)
@@ -171,8 +171,8 @@ export async function runObservedPipelineStage(
 // partial unique index that pins one running run per video is cleared and the
 // next claim can start fresh. The heartbeat + STALE_RUN_MS sweep already
 // reclaims a dead lease on its own, but only after the stale window elapses;
-// the manual "retry deep analysis" flow can't wait that out — a user hitting
-// retry expects the pipeline to restart now, not up to STALE_RUN_MS later — so
+// the manual "retry deep analysis" flow can't wait that out - a user hitting
+// retry expects the pipeline to restart now, not up to STALE_RUN_MS later - so
 // it abandons the current run explicitly before re-triggering. Uses the service
 // role (there's no authenticated write policy on this table); callers must pass
 // an admin client.
@@ -199,7 +199,7 @@ export async function abandonInFlightDeepAnalysisPipelineRun(
 }
 
 // Ends a run and releases its lease. `unsettledAfter` is how much deep-analysis
-// work this pass left behind (null when the pass couldn't measure it) — the
+// work this pass left behind (null when the pass couldn't measure it) - the
 // watchdog reads consecutive runs' readings to tell a video that's still
 // inching forward from one that's stuck and should be given up on, so record it
 // whenever it's known.
@@ -231,7 +231,7 @@ export async function finishDeepAnalysisPipelineRun(
   // rejects) fall back to what it does understand: a paused pass is recorded
   // the way partial passes always were, as a finished one. The continuation and
   // the watchdog both key off the video's pending rows rather than this status,
-  // so the analysis still finishes — it just can't be told apart in the run
+  // so the analysis still finishes - it just can't be told apart in the run
   // history until the migration lands. Any other failure is real and rethrown.
   if (error.code !== "PGRST204" && error.code !== "23514") {
     throw new Error(`Failed to finish deep analysis pipeline: ${error.message}`)

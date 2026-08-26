@@ -5,10 +5,10 @@
 // Called from whichever of the two independent async processes finishes second
 // for a given video:
 //   • /api/analyze, right after the retention windows (and their pending
-//     audio/scene-cue-scan/event-synthesis rows) are saved — the source
+//     audio/scene-cue-scan/event-synthesis rows) are saved - the source
 //     video may already be uploaded and normalised by then.
 //   • the Qencode normalisation callback, right after a source file's proxy
-//     flips to 'ready' — the retention analysis may already have run.
+//     flips to 'ready' - the retention analysis may already have run.
 // Either caller no-ops if its half of the picture isn't ready yet; the other
 // caller picks it up once it is.
 //
@@ -28,7 +28,7 @@
 // extraction alone can outlive that. It used to simply be killed there: the run
 // row stayed 'running' until the staleness sweep reclaimed it, its rows stayed
 // 'pending', and the only thing that ever resumed them was a browser polling
-// the report page — so an analysis finished only if its owner happened to be
+// the report page - so an analysis finished only if its owner happened to be
 // watching. A pass now measures itself against that budget, stops while it can
 // still record where it got to, and asks a fresh invocation to carry on (see
 // lib/deep-analysis-continuation.ts). Nothing outside the server is involved,
@@ -71,7 +71,7 @@ interface PipelineStagePlan {
   stage: DeepAnalysisPipelineStage
   run: () => Promise<void>
   // A stage whose failure must not abort the pass. Only the transcript taxonomy
-  // qualifies — see the note on its entry below.
+  // qualifies - see the note on its entry below.
   optional?: boolean
 }
 
@@ -129,7 +129,7 @@ export function triggerRetentionWindowMediaExtraction(
       // pure ENRICHMENT for synthesis: WindowEvidence.transcriptTaxonomy is
       // nullable and the synthesizer treats a missing read as "not generated,"
       // never a prerequisite. So a failure of this whole stage (a transient
-      // OpenAI outage, or — as shipped once — a schema drift where its columns
+      // OpenAI outage, or - as shipped once - a schema drift where its columns
       // don't yet exist) must not abort the pipeline before the events
       // themselves are synthesized. Record the stage failure (runObservedPipeline
       // Stage already persisted it into the run's stages) and continue to
@@ -159,8 +159,8 @@ export function triggerRetentionWindowMediaExtraction(
     try {
       let paused = false
       for (const step of plan) {
-        // Stages are coarse — a whole video's extraction, a whole video's media
-        // analysis — so one started on a nearly-spent invocation mostly buys a
+        // Stages are coarse - a whole video's extraction, a whole video's media
+        // analysis - so one started on a nearly-spent invocation mostly buys a
         // killed process. Stop here instead and let the next invocation start
         // it with a full budget; everything already settled stays settled,
         // because each stage only ever claims rows that are still pending.
@@ -239,7 +239,7 @@ async function continueIfUnfinished(params: {
   })
   if (!dispatched) {
     // Not fatal: the watchdog sweep picks the video up on its next tick. Worth
-    // saying, though — a deployment that can never hand over runs the whole
+    // saying, though - a deployment that can never hand over runs the whole
     // pipeline at the sweep's pace instead of back-to-back.
     console.warn("Deep analysis continuation was not dispatched", {
       analysedVideoId: params.analysedVideoId,

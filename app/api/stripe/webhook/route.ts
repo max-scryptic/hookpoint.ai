@@ -35,7 +35,7 @@ async function syncDefaultCard(
 
 // POST /api/stripe/webhook
 // Verifies the Stripe signature, then keeps our cached default card in sync with
-// Stripe. We always ACK 2xx once the signature is valid — throwing a 500 would
+// Stripe. We always ACK 2xx once the signature is valid - throwing a 500 would
 // make Stripe retry, and our handlers are idempotent re-reads of Stripe state,
 // so a transient failure is fine to swallow after logging.
 export async function POST(request: NextRequest) {

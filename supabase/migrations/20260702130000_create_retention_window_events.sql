@@ -1,15 +1,15 @@
 -- Synthesizes cross-modal "events" for a retention window: the deterministic
 -- editing/audio measurements and the already-computed vision/audio LLM
 -- analyses (retention_window_snapshots.analysis, retention_window_audio.analysis)
--- get combined, in one more LLM call per window — text-only, no raw media
--- re-sent, just the structured evidence that's already been computed — into
+-- get combined, in one more LLM call per window - text-only, no raw media
+-- re-sent, just the structured evidence that's already been computed - into
 -- a handful of timestamped, narrated events explaining what plausibly drove
 -- that window's retention change. A single window (30s+) commonly produces
 -- more than one such event, hence a dedicated child table rather than a
 -- single JSONB column on retention_windows.
 --
 -- retention_window_event_synthesis tracks the one synthesis job per window
--- (pending/ready/failed), mirroring retention_window_scene_cue_scans —
+-- (pending/ready/failed), mirroring retention_window_scene_cue_scans -
 -- including the same stale-failure retry, since this call is cheap enough
 -- that a transient failure shouldn't need a full re-analyze to heal. Its
 -- output lands in retention_window_events, one row per identified event.

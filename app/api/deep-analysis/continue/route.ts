@@ -10,7 +10,7 @@ import {
 } from "@/lib/deep-analysis-continuation"
 
 // The pipeline runs in after() once this response is sent, but still inside
-// this invocation's budget — the same headroom every other trigger point gets.
+// this invocation's budget - the same headroom every other trigger point gets.
 export const maxDuration = 300
 
 // POST /api/deep-analysis/continue
@@ -18,7 +18,7 @@ export const maxDuration = 300
 // deep-analysis pass, with a full invocation budget, for a video whose previous
 // pass ran out of time (or which the watchdog sweep found stalled).
 //
-// Server-to-server only — no user is present, by design: the whole point is to
+// Server-to-server only - no user is present, by design: the whole point is to
 // finish an analysis whose owner has closed the tab. Callers authenticate with
 // the shared worker secret; without it this would be an unauthenticated way to
 // make the deployment do expensive work for any video id a stranger guessed.
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
       : 0
   // The chain is bounded here as well as at the dispatch end, so a stray or
   // replayed request can't keep a video looping past its ceiling. Beyond it the
-  // watchdog sweep — which paces its retries and gives up out loud — takes over.
+  // watchdog sweep - which paces its retries and gives up out loud - takes over.
   if (attempt > DEEP_ANALYSIS_MAX_CONTINUATION_ATTEMPTS) {
     return NextResponse.json({ ok: true, started: false, reason: "max_attempts" })
   }

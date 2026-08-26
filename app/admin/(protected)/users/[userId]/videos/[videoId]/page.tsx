@@ -19,7 +19,7 @@ import {
 } from "@/lib/retention-window-media-progress"
 import { createAdminClient } from "@/lib/supabase/admin"
 
-// Per-request admin data behind an auth check — never statically prerender.
+// Per-request admin data behind an auth check - never statically prerender.
 export const dynamic = "force-dynamic"
 
 function formatDate(iso: string): string {
@@ -29,7 +29,7 @@ function formatDate(iso: string): string {
 // Admin video detail: the full evidence for a single video a user has analysed,
 // split into Light Analysis and Deep Analysis tabs. Each tab leads with the
 // cost KPIs for that bucket and then every piece of data the pipeline captured
-// for it — the light reads (pacing, packaging + its categorical taxonomy,
+// for it - the light reads (pacing, packaging + its categorical taxonomy,
 // retention attribution) and the deep per-window signals (transcript,
 // snapshots, audio, editing metrics and synthesized events). This is the same
 // breakdown the front end renders, read-only, so admins retain full oversight
@@ -60,17 +60,17 @@ export default async function AdminUserVideoDetailPage({
 
   // Mirror the front-end's transcoding-cost attribution: the one-time Qencode
   // transcoding cost is only charged when the source was actually transcoded
-  // (normalisation ready). Best-effort — a source-file lookup failure just
+  // (normalisation ready). Best-effort - a source-file lookup failure just
   // omits the transcoding line rather than sinking the evidence view.
   let transcodedDurationSeconds: number | null = null
   // Whether the user has actually uploaded a raw source file for this video. The
   // deep-analysis pipeline only runs off an uploaded file, so the Deep Analysis
-  // tab (and the events it surfaces) stay hidden until the upload has landed —
+  // tab (and the events it surfaces) stay hidden until the upload has landed -
   // mirroring the front-end's "ready" gate.
   let sourceFileUploaded = false
   // The live per-stage breakdown of the deep-analysis pipeline, so the detail
   // view can show where a currently-processing video is (transcoding, fetching
-  // events, …) — the same steps the front end surfaces. Null unless a raw file
+  // events, …) - the same steps the front end surfaces. Null unless a raw file
   // has landed and its stages could be computed.
   let deepAnalysisProgress: DeepAnalysisProgress | null = null
   try {
@@ -114,7 +114,7 @@ export default async function AdminUserVideoDetailPage({
       return null
     }),
     // The raw per-call cost log for this one video, powering the Cost logs tab.
-    // Best-effort — a lookup failure leaves that tab empty rather than 500ing
+    // Best-effort - a lookup failure leaves that tab empty rather than 500ing
     // the whole evidence view.
     listCostLogs({ userId, videoId: video.id }).catch((error) => {
       console.error("Failed to load cost logs for admin video detail", error)

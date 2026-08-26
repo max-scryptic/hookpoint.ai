@@ -67,8 +67,8 @@ export interface YouTubeChannelDetails {
 }
 
 // Sort orders search.list accepts for an uploads listing (forMine=true). YouTube
-// sorts each field in a single fixed direction — `date` is newest-first, `title`
-// is A–Z, `viewCount` is most-viewed-first — and offers no comment-count order,
+// sorts each field in a single fixed direction - `date` is newest-first, `title`
+// is A-Z, `viewCount` is most-viewed-first - and offers no comment-count order,
 // so the upload list's sort menu is limited to these three.
 export type RecentVideosOrder = "date" | "title" | "viewCount"
 
@@ -106,7 +106,7 @@ export interface RetentionGain {
   toTimestampSeconds: number
   // How much absolute retention was gained across this segment (positive
   // number). A gain means more viewers were watching at the end of the segment
-  // than the start — typically a re-watched or replayed moment.
+  // than the start - typically a re-watched or replayed moment.
   watchRatioGain: number
 }
 
@@ -181,11 +181,11 @@ export function parseIso8601Duration(duration: string): number {
 // videos owned by the signed-in channel. Title/description search (`query`) is
 // applied server-side via the `q` param; pagination is cursor-based via
 // `pageToken`, so each page is a separate request (search.list caps results at
-// 50 per page). Sorting is server-side too — because only one page is in memory
+// 50 per page). Sorting is server-side too - because only one page is in memory
 // at a time, the client can't reorder the full result set itself. Neither privacy
-// status nor a publish-date range can be filtered here — the publishedAfter/
+// status nor a publish-date range can be filtered here - the publishedAfter/
 // publishedBefore params return a 400 when combined with forMine=true, and
-// privacy only arrives with the enrichment call — so callers filter on both
+// privacy only arrives with the enrichment call - so callers filter on both
 // client-side.
 export async function getRecentVideos(
   accessToken: string,
@@ -204,7 +204,7 @@ export async function getRecentVideos(
 
   const response = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
-    // Per-user, token-scoped data — never cache at the fetch layer.
+    // Per-user, token-scoped data - never cache at the fetch layer.
     cache: "no-store",
   })
 
@@ -271,7 +271,7 @@ export async function getRecentVideos(
   }
 }
 
-// The public, near-real-time counters videos.list serves for a video — the same
+// The public, near-real-time counters videos.list serves for a video - the same
 // numbers YouTube shows under a video on the watch page. Distinct from the
 // Analytics API's `views` metric, which is processed on a delay and therefore
 // lags this by a day or two.
@@ -283,7 +283,7 @@ export interface VideoStatistics {
 }
 
 // videos.list accepts up to 50 ids per call, at 1 quota unit per call regardless
-// of how many ids are on it — so a whole library refreshes for a couple of units.
+// of how many ids are on it - so a whole library refreshes for a couple of units.
 const VIDEO_STATISTICS_BATCH_SIZE = 50
 
 // Splits a list into fixed-size chunks so batched YouTube calls stay inside the
@@ -299,7 +299,7 @@ function chunk<T>(items: T[], size: number): T[][] {
 // Reads the public statistics for a batch of videos, keyed by video id. Videos
 // YouTube doesn't return (deleted, or not visible to this token) are simply
 // absent from the map. Throws on an API failure so callers can decide whether
-// the refresh is best-effort — every caller here treats it as such.
+// the refresh is best-effort - every caller here treats it as such.
 export async function getVideoStatisticsByVideo(
   accessToken: string,
   videoIds: string[],
@@ -392,12 +392,12 @@ export interface VideoLifetimeMetrics {
   views: number | null
   estimatedMinutesWatched: number | null
   averageViewDurationSeconds: number | null
-  // 0..100 — the average share of the video watched.
+  // 0..100 - the average share of the video watched.
   averageViewPercentage: number | null
   likes: number | null
   comments: number | null
   shares: number | null
-  // Gross counts as YouTube reports them — subscribersGained never goes
+  // Gross counts as YouTube reports them - subscribersGained never goes
   // negative on its own. Use netSubscribersGained() when displaying a single
   // "subs gained" figure so a net loss shows as a negative number.
   subscribersGained: number | null
@@ -428,7 +428,7 @@ export async function getLifetimeMetricsByVideo(
   for (const batch of chunk(videoIds, LIFETIME_METRICS_BATCH_SIZE)) {
     const url = new URL(`${ANALYTICS_API}/reports`)
     url.searchParams.set("ids", "channel==MINE")
-    // Full channel lifetime — the earliest date YouTube accepts. A video only
+    // Full channel lifetime - the earliest date YouTube accepts. A video only
     // has rows from its own publication onwards, so this is its lifetime too.
     url.searchParams.set("startDate", "2005-02-01")
     url.searchParams.set("endDate", isoDate(new Date().toISOString())!)
@@ -495,7 +495,7 @@ export async function getSubscribersGainedByVideo(
 
   const url = new URL(`${ANALYTICS_API}/reports`)
   url.searchParams.set("ids", "channel==MINE")
-  // Full channel lifetime — the earliest date YouTube accepts.
+  // Full channel lifetime - the earliest date YouTube accepts.
   url.searchParams.set("startDate", "2005-02-01")
   url.searchParams.set("endDate", isoDate(new Date().toISOString())!)
   url.searchParams.set("dimensions", "video")
@@ -792,7 +792,7 @@ export interface VideoAnalyticsSummary extends VideoLifetimeMetrics {
   trafficSources: TrafficSource[]
   // When the traffic-source breakdown was last fetched. It needs a per-video
   // report, so the batched refresh that keeps the KPI totals current (see
-  // getLifetimeMetricsByVideo) deliberately leaves it alone — this timestamp is
+  // getLifetimeMetricsByVideo) deliberately leaves it alone - this timestamp is
   // what tells the per-video path the breakdown is due again. Absent when the
   // breakdown has never been fetched successfully.
   trafficSourcesFetchedAt?: string
@@ -806,8 +806,8 @@ export interface VideoAnalyticsSummary extends VideoLifetimeMetrics {
 // near-real-time public counter (what the watch page shows), while the Analytics
 // API serves a processed `views` metric that trails it by a day or two. Both are
 // stored, both are kept fresh (see lib/analysed-video-stats.ts), and every
-// surface prints this one — the public counter, falling back to the Analytics
-// figure — so the list, the detail page and every comparison agree with each
+// surface prints this one - the public counter, falling back to the Analytics
+// figure - so the list, the detail page and every comparison agree with each
 // other and with YouTube on what a video's view count is.
 export function preferredViewCount(
   details: { viewCount?: number | null } | null | undefined,
@@ -935,7 +935,7 @@ export async function getVideoAnalyticsSummary(
   }
 
   // Thumbnail reach (impressions + CTR) is deliberately NOT fetched here. It is
-  // not an Analytics API metric — it comes from the asynchronous YouTube
+  // not an Analytics API metric - it comes from the asynchronous YouTube
   // Reporting API at channel granularity (one download covers every video), so
   // it is populated separately and fanned out across all of a user's videos by
   // backfillChannelThumbnailReach (see lib/video-analytics.ts). This summary
@@ -966,7 +966,7 @@ export async function getVideoAnalyticsSummary(
 // Two Data API calls are made: captions.list (50 quota units) to find the best
 // track, then captions.download (200 units) to fetch the cue text. Both require
 // the youtube.force-ssl scope and only work on videos owned by the signed-in
-// channel — exactly the videos Viewlio analyses.
+// channel - exactly the videos Viewlio analyses.
 export async function getVideoTranscript(
   accessToken: string,
   videoId: string,
@@ -1084,7 +1084,7 @@ export function parseWebVtt(vtt: string): TranscriptCue[] {
 }
 
 // YouTube's auto-generated captions censor profanity with a bracketed bleep
-// marker — rendered as "[ __ ]", with non-breaking spaces (U+00A0) padding the
+// marker - rendered as "[ __ ]", with non-breaking spaces (U+00A0) padding the
 // underscores. Some caption tracks leave those spaces encoded as the literal
 // text "&nbsp;", so the marker arrives as "[&nbsp;__&nbsp;]". Replace either
 // form with four asterisks so the transcript still shows that a word was
@@ -1125,7 +1125,7 @@ function normaliseWord(word: string): string {
 
 // Collapses the rolling-window duplication that YouTube auto-generated (ASR)
 // caption tracks emit. Those tracks repaint the on-screen text every cue, so the
-// same phrase reappears verbatim across two or three consecutive cues — which,
+// same phrase reappears verbatim across two or three consecutive cues - which,
 // once joined, reads as "Hey guys Hey guys Hey guys ...". For each cue we drop
 // the leading run of words that simply repeats the tail of what we've already
 // kept, and discard cues that are wholly duplicates. Human-authored tracks have
@@ -1161,7 +1161,7 @@ export function dedupeTranscriptCues(cues: TranscriptCue[]): TranscriptCue[] {
     }
 
     const fresh = words.slice(overlap)
-    if (fresh.length === 0) continue // cue was a verbatim repeat — drop it.
+    if (fresh.length === 0) continue // cue was a verbatim repeat - drop it.
 
     result.push({
       startSeconds: cue.startSeconds,
@@ -1465,7 +1465,7 @@ export function detectRetentionHolds(
     }))
 }
 
-// A drop-off that has been judged "significant" — i.e. steeper than the video's
+// A drop-off that has been judged "significant" - i.e. steeper than the video's
 // own typical decline, or landing on a moment that underperforms similar videos.
 // These are the moments worth explaining; ordinary monotonic decay is not.
 export interface SignificantDropOff extends DropOff {
@@ -1576,8 +1576,8 @@ export function detectSignificantDropOffs(
 
 // A named, fixed stretch of the video's opening that we analyse for EVERY video,
 // independent of where its drop-offs happen to land. The opening seconds are by
-// far the highest-leverage part of any video — most of the audience is won or
-// lost there — so we always break them out into these explicit windows.
+// far the highest-leverage part of any video - most of the audience is won or
+// lost there - so we always break them out into these explicit windows.
 export interface RetentionWindowConfig {
   // Stable identifier, used as a React key.
   id: string

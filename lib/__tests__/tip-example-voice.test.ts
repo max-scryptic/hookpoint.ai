@@ -41,8 +41,8 @@ const TIP_PROMPT_KEYS = [
 // without also writing the tip.
 const ON_DEMAND_KEY = "tip_examples"
 
-const EM_DASH = "—"
-const EN_DASH = "–"
+const EM_DASH = "\u2014"
+const EN_DASH = "\u2013"
 
 describe("tip example voice", () => {
   for (const key of [...TIP_PROMPT_KEYS, ON_DEMAND_KEY]) {

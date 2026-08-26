@@ -4,7 +4,7 @@
 // POSTs a status callback with a download URL when it's done. Our own callback
 // handler pulls the finished proxy into our S3 bucket (see
 // lib/source-files/normalisation-service.ts) rather than handing Qencode a
-// destination to write to directly — its generic S3 destination writer was
+// destination to write to directly - its generic S3 destination writer was
 // observed silently producing 0-byte objects against Supabase's S3-compatible
 // endpoint.
 //
@@ -31,7 +31,7 @@ export interface QencodeFormat {
   height?: number
   // A user-defined label echoed back on the matching entry of the completion
   // callback's `videos` array (as `user_tag`) so we can tell the outputs apart
-  // — Qencode stamps its own value into the separate system `tag` field, so
+  // - Qencode stamps its own value into the separate system `tag` field, so
   // that one is not ours to match on. Both are set to the same value on submit
   // as belt-and-suspenders against which field a given account echoes.
   tag?: string

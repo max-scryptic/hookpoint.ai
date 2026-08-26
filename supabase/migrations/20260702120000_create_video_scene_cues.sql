@@ -1,5 +1,5 @@
 -- Timestamped, deterministic video-editing cues (cuts, freeze-frames,
--- black-frames) detected by ffmpeg — no LLM involved — over a retention
+-- black-frames) detected by ffmpeg - no LLM involved - over a retention
 -- window's own padded analysis range (analysis_from_seconds/
 -- analysis_to_seconds, computed alongside the window in
 -- lib/retention-windows.ts), the same [from, to] span already harvested for
@@ -14,7 +14,7 @@
 -- retention_window_scene_cue_scans tracks the one scan per window
 -- (pending/ready/failed, mirroring retention_window_audio's status). Its
 -- detected events land in video_scene_cues, one row per cut/freeze/black
--- span, tagged with the window that produced them — so cut-count,
+-- span, tagged with the window that produced them - so cut-count,
 -- cuts-per-minute, and freeze/black coverage for any [from, to] range are
 -- computed on read from that table (see lib/video-scene-cues.ts), and an
 -- approximate video-wide baseline is just the average across whichever

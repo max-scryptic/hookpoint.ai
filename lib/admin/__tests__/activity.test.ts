@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 // A per-table store the mocked admin client reads from. Declared via vi.hoisted
 // so the vi.mock factory (which is hoisted above imports) can safely close over
-// it. Each query — from(table).select(...).gte(...)[.in(...)] — resolves to the
+// it. Each query - from(table).select(...).gte(...)[.in(...)] - resolves to the
 // rows registered for that table, ignoring the filter args (the code under test
 // does its own bucketing, which is what we're verifying).
 const { tableData } = vi.hoisted(() => ({
@@ -73,7 +73,7 @@ describe("getDailyActiveUsers", () => {
   })
 
   it("excludes admin users from the daily counts", async () => {
-    // u2 is an admin, so their activity must not be counted — the chart is
+    // u2 is an admin, so their activity must not be counted - the chart is
     // about real end users, not admins signing in to inspect the app.
     tableData.user_daily_activity = [
       { activity_date: "2026-07-21", user_id: "u1" },

@@ -1,9 +1,9 @@
 // Synthesizes cross-modal "events" for each retention window whose evidence
-// has fully settled — the deterministic editing metrics, the already-computed
-// per-snapshot vision analysis, and the audio analysis — into a handful of
+// has fully settled - the deterministic editing metrics, the already-computed
+// per-snapshot vision analysis, and the audio analysis - into a handful of
 // timestamped, narrated events explaining what plausibly drove that window's
 // retention change. One more LLM call per window; it never touches raw media
-// again — only the structured JSON/text evidence that extraction
+// again - only the structured JSON/text evidence that extraction
 // (lib/retention-window-media-extraction.ts) and analysis
 // (lib/retention-window-media-analysis.ts) already produced, so this is a
 // cheap text-only completion, not a second vision/audio call.
@@ -11,7 +11,7 @@
 // Runs after analyzeRetentionWindowMedia in the same trigger (see
 // lib/retention-window-media-trigger.ts): a window is only synthesized once
 // its scene-cue scan, every one of its snapshots, and its audio clip have all
-// *settled* (ready or failed) — not necessarily succeeded, since an event can
+// *settled* (ready or failed) - not necessarily succeeded, since an event can
 // still be synthesized from whatever evidence did come through. A window
 // that hasn't settled yet is silently skipped and retried on a later trigger.
 
@@ -237,7 +237,7 @@ export function compareToBaseline(
   return delta > 0 ? "above" : "below"
 }
 
-// The evidence bundle handed to the synthesis call for one window — every
+// The evidence bundle handed to the synthesis call for one window - every
 // field here is already-computed (deterministic or a prior LLM call's
 // output), never raw media.
 export interface WindowEvidence {
@@ -250,15 +250,15 @@ export interface WindowEvidence {
   transcript: string | null
   // The script-only explanation already shown to the user for this window
   // (lib/retention-attribution.ts), when one has been generated. Given so the
-  // synthesizer only surfaces events that ADD to or CONTRADICT it — a
-  // visual/audio/editing cause the words alone can't reveal — rather than
+  // synthesizer only surfaces events that ADD to or CONTRADICT it - a
+  // visual/audio/editing cause the words alone can't reveal - rather than
   // restating a cause the free tier already gave. Null when no script
   // attribution exists yet for this video.
   scriptExplanation: string | null
   // This window's own structured transcript read (lib/retention-window-transcript-taxonomy.ts):
   // what the words in this span say and how they feel, on the same closed axes
   // the whole-video script taxonomy uses. Best-effort context, never a
-  // prerequisite — null when it hasn't been generated (or failed/was skipped),
+  // prerequisite - null when it hasn't been generated (or failed/was skipped),
   // and synthesis never waits on it. Lets an event lean on, say, a topic shift
   // or an energy dip the words carry without re-deriving it from raw transcript.
   transcriptTaxonomy: WindowTranscriptTaxonomy | null
@@ -292,7 +292,7 @@ export interface WindowEvidence {
     chunkIndex: number
     timestampSeconds: number
     // Deterministic OCR text for this exact frame (lib/media/ocr.ts), not the
-    // vision model's own judgment — on_screen_text_change events can compare
+    // vision model's own judgment - on_screen_text_change events can compare
     // this across chunks without needing the model to have transcribed it.
     ocrText: string | null
     analysis: SnapshotAnalysis
@@ -305,7 +305,7 @@ export interface WindowEvidence {
   // Cross-video prior: a compact summary of the events previously synthesized
   // across this uploader's OTHER deeply-analysed videos (which event types
   // recur in hooks/drop-offs/gains and across how many videos, plus example
-  // narratives). Context for framing recurring channel habits — never grounds
+  // narratives). Context for framing recurring channel habits - never grounds
   // for inventing a local event. Null until enough other videos have been
   // deeply analysed to call anything a trend.
   channelHistory: ChannelEventHistory | null
@@ -316,7 +316,7 @@ type VisualFrame = WindowEvidence["visual"][number]
 // True when two already-analysed frames represent the same visual state: every
 // categorical judgment the vision model made matches and the deterministic OCR
 // text is identical. The free-text notable_event/description are deliberately
-// ignored — on a static talking head they narrate micro-motion ("his head dips
+// ignored - on a static talking head they narrate micro-motion ("his head dips
 // a little lower") that reads as change without being any, which is exactly the
 // redundancy this collapses. camera_movement is part of the comparison, so a
 // frame the model tagged "cut" never merges with a neighbouring "static" one:
@@ -339,7 +339,7 @@ function isSameVisualState(a: VisualFrame, b: VisualFrame): boolean {
 // down to the first frame of each run, so the synthesis call isn't paid to
 // re-read a handful of frames showing the same unchanged shot. Input must be in
 // chronological (chunkIndex) order, which getRetentionWindowSnapshotsForVideo
-// already guarantees. Only what's sent to the model is trimmed — the full set
+// already guarantees. Only what's sent to the model is trimmed - the full set
 // of harvested frames is still surfaced in the oversight UI
 // (components/deep-analysis-evidence.tsx).
 export function dedupeAdjacentVisualFrames(
@@ -356,7 +356,7 @@ export function dedupeAdjacentVisualFrames(
 
 // The synthesized events plus the cost of the LLM call that produced them, so
 // the orchestrator can persist per-window spend without the synthesizer
-// needing a DB handle — mirrors AnalyzeSnapshotsResult on the analysis side.
+// needing a DB handle - mirrors AnalyzeSnapshotsResult on the analysis side.
 export interface SynthesizeResult {
   events: SynthesizedEvent[]
   cost: LlmCallCost
@@ -392,7 +392,7 @@ function isMediaAnalysisSettled(media: {
 
 // Synthesizes events for every window whose event-synthesis job is pending
 // (or a stale failure) *and* whose evidence has settled. Best-effort per
-// window — a bad OpenAI call or malformed response fails just that window's
+// window - a bad OpenAI call or malformed response fails just that window's
 // job, the same failure-isolation extraction/analysis already use.
 export async function synthesizeRetentionWindowEvents(
   admin: SupabaseClient,
@@ -427,7 +427,7 @@ export async function synthesizeRetentionWindowEvents(
     getRetentionWindowTranscripts(admin, userId, analysedVideoId),
     // Best-effort: the script attribution is generated lazily when the report
     // page opens, so it may not exist yet when synthesis runs off the upload.
-    // A missing (or failed) read just leaves scriptExplanation null — the
+    // A missing (or failed) read just leaves scriptExplanation null - the
     // dedup reference is an enhancement, never a prerequisite.
     getRetentionAttribution(admin, userId, analysedVideoId).catch(() => null),
     getAnalysedVideoTranscriptById(admin, userId, analysedVideoId).catch(
@@ -453,7 +453,7 @@ export async function synthesizeRetentionWindowEvents(
   const transcriptByWindow = new Map(
     transcripts.map((t) => [t.retentionWindowId, t.transcript]),
   )
-  // Only ready taxonomies are handed to the synthesizer — a pending/failed/
+  // Only ready taxonomies are handed to the synthesizer - a pending/failed/
   // skipped one contributes nothing and must never masquerade as a read.
   const transcriptTaxonomyByWindow = new Map(
     transcripts
@@ -508,7 +508,7 @@ export async function synthesizeRetentionWindowEvents(
   const model = getEventSynthesisModel()
 
   // Every window's synthesis call is independent (own evidence bundle, own
-  // job row) — the same property that already lets extraction run
+  // job row) - the same property that already lets extraction run
   // concurrently, so there's no reason to award one window's OpenAI call
   // exclusive use of the wait before starting the next.
   await runWithConcurrency(
@@ -522,7 +522,7 @@ export async function synthesizeRetentionWindowEvents(
         window.analysisToSeconds == null
       ) {
         // The window vanished or lost its analysis window since this job was
-        // created — nothing to synthesize; leave the job pending rather than
+        // created - nothing to synthesize; leave the job pending rather than
         // erroring (createPendingRetentionWindowEventSynthesis will clean it
         // up on the next analyze).
         return

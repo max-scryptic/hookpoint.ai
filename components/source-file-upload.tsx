@@ -87,8 +87,8 @@ function formatDuration(seconds: number | null): string {
 }
 
 // One finished part the browser reports back to the completion endpoint. Defined
-// locally (not imported from @/lib/storage) so the server-only storage barrel —
-// and the AWS SDK it pulls in — never reaches the browser bundle.
+// locally (not imported from @/lib/storage) so the server-only storage barrel -
+// and the AWS SDK it pulls in - never reaches the browser bundle.
 interface CompletedPart {
   partNumber: number
   etag: string
@@ -238,7 +238,7 @@ async function uploadFileMultipart(
 // an off-screen <video> element. The browser already holds the picked file, so
 // this is essentially free and avoids any server-side probing. Resolves to null
 // when the browser can't decode the container (notably most .mkv files) or the
-// metadata can't be read within a short grace period — the server treats null as
+// metadata can't be read within a short grace period - the server treats null as
 // "couldn't verify" rather than a failure.
 function readVideoDuration(file: File): Promise<number | null> {
   return new Promise((resolve) => {
@@ -347,8 +347,8 @@ export function SourceFileUpload({
     client.phase === "uploading" ||
     client.phase === "processing"
 
-  // While an upload is in flight, warn the user before they leave the page —
-  // whether by reloading, closing the tab, or navigating to another page —
+  // While an upload is in flight, warn the user before they leave the page -
+  // whether by reloading, closing the tab, or navigating to another page -
   // because leaving would abort the direct-to-storage transfer and strand the
   // record mid-upload. Only active while busy so it never blocks navigation at
   // rest.
@@ -548,8 +548,8 @@ export function SourceFileUpload({
       setShowUploadedDialog(true)
       notifySourceFileReady(videoId)
       // Completing the upload kicks the deep-analysis pipeline off. The poll
-      // had already stopped — before this upload there was no file to analyse,
-      // so its first reading settled and it had no reason to keep asking — so
+      // had already stopped - before this upload there was no file to analyse,
+      // so its first reading settled and it had no reason to keep asking - so
       // restart it here. Without this the card behind the dialog shows a ready
       // file with no sign that anything is running until the page is reloaded.
       restartDeepAnalysisPoll()
@@ -601,7 +601,7 @@ export function SourceFileUpload({
 
   // Resets the video's deep analysis (scene cues, snapshots, audio and their
   // AI analysis, synthesized events) and re-kicks the pipeline against the
-  // source file already on hand — the file itself and the light analysis
+  // source file already on hand - the file itself and the light analysis
   // (retention curve, transcript, pacing) are untouched.
   async function onRetryDeepAnalysis() {
     setRetryState({ busy: true, error: null })
@@ -772,7 +772,7 @@ function Body({
         />
         {/* A successful duration match is worth confirming positively, so when
             the only concern is the filename the user still sees that the more
-            important check — the duration — lines up. Shown only when the
+            important check - the duration - lines up. Shown only when the
             comparison actually ran (differenceSeconds is non-null) and passed. */}
         {!client.durationMismatch && client.durationDifferenceSeconds != null && (
           <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400">
@@ -933,7 +933,7 @@ function Body({
 // when the last run didn't finish, a note prompting a retry.
 //
 // A run still in flight shows as a single "Processing…" badge alongside the
-// card's actions — deliberately not a spinner line and an eight-stage
+// card's actions - deliberately not a spinner line and an eight-stage
 // checklist, which would change the card's size under the reader for as long
 // as the pipeline ran.
 function ReadySourceFileCard({
@@ -954,7 +954,7 @@ function ReadySourceFileCard({
   // Whether the footage-based half of the analysis is still running for this
   // video, shown as a "Processing…" badge beside the card's actions. The
   // provider seeds its first reading from the server render, so this is right
-  // from the first paint — no waiting on a poll, and no badge flashed onto a
+  // from the first paint - no waiting on a poll, and no badge flashed onto a
   // report that was never analysing.
   const { failed, analysing: processing } = useDeepAnalysisStatus()
 

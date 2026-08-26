@@ -139,7 +139,7 @@ function fakeAnalyzer(
 // retention-window-media-extraction.test.ts uses for the extraction side.
 //
 // Claiming does an update().select(), which this fake treats as "claimed
-// every canned row for that table" (it doesn't model the real WHERE clause) —
+// every canned row for that table" (it doesn't model the real WHERE clause) -
 // good enough since these tests care about what analyzeRetentionWindowMedia
 // does with claimed rows, not the claim's own row-locking semantics (that's
 // exercised for real by Postgres, not this fake).

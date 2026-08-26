@@ -3,7 +3,7 @@ import { AdminUsersTable } from "@/components/admin/admin-users-table"
 import { requireAdminUser } from "@/lib/admin/auth"
 import { listUsers } from "@/lib/admin/users"
 
-// Per-request admin data behind an auth check — never statically prerender.
+// Per-request admin data behind an auth check - never statically prerender.
 export const dynamic = "force-dynamic"
 
 // Users management. Admin access is granted directly in the database, so this

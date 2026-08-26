@@ -47,7 +47,7 @@ interface VideosPage {
 // How many videos a single displayed page holds, counted *after* the
 // client-side filters (hidden analysed uploads, privacy, date range) have been
 // applied. Every page is filled to this many visible rows before the user can
-// advance — see the buffering effect below.
+// advance - see the buffering effect below.
 const PAGE_SIZE = 12
 
 // How many uploads to pull from YouTube per API call while filling a page.
@@ -60,7 +60,7 @@ const FETCH_SIZE = 50
 // YouTube limits forMine=true uploads to these three orders.
 const SORT_OPTIONS: Array<{ value: RecentVideosOrder; label: string }> = [
   { value: "date", label: "Newest first" },
-  { value: "title", label: "Title (A–Z)" },
+  { value: "title", label: "Title (A-Z)" },
   { value: "viewCount", label: "Most viewed" },
 ]
 
@@ -85,7 +85,7 @@ export function VideoBrowser({
   // so analysed uploads stay flagged across every paginated page.
   analysedVideoIds?: string[]
   // Whether this creator has yet to analyse anything, and so is owed the coach
-  // mark pointing at a row's actions menu — the list gives no other sign that
+  // mark pointing at a row's actions menu - the list gives no other sign that
   // an analysis starts there. Only the first page carries it: someone paging
   // through their uploads has read the row already.
   showFirstAnalysisHint?: boolean
@@ -125,7 +125,7 @@ export function VideoBrowser({
 
   const [pageNumber, setPageNumber] = useState(1)
   // Start in the loading state when the server-rendered first page doesn't
-  // already hold a full page of visible rows and YouTube has more to give — the
+  // already hold a full page of visible rows and YouTube has more to give - the
   // buffering effect will immediately fetch more, and seeding `loading` to true
   // means the very first paint shows the skeleton instead of the handful of
   // initial rows that would otherwise flash before jumping to the full list. At
@@ -148,7 +148,7 @@ export function VideoBrowser({
   const feedQueryKeyRef = useRef(queryKey)
 
   // The search string and order flow into the fetch through refs so the fetch
-  // helper can stay identity-stable — otherwise every keystroke would rebuild
+  // helper can stay identity-stable - otherwise every keystroke would rebuild
   // the buffering effect and retrigger it.
   const debouncedSearchRef = useRef(debouncedSearch)
   const orderRef = useRef(order)
@@ -232,7 +232,7 @@ export function VideoBrowser({
   // The buffering engine. On every change to the query, the page, or the
   // filters it (a) rebuilds the feed from scratch when the server-side query
   // changed, then (b) keeps pulling YouTube batches until enough *visible* rows
-  // are buffered to fill the current page — plus one extra, which is how we
+  // are buffered to fill the current page - plus one extra, which is how we
   // know whether an older page exists.
   useEffect(() => {
     let cancelled = false
@@ -360,7 +360,7 @@ export function VideoBrowser({
   const canGoPrev = pageNumber > 1
   const canGoNext = visibleVideos.length > pageNumber * PAGE_SIZE
 
-  // Any time the list is loading — the initial buffer, a new query, or paging —
+  // Any time the list is loading - the initial buffer, a new query, or paging -
   // show the table skeleton rather than the current rows. A single loading visual
   // keeps the wait looking the same in every scenario: without this we'd
   // sometimes dim a full page of already-buffered rows (e.g. when no uploads are
@@ -370,7 +370,7 @@ export function VideoBrowser({
   const showSkeleton = loading
 
   // When a query returns nothing, show a blank slate instead of the list and
-  // hide the pagination controls — there are no further pages to step through.
+  // hide the pagination controls - there are no further pages to step through.
   const isEmpty = !showSkeleton && pageVideos.length === 0
   const emptyMessage = hasActiveFilters
     ? "No videos match your filters."
@@ -479,8 +479,8 @@ export function VideoBrowser({
 
       {/* Results */}
       {showSkeleton ? (
-        // While loading, always show the skeleton — never the current rows dimmed
-        // — so the loading state looks identical in every scenario, and the table
+        // While loading, always show the skeleton - never the current rows dimmed
+        // - so the loading state looks identical in every scenario, and the table
         // never visibly grows as buffered batches land.
         <VideoTableRowsSkeleton rows={PAGE_SIZE} />
       ) : isEmpty ? (
@@ -499,7 +499,7 @@ export function VideoBrowser({
         />
       )}
 
-      {/* Pagination — hidden when there are no videos to page through, and while
+      {/* Pagination - hidden when there are no videos to page through, and while
           the skeleton is up (the buttons would only be disabled mid-buffer). */}
       {!isEmpty && !showSkeleton && (
         <div className="flex items-center justify-between gap-3">

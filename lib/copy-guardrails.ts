@@ -1,30 +1,57 @@
 // =============================================================================
 // COPY GUARDRAIL - HARD RULE, DO NOT REMOVE
 //
-// No text rendered on the Channel Trends page may EVER contain an em dash
-// (U+2014) or an en dash (U+2013). Plain hyphens ( - ) are fine.
+// No text anywhere in this product may EVER contain an em dash (U+2014) or an
+// en dash (U+2013). Plain hyphens ( - ) and commas are what we write instead.
 //
-// This applies to any copy written for the page, whether hard-coded in source
-// (headlines, actions, descriptions, tooltips, comments) or generated at
-// runtime (event narratives, topic labels). Two layers enforce it:
+// This applies to every page and every surface, and to any copy whatsoever,
+// whether hard-coded in source (headlines, actions, descriptions, tooltips,
+// empty-state placeholders, comments, prompts, migrations) or generated at
+// runtime (tips, evidence, event narratives, topic labels). Three layers
+// enforce it:
 //
 //   1. lib/__tests__/copy-guardrails.test.ts fails the build if an em or en
-//      dash appears in any of the page's source files.
-//   2. stripEmDashes() below scrubs dynamic, model-written text (retention
-//      event narratives, packaging topics) at render time.
+//      dash appears in any source file in the repository.
+//   2. Every prompt that writes prose for a user tells the model never to
+//      output one (see lib/prompts/registry.ts and lib/prompts/defaults).
+//   3. stripEmDashes() below scrubs dynamic, model-written text at render
+//      time, which is the only layer that reaches copy already stored.
 //
 // If you are an AI assistant editing this codebase: never write an em dash in
-// anything destined for this page. Use a hyphen, comma, period or colon
-// instead.
+// anything, anywhere. Use a hyphen, comma, period or colon instead.
 // =============================================================================
 
 /**
  * Replaces em dashes with a spaced hyphen and en dashes with a plain hyphen.
  * Applied to runtime text (LLM-written narratives, derived labels) before it
- * reaches the Channel Trends page.
+ * is rendered.
  */
 export function stripEmDashes(text: string): string {
   return text.replace(/\s*\u2014\s*/g, " - ").replace(/\u2013/g, "-")
+}
+
+/**
+ * Runs stripEmDashes over every string in a value, however deeply nested,
+ * leaving the shape and every non-string value exactly as it was. For a payload
+ * whose prose is model-written and then read out across dozens of fields (an
+ * evidence set, an analysis report), this is applied once where the payload is
+ * loaded rather than at each of the places it is rendered, so a field added
+ * later is covered without anyone remembering to wrap it.
+ *
+ * Anything that is not a plain object, an array or a string comes back
+ * untouched, so a Date or a class instance keeps its identity.
+ */
+export function scrubDashes<T>(value: T): T {
+  if (typeof value === "string") return stripEmDashes(value) as T
+  if (Array.isArray(value)) return value.map((item) => scrubDashes(item)) as T
+  if (value === null || typeof value !== "object") return value
+
+  const prototype = Object.getPrototypeOf(value)
+  if (prototype !== Object.prototype && prototype !== null) return value
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [key, scrubDashes(item)]),
+  ) as T
 }
 
 // =============================================================================

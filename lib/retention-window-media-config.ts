@@ -75,7 +75,7 @@ export function getLocalSourceCacheMaxBytes(): number {
 //
 // Default 2, not 4: a scene-cue scan decodes every frame of its window at
 // full source resolution before the scale filter downsamples it, which is
-// genuinely CPU-bound — on a Vercel serverless function's single (or
+// genuinely CPU-bound - on a Vercel serverless function's single (or
 // fractional) vCPU, 4 of those running at once means each gets a quarter of
 // one core, which routinely pushed a 30-40s window's decode past the 90s
 // scanVideoSceneCues timeout (or, worse, past the surrounding route's whole
@@ -91,7 +91,7 @@ export function getRetentionWindowExtractionConcurrency(): number {
 
 // How many windows' worth of OpenAI calls (vision/audio analysis, event
 // synthesis) run at once. Unlike extraction's ffmpeg concurrency above, these
-// calls are network-bound, not CPU-bound — the wait is almost entirely on
+// calls are network-bound, not CPU-bound - the wait is almost entirely on
 // OpenAI's side, so there's no local-CPU-contention reason to keep this low.
 // Every window is fully independent (own rows, own storage objects), the same
 // property that makes extraction's concurrency safe. Default 5, comfortably
@@ -122,15 +122,15 @@ export function getSnapshotAnalysisModel(): string {
 }
 
 // OpenAI model used to describe a window's harvested audio clip (audio
-// input). Must be an audio-capable Chat Completions model — gpt-5.4-mini
+// input). Must be an audio-capable Chat Completions model - gpt-5.4-mini
 // (used for the other analysis steps) has no audio modality at all.
 export function getAudioAnalysisModel(): string {
   return process.env.OPENAI_AUDIO_ANALYSIS_MODEL || "gpt-audio-mini"
 }
 
 // OpenAI model used for the per-window cross-modal event-synthesis call
-// (lib/retention-window-event-synthesis.ts). Text-only — it consumes the
-// already-computed structured evidence, not raw media — so this can be a
+// (lib/retention-window-event-synthesis.ts). Text-only - it consumes the
+// already-computed structured evidence, not raw media - so this can be a
 // cheaper/faster model independent of the vision/audio models above.
 export function getEventSynthesisModel(): string {
   return process.env.OPENAI_EVENT_SYNTHESIS_MODEL || "gpt-4.1-mini"

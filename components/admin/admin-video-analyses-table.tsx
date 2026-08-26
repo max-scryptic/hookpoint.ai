@@ -36,7 +36,7 @@ function CostCell({ value }: { value: number }) {
       {value > 0 ? (
         formatUsd(value)
       ) : (
-        <span className="text-muted-foreground">—</span>
+        <span className="text-muted-foreground">-</span>
       )}
     </TableCell>
   )
@@ -51,7 +51,7 @@ function DateCell({ value }: { value: string | null }) {
       {value ? (
         format(new Date(value), "d MMM yyyy, HH:mm")
       ) : (
-        <span className="text-muted-foreground">—</span>
+        <span className="text-muted-foreground">-</span>
       )}
     </TableCell>
   )
@@ -60,8 +60,8 @@ function DateCell({ value }: { value: string | null }) {
 // The "Raw file uploaded" cell: the upload timestamp, plus a spinner while the
 // deep-analysis pipeline is still running so an admin can see at a glance which
 // videos are mid-analysis. Opening the row shows the per-stage breakdown. The
-// table re-fetches itself while any row is processing, so the spinner clears —
-// and the events/cost columns fill in — as each pipeline finishes.
+// table re-fetches itself while any row is processing, so the spinner clears -
+// and the events/cost columns fill in - as each pipeline finishes.
 function RawFileCell({
   uploadedAt,
   processing,
@@ -74,7 +74,7 @@ function RawFileCell({
       {uploadedAt ? (
         format(new Date(uploadedAt), "d MMM yyyy, HH:mm")
       ) : (
-        <span className="text-muted-foreground">—</span>
+        <span className="text-muted-foreground">-</span>
       )}
       {processing && (
         <span className="mt-1 flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-500">
@@ -89,7 +89,7 @@ function RawFileCell({
 // The admin user-detail "Analysed videos" listing. Adopts the shared front-end
 // table baseline (card surface, accent header, clickable rows) so admin and
 // product surfaces read as one system. Every row opens the video's analysis
-// detail page — its Light Analysis / Deep Analysis oversight tabs — since even
+// detail page - its Light Analysis / Deep Analysis oversight tabs - since even
 // a video that's only had the initial light analysis has evidence worth
 // inspecting there. The external icon still opens the source video on YouTube
 // in a new tab, and the per-video light/deep spend rolls up alongside the
@@ -110,8 +110,8 @@ export function AdminVideoAnalysesTable({
   // without this an admin watching a video finish would see a spinner that
   // never resolves. Checks every row (not just the visible page) so paging
   // around doesn't stop the refresh. A gentler cadence than the default because
-  // refreshing this route re-reads the whole user page — including its
-  // Stripe-backed revenue and billing history — for what is a background check.
+  // refreshing this route re-reads the whole user page - including its
+  // Stripe-backed revenue and billing history - for what is a background check.
   useProcessingRefresh(
     videos.some((video) => video.processing),
     { intervalMs: 15000 },
@@ -200,7 +200,7 @@ export function AdminVideoAnalysesTable({
                   {video.eventCount > 0 ? (
                     video.eventCount.toLocaleString()
                   ) : (
-                    <span className="text-muted-foreground">—</span>
+                    <span className="text-muted-foreground">-</span>
                   )}
                 </TableCell>
               </TableRow>

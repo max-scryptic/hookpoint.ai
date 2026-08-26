@@ -110,7 +110,7 @@ describe("shouldDeferExtractionUntilAnalysisProxy", () => {
     ).toBe(false)
   })
 
-  it("never defers once normalisation has settled — no proxy is coming", () => {
+  it("never defers once normalisation has settled - no proxy is coming", () => {
     for (const normalisationStatus of ["ready", "failed", "skipped"] as const) {
       expect(
         shouldDeferExtractionUntilAnalysisProxy(
@@ -268,7 +268,7 @@ describe("extractPendingRetentionWindowMedia", () => {
 
     expect(storage.createSignedReadUrl).not.toHaveBeenCalled()
     expect(extractor.extractThumbnail).not.toHaveBeenCalled()
-    // No pending snapshots at all — never worth paying for a worker/model
+    // No pending snapshots at all - never worth paying for a worker/model
     // load that would go completely unused.
     expect(createOcrEngineSpy).not.toHaveBeenCalled()
   })
@@ -420,7 +420,7 @@ describe("extractPendingRetentionWindowMedia", () => {
     )
     expect(mediaStorage.putObject).toHaveBeenCalledTimes(2)
     // One worker for the whole run, reused across snapshots and torn down
-    // once extraction finishes — not recreated per frame.
+    // once extraction finishes - not recreated per frame.
     expect(ocrEngine.recognize).toHaveBeenCalledWith(Buffer.from("jpeg-bytes"))
     expect(ocrEngine.terminate).toHaveBeenCalledTimes(1)
 
@@ -443,7 +443,7 @@ describe("extractPendingRetentionWindowMedia", () => {
     )
   })
 
-  it("treats an OCR failure as best-effort — the snapshot still succeeds with a null ocrText", async () => {
+  it("treats an OCR failure as best-effort - the snapshot still succeeds with a null ocrText", async () => {
     const { supabase, updates } = makeFakeSupabase(
       [
         {
@@ -483,7 +483,7 @@ describe("extractPendingRetentionWindowMedia", () => {
     expect(ocrEngine.terminate).toHaveBeenCalledTimes(1)
   })
 
-  it("treats OCR engine setup itself failing as best-effort — snapshots and audio still extract", async () => {
+  it("treats OCR engine setup itself failing as best-effort - snapshots and audio still extract", async () => {
     const { supabase, updates } = makeFakeSupabase(
       [
         {
@@ -525,7 +525,7 @@ describe("extractPendingRetentionWindowMedia", () => {
 
     // A broken OCR runtime (e.g. a bundling issue that leaves the worker
     // script missing in production) must not strand every pending snapshot
-    // and audio clip 'pending' forever — only OCR itself is skipped.
+    // and audio clip 'pending' forever - only OCR itself is skipped.
     expect(updates).toContainEqual(
       expect.objectContaining({
         table: "retention_window_snapshots",
@@ -757,7 +757,7 @@ describe("extractPendingRetentionWindowMedia", () => {
       acquireLocalSource: async () => null,
     })
 
-    // No cue data to store — the scan itself never produced any.
+    // No cue data to store - the scan itself never produced any.
     expect(inserts.filter((i) => i.table === "video_scene_cues")).toHaveLength(0)
 
     // [0,10] with no cut data falls back to the fixed 5s grid: 0, 5, 10.
@@ -894,7 +894,7 @@ describe("sliceSceneCues", () => {
   })
 })
 
-describe("extractPendingRetentionWindowMedia — merged scans and shared frames", () => {
+describe("extractPendingRetentionWindowMedia - merged scans and shared frames", () => {
   it("decodes overlapping windows' scans as one span and slices cues per window", async () => {
     const { supabase, updates, inserts } = makeFakeSupabase(
       [],
@@ -1181,7 +1181,7 @@ describe("extractPendingRetentionWindowMedia — merged scans and shared frames"
       },
     } as unknown as SupabaseClient
 
-    // The baseline's full-video scan never resolves — standing in for a source
+    // The baseline's full-video scan never resolves - standing in for a source
     // so expensive to decode that the pass alone blows the serverless budget,
     // exactly the failure that left a real 8.5-minute upload spinning on
     // "Fetching snapshots" forever: the budget-consuming baseline ran ahead of
@@ -1196,7 +1196,7 @@ describe("extractPendingRetentionWindowMedia — merged scans and shared frames"
 
     // Deliberately not awaited to completion: with the fix the harvest is
     // awaited *before* the never-resolving baseline, so the harvest's row
-    // updates land while the outer call stays pending on the baseline — the
+    // updates land while the outer call stays pending on the baseline - the
     // same state production ends up in when the invocation is later killed
     // mid-baseline with the harvest already durably persisted.
     void extractPendingRetentionWindowMedia(supabase, fakeStorage(), makeSourceFile(), {

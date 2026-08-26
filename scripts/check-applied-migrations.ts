@@ -4,7 +4,7 @@
 // Nothing in the deploy pipeline runs migrations: Vercel ships the code the
 // moment a pull request lands, and the SQL beside it is applied out of band by
 // hand. So a merge can leave the application asking for a table or column the
-// database does not have, and the failure is usually silent — the reads that
+// database does not have, and the failure is usually silent - the reads that
 // touch new schema tend to be best-effort, so the feature simply never appears
 // and nobody is told why. This is the thing that tells us.
 //
@@ -13,14 +13,14 @@
 // Deliberately not run on pull requests: a branch that adds a migration has not
 // had it applied yet, which is correct rather than broken.
 //
-// Matching is by migration *name* — the filename with its leading timestamp and
-// .sql suffix removed — not by the version stamp. The two do not line up here:
+// Matching is by migration *name* - the filename with its leading timestamp and
+// .sql suffix removed - not by the version stamp. The two do not line up here:
 // a migration applied through the dashboard or the Supabase MCP is recorded
 // under the timestamp of the moment it ran, not the one in the filename, so
 // comparing versions would report almost every row as drift. Names survive
 // that; renaming a committed migration is what breaks it, so don't.
 //
-// The reverse direction — a name in the ledger with no file in the repo — is
+// The reverse direction - a name in the ledger with no file in the repo - is
 // left alone. Several of those exist and are expected: a follow-up fix applied
 // straight to the database and then folded into the original migration file
 // keeps its own ledger row forever, and flagging those would mean six lines of
@@ -62,7 +62,7 @@ function readMigrationFiles(directory: string): string[] {
 }
 
 // psql's connection details go through the environment rather than argv, so a
-// connection string carrying a password never reaches a CI log — not through
+// connection string carrying a password never reaches a CI log - not through
 // the process listing, and not through the "Command failed: psql …" message
 // Node builds when the child exits non-zero.
 function connectionEnv(databaseUrl: string): NodeJS.ProcessEnv {
@@ -154,8 +154,8 @@ function main(): void {
     `\n${unapplied.length} committed migration(s) have not been applied:\n` +
       unapplied.map((file) => `  ${MIGRATIONS_DIR}/${file}`).join("\n") +
       "\n\nWhatever shipped alongside them is live against a database that does " +
-      "not have their schema yet. Apply them — the dashboard's SQL editor, or " +
-      "supabase db push — and re-run this check.",
+      "not have their schema yet. Apply them - the dashboard's SQL editor, or " +
+      "supabase db push - and re-run this check.",
   )
   process.exit(1)
 }

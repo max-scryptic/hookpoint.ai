@@ -8,7 +8,7 @@
 -- owner reopening the report page, because that page's progress poll was the
 -- only thing that ever re-kicked the pipeline. Production runs show the shape
 -- of it: a run dying in `extraction`, eight silent minutes, then a 19-second
--- run — the one the returning user's poll started — finishing everything.
+-- run - the one the returning user's poll started - finishing everything.
 --
 -- Two things replace that user. A pass now hands its leftovers to a fresh
 -- invocation before its budget runs out (recorded here as the 'paused' status),
@@ -18,7 +18,7 @@
 
 -- A pass that stopped early to hand over is neither ready nor failed: the
 -- analysis is still coming, so the report keeps its processing badge instead of
--- showing a retry prompt. It holds no lease — only 'running' does — so the next
+-- showing a retry prompt. It holds no lease - only 'running' does - so the next
 -- invocation can claim the video immediately.
 alter table public.deep_analysis_pipeline_runs
   drop constraint if exists deep_analysis_pipeline_runs_status_check;
@@ -122,7 +122,7 @@ revoke all on function maintenance.resume_stalled_deep_analysis() from public;
 -- Every five minutes: often enough that a stalled analysis finishes while its
 -- owner is still in the app, rare enough that a video whose pass is genuinely
 -- running is almost never poked (a live lease and a 90-second cooldown make an
--- overlapping tick a no-op anyway). Rescheduling is idempotent — cron.schedule
+-- overlapping tick a no-op anyway). Rescheduling is idempotent - cron.schedule
 -- updates the job when the name already exists.
 select cron.schedule(
   'resume-stalled-deep-analysis',

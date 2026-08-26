@@ -4,7 +4,7 @@ name: Migrations
 # request ships its code to production immediately, while the SQL beside it sits
 # in supabase/migrations until someone runs it. This watches for the gap.
 #
-# It cannot gate the deploy — Vercel builds from the merge, not from this run —
+# It cannot gate the deploy - Vercel builds from the merge, not from this run -
 # so treat a failure here as an alarm on live production rather than a blocked
 # release, and go and apply the migration it names.
 on:
@@ -43,7 +43,7 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      # The check has no dependencies of its own — no npm ci — but it does read
+      # The check has no dependencies of its own - no npm ci - but it does read
       # the database through psql, which the runner image usually ships.
       - name: Ensure psql is available
         run: |

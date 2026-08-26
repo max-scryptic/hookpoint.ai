@@ -2,7 +2,7 @@
 // hook window, significant drop-off and retention gain, an explanation of what
 // was likely happening (grounded in what was being said at that moment) plus a
 // concrete tip where useful. This is the API-only, source-file-free counterpart
-// to the deep-analysis events synthesized from harvested frames/audio — it
+// to the deep-analysis events synthesized from harvested frames/audio - it
 // reasons purely from the retention numbers and the caption transcript.
 //
 // Mirrors lib/pacing-analysis.ts: a single OpenAI Responses call with a strict
@@ -246,7 +246,7 @@ function isModelOutput(value: unknown): value is ModelOutput {
 }
 
 // Generates the retention attribution, or null when there's nothing to attribute
-// (no drop-offs/gains, or none carrying enough transcript to reason from —
+// (no drop-offs/gains, or none carrying enough transcript to reason from -
 // attributing a moment with no words would just be invention).
 export async function generateRetentionAttribution(
   video: Pick<VideoDetails, "title" | "durationSeconds">,

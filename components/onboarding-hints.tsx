@@ -15,7 +15,7 @@ import { SparklesIcon, XIcon } from "lucide-react"
 import type { OnboardingHint } from "@/lib/onboarding-hints"
 import { cn } from "@/lib/utils"
 
-// Where a hint's arrow sits on the bubble, and where along that edge — set by
+// Where a hint's arrow sits on the bubble, and where along that edge - set by
 // whatever the bubble is anchored to, so the arrow lands on the thing being
 // pointed at rather than in the middle of it.
 export type HintArrow = {
@@ -53,8 +53,8 @@ export function OnboardingHintsProvider({
   const [pending, setPending] = useState<ReadonlySet<string>>(
     () => new Set(pendingHints),
   )
-  // The same set, readable synchronously. The gestures that dismiss a hint —
-  // clicking a chart highlight, opening a tab — go on happening long after it
+  // The same set, readable synchronously. The gestures that dismiss a hint -
+  // clicking a chart highlight, opening a tab - go on happening long after it
   // is gone, and this is what stops each of them posting the hint again before
   // the re-render lands.
   const pendingRef = useRef(pending)
@@ -85,8 +85,8 @@ export function OnboardingHintsProvider({
 }
 
 // Whether one hint is still to be met, and the way to retire it. `dismiss` is
-// safe to call unconditionally — from the very handler the hint is teaching, so
-// using the feature is what puts the hint away — and does nothing once the hint
+// safe to call unconditionally - from the very handler the hint is teaching, so
+// using the feature is what puts the hint away - and does nothing once the hint
 // has already gone.
 export function useOnboardingHint(hint: OnboardingHint): {
   pending: boolean
@@ -98,7 +98,7 @@ export function useOnboardingHint(hint: OnboardingHint): {
 }
 
 // How far in from the bubble's aligned edge HintCallout draws the centre of its
-// arrow — the 20px inset of the rotated square plus half its 10px size. An
+// arrow - the 20px inset of the rotated square plus half its 10px size. An
 // anchored bubble is offset by this much so the arrow lands on the middle of
 // what it points at.
 const ARROW_INSET = 25
@@ -174,7 +174,7 @@ export function AnchoredHintCallout({
 
 // The coach mark itself: a small primary-coloured bubble with a one-line
 // explanation and a way to wave it off without using the feature. Positioning
-// belongs to the caller — this only draws the bubble and, where the caller asks
+// belongs to the caller - this only draws the bubble and, where the caller asks
 // for one, the arrow pointing back out of it.
 export function HintCallout({
   title,

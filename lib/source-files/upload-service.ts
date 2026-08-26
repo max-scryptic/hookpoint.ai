@@ -152,7 +152,7 @@ export async function initiateSourceFileUpload(
   })
 
   // Best-effort cleanup of the replaced upload's objects (original + any
-  // proxies) — never block a new upload on a stale-object delete.
+  // proxies) - never block a new upload on a stale-object delete.
   for (const stalePath of [
     previousStoragePath,
     previousProxyStoragePath,
@@ -309,7 +309,7 @@ export async function completeSourceFileUpload(
 
   // Validate against the browser-measured duration and the YouTube title. This
   // is pure and instant, so we compute the verdict and write the final state in
-  // one update — the row goes straight from "uploading" to a terminal state with
+  // one update - the row goes straight from "uploading" to a terminal state with
   // no probing step in between that could time out and strand it.
   const analysed = await getAnalysedVideo(
     supabase,
@@ -385,8 +385,8 @@ export function isStaleSourceFile(sourceFile: SourceFile): boolean {
 }
 
 // Discards an abandoned upload so the UI can fall back to a fresh upload CTA:
-// removes the (possibly partial) storage object — best-effort, the same as the
-// delete route — then deletes the DB row, which is the source of truth.
+// removes the (possibly partial) storage object - best-effort, the same as the
+// delete route - then deletes the DB row, which is the source of truth.
 //
 // Note for multipart uploads abandoned via a tab-close: there is no completed
 // object to delete here (the parts are only assembled at completion), and we

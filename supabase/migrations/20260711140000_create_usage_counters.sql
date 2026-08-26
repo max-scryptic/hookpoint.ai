@@ -6,7 +6,7 @@
 --   • annual paid plans  → monthly slice anchored to current_period_start
 --   • Free plan          → monthly window anchored to account creation
 -- Because the window start is part of the key, a new window simply lands on a
--- new row that starts at zero — that is how limits "reset" on the billing date
+-- new row that starts at zero - that is how limits "reset" on the billing date
 -- without any scheduled job to clear counters.
 --
 -- Locked down exactly like billing_customers/billing_subscriptions: RLS on, no

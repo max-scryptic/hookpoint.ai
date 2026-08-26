@@ -14,7 +14,7 @@ import {
 import { triggerRetentionWindowMediaExtraction } from "@/lib/retention-window-media-trigger"
 
 // Extraction runs in the background via after() once the response is sent, but
-// still within this invocation's time budget — give it room beyond the default.
+// still within this invocation's time budget - give it room beyond the default.
 export const maxDuration = 300
 
 // POST /api/source-files/normalisation-callback?secret=...
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
 
   const callback = parseQencodeCallback(fields)
   if (!callback) {
-    // Nothing actionable (no task token) — acknowledge so it isn't retried.
+    // Nothing actionable (no task token) - acknowledge so it isn't retried.
     return NextResponse.json({ ok: true })
   }
 
@@ -84,11 +84,11 @@ export async function POST(request: NextRequest) {
     )
 
     // The retention analysis may already have run for this video (this
-    // callback can land after /api/analyze) — if so, kick off extraction now
+    // callback can land after /api/analyze) - if so, kick off extraction now
     // instead of waiting on a future analyze call. Fired on failure too, not
     // just success: extraction defers heavy sources while a proxy is still in
     // flight (see shouldDeferExtractionUntilAnalysisProxy), and a failed
-    // transcode is what settles that wait — the master is now the final
+    // transcode is what settles that wait - the master is now the final
     // source, so the deferred rows should run against it rather than sit
     // pending until the user happens to revisit the dashboard.
     if (callback.outcome === "completed" || callback.outcome === "error") {

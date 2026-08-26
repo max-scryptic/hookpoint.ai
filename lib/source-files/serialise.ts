@@ -1,7 +1,7 @@
 // Client-facing serialisation for a source file. Lives in its own module (with
 // only type imports) so both server routes and client components can share the
 // shape without dragging server-only code into the browser bundle. The raw
-// storage path is intentionally never exposed — clients only get signed URLs.
+// storage path is intentionally never exposed - clients only get signed URLs.
 
 import type { SourceFile } from "@/lib/source-files/source-files"
 

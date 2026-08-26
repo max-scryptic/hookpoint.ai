@@ -1,4 +1,4 @@
-// Detects video-editing cues — hard cuts, freeze-frames, and cuts-to-black —
+// Detects video-editing cues - hard cuts, freeze-frames, and cuts-to-black -
 // within one retention window's analysis range, via a single ffmpeg pass over
 // just that span. Purely deterministic (ffmpeg's own scene-change/freeze/
 // black filters), no model involved: see lib/video-scene-cues.ts for how the
@@ -15,7 +15,7 @@
 //
 // All three filters run in one -vf chain, not three separate ffmpeg
 // invocations, since freezedetect/blackdetect pass every frame through
-// unmodified (they just annotate stderr) — placing them ahead of
+// unmodified (they just annotate stderr) - placing them ahead of
 // select/showinfo (which drops every frame that isn't a detected cut) lets
 // one decode of the window feed all three.
 
@@ -31,7 +31,7 @@ const SCENE_DETECTION_SCALE_WIDTH = 320
 // counts as a hard cut. Held at 0.5 rather than the commonly-cited 0.4: at 0.4
 // a static talking-head shot was tripping false cuts on the subject's own
 // motion (a head tilt, a lean, a squint), each of which then spawned a flanking
-// snapshot pair — a handful of near-duplicate frames for a shot that never
+// snapshot pair - a handful of near-duplicate frames for a shot that never
 // actually cut. 0.5 clears that ordinary within-shot motion while still
 // catching genuine hard cuts; the clustering in buildSnapshotTimestampsFromSceneCues
 // and the adjacent-frame dedup in event synthesis are the second and third
@@ -78,7 +78,7 @@ export interface MotionBucket {
 
 // `-copyts` keeps every reported timestamp (pts_time, freeze_start,
 // black_start/end) in the source video's own absolute timeline instead of
-// rebasing to zero at the seek point — the default ffmpeg behaviour for a
+// rebasing to zero at the seek point - the default ffmpeg behaviour for a
 // trimmed output. Without it, every parsed timestamp would need `fromSeconds`
 // manually added back on, and would be wrong by however much `-ss` overshot
 // while seeking to the nearest keyframe.
@@ -118,7 +118,7 @@ export function buildSceneCueScanArgs(
 // buildSceneCueScanArgs run.
 //
 // Cuts come from showinfo's `pts_time:` field on every frame `select` let
-// through (i.e. every detected scene change) — no score is recorded since
+// through (i.e. every detected scene change) - no score is recorded since
 // ffmpeg doesn't print `select`'s internal scene score to stderr.
 //
 // blackdetect logs one line per span with start/end already paired
@@ -193,7 +193,7 @@ export function parseSceneCues(
 }
 
 // Unlike a thumbnail/audio grab (seek to one point, pull a little data), a
-// scan decodes and filters every frame across its whole range — observed in
+// scan decodes and filters every frame across its whole range - observed in
 // practice to routinely exceed 30s for a 30-40s window. Since overlapping
 // windows are scanned as merged spans (see mergeScanSpans in
 // lib/retention-window-media-extraction.ts) the range can be longer than a

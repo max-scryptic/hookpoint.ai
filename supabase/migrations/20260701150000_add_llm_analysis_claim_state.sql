@@ -4,7 +4,7 @@
 --
 -- These are triggered from several independent places (the /api/analyze
 -- route, the dashboard page's render-time backfill, and the Qencode
--- normalisation webhook) that can legitimately fire close together — two
+-- normalisation webhook) that can legitimately fire close together - two
 -- browser tabs, a page refresh while the first request is still generating,
 -- a retried webhook. Without a claim step, two concurrent callers can both
 -- read "not yet analysed" and both call out to the LLM for identical work
@@ -16,11 +16,11 @@
 -- does the LLM call, then writes 'ready'/'failed' same as before. A claim
 -- older than the staleness window below is treated as abandoned (e.g. the
 -- caller was killed by a function timeout) and can be reclaimed, so a stuck
--- claim doesn't block analysis forever — the same self-healing tradeoff
+-- claim doesn't block analysis forever - the same self-healing tradeoff
 -- source-file normalisation already makes with its own 'processing' state.
 
 -- Looks up and drops whichever constraint currently enforces analysis_status's
--- allowed values, by inspecting its definition rather than assuming a name —
+-- allowed values, by inspecting its definition rather than assuming a name -
 -- Postgres's auto-generated name for an inline column check isn't guaranteed
 -- across versions, and getting this wrong (e.g. via a silent `if exists`)
 -- would leave the old, narrower constraint in place rejecting 'processing'.
@@ -75,7 +75,7 @@ alter table public.retention_window_audio
 -- Pacing analysis has no per-row status table to piggyback on (it's a single
 -- report per video), so it gets its own claim column on analysed_videos.
 -- null = nothing in flight (either never attempted, or already saved to
--- pacing_analyses — that table is the source of truth for "done").
+-- pacing_analyses - that table is the source of truth for "done").
 alter table public.analysed_videos
   add column pacing_analysis_status text
     check (pacing_analysis_status in ('processing', 'failed')),

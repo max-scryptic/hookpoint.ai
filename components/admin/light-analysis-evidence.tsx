@@ -126,12 +126,12 @@ function BoolBadge({ value }: { value: boolean }) {
 // model had nothing to quote.
 function Quote({ value }: { value: string }) {
   const trimmed = value.trim()
-  if (!trimmed) return <span className="text-muted-foreground">—</span>
+  if (!trimmed) return <span className="text-muted-foreground">-</span>
   return <span className="text-sm italic">“{trimmed}”</span>
 }
 
 function TagList({ values }: { values: string[] }) {
-  if (values.length === 0) return <span className="text-muted-foreground">—</span>
+  if (values.length === 0) return <span className="text-muted-foreground">-</span>
   return (
     <div className="flex flex-wrap gap-1">
       {values.map((value) => (
@@ -218,7 +218,7 @@ function PacingWindowsTable({ windows }: { windows: PacingWindow[] }) {
                 {window.label}
               </TableCell>
               <TableCell className="px-3 py-2 whitespace-nowrap tabular-nums text-muted-foreground">
-                {formatTimestamp(window.startSeconds)}–
+                {formatTimestamp(window.startSeconds)}-
                 {formatTimestamp(window.endSeconds)}
               </TableCell>
               <TableCell className="px-3 py-2 text-right tabular-nums">
@@ -288,7 +288,7 @@ function PacingSection({ pacing }: { pacing: PacingAnalysis }) {
                   <span className="tabular-nums text-muted-foreground">
                     {formatTimestamp(transition.atSeconds)}
                   </span>{" "}
-                  — {transition.description}
+                  - {transition.description}
                 </li>
               ))}
             </ul>
@@ -304,10 +304,10 @@ function PacingSection({ pacing }: { pacing: PacingAnalysis }) {
               {pacing.slowOrRepetitiveStretches.map((stretch, index) => (
                 <li key={index}>
                   <span className="tabular-nums text-muted-foreground">
-                    {formatTimestamp(stretch.startSeconds)}–
+                    {formatTimestamp(stretch.startSeconds)}-
                     {formatTimestamp(stretch.endSeconds)}
                   </span>{" "}
-                  — {stretch.reason}
+                  - {stretch.reason}
                   <span className="block text-xs text-muted-foreground">
                     Suggestion: {stretch.suggestion}
                   </span>
@@ -408,7 +408,7 @@ const HOOK_FIELDS: DetailField[] = [
 ]
 
 const CROSS_FIELDS: DetailField[] = [
-  { key: "titleThumbnailMatch", label: "Title–thumbnail match", kind: "score" },
+  { key: "titleThumbnailMatch", label: "Title-thumbnail match", kind: "score" },
   { key: "hookDeliversPromise", label: "Hook delivers promise", kind: "score" },
   { key: "singleClearPromise", label: "Single clear promise", kind: "quote" },
   { key: "contradiction", label: "Contradiction", kind: "bool" },
@@ -452,7 +452,7 @@ function renderDetailValue(kind: DetailFieldKind, value: unknown) {
       return (
         <span className="text-sm">
           {value === "" || value == null ? (
-            <span className="text-muted-foreground">—</span>
+            <span className="text-muted-foreground">-</span>
           ) : (
             String(value)
           )}
@@ -488,7 +488,7 @@ function TaxonomyDetail({ detail }: { detail: PackagingDetail }) {
   return (
     <div className="flex flex-col gap-4 rounded-lg border p-3">
       <p className="text-xs font-medium text-muted-foreground">
-        Enriched detail — intrinsic 0–10 axes scored on this video in isolation
+        Enriched detail - intrinsic 0-10 axes scored on this video in isolation
       </p>
       <DetailGroup
         title="Title"
@@ -543,7 +543,7 @@ function TaxonomyBlock({ taxonomy }: { taxonomy: PackagingTaxonomy }) {
             {taxonomy.thumbnailEmotion ? (
               formatLabel(taxonomy.thumbnailEmotion)
             ) : (
-              <span className="text-muted-foreground">—</span>
+              <span className="text-muted-foreground">-</span>
             )}
           </Field>
           <Field label="Thumbnail text words">
@@ -582,7 +582,7 @@ function PackagingSection({ packaging }: { packaging: PackagingAlignment }) {
     <EvidenceSection
       icon={PackageIcon}
       title="Packaging analysis"
-      subtitle="Title, thumbnail and hook — the alignment read plus the categorical taxonomy captured alongside it."
+      subtitle="Title, thumbnail and hook - the alignment read plus the categorical taxonomy captured alongside it."
     >
       <div className="flex flex-col gap-4">
         <p className="text-sm">{packaging.overall}</p>
@@ -621,7 +621,7 @@ function PackagingSection({ packaging }: { packaging: PackagingAlignment }) {
           <TaxonomyBlock taxonomy={packaging.taxonomy} />
         ) : (
           <EmptyState>
-            No categorical taxonomy stored for this video yet — it is backfilled
+            No categorical taxonomy stored for this video yet - it is backfilled
             the next time the owner opens the video&rsquo;s detail page.
           </EmptyState>
         )}
@@ -716,7 +716,7 @@ function ScriptSection({ script }: { script: ScriptTaxonomy }) {
     <EvidenceSection
       icon={FileTextIcon}
       title="Script analysis"
-      subtitle="The categorical, comparison-grade read of the whole transcript — its content and emotional texture, each 0-10 axis scored on this video in isolation."
+      subtitle="The categorical, comparison-grade read of the whole transcript - its content and emotional texture, each 0-10 axis scored on this video in isolation."
     >
       <div className="flex flex-col gap-4">
         <FieldGrid>
@@ -739,7 +739,7 @@ function ScriptSection({ script }: { script: ScriptTaxonomy }) {
 
         <div className="flex flex-col gap-4 rounded-lg border p-3">
           <p className="text-xs font-medium text-muted-foreground">
-            Enriched detail — intrinsic 0-10 axes scored on this video in
+            Enriched detail - intrinsic 0-10 axes scored on this video in
             isolation
           </p>
           <DetailGroup
@@ -810,7 +810,7 @@ function RetentionSection({
                     {formatLabel(moment.kind)} #{moment.windowIndex + 1}
                   </span>
                   <span className="text-xs tabular-nums text-muted-foreground">
-                    {formatTimestamp(moment.fromSeconds)}–
+                    {formatTimestamp(moment.fromSeconds)}-
                     {formatTimestamp(moment.toSeconds)}
                   </span>
                   <span className="text-xs text-muted-foreground">
@@ -845,7 +845,7 @@ function RetentionSection({
 
 // Every "light analysis" read a video has accumulated, one sub-tab per read:
 // pacing, packaging (alignment + the full categorical taxonomy), and retention
-// attribution. Read-only oversight for the admin detail page — splitting the
+// attribution. Read-only oversight for the admin detail page - splitting the
 // reads across tabs keeps each one on its own page rather than one long scroll,
 // and each tab renders its own empty state when that read hasn't been generated
 // yet, so an admin can see exactly which parts of the light analysis have run.

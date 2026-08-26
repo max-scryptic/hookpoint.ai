@@ -8,7 +8,7 @@ import { resumeSubscriptionForUser } from "@/lib/billing/subscriptions"
 // Clears a scheduled cancellation so the user's paid plan continues past the
 // current period. Backs the "Resume plan" / "Keep my plan" affordances shown
 // while a cancellation is pending. Unlike the portal route this mutates Stripe
-// directly and returns no redirect URL — the caller refreshes to pick up the
+// directly and returns no redirect URL - the caller refreshes to pick up the
 // reconciled state.
 export async function POST() {
   if (!isStripeEnabled()) {

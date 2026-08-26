@@ -10,9 +10,9 @@ import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 
 // Shown while the analyse-video server component fetches the user's recent uploads
-// from the YouTube API (the slowest load in the app). The static chrome —
+// from the YouTube API (the slowest load in the app). The static chrome -
 // header, breadcrumb, title, description, the paste-URL row and "Your Videos"
-// heading — matches the loaded page (app/(app)/analyse-video/page.tsx), so the
+// heading - matches the loaded page (app/(app)/analyse-video/page.tsx), so the
 // page is visible immediately and only the table swaps from this skeleton to the
 // real list once the fetch resolves.
 export default function Loading() {

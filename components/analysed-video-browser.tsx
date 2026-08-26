@@ -100,8 +100,8 @@ const SORT_OPTIONS: Array<{ value: SortOption; label: string }> = [
   { value: "analysed-asc", label: "Earliest analysed" },
   { value: "published-desc", label: "Newest" },
   { value: "published-asc", label: "Oldest" },
-  { value: "title-asc", label: "Title (A–Z)" },
-  { value: "title-desc", label: "Title (Z–A)" },
+  { value: "title-asc", label: "Title (A-Z)" },
+  { value: "title-desc", label: "Title (Z-A)" },
   { value: "views-desc", label: "Most viewed" },
   { value: "views-asc", label: "Least viewed" },
 ]
@@ -165,7 +165,7 @@ function toRow(analysed: AnalysedVideo): AnalysedRow {
       durationSeconds: details?.durationSeconds ?? null,
       privacyStatus: details?.privacyStatus ?? "private",
       // Served from the analytics summary stored at analyse time; rows from
-      // before that column existed stay "—" until a detail-page visit
+      // before that column existed stay "-" until a detail-page visit
       // backfills them. Net of subscribers lost, so it can be negative.
       subscribersGained: analysed.analyticsSummary
         ? netSubscribersGained(analysed.analyticsSummary)
@@ -186,7 +186,7 @@ function formatAnalysedAt(iso: string): string {
 }
 
 // A green tick shown for videos whose raw source file has been uploaded and whose
-// deep analysis has finished — the signal that a video has been deeply analysed
+// deep analysis has finished - the signal that a video has been deeply analysed
 // rather than only retention-scanned.
 function RawFileBadge() {
   return (
@@ -645,7 +645,7 @@ export function AnalysedVideoBrowser({
                     ) : rawFileUploaded ? (
                       <RawFileBadge />
                     ) : (
-                      <span className="text-sm text-muted-foreground">—</span>
+                      <span className="text-sm text-muted-foreground">-</span>
                     )}
                   </TableCell>
                 </TableRow>
@@ -656,7 +656,7 @@ export function AnalysedVideoBrowser({
         </div>
       )}
 
-      {/* Pagination — only shown when the result set spans more than one page. */}
+      {/* Pagination - only shown when the result set spans more than one page. */}
       {!isEmpty && pageCount > 1 && (
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">

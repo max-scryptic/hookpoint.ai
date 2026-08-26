@@ -1,7 +1,7 @@
 // Read/write helpers for the deterministic analytics_summary column on
 // analysed_videos. The summary (headline KPIs, engagement, traffic-source mix)
 // is cached on the row and replayed from there, so we don't re-spend YouTube
-// Analytics quota on every page view — but a cached KPI is only useful while it
+// Analytics quota on every page view - but a cached KPI is only useful while it
 // is still true, so each part carries the time it was fetched and is refreshed
 // once it goes stale:
 //
@@ -81,7 +81,7 @@ export const METRICS_REFRESH_INTERVAL_MS = 15 * 60 * 1000
 
 // The traffic-source breakdown needs a per-video report and is not printed as a
 // headline figure anywhere, so it refreshes daily rather than on the KPI
-// interval — it rides along whenever a per-video summary fetch happens.
+// interval - it rides along whenever a per-video summary fetch happens.
 const TRAFFIC_SOURCES_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 // Whether an ISO timestamp is within `maxAgeMs` of now. Missing or unparseable
@@ -111,8 +111,8 @@ function trafficSourcesAreCurrent(summary: VideoAnalyticsSummary): boolean {
 }
 
 // Writes a freshly fetched set of KPI totals onto a summary, leaving everything
-// that did not come from that fetch — the traffic-source mix and thumbnail
-// reach, which have their own fetch cadences — exactly as it was.
+// that did not come from that fetch - the traffic-source mix and thumbnail
+// reach, which have their own fetch cadences - exactly as it was.
 export function applyLifetimeMetrics(
   summary: VideoAnalyticsSummary,
   metrics: VideoLifetimeMetrics,
@@ -131,7 +131,7 @@ const REACH_RETRY_INTERVAL_MS = 6 * 60 * 60 * 1000
 
 // Whether the stored summary's thumbnail reach is current enough to serve as-is.
 // A real (non-null) reading is final. A null reading is only current if we tried
-// recently — otherwise it's due for a retry, because a null may just mean the
+// recently - otherwise it's due for a retry, because a null may just mean the
 // reporting job hadn't produced a report covering this video yet. Summaries that
 // predate the reach fields entirely ("impressions" absent) are never current.
 function reachIsCurrent(summary: VideoAnalyticsSummary): boolean {
@@ -167,8 +167,8 @@ function applyReach(
 
 // Fetches thumbnail reach for the whole channel in a single pass and patches it
 // onto every one of the user's analysed videos that already has a summary.
-// Reach ships from the Reporting API at channel granularity — one download
-// covers every video — so we fan it out across the entire library rather than
+// Reach ships from the Reporting API at channel granularity - one download
+// covers every video - so we fan it out across the entire library rather than
 // paying the download per video: analysing or viewing one video fills in CTR for
 // all of them. Rows are stamped with reachAttemptedAt so a still-null reading (a
 // reporting job with no report yet) is throttled from refetching on every view.
@@ -204,7 +204,7 @@ export async function backfillChannelThumbnailReach(
       const summary = row.analytics_summary
       if (!summary) return
       const reach = reachByVideo.get(row.video_id)
-      // Nothing to fill and not due for a retry — leave the row alone so an
+      // Nothing to fill and not due for a retry - leave the row alone so an
       // established library isn't rewritten wholesale on every backfill.
       if (!reach && reachIsCurrent(summary)) return
       const { error: updateError } = await supabase
@@ -283,7 +283,7 @@ export async function getOrBackfillVideoAnalyticsSummary(
       await saveVideoAnalyticsSummary(supabase, userId, analysedVideoId, base)
     }
 
-    // Populate thumbnail reach for the whole channel in one pass — this patches
+    // Populate thumbnail reach for the whole channel in one pass - this patches
     // every analysed video (including this one) in the database.
     const reachByVideo = await backfillChannelThumbnailReach(
       supabase,
@@ -299,7 +299,7 @@ export async function getOrBackfillVideoAnalyticsSummary(
   } catch (error) {
     console.error("Failed to refresh analytics summary", error)
     // A refresh that could not reach YouTube is not a reason to drop numbers we
-    // already have — serve the stored summary and try again on the next view.
+    // already have - serve the stored summary and try again on the next view.
     return stored
   }
 }

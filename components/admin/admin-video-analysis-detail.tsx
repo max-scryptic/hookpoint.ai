@@ -23,8 +23,8 @@ import type { DeepAnalysisProgress } from "@/lib/retention-window-media-progress
 // The admin video-analysis oversight view: a Light Analysis / Deep Analysis
 // tab split. Each tab leads with the cost KPIs for that bucket (its total plus
 // a per-section breakdown from the append-only cost_logs) and then the full
-// evidence captured for that half of the pipeline — every read for light, the
-// per-window signals for deep — so an admin has complete oversight of what was
+// evidence captured for that half of the pipeline - every read for light, the
+// per-window signals for deep - so an admin has complete oversight of what was
 // generated and what it cost. All data is loaded server-side (behind the admin
 // auth check) and passed in; this component is purely presentational.
 export function AdminVideoAnalysisDetail({
@@ -59,7 +59,7 @@ export function AdminVideoAnalysisDetail({
   )
   // The pipeline is still running when it's active but hasn't settled every
   // stage. The stages snapshot is server-rendered, so re-fetch fresh server data
-  // while it's in flight to keep the checklist moving — and to swap in the
+  // while it's in flight to keep the checklist moving - and to swap in the
   // evidence once the run lands.
   const analysisInProgress = Boolean(
     deepAnalysisProgress?.active &&

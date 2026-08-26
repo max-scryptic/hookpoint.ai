@@ -22,7 +22,7 @@ import { updateSourceFile, type SourceFile } from "@/lib/source-files/source-fil
 import type { CompletedPart } from "@/lib/storage"
 
 // Extraction runs in the background via after() once the response is sent, but
-// still within this invocation's time budget — give it room beyond the default.
+// still within this invocation's time budget - give it room beyond the default.
 export const maxDuration = 300
 
 // POST /api/source-files/:sourceFileId/complete-upload
@@ -47,7 +47,7 @@ export async function POST(
   }
 
   // The body can only be read once, and it carries both the (optional) measured
-  // duration and, for multipart uploads, the part list — so parse it once here.
+  // duration and, for multipart uploads, the part list - so parse it once here.
   let body: unknown
   try {
     body = await request.json()
@@ -106,7 +106,7 @@ export async function POST(
 
     // Charge deep-dive credits for the footage now that it's really landed, once
     // per file (deepCreditsCharged guards re-completions and later retries).
-    // Best-effort: a metering hiccup must not fail a good upload — the upload was
+    // Best-effort: a metering hiccup must not fail a good upload - the upload was
     // already gated on available credits at initiate time.
     sourceFile = await chargeDeepCreditsIfNeeded(
       supabase,
@@ -116,7 +116,7 @@ export async function POST(
     )
     // Deep analysis can start decoding the just-uploaded original right now,
     // in parallel with the 360p proxy transcode that was kicked off
-    // above — the retention windows may already exist (analyze usually runs
+    // above - the retention windows may already exist (analyze usually runs
     // before the upload), and waiting for the normalisation callback would
     // leave the whole extraction pipeline idle through an external transcode
     // round-trip. If the analysis hasn't run yet this no-ops, and /api/analyze

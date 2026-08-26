@@ -1,6 +1,6 @@
 // Thin wrapper for invoking ffmpeg as a subprocess and capturing its stdout as
 // a Buffer. Used to grab a single frame or an audio segment straight out of a
-// video served over HTTPS (a signed read URL) — ffmpeg seeks and range-requests
+// video served over HTTPS (a signed read URL) - ffmpeg seeks and range-requests
 // only the bytes it needs, so the source video is never downloaded in full.
 
 import { spawn } from "node:child_process"
@@ -14,7 +14,7 @@ import { spawn } from "node:child_process"
 //
 // Deliberately not ffmpeg-static: its install script downloads the binary
 // from GitHub Releases at install time, which fails (403) in build
-// environments that restrict egress to the npm registry — leaving the
+// environments that restrict egress to the npm registry - leaving the
 // package present but its binary missing, so every spawn ENOENTs at
 // runtime. @ffmpeg-installer/* ships the binary as the npm package content
 // itself, resolved by ordinary `npm install`.
@@ -95,14 +95,14 @@ export function runFfmpegCapturingOutput(
   })
 }
 
-// Runs ffmpeg with `args`, capturing stdout as a single Buffer — the caller's
+// Runs ffmpeg with `args`, capturing stdout as a single Buffer - the caller's
 // args must write output to `pipe:1`. Rejects with the captured stderr on a
 // non-zero exit, or if the process doesn't finish within `timeoutMs`.
 //
 // Also rejects on an empty (0-byte) stdout even though ffmpeg exited 0: a
 // `-frames:v 1` grab seeking to (or past) the last decodable moment of a
-// source — e.g. a retention window's computed end time landing a fraction of
-// a second beyond the actual media length — can write nothing and still exit
+// source - e.g. a retention window's computed end time landing a fraction of
+// a second beyond the actual media length - can write nothing and still exit
 // successfully, since "no frame matched" isn't always treated as an ffmpeg
 // error. Left unchecked, that empty buffer gets uploaded and the row marked
 // 'ready' as if extraction worked, and the failure only surfaces later as a

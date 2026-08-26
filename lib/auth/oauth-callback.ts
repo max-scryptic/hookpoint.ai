@@ -6,7 +6,7 @@ export type OAuthCallbackResult =
   // provider_refresh_token the caller needs to persist.
   | { status: "signed-in"; session: Session | null }
   // The exchange did not happen (or could not happen), but the browser already
-  // holds a valid session — this callback is a duplicate of one that already
+  // holds a valid session - this callback is a duplicate of one that already
   // succeeded. Nothing to do; send the user into the app.
   | { status: "already-signed-in" }
   // No session, and no way to establish one. The user has to start over.
@@ -18,7 +18,7 @@ export type OAuthCallbackResult =
 // "exchange, or fail" is that Google's sign-in screens do not debounce: neither
 // the account row on the account chooser nor the "Continue" button on the
 // consent screen disables itself once clicked. The chooser also re-renders
-// itself — filtered down to the account that was just picked — while Google
+// itself - filtered down to the account that was just picked - while Google
 // works out the next step, which reads as a second, near-identical account
 // picker and invites a second click. Google honours that click and fires a
 // second redirect back here.
@@ -26,7 +26,7 @@ export type OAuthCallbackResult =
 // By the time the duplicate arrives the first one has usually already won: the
 // authorization code is spent, the code_verifier cookie has been cleared, and
 // the user is signed in. Exchanging again therefore *must* fail. Treating that
-// failure as a failed sign-in is what makes the flow appear to break — it
+// failure as a failed sign-in is what makes the flow appear to break - it
 // throws a user who is signed in perfectly well onto the error page. So before
 // giving up we check for an existing session and treat the duplicate as the
 // no-op it is.

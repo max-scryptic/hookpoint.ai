@@ -3,7 +3,7 @@
 // Analysing a video freezes a snapshot of it: `video_details` carries the
 // public counters videos.list served at the time, and `analytics_summary`
 // carries the Analytics KPI totals fetched the first time its detail page was
-// opened. Left alone, both keep printing whatever the video had on that day —
+// opened. Left alone, both keep printing whatever the video had on that day -
 // so a week-old video with 186 views on YouTube still showed the couple of
 // dozen it had when it was analysed, on the list, on the detail page, and in
 // any comparison report generated from the row.
@@ -43,7 +43,7 @@ export interface RefreshAnalysedVideoStatsOptions {
   // Restrict the refresh to specific YouTube video ids.
   videoIds?: string[]
   // Refresh regardless of how recently the numbers were read. Used where a
-  // stale figure would be baked into something durable — a comparison report is
+  // stale figure would be baked into something durable - a comparison report is
   // written once and read for months, so it is worth a guaranteed fetch.
   force?: boolean
 }
@@ -186,7 +186,7 @@ export async function refreshAnalysedVideoStats(
             // stamp the read so it isn't refetched on every page load.
             update.analytics_summary = { ...existing, fetchedAt }
           } else {
-            // Nothing stored and nothing reported — record the (empty) reading
+            // Nothing stored and nothing reported - record the (empty) reading
             // so this video stops forcing a refetch on every page load.
             update.analytics_summary = { ...emptySummary(), fetchedAt }
           }

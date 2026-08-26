@@ -1,4 +1,4 @@
-// Read/write helpers for `retention_window_costs` — the per-window record of
+// Read/write helpers for `retention_window_costs` - the per-window record of
 // what each deep-analysis LLM call spent. Written by the analysis/synthesis
 // orchestrators as each call settles (lib/retention-window-media-analysis.ts,
 // lib/retention-window-event-synthesis.ts) and read back, grouped by window,
@@ -52,7 +52,7 @@ function mapRow(row: RetentionWindowCostRow): RetentionWindowCost {
 // Records (upserts) the cost of one deep-analysis call against its window and
 // step. Upsert on (retention_window_id, step) so re-running a single step
 // overwrites just that step's figure rather than accumulating duplicates
-// across re-analyses. Callers treat this as best-effort — a costing write must
+// across re-analyses. Callers treat this as best-effort - a costing write must
 // never fail the analysis it is only measuring.
 export async function recordRetentionWindowCost(
   admin: SupabaseClient,
