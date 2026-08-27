@@ -171,20 +171,30 @@ function TipRow({
       </button>
 
       <div className="min-w-0 flex-1">
-        <p className="text-sm">{tip.tip}</p>
-        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+        <p className="text-sm leading-relaxed">{tip.tip}</p>
+        {/* Three things under a tip, and only three: what it is about, when it
+            was kept, and the way back to where it came from. The section a tip
+            was read in ("Retention: Hook: Script") used to sit here too and is
+            deliberately gone: it ended on the very word the category badge
+            already carries, so the line opened by saying the same thing twice
+            and the two pieces that are worth reading were buried in the middle
+            of it. */}
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
           {/* Tinted the same purple as the Title / Thumbnail / Hook badges on
               a video's packaging cards, so a category reads as a label at a
               glance rather than as another grey line of metadata. */}
           <span className="rounded-md border border-purple-500/40 bg-purple-500/10 px-1.5 py-0.5 font-medium text-purple-700 dark:text-purple-300">
             {TIP_CATEGORY_LABELS[tip.category]}
           </span>
-          <span>{tip.section}</span>
           <span>Saved {format(new Date(tip.createdAt), "d MMM yyyy")}</span>
+          {/* The one thing on this line that can be clicked, so it is the one
+              thing on it that is not grey: coloured and weighted like the
+              links everywhere else in the app, rather than reading as a third
+              piece of metadata until the cursor happens to cross it. */}
           {tip.sourcePath && (
             <Link
               href={tip.sourcePath}
-              className="inline-flex items-center gap-0.5 hover:text-foreground hover:underline"
+              className="inline-flex items-center gap-0.5 font-medium text-primary underline-offset-4 hover:underline"
             >
               Open the report
               <ArrowUpRightIcon className="size-3" />
