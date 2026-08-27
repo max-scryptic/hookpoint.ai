@@ -90,6 +90,10 @@ export interface SeedDemoDataResult {
   notifications: number
   costLogs: number
   planGranted: boolean
+  // One line per decorative section that failed and was skipped. Empty on a
+  // clean seed. The library itself is never in here: a failure writing it
+  // throws, because there is nothing to demo without it.
+  warnings: string[]
 }
 
 function isoDaysAgo(now: Date, days: number): string {
@@ -257,6 +261,28 @@ export async function seedDemoData(
   )
   const supabase = createAdminClient()
   const rng = new Rng(`${userId}:library`)
+
+  // The seed is a sequence of writes across a dozen tables, not one
+  // transaction, so a failure partway through leaves the account holding
+  // whatever landed before it. That is how a unique-index collision on the
+  // notifications table once cost an otherwise complete library its plan grant,
+  // which is the one row that decides whether Channel Trends renders at all.
+  //
+  // So the library itself (videos, windows, events, the plan that unlocks them)
+  // still fails loudly, and everything that only decorates it is best-effort:
+  // a comparison report or a cost log that will not write is worth a line in
+  // the result, not the whole seed.
+  const warnings: string[] = []
+  async function optional(label: string, task: () => Promise<void>) {
+    try {
+      await task()
+    } catch (error) {
+      console.error(`Demo data: ${label} failed`, error)
+      warnings.push(
+        `${label}: ${error instanceof Error ? error.message : "failed"}`,
+      )
+    }
+  }
 
   // Re-seeding replaces rather than accumulates: a second click should leave
   // the account with one demo library, not two.
@@ -444,6 +470,11 @@ export async function seedDemoData(
       payload.deepAnalysed && videoIdByYoutubeId.has(payload.videoId),
   )
 
+  // The most recent analysis date in the library, used to date the one
+  // notification that belongs to the channel rather than to a single video.
+  const newestAnalysedAt =
+    payloads[payloads.length - 1]?.dateAnalysed ?? now.toISOString()
+
   const sourceFileRows = deepPayloads.map((payload) => ({
     user_id: userId,
     analysed_video_id: videoIdByYoutubeId.get(payload.videoId)!,
@@ -504,7 +535,8 @@ export async function seedDemoData(
   // --- comparisons -----------------------------------------------------------
 
   let comparisonCount = 0
-  if (payloads.length >= 2) {
+  await optional("Comparison reports", async () => {
+    if (payloads.length < 2) return
     const pairs: [DemoVideoPayload, DemoVideoPayload][] = []
     // Newest against oldest, then the two in the middle: two pairs with a real
     // gap between them, which is what makes a comparison report worth reading.
@@ -545,7 +577,7 @@ export async function seedDemoData(
       }
       comparisonCount = comparisonRows.length
     }
-  }
+  })
 
   // --- checklist -------------------------------------------------------------
 
@@ -562,34 +594,64 @@ export async function seedDemoData(
     created_at: isoDaysAgo(now, 20 - index),
   }))
 
-  const { error: tipError } = await supabase.from("saved_tips").insert(tipRows)
-  if (tipError) {
-    throw new Error(`Failed to insert demo saved tips: ${tipError.message}`)
-  }
+  let savedTipCount = 0
+  await optional("Checklist", async () => {
+    const { error } = await supabase.from("saved_tips").insert(tipRows)
+    if (error) throw new Error(error.message)
+    savedTipCount = tipRows.length
+  })
 
   // --- notifications ---------------------------------------------------------
 
-  const notified = deepPayloads.slice(-3)
-  const notificationRows = notified.map((payload, index) => ({
-    user_id: userId,
-    analysed_video_id: videoIdByYoutubeId.get(payload.videoId)!,
-    kind: "deep_analysis_complete",
-    title: "Deep analysis ready",
-    description: `Your deep analysis of "${payload.title}" is ready to read.`,
-    // The newest is left unread whatever the count, so the bell always shows
-    // its badge on a freshly seeded account.
-    read_at: index === notified.length - 1 ? null : isoDaysAgo(now, 3),
-    created_at: isoDaysAgo(now, notified.length + 1 - index),
-  }))
-
-  if (notificationRows.length > 0) {
-    const { error } = await supabase
-      .from("notifications")
-      .insert(notificationRows)
-    if (error) {
-      throw new Error(`Failed to insert demo notifications: ${error.message}`)
+  // The seeder writes no notifications. Two database triggers on
+  // retention_window_event_synthesis already have: inserting the last 'ready'
+  // synthesis row for a video raises its deep_analysis_complete notification
+  // (migration 20260712130000), and the first video to get there also raises
+  // the one-per-user channel_trends_ready notification (migration
+  // 20260816120000). Inserting our own on top collided with
+  // notifications_deep_analysis_video_idx and took the rest of the seed with it.
+  //
+  // What is left to do is age them. The triggers stamp created_at = now(), so
+  // an account seeded with a year of uploads would show every notification
+  // arriving in the same second. Each one is backdated to the analysis date of
+  // the video it belongs to, and all but the newest are marked read, so the
+  // bell carries a plausible history behind a single unread badge.
+  let notificationCount = 0
+  await optional("Notification dates", async () => {
+    for (const [index, payload] of deepPayloads.entries()) {
+      const analysedVideoId = videoIdByYoutubeId.get(payload.videoId)
+      if (!analysedVideoId) continue
+      const isNewest = index === deepPayloads.length - 1
+      const { count, error } = await supabase
+        .from("notifications")
+        .update(
+          {
+            created_at: payload.dateAnalysed,
+            read_at: isNewest ? null : payload.dateAnalysed,
+          },
+          { count: "exact" },
+        )
+        .eq("user_id", userId)
+        .eq("analysed_video_id", analysedVideoId)
+      if (error) throw new Error(error.message)
+      notificationCount += count ?? 0
     }
-  }
+
+    // The channel-trends notification carries no analysed_video_id, so it is
+    // not covered by the loop above. It is the newest thing that happened, and
+    // it is the one worth leaving unread: it points at the page this whole
+    // library exists to fill.
+    const { count: trendsCount, error: trendsError } = await supabase
+      .from("notifications")
+      .update(
+        { created_at: newestAnalysedAt, read_at: null },
+        { count: "exact" },
+      )
+      .eq("user_id", userId)
+      .eq("kind", "channel_trends_ready")
+    if (trendsError) throw new Error(trendsError.message)
+    notificationCount += trendsCount ?? 0
+  })
 
   // --- cost logs -------------------------------------------------------------
 
@@ -638,12 +700,13 @@ export async function seedDemoData(
     })
   })
 
-  if (costRows.length > 0) {
+  let costLogCount = 0
+  await optional("Cost logs", async () => {
+    if (costRows.length === 0) return
     const { error } = await supabase.from("cost_logs").insert(costRows)
-    if (error) {
-      throw new Error(`Failed to insert demo cost logs: ${error.message}`)
-    }
-  }
+    if (error) throw new Error(error.message)
+    costLogCount = costRows.length
+  })
 
   // --- activity history ------------------------------------------------------
 
@@ -658,17 +721,16 @@ export async function seedDemoData(
       last_seen_at: isoDaysAgo(now, daysAgo),
     }))
 
-  if (activityRows.length > 0) {
+  await optional("Activity history", async () => {
+    if (activityRows.length === 0) return
     const { error } = await supabase
       .from("user_daily_activity")
       .upsert(activityRows, {
         onConflict: "user_id,activity_date",
         ignoreDuplicates: true,
       })
-    if (error) {
-      throw new Error(`Failed to insert demo activity: ${error.message}`)
-    }
-  }
+    if (error) throw new Error(error.message)
+  })
 
   // --- plan and usage --------------------------------------------------------
 
@@ -721,10 +783,11 @@ export async function seedDemoData(
     retentionWindows: windowCount,
     events: eventCount,
     comparisons: comparisonCount,
-    savedTips: tipRows.length,
-    notifications: notificationRows.length,
-    costLogs: costRows.length,
+    savedTips: savedTipCount,
+    notifications: notificationCount,
+    costLogs: costLogCount,
     planGranted,
+    warnings,
   }
 }
 

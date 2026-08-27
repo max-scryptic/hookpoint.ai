@@ -40,6 +40,7 @@ interface SeedResult {
   notifications: number
   costLogs: number
   planGranted: boolean
+  warnings: string[]
 }
 
 interface ClearResult {
@@ -77,6 +78,7 @@ export function AdminSettingsDemoData({
   const [grantPaidPlan, setGrantPaidPlan] = React.useState(true)
   const [busy, setBusy] = React.useState<"seed" | "clear" | null>(null)
   const [message, setMessage] = React.useState<string | null>(null)
+  const [warnings, setWarnings] = React.useState<string[]>([])
   const [error, setError] = React.useState<string | null>(null)
 
   const selectedUser =
@@ -88,6 +90,7 @@ export function AdminSettingsDemoData({
   async function run(action: "seed" | "clear") {
     setBusy(action)
     setMessage(null)
+    setWarnings([])
     setError(null)
     try {
       const response = await fetch("/api/admin/demo-data", {
@@ -116,6 +119,7 @@ export function AdminSettingsDemoData({
             `${result.costLogs} cost logs.` +
             (result.planGranted ? " Pro plan granted." : ""),
         )
+        setWarnings(result.warnings ?? [])
       } else {
         const result = payload.result as ClearResult
         setMessage(
@@ -247,6 +251,18 @@ export function AdminSettingsDemoData({
 
           {message && (
             <p className="text-sm text-muted-foreground">{message}</p>
+          )}
+          {warnings.length > 0 && (
+            <div className="space-y-1 text-sm">
+              <p className="font-medium">
+                The library was seeded, but these parts were skipped:
+              </p>
+              <ul className="list-disc space-y-0.5 pl-5 text-muted-foreground">
+                {warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            </div>
           )}
           {error && <p className="text-sm text-destructive">{error}</p>}
 
