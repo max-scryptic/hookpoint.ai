@@ -1,5 +1,5 @@
 // =============================================================================
-// TIP VOICE - THE ONE RULE EVERY "Try:" TIP IS WRITTEN UNDER
+// TIP VOICE - THE ONE RULE EVERY TIP IS WRITTEN UNDER
 //
 // A tip is advice for a video the uploader has not made yet. It is never a note
 // about the video that was analysed. That single rule decides the tense, the
@@ -55,6 +55,14 @@
 // stripped at render time by cleanCopy (lib/copy-guardrails.ts) when a model
 // writes one anyway.
 //
+// THE LABEL IS THE INTERFACE'S, NOT THE TIP'S
+//
+// A tip is printed behind one of two words, decided by the moment it came from
+// rather than by the tip: "Try:" on advice about a weakness, "Maintain:" on a
+// gain or a hold, where what the row is reporting is that something went right
+// (tipLabelForSection, lib/tips.ts). Neither word belongs in the tip itself,
+// which is why rule 4 below bans both as openers.
+//
 // COPY GUARDRAIL: no em or en dashes (U+2014 / U+2013), ever, in any text in
 // this file. Hyphens are fine.
 // =============================================================================
@@ -81,7 +89,7 @@ export const TIP_VOICE_RULES: readonly string[] = [
   "Do not grade the analysed video inside a tip. A comparative ('clearer', 'punchier', 'stronger', 'tighter', 'more specific', 'better') measures the next video against the one you just watched, which is not in front of the uploader when they act on the advice, so use the plain adjective instead ('clear', 'punchy', 'strong', 'tight', 'specific'). The same goes for any backwards reference: 'instead of what you did here', 'unlike your last hook', 'rather than the setup you used'. State the thing to do, not the thing it improves on. Where a moment shows a weakness, the tip says what to do in its place, and the explanation beside it is where what actually happened gets described.",
 
   // 4. Shape: a plain command, with no lead-in and no doubled label.
-  "Write the tip as a plain command that starts with its verb, the way the video analysis tips are written ('Open on the specific claim rather than the setup', 'Keep the picture moving through a stretch like this'). The interface prefixes every tip with 'Try:', so a tip beginning 'Try opening with a split-screen' lands on the page as 'Try: Try opening with a split-screen': never begin one with 'Try', 'Try to', 'Consider', 'Aim to' or a gerund. Do not begin one with 'Next time', 'In future videos', 'In your next video', 'Going forward' or any similar lead-in either: the forward-looking framing belongs in how the advice is worded, and a lead-in only delays the point.",
+  "Write the tip as a plain command that starts with its verb, the way the video analysis tips are written ('Open on the specific claim rather than the setup', 'Keep the picture moving through a stretch like this'). The interface prints its own label in front of every tip, 'Try:' where the moment went wrong and 'Maintain:' where it went right, so a tip that carries a label of its own says it twice: 'Try opening with a split-screen' lands on the page as 'Try: Try opening with a split-screen', and 'Maintain the cutting rhythm' lands as 'Maintain: Maintain the cutting rhythm'. So never begin one with 'Try', 'Try to', 'Consider', 'Aim to', 'Maintain', 'Keep doing' or a gerund. Do not begin one with 'Next time', 'In future videos', 'In your next video', 'Going forward' or any similar lead-in either: the forward-looking framing belongs in how the advice is worded, and a lead-in only delays the point.",
 
   // 5. Plain English, because a tip that has to be read twice is not acted on.
   "Write the tip in plain English, so that someone who has never edited a video can act on it the first time they read it. One instruction, one sentence, about twenty five words at most, and the shortest everyday word that carries the meaning. Say the concrete thing to do in the main clause rather than putting an abstraction in front of it: 'Show something on screen while you make a point' beats 'Give a spoken point something to look at as you make it', and 'Start each section with the point, not a warm-up' beats 'Write the opening sentence so it starts on the point itself, with no wind-up in front of it'. Use a craft word only where it is the plain name for the thing and a beginner meets it in their editor anyway ('B-roll', 'cut', 'shot', 'frame'); avoid the rest ('wind-up', 'signpost', 'beat', 'mechanism', 'pattern interrupt', 'continuity', 'cadence'), and never abbreviate. Do not stack clauses, and do not join two separate instructions with a semicolon or a colon, though a colon introducing an example or a short list is fine.",

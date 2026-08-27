@@ -302,8 +302,8 @@ function stripStructuralArtifacts(text: string): string {
 }
 
 // Every tip is already understood to be advice for the videos the uploader
-// makes next - that is what the "Try:" label means - so spelling it out in a
-// lead-in ("Next time, ...", "In future videos, ...") only pushes the actual
+// makes next - that is what the label in front of it means - so spelling it out
+// in a lead-in ("Next time, ...", "In future videos, ...") only pushes the actual
 // advice further down the sentence, and reads as a tic once every tip on the
 // page opens the same way. The tip should start with the thing to do.
 //
@@ -343,14 +343,14 @@ function capitalizeFirstLetter(text: string): string {
 // =============================================================================
 // THE "TRY:" LABEL IN A TIP
 //
-// Every tip is rendered behind a "Try:" label, so a tip that opens with "Try"
-// puts the word on the page twice: "Try: Try opening with a split-screen".
-// The video analysis tips never do it, because they are written as plain
-// commands ("Keep the picture moving through a stretch like this"), and the
-// comparison reports are asked for the same thing. Models write it anyway,
-// often enough to read as a tic across a page of tips, so the opener is unwound
-// here at render time. That also settles the reports already stored, which no
-// prompt can reach.
+// Every tip is rendered behind a label the interface prints itself, so a tip
+// that opens with that label's own word puts it on the page twice: "Try: Try
+// opening with a split-screen". The video analysis tips never do it, because
+// they are written as plain commands ("Keep the picture moving through a
+// stretch like this"), and the comparison reports are asked for the same thing.
+// Models write it anyway, often enough to read as a tic across a page of tips,
+// so the opener is unwound here at render time. That also settles the reports
+// already stored, which no prompt can reach.
 //
 // "Try to open with X" and "Try: open with X" only lose the opener, since the
 // command is already written. "Try opening with X" has to have its gerund put
@@ -358,6 +358,14 @@ function capitalizeFirstLetter(text: string): string {
 // gerundImperative() does. Anything it cannot convert with confidence is left
 // exactly as the model wrote it: a tip that says "Try" twice is a blemish,
 // while "Openning with X" would be a bug.
+//
+// Only "Try" is unwound. The other label a tip can wear is "Maintain:" (see
+// tipLabelForSection in lib/tips.ts), and the shape it doubles in cannot be
+// repaired the same way: dropping the opener out of "Maintain the cutting
+// rhythm" leaves "The cutting rhythm", a fragment rather than a command. So
+// that one is prevented in the prompts (rule 4 in lib/tip-voice.ts bans both
+// words as openers) and left alone here, under the same rule as above: a
+// doubled word is a blemish, a fragment is a bug.
 // =============================================================================
 
 // The gerunds the rules below cannot reach: irregular verbs, and the endings

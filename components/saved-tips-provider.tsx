@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useMemo, useState } from "react"
 
-// Which tips the creator has already kept, shared with every "Try:" callout on
+// Which tips the creator has already kept, shared with every tip callout on
 // the page. A tip can appear on several reports, and the same report renders
 // dozens of them, so this is held once for the whole dashboard rather than each
 // callout asking the server about itself.

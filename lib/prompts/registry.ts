@@ -122,7 +122,7 @@ const DEFINITIONS: readonly PromptDefinition[] = [
     group: "shared",
     role: "fragment",
     description:
-      "The rules every \"Try:\" tip is written under: advice for the next video, never a note on the one that was analysed. Quoted by every prompt that writes a tip.",
+      "The rules every tip is written under: advice for the next video, never a note on the one that was analysed. Quoted by every prompt that writes a tip.",
     source: "lib/tip-voice.ts",
     modelEnvVar: null,
     default: TIP_VOICE_PROMPT,

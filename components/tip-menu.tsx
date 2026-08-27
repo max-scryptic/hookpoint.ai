@@ -36,7 +36,7 @@ import {
 } from "@/lib/tips"
 import { cn } from "@/lib/utils"
 
-// A "Try:" tip that can be acted on: the advice itself is the control. Clicking
+// A tip that can be acted on: the advice itself is the control. Clicking
 // it opens the tip out into a card that shows what the advice actually looks
 // like once carried out, three worked examples tabbed through by approach, with
 // the two things a creator can do with a tip underneath: keep it on their
@@ -116,10 +116,11 @@ export function TipMenu({
   // Passed to the panel below, which asks the server for them only when a tip
   // arrives without any.
   examples?: readonly TipExample[]
-  // The word that introduces the tip, "Try:". It lives inside the trigger
-  // rather than beside it so the label and the advice are one run of inline
-  // text: a long tip wraps mid sentence instead of being pushed whole onto the
-  // line below its own label.
+  // The word that introduces the tip, "Try:" or "Maintain:" depending on
+  // whether the moment it came from went wrong or right (see
+  // tipLabelForSection). It lives inside the trigger rather than beside it so
+  // the label and the advice are one run of inline text: a long tip wraps mid
+  // sentence instead of being pushed whole onto the line below its own label.
   label?: string
 }) {
   const { savedFingerprints, markSaved, markRemoved } = useSavedTips()

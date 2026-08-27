@@ -383,9 +383,10 @@ export function TipChecklist({ tips: initialTips }: { tips: SavedTip[] }) {
         <ListChecksIcon className="size-6 text-muted-foreground" />
         <p className="text-sm font-medium">Your checklist is empty</p>
         <p className="max-w-md text-sm text-muted-foreground">
-          Every report ends its sections on a blue &quot;Try:&quot; tip. Click
-          one and add it to your checklist, and it will be waiting here the next
-          time you plan a video.
+          Every report ends its sections on a blue tip: &quot;Try:&quot; where
+          something could be better, &quot;Maintain:&quot; where something
+          already worked. Click one and add it to your checklist, and it will be
+          waiting here the next time you plan a video.
         </p>
       </div>
     )
