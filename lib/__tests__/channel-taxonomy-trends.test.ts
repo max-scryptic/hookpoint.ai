@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest"
 
+import type { DeliveryRead } from "@/lib/channel-delivery"
 import {
   axisGroupContrasts,
   axisGroupRows,
+  axisIsDescriptor,
+  axisLowerIsBetter,
   buildChannelAlignmentAverage,
   buildChannelAxisProfile,
   buildChannelExtremesProfile,
@@ -180,6 +183,7 @@ function video(
     reach,
     packaging: null,
     script: null,
+    delivery: null,
     ...extras,
   }
 }
@@ -824,5 +828,198 @@ describe("videoTopics", () => {
 
   it("returns nothing for a video with neither taxonomy", () => {
     expect(videoTopics(video("a", 10))).toEqual([])
+  })
+})
+
+// The delivery read is the third source the profiles above accept, and the only
+// one whose figures are measured rather than model scored. It reaches them
+// already scaled onto the same 0-10 axis (lib/channel-delivery.ts), so what is
+// worth testing here is that the source routing keeps it separate from the other
+// two, that its one group is big enough to draw, and that it has no style
+// profile to build.
+describe("the delivery source", () => {
+  const deliveryRead = (cuts: number, speech = 5): DeliveryRead => ({
+    detail: {
+      cutsPerMinute: cuts,
+      motion: 5,
+      speechRate: speech,
+      freezeCoverage: 1,
+      blackCoverage: 0,
+    },
+    raw: {
+      cutsPerMinute: cuts * 3,
+      motion: 0.1,
+      speechRate: speech * 22,
+      freezeCoverage: 0.1,
+      blackCoverage: 0,
+    },
+    sampledSeconds: 120,
+    videoDurationSeconds: 600,
+    schemaVersion: 1,
+    generatedAt: "2026-01-01T00:00:00.000Z",
+  })
+
+  // Retention as the outcome, since that is what the page ranks delivery on.
+  const sixVideos = () => [
+    video("a", 80, { delivery: deliveryRead(9) }),
+    video("b", 70, { delivery: deliveryRead(9) }),
+    video("c", 60, { delivery: deliveryRead(9) }),
+    video("d", 30, { delivery: deliveryRead(1) }),
+    video("e", 20, { delivery: deliveryRead(1) }),
+    video("f", 10, { delivery: deliveryRead(1) }),
+  ]
+
+  it("builds one group carrying every measured axis", () => {
+    const profile = buildChannelExtremesProfile({
+      videos: sixVideos(),
+      source: "delivery",
+      outcome: "retention",
+      outcomeOf: reachOf,
+    })
+
+    expect(profile!.source).toBe("delivery")
+    expect(profile!.groups.map((group) => group.group)).toEqual(["delivery"])
+    expect(
+      profile!.groups[0].axes.map((axis) => axis.key),
+    ).toEqual([
+      "delivery.cutsPerMinute",
+      "delivery.motion",
+      "delivery.speechRate",
+      "delivery.freezeCoverage",
+      "delivery.blackCoverage",
+    ])
+  })
+
+  // The radar needs three spokes to enclose an area, so a group of five draws a
+  // shape rather than falling back to bars. This is the reason the five figures
+  // are one group instead of an edit group and a speech group.
+  it("carries enough axes in its one group to draw a shape", () => {
+    const profile = buildChannelExtremesProfile({
+      videos: sixVideos(),
+      source: "delivery",
+      outcome: "retention",
+      outcomeOf: reachOf,
+    })
+    expect(profile!.groups[0].axes.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it("separates the two ends of the library on a measured axis", () => {
+    const profile = buildChannelExtremesProfile({
+      videos: sixVideos(),
+      source: "delivery",
+      outcome: "retention",
+      outcomeOf: reachOf,
+    })
+
+    expect(profile!.top.map((entry) => entry.id)).toEqual(["a", "b", "c"])
+    expect(profile!.contrasts.map((row) => row.key)).toEqual([
+      "delivery.cutsPerMinute",
+    ])
+    const cuts = extremeGroupAxes(profile!, "delivery").find(
+      (axis) => axis.key === "delivery.cutsPerMinute",
+    )
+    expect(cuts!.topMean).toBe(9)
+    expect(cuts!.bottomMean).toBe(1)
+    expect(cuts!.libraryMean).toBe(5)
+  })
+
+  it("drops an axis no video measured", () => {
+    const withoutMotion = () =>
+      sixVideos().map((entry) => ({
+        ...entry,
+        delivery: {
+          ...entry.delivery!,
+          detail: { ...entry.delivery!.detail, motion: null },
+        },
+      }))
+    const profile = buildChannelExtremesProfile({
+      videos: withoutMotion(),
+      source: "delivery",
+      outcome: "retention",
+      outcomeOf: reachOf,
+    })
+
+    expect(
+      profile!.groups[0].axes.map((axis) => axis.key),
+    ).not.toContain("delivery.motion")
+    expect(profile!.groups[0].axes.length).toBe(4)
+  })
+
+  it("keeps a delivery read out of the packaging and script profiles", () => {
+    const videos = sixVideos()
+    expect(
+      buildChannelExtremesProfile({
+        videos,
+        source: "packaging",
+        outcome: "reach",
+        outcomeOf: reachOf,
+      }),
+    ).toBeNull()
+    expect(
+      buildChannelAxisProfile({
+        videos,
+        source: "script",
+        outcome: "retention",
+        outcomeOf: reachOf,
+      }),
+    ).toBeNull()
+  })
+
+  it("keeps a packaging read out of the delivery profile", () => {
+    expect(
+      buildChannelExtremesProfile({
+        videos: [
+          video("a", 100, { packaging: packaging({ titleSpecificity: 10 }) }),
+          video("b", 90, { packaging: packaging({ titleSpecificity: 9 }) }),
+          video("c", 80, { packaging: packaging({ titleSpecificity: 8 }) }),
+          video("d", 30, { packaging: packaging({ titleSpecificity: 2 }) }),
+          video("e", 20, { packaging: packaging({ titleSpecificity: 1 }) }),
+          video("f", 10, { packaging: packaging({ titleSpecificity: 0 }) }),
+        ],
+        source: "delivery",
+        outcome: "retention",
+        outcomeOf: reachOf,
+      }),
+    ).toBeNull()
+  })
+
+  it("builds the channel's own profile over every read video", () => {
+    const profile = buildChannelAxisProfile({
+      videos: sixVideos(),
+      source: "delivery",
+      outcome: "retention",
+      outcomeOf: reachOf,
+    })
+
+    expect(profile!.taxonomyVideoCount).toBe(6)
+    const cuts = profile!.axes.find(
+      (axis) => axis.key === "delivery.cutsPerMinute",
+    )
+    expect(cuts!.group).toBe("delivery")
+    expect(cuts!.channelMedian).toBe(5)
+  })
+
+  it("has no style profile, having no vocabulary to count over", () => {
+    expect(
+      buildChannelStyleProfile({
+        videos: sixVideos(),
+        source: "delivery",
+        outcome: "retention",
+        outcomeOf: reachOf,
+      }),
+    ).toBeNull()
+  })
+
+  it("marks every measured axis a descriptor rather than a score", () => {
+    for (const key of [
+      "delivery.cutsPerMinute",
+      "delivery.motion",
+      "delivery.speechRate",
+      "delivery.freezeCoverage",
+      "delivery.blackCoverage",
+    ]) {
+      expect(axisIsDescriptor(key)).toBe(true)
+      expect(axisLowerIsBetter(key)).toBe(false)
+    }
   })
 })

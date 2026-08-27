@@ -1,10 +1,13 @@
-// Channel-level aggregation over the two per-video taxonomies: the packaging
-// read (lib/packaging-taxonomy.ts) and the script read (lib/script-taxonomy.ts).
-// Both score every video on the SAME closed vocabularies and the same 0-10
-// axes, each video judged in isolation, which is exactly what makes them
-// summable across a library. lib/channel-trends.ts already contrasts the flat
-// v1 packaging flags between reach bands; this module does the two things that
-// vocabulary cannot do:
+// Channel-level aggregation over the three per-video reads: the packaging read
+// (lib/packaging-taxonomy.ts), the script read (lib/script-taxonomy.ts) and the
+// delivery read (lib/channel-delivery.ts). All three score every video on the
+// same 0-10 axes, each video judged in isolation, which is exactly what makes
+// them summable across a library; the first two add closed vocabularies on top,
+// which is what the style profile counts over and which delivery, being
+// measured rather than classified, has none of.
+//
+// lib/channel-trends.ts already contrasts the flat v1 packaging flags between
+// reach bands; this module does the two things that vocabulary cannot do:
 //
 //   axis profile   the 0-10 ordinals, as a channel median per axis plus the
 //                  gap between the top and bottom half of the library on some
@@ -28,10 +31,20 @@
 // COPY GUARDRAIL: no em dashes (U+2014) or en dashes (U+2013), ever, in this
 // file. Hyphens are fine. Enforced by lib/__tests__/copy-guardrails.test.ts.
 
+import type { DeliveryRead } from "@/lib/channel-delivery"
 import type { PackagingTaxonomy } from "@/lib/packaging-taxonomy"
 import type { ScriptTaxonomy } from "@/lib/script-taxonomy"
 
-export type TaxonomySource = "packaging" | "script"
+// The three reads a video can be profiled on. Packaging and script are model
+// scored; delivery is measured off the source file by ffmpeg and scaled onto the
+// same 0-10 axis (see lib/channel-delivery.ts). All three score a video in
+// isolation, which is the only property this module needs of them.
+export type TaxonomySource = "packaging" | "script" | "delivery"
+
+// Any one video's read, whichever source it came from. The axis and dimension
+// readers below are each written against one of the three and only ever handed
+// their own, so this union exists to keep the definition tables in one shape.
+type TaxonomyRead = PackagingTaxonomy | ScriptTaxonomy | DeliveryRead
 
 // Which stored metric the top/bottom split is made on. Reach answers "what got
 // clicked", retention answers "what got watched".
@@ -43,6 +56,22 @@ export interface TaxonomyProfileVideo {
   title: string | null
   packaging: PackagingTaxonomy | null
   script: ScriptTaxonomy | null
+  // The measured craft read, derived from the stored ffmpeg baseline rather than
+  // generated; null when the video was never deeply analysed with its source
+  // file, or when nothing measured.
+  delivery: DeliveryRead | null
+}
+
+// Which of a video's three reads a source is asking for. One function rather
+// than a ternary at each of the three call sites, because a two-way ternary
+// silently sends a third source to the wrong read.
+function readForSource(
+  video: TaxonomyProfileVideo,
+  source: TaxonomySource,
+): TaxonomyRead | null {
+  if (source === "packaging") return video.packaging
+  if (source === "script") return video.script
+  return video.delivery
 }
 
 // A profile needs a few videos before a median means anything, and each half of
@@ -95,7 +124,16 @@ export const SCRIPT_AXIS_GROUPS = [
 ] as const
 export type ScriptAxisGroup = (typeof SCRIPT_AXIS_GROUPS)[number]
 
-export type TaxonomyAxisGroup = PackagingAxisGroup | ScriptAxisGroup
+// One group, because the five measured figures are one idea (how the video is
+// cut, moved and spoken) and splitting them would leave a pair too small to draw
+// as a shape.
+export const DELIVERY_AXIS_GROUPS = ["delivery"] as const
+export type DeliveryAxisGroup = (typeof DELIVERY_AXIS_GROUPS)[number]
+
+export type TaxonomyAxisGroup =
+  | PackagingAxisGroup
+  | ScriptAxisGroup
+  | DeliveryAxisGroup
 
 interface AxisDefinition<T> {
   key: string
@@ -157,14 +195,70 @@ const SCRIPT_AXES: AxisDefinition<ScriptTaxonomy>[] = [
   { key: "rhetoric.relatability", group: "rhetoric", read: (t) => t.detail?.rhetoric.relatability ?? null },
 ]
 
+// Every delivery axis is a descriptor: none of these has a good end. A video cut
+// every two seconds is not better made than one held on a single shot, it is a
+// different kind of video, and which of the two a channel's best uploads look
+// like is the whole question the tab exists to ask. The figures are measured
+// rather than judged, so there is no scoring intent here to read a direction
+// out of either.
+const DELIVERY_AXES: AxisDefinition<DeliveryRead>[] = [
+  {
+    key: "delivery.cutsPerMinute",
+    group: "delivery",
+    descriptor: true,
+    read: (t) => t.detail?.cutsPerMinute ?? null,
+  },
+  {
+    key: "delivery.motion",
+    group: "delivery",
+    descriptor: true,
+    read: (t) => t.detail?.motion ?? null,
+  },
+  {
+    key: "delivery.speechRate",
+    group: "delivery",
+    descriptor: true,
+    read: (t) => t.detail?.speechRate ?? null,
+  },
+  {
+    key: "delivery.freezeCoverage",
+    group: "delivery",
+    descriptor: true,
+    read: (t) => t.detail?.freezeCoverage ?? null,
+  },
+  {
+    key: "delivery.blackCoverage",
+    group: "delivery",
+    descriptor: true,
+    read: (t) => t.detail?.blackCoverage ?? null,
+  },
+]
+
 // A higher number is better on most axes, but fillerLevel is the one axis where
 // less is more, so a contrast on it has to be read the other way round.
 const LOWER_IS_BETTER = new Set(["substance.fillerLevel"])
 
+// The axis table for one source, cast to the union the shared builders read
+// through. Each table's readers are typed to their own read and the builders
+// only ever hand them rows already narrowed to that source, so the cast is over
+// a union no caller can get wrong.
+function axisDefinitionsForSource(
+  source: TaxonomySource,
+): AxisDefinition<TaxonomyRead>[] {
+  const definitions =
+    source === "packaging"
+      ? PACKAGING_AXES
+      : source === "script"
+        ? SCRIPT_AXES
+        : DELIVERY_AXES
+  return definitions as AxisDefinition<TaxonomyRead>[]
+}
+
 export function axisIsDescriptor(key: string): boolean {
   return (
     PACKAGING_AXES.some((axis) => axis.key === key && axis.descriptor === true) ||
-    SCRIPT_AXES.some((axis) => axis.key === key && axis.descriptor === true)
+    SCRIPT_AXES.some((axis) => axis.key === key && axis.descriptor === true) ||
+    DELIVERY_AXES.some((axis) => axis.key === key && axis.descriptor === true)
   )
 }
 
@@ -253,11 +347,9 @@ export function buildChannelAxisProfile<V extends TaxonomyProfileVideo>(params: 
   outcomeOf: (video: V) => number | null
 }): ChannelAxisProfile | null {
   const { videos, source, outcome, outcomeOf } = params
-  const taxonomyOf = (video: V): PackagingTaxonomy | ScriptTaxonomy | null =>
-    source === "packaging" ? video.packaging : video.script
 
   const carrying = videos.flatMap((video) => {
-    const taxonomy = taxonomyOf(video)
+    const taxonomy = readForSource(video, source)
     // A v1 packaging row has no `detail`, so it carries no axes at all.
     if (taxonomy == null || taxonomy.detail == null) return []
     return [{ video, taxonomy }]
@@ -279,12 +371,7 @@ export function buildChannelAxisProfile<V extends TaxonomyProfileVideo>(params: 
   const top = splitAvailable ? withOutcome.slice(0, bandSize) : []
   const bottom = splitAvailable ? withOutcome.slice(-bandSize) : []
 
-  // The axis readers are typed to one taxonomy each, and `carrying` is already
-  // narrowed to the source's own rows, so the cast is over a union the caller
-  // cannot get wrong.
-  const definitions = (
-    source === "packaging" ? PACKAGING_AXES : SCRIPT_AXES
-  ) as AxisDefinition<PackagingTaxonomy | ScriptTaxonomy>[]
+  const definitions = axisDefinitionsForSource(source)
 
   const axes = axisRows(
     definitions,
@@ -392,7 +479,7 @@ export function buildChannelExtremesProfile<
   const { videos, source, outcome, outcomeOf } = params
 
   const carrying = videos.flatMap((video) => {
-    const taxonomy = source === "packaging" ? video.packaging : video.script
+    const taxonomy = readForSource(video, source)
     // A v1 packaging row has no `detail`, so it carries no axes at all.
     if (taxonomy == null || taxonomy.detail == null) return []
     return [{ video, taxonomy, outcome: outcomeOf(video) }]
@@ -408,15 +495,11 @@ export function buildChannelExtremesProfile<
   const top = ranked.slice(0, EXTREMES_BAND_SIZE)
   const bottom = ranked.slice(-EXTREMES_BAND_SIZE)
 
-  // Same cast as the profile above: `ranked` is already narrowed to the
-  // source's own rows, so the union the readers see cannot be the wrong one.
-  const definitions = (
-    source === "packaging" ? PACKAGING_AXES : SCRIPT_AXES
-  ) as AxisDefinition<PackagingTaxonomy | ScriptTaxonomy>[]
+  const definitions = axisDefinitionsForSource(source)
 
   const bandMean = (
-    band: { taxonomy: PackagingTaxonomy | ScriptTaxonomy }[],
-    axis: AxisDefinition<PackagingTaxonomy | ScriptTaxonomy>,
+    band: { taxonomy: TaxonomyRead }[],
+    axis: AxisDefinition<TaxonomyRead>,
   ): number | null => {
     const values = band.flatMap((entry) => axis.read(entry.taxonomy) ?? [])
     return values.length === 0 ? null : mean(values)
@@ -687,7 +770,7 @@ export function buildChannelStyleProfile<V extends TaxonomyProfileVideo>(params:
 }): ChannelStyleProfile | null {
   const { videos, source, outcome, outcomeOf } = params
   const carrying = videos.flatMap((video) => {
-    const taxonomy = source === "packaging" ? video.packaging : video.script
+    const taxonomy = readForSource(video, source)
     return taxonomy == null ? [] : [{ video, taxonomy }]
   })
   if (carrying.length < TAXONOMY_PROFILE_MIN_VIDEOS) return null
@@ -698,9 +781,16 @@ export function buildChannelStyleProfile<V extends TaxonomyProfileVideo>(params:
   })
   const channelMedian = outcomes.length > 0 ? median(outcomes) : null
 
+  // Delivery is measured rather than classified, so it has no closed
+  // vocabularies to count over and no style profile to build. An empty table
+  // falls through to the null return below rather than being special-cased.
   const definitions = (
-    source === "packaging" ? PACKAGING_DIMENSIONS : SCRIPT_DIMENSIONS
-  ) as DimensionDefinition<PackagingTaxonomy | ScriptTaxonomy>[]
+    source === "packaging"
+      ? PACKAGING_DIMENSIONS
+      : source === "script"
+        ? SCRIPT_DIMENSIONS
+        : []
+  ) as DimensionDefinition<TaxonomyRead>[]
 
   const dimensions = definitions.flatMap(
     (dimension): ChannelStyleDimension[] => {

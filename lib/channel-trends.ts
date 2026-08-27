@@ -24,6 +24,7 @@ import {
   loadChannelEventRecords,
   type ChannelEventRecord,
 } from "@/lib/channel-event-history"
+import { toDeliveryRead, type DeliveryRead } from "@/lib/channel-delivery"
 import {
   buildChannelRetentionCurve,
   type ChannelRetentionCurve,
@@ -135,6 +136,11 @@ export interface ChannelVideo {
   packaging: PackagingTaxonomy | null
   // The categorical read of the whole spoken script; null until generated.
   script: ScriptTaxonomy | null
+  // The measured craft read: cut rate, motion, speech rate and how much of the
+  // runtime is a frozen or black frame, scaled onto the taxonomies' own 0-10
+  // axis. Derived from the ffmpeg baseline stored at deep-analysis time, so it
+  // is null for a video analysed without its source file.
+  delivery: DeliveryRead | null
   // The full stored audience-retention curve, as YouTube reported it. Feeds the
   // library's average curve (lib/channel-retention-curve.ts); null for rows
   // analysed before the curve was persisted.
@@ -590,6 +596,17 @@ export interface ChannelTrendsData {
   // an average view percentage.
   scriptExtremes: ChannelExtremesProfile | null
   scriptStyle: ChannelStyleProfile | null
+  // The measured craft axes at the ends of the library: the three best-retaining
+  // uploads against the three worst, over the library's own average. Contrasted
+  // against retention the way the script read is, because how a video is cut and
+  // spoken is what happens after the click, so the share of it that gets watched
+  // is the outcome worth ranking on. Null until six videos carry both a stored
+  // ffmpeg baseline and an average view percentage.
+  //
+  // The only delivery profile there is: the measured figures carry no closed
+  // vocabulary to build a style profile over, and the halves split its two
+  // siblings also expose is not drawn on this page.
+  deliveryExtremes: ChannelExtremesProfile | null
 }
 
 function kindTrends(
@@ -1494,6 +1511,12 @@ export function buildChannelTrends(params: {
       outcome: "retention",
       outcomeOf: (video) => video.averageViewPercentage,
     }),
+    deliveryExtremes: buildChannelExtremesProfile({
+      videos,
+      source: "delivery",
+      outcome: "retention",
+      outcomeOf: (video) => video.averageViewPercentage,
+    }),
   }
 }
 
@@ -1572,9 +1595,11 @@ function browseSuggestedShare(
 // chronological columns, the subscriber conversion view and the packaging
 // patterns view all read from this. JSON-path selects keep the payload to the
 // fields used instead of shipping whole video_details/packaging_alignment
-// documents. The one deliberately whole column is `retention`: the average
-// curve needs every sample of every video's curve, and Postgrest cannot project
-// inside a JSON array.
+// documents, and the same for the five measured figures the delivery read is
+// built from, which leaves the baseline's per-minute `ranges` array (read by
+// nothing here) in the database. The one deliberately whole column is
+// `retention`: the average curve needs every sample of every video's curve, and
+// Postgrest cannot project inside a JSON array.
 async function loadVideos(
   supabase: SupabaseClient,
   userId: string,
@@ -1585,7 +1610,7 @@ async function loadVideos(
   const { data, error } = await supabase
     .from("analysed_videos")
     .select(
-      "id, video_title, date_analysed, analytics_summary, retention, published_at:video_details->>publishedAt, duration_seconds:video_details->durationSeconds, packaging_taxonomy:packaging_alignment->taxonomy, script_taxonomy",
+      "id, video_title, date_analysed, analytics_summary, retention, published_at:video_details->>publishedAt, duration_seconds:video_details->durationSeconds, packaging_taxonomy:packaging_alignment->taxonomy, script_taxonomy, delivery_cuts_per_minute:deep_feature_baseline->cutsPerMinute, delivery_motion:deep_feature_baseline->motion, delivery_speech_rate:deep_feature_baseline->speechRate, delivery_freeze_coverage:deep_feature_baseline->freezeCoverage, delivery_black_coverage:deep_feature_baseline->blackCoverage, delivery_sampled_seconds:deep_feature_baseline->sampledSeconds, delivery_duration_seconds:deep_feature_baseline->videoDurationSeconds, delivery_generated_at:deep_feature_baseline->>generatedAt",
     )
     .eq("user_id", userId)
     .in("id", videoIds)
@@ -1613,6 +1638,14 @@ async function loadVideos(
       duration_seconds: number | null
       packaging_taxonomy: PackagingTaxonomy | null
       script_taxonomy: ScriptTaxonomy | null
+      delivery_cuts_per_minute: number | null
+      delivery_motion: number | null
+      delivery_speech_rate: number | null
+      delivery_freeze_coverage: number | null
+      delivery_black_coverage: number | null
+      delivery_sampled_seconds: number | null
+      delivery_duration_seconds: number | null
+      delivery_generated_at: string | null
     }[]
   ).map((row) => ({
     id: row.id,
@@ -1631,6 +1664,18 @@ async function loadVideos(
       row.analytics_summary?.impressionClickThroughRate ?? null,
     packaging: row.packaging_taxonomy,
     script: row.script_taxonomy,
+    // Null on every field at once when the video carries no baseline, which
+    // toDeliveryRead reads as nothing to score.
+    delivery: toDeliveryRead({
+      cutsPerMinute: row.delivery_cuts_per_minute,
+      motion: row.delivery_motion,
+      speechRate: row.delivery_speech_rate,
+      freezeCoverage: row.delivery_freeze_coverage,
+      blackCoverage: row.delivery_black_coverage,
+      sampledSeconds: row.delivery_sampled_seconds,
+      videoDurationSeconds: row.delivery_duration_seconds,
+      generatedAt: row.delivery_generated_at,
+    }),
     retention: row.retention,
     durationSeconds: row.duration_seconds,
   }))
