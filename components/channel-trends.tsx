@@ -10,10 +10,6 @@ import {
 } from "lucide-react"
 
 import {
-  DeliveryPanel,
-  deliveryPanelHasContent,
-} from "@/components/channel-trends-delivery"
-import {
   PackagingPanel,
   packagingPanelHasContent,
 } from "@/components/channel-trends-packaging"
@@ -46,7 +42,7 @@ import {
 } from "@/lib/channel-trends"
 
 // The Channel Trends page body: the unlock meter, the library's headline
-// numbers, then four tabs.
+// numbers, then three tabs.
 //
 //   Retention  what the library actually did to viewers: the three most-viewed
 //              uploads and the three least-viewed averaged onto one axis, over
@@ -59,9 +55,6 @@ import {
 //              read one surface at a time across its own Substance, Structure,
 //              Emotion and Rhetoric sub-tabs
 //              (components/channel-trends-script.tsx)
-//   Delivery   how they are cut and spoken against the same outcome, on figures
-//              measured off the source file rather than read by a model
-//              (components/channel-trends-delivery.tsx)
 //
 // The page carries no colour of its own: every verdict is written out, so a
 // card never depends on a red or green edge to be read. The only colour is the
@@ -244,7 +237,6 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
   const hasRetention = retentionPanelHasContent(data)
   const hasPackaging = packagingPanelHasContent(data)
   const hasScript = scriptPanelHasContent(data)
-  const hasDelivery = deliveryPanelHasContent(data)
 
   return (
     <div className="flex flex-col gap-6">
@@ -272,13 +264,6 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
               hasScript ? (
                 <TrendsPanel description="What your videos actually say, measured against how much of them gets watched.">
                   <ScriptPanel data={data} />
-                </TrendsPanel>
-              ) : undefined
-            }
-            delivery={
-              hasDelivery ? (
-                <TrendsPanel description="How your videos are cut, moved and spoken, measured off the source files rather than read by a model.">
-                  <DeliveryPanel data={data} />
                 </TrendsPanel>
               ) : undefined
             }

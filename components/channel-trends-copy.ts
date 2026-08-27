@@ -413,30 +413,6 @@ const AXIS_COPY: Record<string, AxisCopy> = {
     name: "Relatability",
     meaning: "a target viewer clearly sees themselves in it",
   },
-  // The delivery axes are measured off the source file rather than judged, so
-  // each `meaning` names the real figure a 10 stands for. Keep these in step
-  // with the ceilings in lib/channel-delivery.ts: the number quoted here is the
-  // only place a reader is told what full scale was set at.
-  "delivery.cutsPerMinute": {
-    name: "Cut rate",
-    meaning: "about 30 cuts a minute, one every two seconds",
-  },
-  "delivery.motion": {
-    name: "Motion",
-    meaning: "the frame changing as fast as busy, fast-cut footage does",
-  },
-  "delivery.speechRate": {
-    name: "Speech rate",
-    meaning: "around 220 words a minute, a genuinely fast talker",
-  },
-  "delivery.freezeCoverage": {
-    name: "Held frames",
-    meaning: "the whole runtime sitting on a still, unmoving frame",
-  },
-  "delivery.blackCoverage": {
-    name: "Black frames",
-    meaning: "the whole runtime black, from fades and cuts to black",
-  },
 }
 
 export function taxonomyAxisCopy(key: string): AxisCopy {
@@ -471,10 +447,6 @@ const AXIS_SHORT_LABELS: Record<string, string> = {
   "structure.payoffPlacement": "Payoff",
   "emotion.emotionalRange": "Range",
   "rhetoric.directAddress": "Direct",
-  "delivery.cutsPerMinute": "Cuts",
-  "delivery.speechRate": "Speech",
-  "delivery.freezeCoverage": "Held",
-  "delivery.blackCoverage": "Black",
 }
 
 export function taxonomyAxisShortLabel(key: string): string {
@@ -505,7 +477,6 @@ const AXIS_GROUP_LABELS: Record<string, string> = {
   structure: "Structure",
   emotion: "Emotion",
   rhetoric: "Rhetoric",
-  delivery: "Delivery",
 }
 
 export function taxonomyAxisGroupLabel(group: string): string {

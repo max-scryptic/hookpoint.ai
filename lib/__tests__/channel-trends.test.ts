@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest"
 
-import { toDeliveryRead, type DeliveryRead } from "@/lib/channel-delivery"
 import type { ChannelEventRecord } from "@/lib/channel-event-history"
 import {
   buildChannelInsights,
@@ -55,7 +54,6 @@ function video(
     impressionClickThroughRate: null,
     packaging: null,
     script: null,
-    delivery: null,
     retention: null,
     durationSeconds: null,
     ...extras,
@@ -1195,71 +1193,3 @@ describe("buildChannelTrends packaging extremes", () => {
   })
 })
 
-// The delivery read reaches the page through buildChannelTrends like the other
-// two, but off a column the other two do not touch, so this covers the wiring
-// rather than the aggregation (lib/__tests__/channel-taxonomy-trends.test.ts
-// covers that) and the outcome it is ranked on.
-describe("buildChannelTrends delivery wiring", () => {
-  const deliveryRead = (cutsPerMinute: number): DeliveryRead =>
-    toDeliveryRead({
-      cutsPerMinute,
-      motion: 0.05,
-      speechRate: 150,
-      freezeCoverage: 0,
-      blackCoverage: 0,
-      sampledSeconds: 72,
-      videoDurationSeconds: 558,
-      generatedAt: "2026-01-01T00:00:00.000Z",
-    })!
-
-  // Ranked on retention, so the watched share is what orders the bands and the
-  // cut rate is what separates them.
-  const sixMeasured = () =>
-    [
-      { id: "av-1", watched: 80, cuts: 30 },
-      { id: "av-2", watched: 70, cuts: 30 },
-      { id: "av-3", watched: 60, cuts: 30 },
-      { id: "av-4", watched: 30, cuts: 0 },
-      { id: "av-5", watched: 20, cuts: 0 },
-      { id: "av-6", watched: 10, cuts: 0 },
-    ].map((entry) =>
-      video(entry.id, entry.id, null, {
-        averageViewPercentage: entry.watched,
-        delivery: deliveryRead(entry.cuts),
-      }),
-    )
-
-  it("carries the measured axes onto the page ranked on retention", () => {
-    const data = buildChannelTrends({
-      records: [],
-      videos: sixMeasured(),
-      libraryVideoCount: 6,
-      windowCount: 6,
-    })
-
-    expect(data.deliveryExtremes).not.toBeNull()
-    expect(data.deliveryExtremes!.outcome).toBe("retention")
-    expect(data.deliveryExtremes!.top.map((entry) => entry.id)).toEqual([
-      "av-1",
-      "av-2",
-      "av-3",
-    ])
-    expect(data.deliveryExtremes!.contrasts[0].key).toBe(
-      "delivery.cutsPerMinute",
-    )
-  })
-
-  it("leaves the delivery profile null when no video was measured", () => {
-    const data = buildChannelTrends({
-      records: [],
-      videos: sixMeasured().map((entry) => ({ ...entry, delivery: null })),
-      libraryVideoCount: 6,
-      windowCount: 6,
-    })
-
-    expect(data.deliveryExtremes).toBeNull()
-    // A library with no source files still reaches the page; only this tab is
-    // missing from it.
-    expect(data.snapshot.libraryVideoCount).toBe(6)
-  })
-})
