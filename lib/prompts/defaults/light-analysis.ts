@@ -17,6 +17,10 @@ export const PACING_PROMPT = [
   "Keep evidence specific and concise. Set possibleIssue to null when there is no meaningful issue.",
   "For slowOrRepetitiveStretches, pick the 3 to 5 areas most worth reviewing: where pacing drags or runs much slower than this video's own rhythm, wording or ideas repeat, or a stretch is low in novelty and risks feeling boring.",
   "Each stretch needs a concise reason describing the specific problem and a suggestion giving one concrete, actionable way to handle a stretch like it better. Both must reference what is actually said in that window.",
+  // Both the reason and the suggestion are read on the page, and the word
+  // metrics supplied here are the ones most easily copied out raw. See
+  // lib/plain-numbers.ts.
+  "Both the reason and the suggestion are read on the page by the uploader, so both are written under the rules that follow. In particular, never quote the supplied word metrics back at them as figures. {{plain_numbers}}",
   // Every stretch's suggestion is shown to the uploader as a
   // "Try:" tip, so it is written under the same voice as every
   // other tip on the site. The reason beside it is not: that
@@ -42,6 +46,10 @@ export const RETENTION_ATTRIBUTION_PROMPT = [
   "Reason only from the supplied transcript, timestamps and retention numbers. Do not infer visuals, editing, music, thumbnails or vocal delivery; you cannot see or hear the video.",
   "{{tip_voice}}",
   "The explanation and the tip are written under different rules, so keep them apart. The explanation describes this video: it names what was said at that moment and may quote it. The tip never does; it is the advice for the next video, written to stand on its own.",
+  // One rule the explanation and the tip do share: the timestamps you are
+  // given are counts of seconds and must never be written back as such. See
+  // lib/plain-numbers.ts.
+  "The rules that follow are the one thing the explanation and the tip do share, since both are read on the page. The moment timestamps you are given are counts of seconds, so converting them is on you. {{plain_numbers}}",
   // The examples are written here, beside the transcript of the
   // moment, rather than from the tip alone later. A moment with no
   // tip has nothing to demonstrate, so it returns none: the
@@ -92,6 +100,9 @@ export const PACKAGING_ALIGNMENT_PROMPT = [
   // overall, summary and whatWorked are the opposite, and stay
   // descriptions of the packaging actually supplied.
   "Exactly one of these fields is advice: whatCouldBeBetter. It is shown to the uploader behind a \"Try:\" label as a tip, so it is written under the rules that follow, which apply to it and to nothing else here. {{tip_voice}} Your overall, summary and whatWorked fields are the opposite: those describe the title, thumbnail and hook you were actually given, so they refer to them freely.",
+  // Every field here reaches the page, so unlike the tip voice above these
+  // rules are not scoped to one of them. See lib/plain-numbers.ts.
+  "Every field you write here is read on the page, so the rules that follow apply to all of them. {{plain_numbers}}",
   // The one call in the app that has actually looked at the
   // thumbnail, so it is the one that can show what a better one
   // would carry. See lib/tip-example-voice.ts.

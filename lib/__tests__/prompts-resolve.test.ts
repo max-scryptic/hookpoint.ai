@@ -48,8 +48,11 @@ afterEach(() => {
 
 describe("resolvePrompt", () => {
   it("sends the shipped default when nothing has been saved", async () => {
+    // Compared against defaultPromptText rather than the raw default, since
+    // the shipped text of a prompt that quotes a fragment includes that
+    // fragment's own shipped text.
     expect(await resolvePrompt("event_synthesis")).toBe(
-      promptDefinition("event_synthesis")?.default,
+      defaultPromptText("event_synthesis"),
     )
   })
 
@@ -65,7 +68,7 @@ describe("resolvePrompt", () => {
     // developer turn rather than the text the prompt ships with.
     rows.set("event_synthesis", { content: null })
     expect(await resolvePrompt("event_synthesis")).toBe(
-      promptDefinition("event_synthesis")?.default,
+      defaultPromptText("event_synthesis"),
     )
   })
 

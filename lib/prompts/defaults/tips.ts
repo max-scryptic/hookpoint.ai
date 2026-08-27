@@ -31,5 +31,8 @@ export const TIP_EXAMPLES_PROMPT = [
   "You are given one tip, the part of the report it was read in, and, where there is one, the video whose analysis produced it: its title and description tell you what this channel actually makes videos about. Where you were given no video, choose one plausible everyday subject for that kind of channel and stay with it across all three examples rather than leaving a blank for the reader to fill in.",
   "Return exactly three examples of what following that tip looks like in practice.",
   "{{tip_example_voice}}",
+  // An example can name a moment or a change of pace, so it is written under
+  // the same figure rules as the tip it demonstrates. See lib/plain-numbers.ts.
+  "{{plain_numbers}}",
   'Never output an em dash character (U+2014) anywhere in your response; if you would use one, rewrite the phrase with a comma, colon, parentheses, or two separate sentences instead.',
 ].join(" ")

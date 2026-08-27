@@ -288,6 +288,221 @@ export function limitSentences(
   return sentences.slice(0, limit).join(" ")
 }
 
+// =============================================================================
+// FIGURES IN MODEL-WRITTEN COPY
+//
+// The pipeline measures a video in the units its tooling produces: a moment is
+// a count of seconds because that is what the retention API returns, speech is
+// words per minute because that is what the audio pass computes, loudness is
+// decibels because that is what ffmpeg reports. All three used to reach the page
+// exactly as measured:
+//
+//   "Around 538 seconds, the audio shifts notably: your speech rate slows
+//    sharply from about 229 wpm to 86 wpm, while average volume rises by about
+//    5 dB..."
+//
+// lib/plain-numbers.ts is the rule that stops copy being written that way, and
+// every prompt that writes prose for an uploader now quotes it. A prompt only
+// reaches copy written after it changes, though, and no report is regenerated
+// just to gain a rewording, so the mechanical part of the rule is unwound here
+// as well, at render time, which is the only layer that reaches the reports
+// already stored.
+//
+// Mechanical is the whole of what this does. It converts a count of seconds to
+// a clock time, collapses a pair of measurements into the percentage between
+// them, and turns a decibel change into the words a reader would use. It does
+// not touch the vocabulary around them ("speech rate", "average volume"), which
+// is the prompt's half of the job. As everywhere else in this file, anything it
+// cannot convert with confidence is left exactly as the model wrote it.
+// =============================================================================
+
+// Below this, a count of seconds is far more often a length ("hold it around 5
+// seconds") than a moment, and "0:05" would be the wrong reading of it. Above
+// it, a bare count is unreadable as a position and worth converting.
+const MIN_CLOCK_SECONDS = 60
+
+/** A count of seconds as the clock time the player and the charts show. */
+function secondsToClock(totalSeconds: number): string {
+  const seconds = Math.max(0, Math.round(totalSeconds))
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const rest = String(seconds % 60).padStart(2, "0")
+  if (hours === 0) return `${minutes}:${rest}`
+  return `${hours}:${String(minutes).padStart(2, "0")}:${rest}`
+}
+
+// The hedges a model puts between the preposition and the figure, which ride
+// along with the position rather than blocking it: "at around 538 seconds".
+const HEDGE = "(?:about|around|roughly|approximately|some|nearly)"
+
+// The unit, in the spellings the prompts and the models actually produce. The
+// bare "s" has no space in front of it, so "538s" is a time and "5 s" is not
+// caught by this branch at all.
+const SECONDS_UNIT = "(?:\\s*(?:seconds?|secs?)\\b|s\\b)"
+
+// A word that makes the count a length rather than a position, so "runs around
+// 90 seconds" and "for about 90 seconds" are left alone. Matched against the
+// text immediately before the preposition.
+//
+// Only words that can govern a length outright are in here. The nouns this
+// product uses for a span of video are deliberately not ("the stretch from 538
+// seconds", "the hold at 538 seconds"), and neither is "leave", since "viewers
+// leave at 538 seconds" is the single most common sentence on the page.
+const DURATION_LEAD =
+  /\b(?:for|of|than|within|every|another|lasts|lasted|lasting|runs|ran|running|takes|took|taking|spanning|wait|waits|waiting|pause|pauses|pausing)\s+$/i
+
+// A count followed by "of" is a quantity of something rather than a position in
+// the video: "around 300 seconds of build before the reveal".
+const DURATION_TAIL = /^\s+of\b/i
+
+// "at 538 seconds", "around 538 seconds", "at about 538s". The preposition is
+// required: without one a bare count is far more often a length.
+const SECONDS_POSITION = new RegExp(
+  `\\b(at|around|near)\\s+(?:(${HEDGE})\\s+)?(\\d{1,5})(?:\\.\\d+)?${SECONDS_UNIT}`,
+  "gi",
+)
+
+// "from 538 seconds to 566 seconds", where only the first count carries a
+// preposition and the second would otherwise be left behind.
+const SECONDS_RANGE = new RegExp(
+  `\\bfrom\\s+(?:${HEDGE}\\s+)?(\\d{1,5})(?:\\.\\d+)?(?:\\s*(?:seconds?|secs?))?\\s+to\\s+(?:${HEDGE}\\s+)?(\\d{1,5})(?:\\.\\d+)?\\s*(?:seconds?|secs?)\\b`,
+  "gi",
+)
+
+// "the 538 second mark", "the 538-second mark".
+const SECONDS_MARK = /\b(\d{1,5})(?:\.\d+)?[\s-]*(?:seconds?|secs?)([\s-]+mark\b)/gi
+
+/**
+ * Rewrites a moment given as a count of seconds into the clock time the rest of
+ * the interface shows, so "Around 538 seconds, the audio shifts" reads "Around
+ * 8:58, the audio shifts". A length of time is not a moment and is left alone,
+ * which is what the preposition, the duration words and MIN_CLOCK_SECONDS are
+ * between them protecting.
+ */
+export function clockTimestamps(text: string): string {
+  const ranged = text.replace(
+    SECONDS_RANGE,
+    (whole, from: string, to: string, offset: number) => {
+      if (DURATION_LEAD.test(text.slice(0, offset))) return whole
+      if (DURATION_TAIL.test(text.slice(offset + whole.length))) return whole
+      const start = Number(from)
+      const end = Number(to)
+      if (!(end > start) || end < MIN_CLOCK_SECONDS) return whole
+      return `from ${secondsToClock(start)} to ${secondsToClock(end)}`
+    },
+  )
+
+  const positioned = ranged.replace(
+    SECONDS_POSITION,
+    (
+      whole,
+      preposition: string,
+      hedge: string | undefined,
+      count: string,
+      offset: number,
+    ) => {
+      if (DURATION_LEAD.test(ranged.slice(0, offset))) return whole
+      if (DURATION_TAIL.test(ranged.slice(offset + whole.length))) return whole
+      const seconds = Number(count)
+      if (seconds < MIN_CLOCK_SECONDS) return whole
+      const lead = hedge ? `${preposition} ${hedge}` : preposition
+      return `${lead} ${secondsToClock(seconds)}`
+    },
+  )
+
+  return positioned.replace(
+    SECONDS_MARK,
+    (whole, count: string, mark: string) => {
+      const seconds = Number(count)
+      if (seconds < MIN_CLOCK_SECONDS) return whole
+      return `${secondsToClock(seconds)}${mark}`
+    },
+  )
+}
+
+// The units a rate is measured in, where the gap between two readings is what
+// the sentence is actually about and a percentage says it in one figure.
+// Decibels are deliberately absent: they are a logarithmic scale, so the
+// percentage between two of them would be arithmetic that means nothing.
+const RATE_UNIT =
+  "(?:wpm|words per minute|words a minute|cuts per minute|cuts a minute)"
+
+// "from about 229 wpm to 86 wpm". The unit is optional on the first figure,
+// since a model that writes both often names it only once.
+const RATE_PAIR = new RegExp(
+  `\\bfrom\\s+(?:${HEDGE}\\s+)?(\\d+(?:\\.\\d+)?)\\s*${RATE_UNIT}?\\s+to\\s+(?:${HEDGE}\\s+)?(\\d+(?:\\.\\d+)?)\\s*${RATE_UNIT}\\b`,
+  "gi",
+)
+
+// How far a change in level has to go before a listener would call it
+// something. Bands rather than a formula, because what the reader wants is the
+// word they would have used themselves.
+function loudnessWords(decibels: number): string {
+  const change = Math.abs(decibels)
+  if (change < 2) return "slightly"
+  if (change < 4) return "a little"
+  if (change < 8) return "quite a bit"
+  if (change < 14) return "a lot"
+  return "dramatically"
+}
+
+// "rises by about 5 dB" to "rises quite a bit". The verb in front of it already
+// carries the direction, so the words only have to carry the size.
+const DECIBEL_CHANGE = new RegExp(
+  `\\bby\\s+(?:${HEDGE}\\s+)?(-?\\d+(?:\\.\\d+)?)\\s*(?:dB|decibels?)\\b`,
+  "gi",
+)
+
+// "5 dB louder", where the comparative carries the direction instead.
+const DECIBEL_COMPARATIVE = new RegExp(
+  `\\b(?:${HEDGE}\\s+)?(-?\\d+(?:\\.\\d+)?)\\s*(?:dB|decibels?)\\s+(louder|quieter|softer|higher|lower)\\b`,
+  "gi",
+)
+
+/**
+ * Replaces a measurement a reader has no feel for with the plain English of
+ * what it means: a pair of rates becomes the percentage between them, and a
+ * change in decibels becomes how much louder or quieter it actually got.
+ *
+ * A lone figure is left as written. "229 wpm" on its own has nothing to be a
+ * percentage of, and inventing a comparison for it would be a bug rather than a
+ * blemish; the prompts are what keep a lone figure from being written at all.
+ */
+export function plainUnits(text: string): string {
+  const rated = text.replace(RATE_PAIR, (whole, from: string, to: string) => {
+    const start = Number(from)
+    const end = Number(to)
+    if (!(start > 0) || !(end > 0)) return whole
+    const percent = Math.round((Math.abs(end - start) / start) * 100)
+    // Nothing worth printing, and "by about 0%" would read as a mistake.
+    if (percent < 1) return whole
+    return `by about ${percent}%`
+  })
+
+  return rated
+    .replace(
+      DECIBEL_COMPARATIVE,
+      (whole, decibels: string, direction: string) =>
+        `${loudnessWords(Number(decibels))} ${direction}`,
+    )
+    .replace(DECIBEL_CHANGE, (whole, decibels: string) =>
+      loudnessWords(Number(decibels)),
+    )
+}
+
+/**
+ * Both figure passes together, in the order they have to run: the clock pass
+ * first, so a count of seconds is already a time before the unit pass looks for
+ * a pair of figures to collapse.
+ *
+ * Applied inside cleanCopy, and separately by the comparison components to the
+ * model's own prose about the pair. It must not be applied to a verbatim title
+ * or a transcript quote, where a figure is the uploader's own words.
+ */
+export function plainFigures(text: string): string {
+  return plainUnits(clockTimestamps(text))
+}
+
 // Model-written copy occasionally leaks the JSON structure it was generated
 // inside back into the text itself, so a tip can arrive reading
 // `...Reaching Arena 16."]},` with a stray `]},` clinging to the end. These
@@ -504,20 +719,28 @@ function stripTryOpener(text: string): string {
  * Scrubs one piece of model-written copy before it is shown to a user, so every
  * tip and every described piece of evidence reads as plain, well-formed
  * English. It removes em and en dashes, strips leaked JSON structural artifacts
- * (stray braces and brackets and the punctuation clinging to them), drops a
- * "next time" / "in future videos" lead-in so the tip opens on the advice
- * itself, drops a "Try" the interface already prints as the label in front of
- * the tip, and collapses runaway whitespace into single spaces. Apply it at the
- * point copy is rendered, so text already stored before this guardrail existed
- * is cleaned too.
+ * (stray braces and brackets and the punctuation clinging to them), rewrites a
+ * moment given as a count of seconds into a clock time and a measurement the
+ * reader has no feel for into plain words, drops a "next time" / "in future
+ * videos" lead-in so the tip opens on the advice itself, drops a "Try" the
+ * interface already prints as the label in front of the tip, and collapses
+ * runaway whitespace into single spaces. Apply it at the point copy is
+ * rendered, so text already stored before this guardrail existed is cleaned
+ * too.
  */
 export function cleanCopy(text: string): string {
   // The "Try" strip runs last: a tip can carry both openers at once ("Next
   // time, try opening on the claim"), and the "Try" is only visible as one
-  // once the lead-in in front of it has gone.
+  // once the lead-in in front of it has gone. The figure passes run before
+  // both, on whitespace that has already been collapsed, so "538  seconds" is
+  // one match rather than none.
   return stripTryOpener(
     stripAdvicePreamble(
-      stripStructuralArtifacts(stripEmDashes(text)).replace(/\s+/g, " ").trim(),
+      plainFigures(
+        stripStructuralArtifacts(stripEmDashes(text))
+          .replace(/\s+/g, " ")
+          .trim(),
+      ),
     ),
   )
 }
