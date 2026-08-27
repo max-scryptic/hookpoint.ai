@@ -1,7 +1,7 @@
 // Turns each ranked retention-window event into one concrete recommendation.
 //
 // COPY CONSTRAINT: these are written here rather than by a model, but they are
-// rendered as "Try:" tips like every other, so they follow the same rule, which
+// rendered as tips like every other, so they follow the same rule, which
 // lib/tip-voice.ts states in full for the prompts. In short: the video being
 // analysed is already published on YouTube.
 // Its edit cannot be changed, and there is no way to put an alternate cut up
@@ -11,7 +11,7 @@
 //
 // Carry that framing in the body of the sentence - "plan ...", "a stretch like
 // this" - rather than in a "next time, ..." / "in future videos, ..." lead-in.
-// The "Try:" label already says these are for the next video, so a lead-in only
+// The label already says these are for the next video, so a lead-in only
 // delays the advice, and it turns into a tic when every tip on the page opens
 // the same way. cleanCopy (lib/copy-guardrails.ts) strips one at render time if
 // it slips through, here or from a model-written tip. The timestamp stays in
@@ -90,7 +90,9 @@ export type RecommendationActionType =
 // explains what it buys. They travel together so the muted purpose under a tip
 // always belongs to the tip it sits beneath.
 export interface RecommendationCopy {
-  // The forward-looking instruction shown to the uploader as the "Try:" line.
+  // The forward-looking instruction shown to the uploader as the tip line,
+  // behind "Try:" or, on a gain or a hold, "Maintain:" (see tipLabelForSection
+  // in lib/tips.ts). Neither word belongs at the front of the action itself.
   // Always about their next videos, never about re-editing this one.
   action: string
   expectedPurpose: string

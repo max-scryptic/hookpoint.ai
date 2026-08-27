@@ -9,11 +9,13 @@ import {
   TIP_FEEDBACK_REASONS,
   TIP_FEEDBACK_REASON_LABELS,
   TIP_FINGERPRINT_MAX_LENGTH,
+  TIP_LABELS,
   TIP_SURFACES,
   TIP_SURFACE_LABELS,
   tipCategoryCounts,
   tipCategoryForSection,
   tipFingerprint,
+  tipLabelForSection,
   tipSurface,
   type SavedTip,
   type TipCategory,
@@ -186,6 +188,56 @@ describe("tipCategoryForSection", () => {
     }
     expect(isTipCategory("titles")).toBe(false)
     expect(isTipCategory(null)).toBe(false)
+  })
+})
+
+describe("tipLabelForSection", () => {
+  // A gain and a hold are the two retention lists that report something going
+  // right, so their advice is about keeping it up rather than about fixing
+  // anything. "Try:" in front of one reads as a correction of a result that was
+  // in fact good.
+  it.each([
+    "Retention: Gain",
+    "Retention: Hold",
+    "Retention: Gain: Script",
+    "Retention: Hold: Script",
+    "Retention: Gain: Deep analysis",
+    "Retention: Hold: Deep analysis",
+    "RETENTION: HOLD",
+  ])("reads %s as something to maintain", (section) => {
+    expect(tipLabelForSection(section)).toBe("Maintain")
+  })
+
+  // Everything else is advice about a weakness, which is what "Try:" is for.
+  it.each([
+    "Retention: Hook",
+    "Retention: Drop-off",
+    "Retention: Drop-off: Script",
+    "Pacing",
+    "Packaging: Title",
+    "Packaging: Thumbnail",
+    "Deep analysis: Non-verbal takeaway",
+    "",
+  ])("reads %s as something to try", (section) => {
+    expect(tipLabelForSection(section)).toBe("Try")
+  })
+
+  // A head-to-head heading is model-written and can say "gains" while still
+  // being advice about which of two videos did better, so only the retention
+  // lists themselves can claim the label.
+  it("does not let a comparison heading claim the maintain label", () => {
+    expect(
+      tipLabelForSection("Retention head-to-head: Gains and recoveries"),
+    ).toBe("Try")
+    expect(tipLabelForSection("Script head-to-head: Holding the middle")).toBe(
+      "Try",
+    )
+  })
+
+  it("only ever returns a label the callout knows how to print", () => {
+    for (const section of ["Retention: Hold", "Packaging: Title"]) {
+      expect(TIP_LABELS).toContain(tipLabelForSection(section))
+    }
   })
 })
 

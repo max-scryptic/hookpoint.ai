@@ -569,7 +569,7 @@ function ActionableRecommendationBody({
 
 // The deep (multimodal) insight plus its actionable recommendation, formatted
 // identically to ScriptFeedbackBody so every tab reads the same: the white
-// evidence line, then the blue "Try:" tip. No bordered box, evidence-source
+// evidence line, then the blue tip. No bordered box, evidence-source
 // caption or expected-purpose subtext - those would make the deep tab look
 // unlike the Script tab it sits beside.
 function DeepFeedbackBody({

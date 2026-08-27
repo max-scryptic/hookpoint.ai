@@ -1,8 +1,9 @@
 import { TryCallout } from "@/components/try-callout"
 import type { TipExample } from "@/lib/tip-examples"
 
-// Recommendation tips share the borderless "Try:" callout used across the
-// retention tabs so the Pacing and Gains suggestions match the rest of the UI.
+// Recommendation tips share the borderless callout used across the retention
+// tabs so the Pacing and Gains suggestions match the rest of the UI, label
+// included: the callout works its own out from the section it is given.
 export function RecommendationCallout({
   children,
   section,

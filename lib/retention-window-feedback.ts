@@ -64,7 +64,7 @@ export interface ResolvedWindowFeedback {
 }
 
 // EVERY SHOWING CARRIES A TIP. The script reading earns its place only when it
-// has a "Try:" line of its own that no deep tab already carries; the deep
+// has a tip line of its own that no deep tab already carries; the deep
 // insights already answer to the same rule through dedupeDeepFeedback. An
 // explanation with no advice under it is dropped whole rather than shown
 // tipless, because the reader can see the curve already: a tab that restates
@@ -92,8 +92,8 @@ export function resolveWindowFeedback(
   return { script, deep }
 }
 
-// Whether the window has a tip on it: a "Try:" line the creator can act on,
-// written either from the transcript or from one of the deep insights that
+// Whether the window has a tip on it: a line the creator can act on, written
+// either from the transcript or from one of the deep insights that
 // survived the dedupe. This is what decides whether the window gets a row at
 // all, so an explanation with no advice under it counts as nothing: the reader
 // already has the curve, and a timestamp restating what it shows is not a

@@ -1,9 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-// Everything behind the two controls that sit on a "Try:" tip: keeping it on
-// the creator's checklist, and flagging it as not useful. Shared by the API
-// routes, the checklist page and the callout itself, so the rules about what a
-// tip is (how long, how it is compared, where it came from) are stated once.
+// Everything behind the two controls that sit on a tip: keeping it on the
+// creator's checklist, and flagging it as not useful. Shared by the API routes,
+// the checklist page and the callout itself, so the rules about what a tip is
+// (how long, how it is compared, where it came from, which label it is read
+// behind) are stated once.
 //
 // COPY GUARDRAIL: no em or en dashes (U+2014 / U+2013), ever, in any text in
 // this file. Hyphens are fine. Enforced by lib/__tests__/copy-guardrails.
@@ -182,6 +183,53 @@ export function tipCategoryForSection(section: string): TipCategory {
     TIP_CATEGORY_RULES.find((rule) => rule.pattern.test(haystack))?.category ??
     "other"
   )
+}
+
+// =============================================================================
+// THE LABEL IN FRONT OF A TIP
+//
+// Almost every tip on a report answers a weakness: a hook that lost people, a
+// drop-off, a slow stretch, a title pulling against its thumbnail. "Try:" is
+// the right word in front of those, because the advice is something the creator
+// is not doing yet.
+//
+// Two of the retention lists are not weaknesses. A gain is a moment viewers
+// came back for, and a hold is a stretch they sat through without leaving; both
+// are detected precisely because the curve went the right way, and the tip
+// under one says how to set that same thing up deliberately next time (see the
+// gain and hold instructions in lib/prompts/defaults/light-analysis.ts, and
+// PRESERVE_PATTERN / SUSTAIN_ATTENTION in lib/deep-analysis-recommendations.ts).
+// Labelling that "Try:" reads as a correction of something that in fact went
+// right, which is the opposite of what the row is saying, so those tips are
+// read behind "Maintain:" instead: this worked, keep doing it on purpose.
+//
+// The label is derived from the section rather than passed in, for the same
+// reason the category is: every callout already names the section it was read
+// in, and a dozen call sites each naming their own label would drift.
+// =============================================================================
+
+export const TIP_LABELS = ["Try", "Maintain"] as const
+
+export type TipLabel = (typeof TIP_LABELS)[number]
+
+// A gain or a hold on a single video's retention report, including the tabs
+// beneath one ("Retention: Hold: Script", "Retention: Gain: Deep analysis").
+// Anchored at the start so it can only match the retention lists themselves: a
+// head-to-head section is prefixed "Retention head-to-head: ...", and its model
+// written heading is free to contain the word "gains" while still being advice
+// about which of two videos did better.
+const MAINTAINED_SECTION = /^retention:\s*(?:gain|hold)s?\b/i
+
+/**
+ * The word printed in front of a tip read in this section: "Maintain" where the
+ * moment it came from went right, "Try" everywhere else.
+ *
+ * Only the label changes. A "Maintain:" tip is saved, flagged, fingerprinted
+ * and filed on the checklist exactly like any other, so nothing downstream has
+ * to know which word introduced it.
+ */
+export function tipLabelForSection(section: string): TipLabel {
+  return MAINTAINED_SECTION.test(section.trim()) ? "Maintain" : "Try"
 }
 
 /**
