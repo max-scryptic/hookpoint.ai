@@ -4,9 +4,22 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { Loader2Icon, XIcon } from "lucide-react"
 
 import { VideoThumbnail } from "@/components/video-thumbnail"
+import {
+  isPlaybackUrlStale,
+  PLAYBACK_URL_MIN_RESIGN_INTERVAL_MS,
+  resolvePlaybackUrlExpiry,
+} from "@/lib/source-files/playback-url"
 
 interface SourceFileResponse {
   playbackUrl?: string | null
+  playbackUrlExpiresAt?: string | null
+}
+
+// A signed playback URL together with the moment it stops working, so the
+// player can re-sign before a seek rather than after one fails.
+interface SignedPlayback {
+  url: string
+  expiresAtMs: number
 }
 
 export const SOURCE_FILE_READY_EVENT = "viewlio:source-file-ready"
@@ -17,28 +30,63 @@ export function notifySourceFileReady(videoId: string) {
   )
 }
 
-// Fetches (and re-fetches, when the source file finishes uploading) a signed
-// playback URL for a video's uploaded source file. Returns the URL once it is
-// available, plus a loading flag the player uses while the media buffers.
+// Fetches (and re-fetches) a signed playback URL for a video's uploaded source
+// file. Returns the URL once it is available, plus a loading flag the player
+// uses while the media buffers.
+//
+// The URL is re-signed on three occasions, not just the first:
+//
+//  1. The source file finishes uploading, so there is finally one to sign.
+//  2. The player is about to seek and the URL it holds is at the end of its
+//     life. A report is routinely open longer than one signature lives - the
+//     reader waits out a deep-analysis run, then works down the tips - and a
+//     <video> element only discovers a spent signature when it issues the range
+//     request a seek needs, which is precisely the click that opens a
+//     highlight. Refreshing beforehand is what keeps that click working on a
+//     page that has not been reloaded in an hour.
+//  3. The element reports an error we have not just re-signed against, which is
+//     the same expiry arriving as a load failure rather than a stalled seek.
 function useSourcePlayback(videoId: string) {
-  const [playbackUrl, setPlaybackUrl] = useState<string | null>(null)
+  const [playback, setPlayback] = useState<SignedPlayback | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  // One request in flight at a time, and never two in quick succession. Both
+  // guards matter: the freshness check reads state that a response itself sets,
+  // so an unguarded re-sign could chase its own tail.
+  const requestRef = useRef<Promise<void> | null>(null)
+  const lastRequestedAtRef = useRef(0)
 
-  const loadSourceVideo = useCallback(async () => {
-    try {
-      const response = await fetch(`/api/videos/${videoId}/source-file`, {
-        cache: "no-store",
-      })
-      if (!response.ok) return
+  const loadSourceVideo = useCallback((): Promise<void> => {
+    if (requestRef.current) return requestRef.current
 
-      const data = (await response.json()) as SourceFileResponse
-      if (data.playbackUrl) {
-        setIsLoading(true)
-        setPlaybackUrl(data.playbackUrl)
+    const requestedAt = Date.now()
+    lastRequestedAtRef.current = requestedAt
+    const request = (async () => {
+      try {
+        const response = await fetch(`/api/videos/${videoId}/source-file`, {
+          cache: "no-store",
+        })
+        if (!response.ok) return
+
+        const data = (await response.json()) as SourceFileResponse
+        if (data.playbackUrl) {
+          setIsLoading(true)
+          setPlayback({
+            url: data.playbackUrl,
+            expiresAtMs: resolvePlaybackUrlExpiry(
+              data.playbackUrlExpiresAt,
+              requestedAt,
+            ),
+          })
+        }
+      } catch {
+        // Keep the YouTube thumbnail as a fallback if playback signing fails.
+      } finally {
+        requestRef.current = null
       }
-    } catch {
-      // Keep the YouTube thumbnail as a fallback if playback signing fails.
-    }
+    })()
+
+    requestRef.current = request
+    return request
   }, [videoId])
 
   useEffect(() => {
@@ -59,7 +107,45 @@ function useSourcePlayback(videoId: string) {
     }
   }, [loadSourceVideo, videoId])
 
-  return { playbackUrl, setPlaybackUrl, isLoading, setIsLoading }
+  // Re-sign when the URL we hold is spent, ahead of whatever is about to seek
+  // against it. A URL still comfortably inside its life is left alone, so the
+  // usual click costs nothing.
+  const refreshExpiredPlayback = useCallback(() => {
+    const now = Date.now()
+    if (playback && !isPlaybackUrlStale(playback.expiresAtMs, now)) return
+    if (now - lastRequestedAtRef.current < PLAYBACK_URL_MIN_RESIGN_INTERVAL_MS) {
+      return
+    }
+    void loadSourceVideo()
+  }, [loadSourceVideo, playback])
+
+  // What the element's `error` event means depends on how recently we signed.
+  // A fresh signature failing says the file itself will not play, so we drop
+  // back to the thumbnail and the dismiss control. An old one failing is very
+  // likely just expiry, so we re-sign and let the element remount on the new
+  // URL rather than losing the player for the rest of the visit.
+  const recoverFromPlaybackError = useCallback(() => {
+    setIsLoading(false)
+    // A re-sign already on its way will replace the source in a moment: the
+    // error we just saw belongs to the URL it is replacing.
+    if (requestRef.current) return
+    if (
+      Date.now() - lastRequestedAtRef.current <
+      PLAYBACK_URL_MIN_RESIGN_INTERVAL_MS
+    ) {
+      setPlayback(null)
+      return
+    }
+    void loadSourceVideo()
+  }, [loadSourceVideo])
+
+  return {
+    playbackUrl: playback?.url ?? null,
+    refreshExpiredPlayback,
+    recoverFromPlaybackError,
+    isLoading,
+    setIsLoading,
+  }
 }
 
 // The static packaging thumbnail shown at the top of the analysis. It no longer
@@ -107,8 +193,13 @@ export function SourceVideoPlayer({
   // the button and the click-away gesture are two ways to do the one thing.
   onClose?: () => void
 }) {
-  const { playbackUrl, setPlaybackUrl, isLoading, setIsLoading } =
-    useSourcePlayback(videoId)
+  const {
+    playbackUrl,
+    refreshExpiredPlayback,
+    recoverFromPlaybackError,
+    isLoading,
+    setIsLoading,
+  } = useSourcePlayback(videoId)
   const videoRef = useRef<HTMLVideoElement>(null)
 
   // The player is only "engaged" while the user has an insight selected (a
@@ -121,6 +212,15 @@ export function SourceVideoPlayer({
   // whenever the player is faded out - it stays click-through so the chart
   // underneath keeps receiving pointer moves and marker clicks.
   const isInteractive = isVisible && Boolean(playbackWindow)
+
+  // Opening a highlight is a seek, and a seek is what a spent signature fails
+  // on. Ask for a fresh URL the moment one is selected: when the one we hold is
+  // still good this is a no-op, and when it isn't, the new URL remounts the
+  // element below and the play effect runs again against a URL that works.
+  useEffect(() => {
+    if (!playbackWindow) return
+    refreshExpiredPlayback()
+  }, [playbackWindow, refreshExpiredPlayback])
 
   useEffect(() => {
     const video = videoRef.current
@@ -221,6 +321,11 @@ export function SourceVideoPlayer({
             onLoadedData={() => setIsLoading(false)}
             onCanPlay={() => setIsLoading(false)}
             onWaiting={() => setIsLoading(true)}
+            // A seek that never gets its bytes is the quiet face of an expired
+            // signature - no error event, just a buffer that stops filling. A
+            // URL still inside its life makes this a no-op, so a genuine
+            // network stall is left to recover on its own.
+            onStalled={refreshExpiredPlayback}
             onPlaying={() => setIsLoading(false)}
             onTimeUpdate={(event) => {
               if (
@@ -231,10 +336,7 @@ export function SourceVideoPlayer({
                 event.currentTarget.currentTime = playbackWindow.toSeconds
               }
             }}
-            onError={() => {
-              setPlaybackUrl(null)
-              setIsLoading(false)
-            }}
+            onError={recoverFromPlaybackError}
             aria-label={`Play ${title}`}
           />
         )}
