@@ -59,7 +59,11 @@ export interface TaxonomyProfileVideo {
   // The measured craft read, derived from the stored ffmpeg baseline rather than
   // generated; null when the video was never deeply analysed with its source
   // file, or when nothing measured.
-  delivery: DeliveryRead | null
+  //
+  // Optional because no view on the Channel Trends page draws it any more: the
+  // axes and the scoring below still work, but the page hands over rows that
+  // carry no delivery read at all.
+  delivery?: DeliveryRead | null
 }
 
 // Which of a video's three reads a source is asking for. One function rather
@@ -71,7 +75,7 @@ function readForSource(
 ): TaxonomyRead | null {
   if (source === "packaging") return video.packaging
   if (source === "script") return video.script
-  return video.delivery
+  return video.delivery ?? null
 }
 
 // A profile needs a few videos before a median means anything, and each half of

@@ -130,7 +130,7 @@ export interface DemoVideoPayload {
   scriptTaxonomy: ScriptTaxonomy
   retentionAttribution: RetentionAttribution
   pacing: PacingAnalysis
-  // The measured editing figures, for the Delivery view on Channel Trends.
+  // The measured editing figures a deep analysis stores off the source file.
   // Null on a light-analysed video, which never had a source file to measure.
   deepFeatureBaseline: SparseVideoFeatureBaseline | null
   windows: RetentionWindow[]
@@ -698,8 +698,8 @@ function buildWindowEvents(
 
 // --- the delivery baseline ---------------------------------------------------
 
-// The measured editing figures the Delivery view on Channel Trends is derived
-// from (lib/channel-delivery.ts). On a real video these come off the source
+// The measured editing figures the delivery read is derived from
+// (lib/channel-delivery.ts). On a real video these come off the source
 // file by ffmpeg during deep analysis, which is why only a deep-analysed demo
 // video gets one: a light-analysed row has no source file to have measured.
 //

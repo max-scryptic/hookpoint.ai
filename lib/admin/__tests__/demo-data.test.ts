@@ -91,9 +91,6 @@ function trendsFor(payloads: DemoVideoPayload[]) {
         payload.analyticsSummary.impressionClickThroughRate,
       packaging: payload.packagingAlignment.taxonomy ?? null,
       script: payload.scriptTaxonomy,
-      // Derived on read from the stored baseline, the same way the loader in
-      // lib/channel-trends.ts derives it from the projected JSONB columns.
-      delivery: toDeliveryRead(payload.deepFeatureBaseline),
       retention: payload.retention,
       durationSeconds: payload.videoDetails.durationSeconds,
     })),
@@ -195,13 +192,12 @@ describe("channel trends over a demo library", () => {
     expect(trends.scriptAxes).not.toBeNull()
     expect(trends.packagingStyle).not.toBeNull()
     expect(trends.scriptStyle).not.toBeNull()
-    expect(trends.deliveryExtremes).not.toBeNull()
   })
 
-  it("gives the delivery view figures on every axis", () => {
+  it("gives the measured delivery read figures on every axis", () => {
     // The delivery read is measured off a source file, so only the
     // deep-analysed half of the library carries one. Every axis needs a figure
-    // or the radar draws a partial shape.
+    // or a reader of the baseline gets a partial shape.
     const [deepPayload] = buildLibrary().filter(
       (payload) => payload.deepAnalysed,
     )
