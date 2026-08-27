@@ -150,7 +150,18 @@ body {
   --foreground: oklch(0.97 0.008 285);
   --card: oklch(0.25 0.042 270);
   --card-foreground: oklch(0.97 0.008 285);
-  --popover: oklch(0.25 0.042 270);
+  /*
+   * A tier above --card, deliberately. Dark mode cannot borrow light mode's
+   * trick of casting a shadow to say "this floats": a black shadow against an
+   * already-dark page does almost nothing, so a popup that shares the card
+   * tier lands on a report card and disappears into it. Lightness is what
+   * carries elevation here, so every floating layer on this token (popovers,
+   * dialogs, sheets) sits one step above the surface it opens over. The step
+   * is small on purpose, roughly the 0.025 that reads as a change without
+   * turning the card into a bright patch, and it stays below --muted (0.30)
+   * so widgets nested inside a popup still have somewhere to sit.
+   */
+  --popover: oklch(0.275 0.043 270);
   --popover-foreground: oklch(0.97 0.008 285);
   --primary: oklch(0.62 0.19 264);
   --primary-foreground: oklch(0.985 0 0);

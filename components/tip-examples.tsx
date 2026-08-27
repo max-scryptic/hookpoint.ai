@@ -214,7 +214,13 @@ export function TipExamples({
           the strip a place to move between examples rather than something to
           read, and the approach each one takes is said above the example
           itself, where there is room for it. */}
-      <TabsList className="max-w-full overflow-x-auto">
+      {/* The hairline is for dark mode only, and only because of where this
+          strip sits. A tabs track separates itself from the page by being a
+          shade lighter than it, which works on a card but leaves it close to
+          the surface of a popup, since a popup is itself lifted a tier for the
+          same reason. The edge is what keeps the strip reading as one control
+          rather than a smudge behind three labels. */}
+      <TabsList className="max-w-full overflow-x-auto dark:border dark:border-white/10">
         {examples.map((_, index) => (
           <TabsTrigger
             key={index}
