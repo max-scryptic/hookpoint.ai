@@ -6,6 +6,7 @@ import {
   resolvePlaybackStoragePath,
 } from "@/lib/source-files/source-files"
 import { errorResponse, serialiseSourceFile } from "@/lib/source-files/http"
+import { PLAYBACK_URL_TTL_SECONDS } from "@/lib/source-files/playback-url"
 import { getStorageProvider } from "@/lib/storage/provider"
 
 // GET /api/videos/:videoId/source-file
@@ -31,18 +32,29 @@ export async function GET(
       ? resolvePlaybackStoragePath(sourceFile)
       : null
     let playbackUrl: string | null = null
+    // When the signature above lapses. The player seeks against this URL long
+    // after the response that carried it, so it needs to know when to come back
+    // for a fresh one rather than discovering the expiry as a failed seek.
+    let playbackUrlExpiresAt: string | null = null
     if (
       playbackPath &&
       sourceFile?.uploadStatus === "ready" &&
       (sourceFile.validationStatus === "passed" ||
         sourceFile.validationStatus === "warning")
     ) {
-      playbackUrl = await getStorageProvider().createSignedReadUrl(playbackPath)
+      playbackUrl = await getStorageProvider().createSignedReadUrl(
+        playbackPath,
+        PLAYBACK_URL_TTL_SECONDS,
+      )
+      playbackUrlExpiresAt = new Date(
+        Date.now() + PLAYBACK_URL_TTL_SECONDS * 1000,
+      ).toISOString()
     }
 
     return NextResponse.json({
       sourceFile: sourceFile ? serialiseSourceFile(sourceFile) : null,
       playbackUrl,
+      playbackUrlExpiresAt,
     })
   } catch (error) {
     return errorResponse(error)
