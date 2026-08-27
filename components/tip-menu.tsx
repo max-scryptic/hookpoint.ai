@@ -279,12 +279,16 @@ export function TipMenu({
 
         {/* Wide enough for a quoted line of narration to read as one, and
             capped against the viewport so a tip opened on a phone stays on
-            screen. The padding is per section rather than on the popup, so the
-            rule above the actions runs the full width of the card. */}
+            screen. Half again as wide as it first was: an example is two or
+            three sentences of spoken narration, and at the old width every one
+            of them broke into four or five short lines, which reads as a
+            column of fragments rather than as something a creator could say.
+            The padding is per section rather than on the popup, so the rule
+            above the actions runs the full width of the card. */}
         <PopoverContent
           align="start"
           aria-label={`Examples and options for the tip: ${tip}`}
-          className="w-[26rem] max-w-[calc(100vw-2rem)] p-0"
+          className="w-[40rem] max-w-[calc(100vw-2rem)] p-0"
         >
           <div className="flex flex-col gap-3 p-4">
             <div className="flex flex-col gap-0.5">
