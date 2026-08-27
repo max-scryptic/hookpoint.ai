@@ -19,6 +19,7 @@ import { TryCallout } from "@/components/try-callout"
 import {
   limitSentences,
   nameVideoSides,
+  plainFigures,
   stripEmDashes,
 } from "@/lib/copy-guardrails"
 import { cn } from "@/lib/utils"
@@ -96,10 +97,11 @@ function clean(text: string): string {
 }
 
 // For the model's own prose about the pair, where a bare "A" or "B" is the
-// video rather than a word. Kept apart from clean(), which also runs over
-// verbatim titles and transcript quotes that must not be touched.
+// video rather than a word and a figure is the model's own arithmetic rather
+// than a quote. Kept apart from clean(), which also runs over verbatim titles
+// and transcript quotes that must not be touched.
 function cleanProse(text: string): string {
-  return nameVideoSides(clean(text))
+  return nameVideoSides(plainFigures(clean(text)))
 }
 
 function SideDot({ side }: { side: Side }) {

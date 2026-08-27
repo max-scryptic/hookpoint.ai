@@ -5,8 +5,10 @@ import { describe, expect, it } from "vitest"
 
 import {
   cleanCopy,
+  clockTimestamps,
   limitSentences,
   nameVideoSides,
+  plainUnits,
   stripEmDashes,
 } from "@/lib/copy-guardrails"
 import { PROMPT_DEFINITIONS } from "@/lib/prompts/registry"
@@ -416,5 +418,131 @@ describe("limitSentences", () => {
     expect(limitSentences("An unterminated verdict with no full stop")).toBe(
       "An unterminated verdict with no full stop",
     )
+  })
+})
+
+// A moment in a video is a clock time, never a count of seconds. See the
+// FIGURES IN MODEL-WRITTEN COPY section of lib/copy-guardrails.ts, and
+// lib/plain-numbers.ts for the rule the prompts are given.
+describe("clockTimestamps", () => {
+  it("rewrites a moment given as a count of seconds", () => {
+    expect(
+      clockTimestamps(
+        "Around 538 seconds, the audio shifts notably and the outro music starts.",
+      ),
+    ).toBe("Around 8:58, the audio shifts notably and the outro music starts.")
+    expect(clockTimestamps("The cut at 90 seconds lands on the payoff.")).toBe(
+      "The cut at 1:30 lands on the payoff.",
+    )
+    expect(clockTimestamps("at about 605 seconds")).toBe("at about 10:05")
+    expect(clockTimestamps("near 3860 seconds the energy lifts")).toBe(
+      "near 1:04:20 the energy lifts",
+    )
+    expect(clockTimestamps("the 538 second mark")).toBe("the 8:58 mark")
+    expect(clockTimestamps("the 538-second mark")).toBe("the 8:58 mark")
+    expect(clockTimestamps("Viewers leave at 538s.")).toBe(
+      "Viewers leave at 8:58.",
+    )
+  })
+
+  it("converts both ends of a range", () => {
+    expect(
+      clockTimestamps("The stretch from 538 seconds to 566 seconds holds."),
+    ).toBe("The stretch from 8:58 to 9:26 holds.")
+    expect(clockTimestamps("from about 90 to 150 seconds")).toBe(
+      "from 1:30 to 2:30",
+    )
+  })
+
+  it("leaves a length of time alone, because it is not a moment", () => {
+    // Every one of these is a duration: converting it to a clock time would be
+    // a bug, where a count of seconds left standing is only a blemish.
+    for (const duration of [
+      "Hold the shot for about 90 seconds before cutting away.",
+      "The tangent runs around 120 seconds and never comes back.",
+      "Leave around 300 seconds of build before the reveal.",
+      "It takes around 180 seconds to get to the point.",
+      "Cut anything longer than 90 seconds.",
+    ]) {
+      expect(clockTimestamps(duration)).toBe(duration)
+    }
+  })
+
+  it("leaves a short count alone, where a length is the likelier reading", () => {
+    expect(clockTimestamps("Pause at 3 seconds and let it land.")).toBe(
+      "Pause at 3 seconds and let it land.",
+    )
+    expect(clockTimestamps("hold two seconds of silence")).toBe(
+      "hold two seconds of silence",
+    )
+  })
+
+  it("leaves a clock time that is already one untouched", () => {
+    expect(clockTimestamps("The drop at 8:58 is the sharpest in the video.")).toBe(
+      "The drop at 8:58 is the sharpest in the video.",
+    )
+  })
+})
+
+// A measurement the reader has no feel for becomes the plain English of what it
+// means. See lib/plain-numbers.ts for the rule the prompts are given.
+describe("plainUnits", () => {
+  it("collapses a pair of rates into the percentage between them", () => {
+    expect(
+      plainUnits("Your speech rate slows from about 229 wpm to 86 wpm here."),
+    ).toBe("Your speech rate slows by about 62% here.")
+    expect(plainUnits("cutting rises from 2 to 11 cuts per minute")).toBe(
+      "cutting rises by about 450%",
+    )
+    expect(
+      plainUnits("delivery lifts from 120 words per minute to 150 words per minute"),
+    ).toBe("delivery lifts by about 25%")
+  })
+
+  it("turns a change in decibels into how much louder it actually got", () => {
+    expect(plainUnits("average volume rises by about 5 dB")).toBe(
+      "average volume rises quite a bit",
+    )
+    expect(plainUnits("the music drops by 1 dB")).toBe(
+      "the music drops slightly",
+    )
+    expect(plainUnits("the outro is 12 dB louder")).toBe(
+      "the outro is a lot louder",
+    )
+    expect(plainUnits("the room goes 20 decibels quieter")).toBe(
+      "the room goes dramatically quieter",
+    )
+  })
+
+  it("leaves a lone figure alone, since it has nothing to be a percentage of", () => {
+    // The prompts are what keep a lone figure from being written at all;
+    // inventing a comparison for one here would be a bug.
+    expect(plainUnits("you speak at about 229 wpm across the video")).toBe(
+      "you speak at about 229 wpm across the video",
+    )
+    expect(plainUnits("retention falls from 62% to 47%")).toBe(
+      "retention falls from 62% to 47%",
+    )
+  })
+})
+
+// The whole render-time pass, as a tip and a narrative actually arrive.
+describe("cleanCopy on figures", () => {
+  it("cleans the narrative that prompted the rule", () => {
+    expect(
+      cleanCopy(
+        "Around 538 seconds, the audio shifts notably: your speech rate slows sharply from about 229 wpm to 86 wpm, while average volume rises by about 5 dB and upbeat outro music starts playing.",
+      ),
+    ).toBe(
+      "Around 8:58, the audio shifts notably: your speech rate slows sharply by about 62%, while average volume rises quite a bit and upbeat outro music starts playing.",
+    )
+  })
+
+  it("still strips the openers it always did", () => {
+    expect(
+      cleanCopy(
+        "Next time, try cutting the silence around 538 seconds when you edit.",
+      ),
+    ).toBe("Cut the silence around 8:58 when you edit.")
   })
 })

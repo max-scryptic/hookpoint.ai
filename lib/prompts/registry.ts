@@ -19,6 +19,7 @@
 // =============================================================================
 
 import { COMPARABILITY_PROMPT } from "@/lib/comparison-comparability"
+import { PLAIN_NUMBERS_PROMPT } from "@/lib/plain-numbers"
 import {
   PACKAGING_COMPARISON_PROMPT,
   RETENTION_COMPARISON_PROMPT,
@@ -112,6 +113,7 @@ export type PromptDefinition = {
 // resolved through the same path.
 export const TIP_VOICE_KEY = "tip_voice"
 export const TIP_EXAMPLE_VOICE_KEY = "tip_example_voice"
+export const PLAIN_NUMBERS_KEY = "plain_numbers"
 export const COMPARABILITY_KEY = "comparability"
 
 const DEFINITIONS: readonly PromptDefinition[] = [
@@ -141,6 +143,18 @@ const DEFINITIONS: readonly PromptDefinition[] = [
     fragments: [],
   },
   {
+    key: PLAIN_NUMBERS_KEY,
+    label: "Plain numbers",
+    group: "shared",
+    role: "fragment",
+    description:
+      "How every figure an uploader reads is written: a moment as a clock time rather than a count of seconds, a change as one percentage rather than two raw figures, and no measurement units (wpm, dB, motion scores) anywhere in the prose. Quoted by every prompt that writes prose for the page.",
+    source: "lib/plain-numbers.ts",
+    modelEnvVar: null,
+    default: PLAIN_NUMBERS_PROMPT,
+    fragments: [],
+  },
+  {
     key: COMPARABILITY_KEY,
     label: "Comparability rules",
     group: "shared",
@@ -164,7 +178,7 @@ const DEFINITIONS: readonly PromptDefinition[] = [
     source: "lib/pacing-analysis.ts",
     modelEnvVar: "OPENAI_PACING_MODEL",
     default: PACING_PROMPT,
-    fragments: [TIP_VOICE_KEY, TIP_EXAMPLE_VOICE_KEY],
+    fragments: [TIP_VOICE_KEY, TIP_EXAMPLE_VOICE_KEY, PLAIN_NUMBERS_KEY],
   },
   {
     key: "retention_attribution",
@@ -176,7 +190,7 @@ const DEFINITIONS: readonly PromptDefinition[] = [
     source: "lib/retention-attribution.ts",
     modelEnvVar: "OPENAI_RETENTION_ATTRIBUTION_MODEL",
     default: RETENTION_ATTRIBUTION_PROMPT,
-    fragments: [TIP_VOICE_KEY, TIP_EXAMPLE_VOICE_KEY],
+    fragments: [TIP_VOICE_KEY, TIP_EXAMPLE_VOICE_KEY, PLAIN_NUMBERS_KEY],
   },
   {
     key: "packaging_alignment",
@@ -188,7 +202,7 @@ const DEFINITIONS: readonly PromptDefinition[] = [
     source: "lib/packaging-alignment.ts",
     modelEnvVar: "OPENAI_PACKAGING_MODEL",
     default: PACKAGING_ALIGNMENT_PROMPT,
-    fragments: [TIP_VOICE_KEY, TIP_EXAMPLE_VOICE_KEY],
+    fragments: [TIP_VOICE_KEY, TIP_EXAMPLE_VOICE_KEY, PLAIN_NUMBERS_KEY],
   },
   {
     key: "packaging_taxonomy",
@@ -286,7 +300,7 @@ const DEFINITIONS: readonly PromptDefinition[] = [
     source: "lib/retention-window-event-synthesis.ts",
     modelEnvVar: "OPENAI_EVENT_SYNTHESIS_MODEL",
     default: EVENT_SYNTHESIS_PROMPT,
-    fragments: [],
+    fragments: [PLAIN_NUMBERS_KEY],
   },
 
   // --- Tips -----------------------------------------------------------------
@@ -300,7 +314,7 @@ const DEFINITIONS: readonly PromptDefinition[] = [
     source: "lib/tip-examples-generation.ts",
     modelEnvVar: "OPENAI_TIP_EXAMPLES_MODEL",
     default: TIP_EXAMPLES_PROMPT,
-    fragments: [TIP_EXAMPLE_VOICE_KEY],
+    fragments: [TIP_EXAMPLE_VOICE_KEY, PLAIN_NUMBERS_KEY],
   },
 
   // --- Comparison reports ---------------------------------------------------
@@ -314,7 +328,7 @@ const DEFINITIONS: readonly PromptDefinition[] = [
     source: "lib/script-comparison-report.ts",
     modelEnvVar: "OPENAI_SCRIPT_COMPARISON_MODEL",
     default: SCRIPT_COMPARISON_PROMPT,
-    fragments: [COMPARABILITY_KEY, TIP_VOICE_KEY, TIP_EXAMPLE_VOICE_KEY],
+    fragments: [COMPARABILITY_KEY, TIP_VOICE_KEY, TIP_EXAMPLE_VOICE_KEY, PLAIN_NUMBERS_KEY],
   },
   {
     key: "packaging_comparison",
@@ -326,7 +340,7 @@ const DEFINITIONS: readonly PromptDefinition[] = [
     source: "lib/packaging-comparison-report.ts",
     modelEnvVar: "OPENAI_PACKAGING_COMPARISON_MODEL",
     default: PACKAGING_COMPARISON_PROMPT,
-    fragments: [COMPARABILITY_KEY, TIP_VOICE_KEY, TIP_EXAMPLE_VOICE_KEY],
+    fragments: [COMPARABILITY_KEY, TIP_VOICE_KEY, TIP_EXAMPLE_VOICE_KEY, PLAIN_NUMBERS_KEY],
   },
   {
     key: "retention_comparison",
@@ -338,7 +352,7 @@ const DEFINITIONS: readonly PromptDefinition[] = [
     source: "lib/retention-comparison-report.ts",
     modelEnvVar: "OPENAI_RETENTION_COMPARISON_MODEL",
     default: RETENTION_COMPARISON_PROMPT,
-    fragments: [TIP_VOICE_KEY, TIP_EXAMPLE_VOICE_KEY],
+    fragments: [TIP_VOICE_KEY, TIP_EXAMPLE_VOICE_KEY, PLAIN_NUMBERS_KEY],
   },
 ]
 
