@@ -291,6 +291,10 @@ export async function seedDemoData(
     packaging_alignment: payload.packagingAlignment,
     script_taxonomy: payload.scriptTaxonomy,
     retention_attribution: payload.retentionAttribution,
+    // The measured editing figures behind the Delivery view on Channel Trends.
+    // Null on a light-analysed video, exactly as it is in production: the
+    // numbers are measured off a source file that a light analysis never had.
+    deep_feature_baseline: payload.deepFeatureBaseline,
     // Null status on all three means "settled, nothing in flight", which is
     // what stops a detail-page visit claiming the row and paying for a model
     // call to regenerate what is already stored.

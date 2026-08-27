@@ -62,6 +62,11 @@ import {
   SCRIPT_TAXONOMY_SCHEMA_VERSION,
   type ScriptTaxonomy,
 } from "@/lib/script-taxonomy"
+import {
+  buildSparseBaselineRanges,
+  SPARSE_BASELINE_SCHEMA_VERSION,
+  type SparseVideoFeatureBaseline,
+} from "@/lib/video-feature-baseline"
 import type {
   RetentionPoint,
   TranscriptCue,
@@ -125,6 +130,9 @@ export interface DemoVideoPayload {
   scriptTaxonomy: ScriptTaxonomy
   retentionAttribution: RetentionAttribution
   pacing: PacingAnalysis
+  // The measured editing figures, for the Delivery view on Channel Trends.
+  // Null on a light-analysed video, which never had a source file to measure.
+  deepFeatureBaseline: SparseVideoFeatureBaseline | null
   windows: RetentionWindow[]
   windowEvents: DemoWindowEvents[]
   // Only some of a library is ever deep-analysed, because deep credits cost
@@ -688,6 +696,46 @@ function buildWindowEvents(
   })
 }
 
+// --- the delivery baseline ---------------------------------------------------
+
+// The measured editing figures the Delivery view on Channel Trends is derived
+// from (lib/channel-delivery.ts). On a real video these come off the source
+// file by ffmpeg during deep analysis, which is why only a deep-analysed demo
+// video gets one: a light-analysed row has no source file to have measured.
+//
+// The units are the real ones, not the 0-10 scale, because that scaling happens
+// on read. Each figure is drawn against the fixed ceilings that module
+// documents, so a demo channel lands across the middle of every axis with
+// enough spread for the top and bottom bands to differ: cut rate and speech
+// rate track the concept's dials, and the two coverage shares stay small, as
+// they are on any video that is not mostly fades.
+function buildDeliveryBaseline(
+  concept: DemoVideoConcept,
+  generatedAt: string,
+  rng: Rng,
+): SparseVideoFeatureBaseline {
+  const ranges = buildSparseBaselineRanges(concept.durationSeconds)
+  const sampledSeconds = ranges.reduce(
+    (total, range) => total + (range.toSeconds - range.fromSeconds),
+    0,
+  )
+
+  return {
+    schemaVersion: SPARSE_BASELINE_SCHEMA_VERSION,
+    generatedAt,
+    videoDurationSeconds: concept.durationSeconds,
+    sampledSeconds,
+    ranges,
+    // A tighter edit on the videos that held their audience, which is the
+    // contrast the delivery profile exists to report.
+    cutsPerMinute: rng.round(3 + concept.retention * 16, 8 + concept.retention * 22, 2),
+    freezeCoverage: rng.round(0.01, 0.08 + (1 - concept.retention) * 0.16, 4),
+    blackCoverage: rng.round(0, 0.045, 4),
+    motion: rng.round(0.012, 0.02 + concept.reach * 0.07, 4),
+    speechRate: rng.round(115 + concept.retention * 45, 150 + concept.retention * 60, 1),
+  }
+}
+
 // --- pacing ------------------------------------------------------------------
 
 function buildPacing(
@@ -865,6 +913,9 @@ export function buildDemoVideo(
     scriptTaxonomy: buildScriptTaxonomy(concept, transcript, dateAnalysed, rng),
     retentionAttribution: buildRetentionAttribution(windows, dateAnalysed, rng),
     pacing: buildPacing(concept, transcript, dateAnalysed, rng),
+    deepFeatureBaseline: deepAnalysed
+      ? buildDeliveryBaseline(concept, dateAnalysed, rng)
+      : null,
     windows,
     windowEvents: deepAnalysed ? buildWindowEvents(windows, rng) : [],
     deepAnalysed,

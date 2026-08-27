@@ -8,6 +8,7 @@ import {
 } from "@/lib/admin/demo-data/build"
 import { DEMO_VIDEO_CONCEPTS } from "@/lib/admin/demo-data/content"
 import { DEFAULT_DEMO_VIDEO_COUNT } from "@/lib/admin/demo-data/seed"
+import { toDeliveryRead } from "@/lib/channel-delivery"
 import type { ChannelEventRecord } from "@/lib/channel-event-history"
 import { buildChannelTrends } from "@/lib/channel-trends"
 
@@ -90,6 +91,9 @@ function trendsFor(payloads: DemoVideoPayload[]) {
         payload.analyticsSummary.impressionClickThroughRate,
       packaging: payload.packagingAlignment.taxonomy ?? null,
       script: payload.scriptTaxonomy,
+      // Derived on read from the stored baseline, the same way the loader in
+      // lib/channel-trends.ts derives it from the projected JSONB columns.
+      delivery: toDeliveryRead(payload.deepFeatureBaseline),
       retention: payload.retention,
       durationSeconds: payload.videoDetails.durationSeconds,
     })),
@@ -191,6 +195,30 @@ describe("channel trends over a demo library", () => {
     expect(trends.scriptAxes).not.toBeNull()
     expect(trends.packagingStyle).not.toBeNull()
     expect(trends.scriptStyle).not.toBeNull()
+    expect(trends.deliveryExtremes).not.toBeNull()
+  })
+
+  it("gives the delivery view figures on every axis", () => {
+    // The delivery read is measured off a source file, so only the
+    // deep-analysed half of the library carries one. Every axis needs a figure
+    // or the radar draws a partial shape.
+    const [deepPayload] = buildLibrary().filter(
+      (payload) => payload.deepAnalysed,
+    )
+    const read = toDeliveryRead(deepPayload.deepFeatureBaseline)
+    expect(read).not.toBeNull()
+    for (const value of Object.values(read!.detail)) {
+      expect(value).not.toBeNull()
+      expect(value).toBeGreaterThanOrEqual(0)
+      expect(value).toBeLessThanOrEqual(10)
+    }
+  })
+
+  it("leaves a light-analysed video without a delivery read", () => {
+    const light = buildLibrary().find((payload) => !payload.deepAnalysed)
+    expect(light).toBeDefined()
+    expect(light!.deepFeatureBaseline).toBeNull()
+    expect(toDeliveryRead(light!.deepFeatureBaseline)).toBeNull()
   })
 
   it("reports hook, drop-off, gain and hold trends", () => {
