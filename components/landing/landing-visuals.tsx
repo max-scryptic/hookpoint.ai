@@ -241,6 +241,84 @@ export function ReportVisual({ className }: { className?: string }) {
   )
 }
 
+// The chips that float around the hero report: three facts the report itself is
+// making, lifted off the card and onto the page so the eye has somewhere to go
+// after the curve. They are decoration over a figure that already says all of
+// this, which is why they are hidden from assistive technology and only drawn
+// once there is a column wide enough to hold them without landing on the copy.
+//
+// Each one is placed on an edge of the card or over the chart, never over the
+// report's own writing: a chip that covers a line of the report is worth less
+// than the line it covers.
+const HERO_CHIPS = [
+  {
+    label: "Hook",
+    value: "71% held",
+    tone: "bg-amber-500",
+    position: "top-[46%] -left-6",
+    delay: 1500,
+    float: "0.5rem",
+    duration: "6s",
+  },
+  {
+    label: "Fixes ready",
+    value: "3 for the next edit",
+    tone: "bg-primary",
+    position: "-top-8 right-6",
+    delay: 1650,
+    float: "0.65rem",
+    duration: "7.5s",
+  },
+  {
+    label: "Deep dive",
+    value: "Frame level",
+    tone: "bg-emerald-500",
+    position: "-bottom-6 left-14",
+    delay: 1800,
+    float: "0.45rem",
+    duration: "6.8s",
+  },
+] as const
+
+export function HeroChips() {
+  return (
+    <div aria-hidden="true" className="pointer-events-none">
+      {HERO_CHIPS.map((chip) => (
+        <span
+          key={chip.label}
+          style={delayStyle(chip.delay)}
+          className={cn(
+            "landing-pop absolute z-10 hidden lg:block",
+            chip.position
+          )}
+        >
+          {/* The bob lives on the inside, so it never has to share the
+              transform with the entrance on the wrapper. */}
+          <span
+            className="landing-float flex items-center gap-2.5 rounded-xl border bg-popover/80 px-3 py-2 shadow-lg shadow-black/5 backdrop-blur-md dark:shadow-black/30"
+            style={
+              {
+                "--landing-float": chip.float,
+                "--landing-float-duration": chip.duration,
+              } as React.CSSProperties
+            }
+          >
+            <span className={cn("size-2 rounded-full", chip.tone)} />
+            <span className="text-left">
+              <span className="block text-[10px] leading-none font-semibold tracking-wide text-muted-foreground uppercase">
+                {chip.label}
+              </span>
+              <span className="mt-1 block text-xs leading-none font-semibold">
+                {chip.value}
+              </span>
+            </span>
+          </span>
+        </span>
+      ))}
+    </div>
+  )
+}
+
 function Marker({
   className,
   tone,
@@ -833,20 +911,44 @@ export function BrandBackdrop({ className }: { className?: string }) {
       aria-hidden="true"
       className={cn("pointer-events-none absolute inset-0 overflow-hidden", className)}
     >
-      {/* The two fields drift on long, opposed cycles, which keeps the wash
-          behind the hero from ever reading as a fixed gradient. */}
-      <div className="landing-drift absolute -top-40 -left-32 size-[36rem] rounded-full bg-primary/20 blur-3xl dark:bg-primary/25" />
-      <div className="landing-drift-slow absolute -top-24 right-[-10rem] size-[32rem] rounded-full bg-chart-3/20 blur-3xl dark:bg-chart-3/20" />
+      {/* Everything with colour in it rides the scroll a little faster than the
+          page does, so passing the hero reads as moving through the wash rather
+          than sliding it along. The clip stays on the wrapper above, which is
+          why the parallax is a layer of its own: a moving clip edge would drag
+          a hard line across the blur. */}
       <div
-        className="absolute inset-0 opacity-[0.4] dark:opacity-[0.15]"
+        className="landing-parallax absolute inset-0"
+        style={{ "--landing-parallax": "12%" } as React.CSSProperties}
+      >
+        {/* The two fields drift on long, opposed cycles, which keeps the wash
+            behind the hero from ever reading as a fixed gradient. */}
+        <div className="landing-drift absolute -top-40 -left-32 size-[36rem] rounded-full bg-primary/20 blur-3xl dark:bg-primary/25" />
+        <div className="landing-drift-slow absolute -top-24 right-[-10rem] size-[32rem] rounded-full bg-chart-3/20 blur-3xl dark:bg-chart-3/20" />
+        <div
+          className="absolute inset-0 opacity-[0.4] dark:opacity-[0.15]"
+          style={{
+            backgroundImage:
+              "linear-gradient(to right, var(--color-border) 1px, transparent 1px), linear-gradient(to bottom, var(--color-border) 1px, transparent 1px)",
+            backgroundSize: "56px 56px",
+            maskImage:
+              "radial-gradient(ellipse 80% 60% at 50% 0%, black 30%, transparent 75%)",
+            WebkitMaskImage:
+              "radial-gradient(ellipse 80% 60% at 50% 0%, black 30%, transparent 75%)",
+          }}
+        />
+      </div>
+
+      {/* A single set of hairlines raked across the whole backdrop. It is fixed
+          to the page rather than parallaxed, so the drifting colour behind it
+          has something still to move against. */}
+      <div
+        className="absolute inset-0 opacity-[0.5] dark:opacity-[0.35]"
         style={{
           backgroundImage:
-            "linear-gradient(to right, var(--color-border) 1px, transparent 1px), linear-gradient(to bottom, var(--color-border) 1px, transparent 1px)",
-          backgroundSize: "56px 56px",
-          maskImage:
-            "radial-gradient(ellipse 80% 60% at 50% 0%, black 30%, transparent 75%)",
+            "repeating-linear-gradient(115deg, var(--color-border) 0px, var(--color-border) 1px, transparent 1px, transparent 56px)",
+          maskImage: "linear-gradient(to bottom, black 0%, transparent 85%)",
           WebkitMaskImage:
-            "radial-gradient(ellipse 80% 60% at 50% 0%, black 30%, transparent 75%)",
+            "linear-gradient(to bottom, black 0%, transparent 85%)",
         }}
       />
     </div>
@@ -882,29 +984,36 @@ export function SectionTexture({
         className
       )}
     >
+      {/* Same trick as the hero: the ground moves at its own pace behind the
+          cards standing on it, and the clip above it holds still. */}
       <div
-        className={cn(
-          "landing-drift-slow absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl",
-          subtle
-            ? "size-[30rem] bg-primary/[0.03] dark:bg-primary/[0.04]"
-            : "size-[44rem] bg-primary/10 dark:bg-primary/15"
-        )}
-      />
-      <div
-        className={cn(
-          "absolute inset-0",
-          subtle ? "opacity-40 dark:opacity-25" : "opacity-60 dark:opacity-40"
-        )}
-        style={{
-          backgroundImage:
-            "radial-gradient(var(--color-border) 1px, transparent 1px)",
-          backgroundSize: "24px 24px",
-          maskImage:
-            "radial-gradient(ellipse 70% 70% at 50% 50%, black 10%, transparent 80%)",
-          WebkitMaskImage:
-            "radial-gradient(ellipse 70% 70% at 50% 50%, black 10%, transparent 80%)",
-        }}
-      />
+        className="landing-parallax absolute inset-0"
+        style={{ "--landing-parallax": "8%" } as React.CSSProperties}
+      >
+        <div
+          className={cn(
+            "landing-drift-slow absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl",
+            subtle
+              ? "size-[30rem] bg-primary/[0.03] dark:bg-primary/[0.04]"
+              : "size-[44rem] bg-primary/10 dark:bg-primary/15"
+          )}
+        />
+        <div
+          className={cn(
+            "absolute inset-0",
+            subtle ? "opacity-40 dark:opacity-25" : "opacity-60 dark:opacity-40"
+          )}
+          style={{
+            backgroundImage:
+              "radial-gradient(var(--color-border) 1px, transparent 1px)",
+            backgroundSize: "24px 24px",
+            maskImage:
+              "radial-gradient(ellipse 70% 70% at 50% 50%, black 10%, transparent 80%)",
+            WebkitMaskImage:
+              "radial-gradient(ellipse 70% 70% at 50% 50%, black 10%, transparent 80%)",
+          }}
+        />
+      </div>
     </div>
   )
 }

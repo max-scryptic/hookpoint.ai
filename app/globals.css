@@ -324,10 +324,17 @@ body {
  * elements carry, so the two never fight over one declaration.
  */
 
+/* The blur on the way in is what makes an entrance read as something coming
+ * into focus rather than sliding around. It is deliberately absent from the
+ * closing keyframe: an omitted property finishes on the element's own value, so
+ * the animation resolves to no filter at all rather than leaving every revealed
+ * section wearing a permanent blur(0) and the compositing layer that comes with
+ * it. */
 @keyframes landing-reveal {
   from {
     opacity: 0;
     transform: translateY(1.5rem);
+    filter: blur(6px);
   }
   to {
     opacity: 1;
@@ -339,6 +346,23 @@ body {
   from {
     opacity: 0;
     transform: translateY(0.5rem);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* One word of a heading, rising out of the mask its wrapper clips it to. The
+ * words are staggered a few tens of milliseconds apart, so a headline reads
+ * itself into place left to right instead of arriving as a block. See
+ * components/landing/landing-words.tsx. */
+@keyframes landing-word {
+  from {
+    opacity: 0;
+    transform: translateY(110%);
+    filter: blur(8px);
   }
   to {
     opacity: 1;
@@ -379,6 +403,7 @@ body {
   from {
     opacity: 0;
     transform: scale(0.6);
+    filter: blur(4px);
   }
   60% {
     transform: scale(1.08);
@@ -386,6 +411,33 @@ body {
   to {
     opacity: 1;
     transform: none;
+  }
+}
+
+/* A card, a chip or a wash that rides the scroll at its own speed. Driven by a
+ * scroll-driven timeline rather than a listener, so there is no per-frame
+ * JavaScript behind it; browsers without the timeline simply hold the layer
+ * still, which is the same thing a reduced-motion reader gets. The distance is
+ * a variable so one keyframe covers a heavy wash and a light chip alike. */
+@keyframes landing-parallax {
+  from {
+    transform: translate3d(0, calc(var(--landing-parallax, 10%) * -0.5), 0);
+  }
+  to {
+    transform: translate3d(0, var(--landing-parallax, 10%), 0);
+  }
+}
+
+/* The idle bob on the chips around the hero report. Applied to an inner
+ * element, never to one carrying an entrance, so the two never fight over the
+ * transform. */
+@keyframes landing-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, calc(var(--landing-float, 0.5rem) * -1), 0);
   }
 }
 
@@ -491,4 +543,84 @@ body {
   .landing-drift-slow {
     animation: landing-drift 30s ease-in-out infinite reverse;
   }
+
+  /* Headings, word by word. The mask is structural and always applied (see
+   * below); this is only the motion inside it. */
+  .landing-reveal .landing-word {
+    opacity: 0;
+  }
+
+  .landing-enter .landing-word,
+  .landing-reveal[data-revealed="true"] .landing-word {
+    animation: landing-word 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: var(--landing-delay, 0ms);
+  }
+
+  .landing-float {
+    animation: landing-float var(--landing-float-duration, 6s) ease-in-out
+      infinite;
+    animation-delay: var(--landing-delay, 0ms);
+  }
+
+  /* A wrapper that exists only to tell its contents they have arrived: the
+   * heading whose words animate themselves does not want the block entrance on
+   * top of them. Written last so it wins over the rules above at equal
+   * specificity. */
+  .landing-quiet,
+  .landing-quiet[data-revealed="true"] {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/*
+ * Scroll-linked depth. The washes behind a section travel a little further than
+ * the page does, so scrolling past one reads as moving through it rather than
+ * over it. This needs no script at all, which is why it sits outside the block
+ * above: where the browser has no scroll-driven timelines the layer is simply
+ * static, and nothing else about the page changes.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    /*
+     * The section a parallax layer belongs to names the timeline, and the layer
+     * inside it animates on that name. The layer cannot work this out for
+     * itself: a section that clips its decoration is a scroll container as far
+     * as the timeline is concerned, and a bare view() inside one measures
+     * against a box that never scrolls, which holds the layer still at whatever
+     * offset it started on. The section, whose own scroller is the page, is the
+     * outermost element that still knows when this stretch is being read.
+     */
+    .landing-parallax-scope {
+      view-timeline-name: --landing-parallax-view;
+    }
+
+    .landing-parallax {
+      animation: landing-parallax linear both;
+      animation-timeline: --landing-parallax-view;
+      animation-range: cover 0% cover 100%;
+      will-change: transform;
+    }
+  }
+}
+
+/*
+ * The mask a heading's words rise out of. Structural rather than motion, so it
+ * is applied whatever the reader's preferences are: with no animation the words
+ * simply sit in their masks, which looks exactly like ordinary text.
+ *
+ * The padding and the matching negative margins buy the mask room for
+ * ascenders and descenders it would otherwise clip, without moving the text off
+ * the baseline it would have sat on.
+ */
+.landing-word-mask {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: bottom;
+  padding-block: 0.12em 0.16em;
+  margin-block: -0.12em -0.16em;
+}
+
+.landing-word {
+  display: inline-block;
 }

@@ -23,12 +23,20 @@ type RevealTag = "div" | "li" | "span" | "figure"
 export function Reveal({
   as = "div",
   delay = 0,
+  quiet = false,
   className,
   children,
 }: {
   as?: RevealTag
   /** Milliseconds to hold this element back, for staggering a row of cards. */
   delay?: number
+  /**
+   * Report the arrival without moving. For a wrapper whose contents animate
+   * themselves, a heading whose words rise one at a time being the case this
+   * exists for: playing the block entrance underneath them as well only muddies
+   * both.
+   */
+  quiet?: boolean
   className?: string
   children: React.ReactNode
 }) {
@@ -71,7 +79,7 @@ export function Reveal({
     <Tag
       ref={setNode}
       data-revealed={revealed ? "true" : undefined}
-      className={cn("landing-reveal", className)}
+      className={cn("landing-reveal", quiet && "landing-quiet", className)}
       style={delay > 0 ? delayStyle(delay) : undefined}
     >
       {children}
