@@ -19,17 +19,21 @@ function formatBrand(brand: string): string {
   return brand.charAt(0).toUpperCase() + brand.slice(1)
 }
 
-// The "Payment method" card, rendered only for users on a paid plan. Cards are
-// never added here: a card arrives with the subscription itself, entered during
-// the Stripe Checkout that pays for the plan. All this offers is the Stripe
-// Customer Portal, where a subscriber can replace the card that future renewals
-// will be charged to. The card shown is our webhook-synced cache.
+// The "Payment method" card, always rendered so the "Payments & Invoices"
+// heading has both of its cards beneath it on every plan. Cards are never added
+// here: a card arrives with the subscription itself, entered during the Stripe
+// Checkout that pays for the plan. All this offers is the Stripe Customer
+// Portal, where a subscriber can replace the card that future renewals will be
+// charged to - so on Free the card is an empty state with no action. The card
+// shown is our webhook-synced cache.
 export function BillingPaymentMethod({
   card,
   enabled,
+  isSubscriber,
 }: {
   card: BillingCard | null
   enabled: boolean
+  isSubscriber: boolean
 }) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -63,16 +67,22 @@ export function BillingPaymentMethod({
           <CreditCardIcon className="size-4" />
           Payment method
         </CardTitle>
-        <CardAction>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!enabled || isLoading}
-            onClick={openPortal}
-          >
-            {isLoading ? "Redirecting…" : "Manage payment method"}
-          </Button>
-        </CardAction>
+        {/* Offered to subscribers, and to anyone with a card still on file (a
+            cancelled plan leaves one behind) so it can be removed. With neither
+            there is nothing to manage: the portal would open on a customer with
+            no card and no renewal to change. */}
+        {isSubscriber || card ? (
+          <CardAction>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!enabled || isLoading}
+              onClick={openPortal}
+            >
+              {isLoading ? "Redirecting…" : "Manage payment method"}
+            </Button>
+          </CardAction>
+        ) : null}
       </CardHeader>
       <CardContent className="space-y-3">
         {card ? (
@@ -95,7 +105,9 @@ export function BillingPaymentMethod({
           <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
             {!enabled
               ? "Card payments aren’t enabled yet."
-              : "We couldn’t load the card on your subscription. Open the billing portal to review it."}
+              : isSubscriber
+                ? "We couldn’t load the card on your subscription. Open the billing portal to review it."
+                : "No payment method on file. You’ll add a card when you upgrade to a paid plan."}
           </div>
         )}
         {error ? (
