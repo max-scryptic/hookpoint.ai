@@ -126,8 +126,10 @@ export function ReportComparisonDialog() {
         </table>
 
         {/* The close: one line and a button. The table above has already made
-            the case, so this only has to name the next step. */}
-        <div className="flex flex-col items-start gap-3 rounded-lg bg-muted/30 p-4">
+            the case, so this only has to name the next step. No inset panel
+            here, so the copy starts on the same left edge as the title, the
+            description and the table rows. */}
+        <div className="flex flex-col items-start gap-3 pt-1">
           <p className="text-sm leading-relaxed text-muted-foreground">
             Upgrade to Starter or Pro to unlock complete reports, and much more,
             now.
