@@ -35,12 +35,16 @@ export function PricingPlansCheckout({
   currentBillingPeriod,
   currentPeriodEnd,
   cancelAtPeriodEnd = false,
+  planIsComplimentary = false,
   billingEnabled,
 }: {
   currentPlanId: PlanId
   currentBillingPeriod: BillingPeriod | null
   currentPeriodEnd: string | null
   cancelAtPeriodEnd?: boolean
+  // True when the current plan was given rather than bought. There is no Stripe
+  // subscription behind it, so the downgrade path has nothing to cancel.
+  planIsComplimentary?: boolean
   billingEnabled: boolean
 }) {
   const searchParams = useSearchParams()
@@ -111,6 +115,15 @@ export function PricingPlansCheckout({
     // survey asking why. The actual cancellation happens in handleCancelSubmit
     // once a reason is chosen.
     if (planId === "free") {
+      // A complimentary plan is not a subscription, so there is no cancellation
+      // to schedule: the survey and the cancel endpoint both have nothing to
+      // act on. Say so plainly rather than failing at the Stripe call.
+      if (planIsComplimentary) {
+        setError(
+          `Your ${currentPlanName} access was given to you rather than bought, so there is nothing to cancel here.`,
+        )
+        return
+      }
       if (cancelAtPeriodEnd) {
         setError(
           "Your plan is already scheduled to move to Free at the end of the current billing period.",
