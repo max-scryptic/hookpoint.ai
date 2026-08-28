@@ -55,9 +55,9 @@ export default async function Page() {
             Checklist
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            The tips you kept from your reports. Drag them into the order you
-            want to work through them on your next video, and remove the ones
-            you no longer need.
+            The tips you kept from your reports, each next to the video it was
+            written about. Drag them into the order you want to work through
+            them on your next video, and remove the ones you no longer need.
           </p>
         </div>
 

@@ -17,6 +17,7 @@ import {
   tipFingerprint,
   tipLabelForSection,
   tipSurface,
+  tipVideoRefs,
   type SavedTip,
   type TipCategory,
 } from "@/lib/tips"
@@ -74,6 +75,55 @@ describe("normaliseTipSourcePath", () => {
     expect(normaliseTipSourcePath(`/${"a".repeat(600)}`)).toBeNull()
     expect(normaliseTipSourcePath(undefined)).toBeNull()
     expect(normaliseTipSourcePath(42)).toBeNull()
+  })
+})
+
+describe("tipVideoRefs", () => {
+  const uuidA = "11111111-2222-3333-4444-555555555555"
+  const uuidB = "66666666-7777-8888-9999-aaaaaaaaaaaa"
+
+  it("reads the one video a single video report was about", () => {
+    expect(tipVideoRefs("/analysed-video/dQw4w9WgXcQ")).toEqual([
+      { by: "youtubeId", id: "dQw4w9WgXcQ" },
+    ])
+  })
+
+  it("reads both videos a comparison report was about, in the order the report reads them", () => {
+    expect(
+      tipVideoRefs(`/video-comparator/report?a=${uuidA}&b=${uuidB}`),
+    ).toEqual([
+      { by: "analysedVideoId", id: uuidA },
+      { by: "analysedVideoId", id: uuidB },
+    ])
+  })
+
+  it("still reads tips saved under the old /dashboard paths", () => {
+    expect(tipVideoRefs("/dashboard/analysed-video/abc123")).toEqual([
+      { by: "youtubeId", id: "abc123" },
+    ])
+    expect(
+      tipVideoRefs(`/dashboard/video-comparator/report?a=${uuidA}&b=${uuidB}`),
+    ).toEqual([
+      { by: "analysedVideoId", id: uuidA },
+      { by: "analysedVideoId", id: uuidB },
+    ])
+  })
+
+  // A row id goes straight into a query, and Postgres fails the whole read on a
+  // malformed uuid rather than skipping the one value, so anything not shaped
+  // like an id we wrote is dropped here.
+  it("drops a comparison id that is not shaped like one of ours", () => {
+    expect(
+      tipVideoRefs(`/video-comparator/report?a=${uuidA}&b=' or 1=1--`),
+    ).toEqual([{ by: "analysedVideoId", id: uuidA }])
+    expect(tipVideoRefs("/video-comparator/report")).toEqual([])
+  })
+
+  it("finds no video on a path that is not a report", () => {
+    expect(tipVideoRefs("/analysed-videos")).toEqual([])
+    expect(tipVideoRefs("/checklist")).toEqual([])
+    expect(tipVideoRefs(null)).toEqual([])
+    expect(tipVideoRefs(undefined)).toEqual([])
   })
 })
 
@@ -249,6 +299,7 @@ describe("tipCategoryCounts", () => {
     category,
     sourcePath: null,
     createdAt: "2026-08-01T00:00:00.000Z",
+    videoTitles: [],
   })
 
   it("counts each category the checklist actually has tips under", () => {

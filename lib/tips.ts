@@ -268,6 +268,75 @@ export function normaliseTipSourcePath(value: unknown): string | null {
   return trimmed
 }
 
+// =============================================================================
+// WHICH VIDEO A TIP IS ABOUT
+//
+// A lot of advice only means anything next to the video it was written about:
+// "hint at why the papaya quest is exciting" is a note about one title, not a
+// rule for every video the creator will ever make. The checklist has to say
+// which one, or a tip kept a month ago is unreadable.
+//
+// Nothing about the video is stored on the tip. It is read back off the path
+// the tip was saved from, which is the only thing recorded that identifies the
+// report, and the two report surfaces identify their videos differently:
+//
+//   /analysed-video/{youtube id}                  one video, by its YouTube id
+//   /video-comparator/report?a={row id}&b={row id}  two videos, by row id
+//
+// Read back rather than stored on purpose. It costs one query on a page that
+// already runs one, it needs no backfill, so every tip a creator kept before
+// this existed says what it is about too, and a video renamed on YouTube reads
+// under its current title rather than the one it had the day the tip was kept.
+// =============================================================================
+
+// An analysed video's row id is a uuid, and the comparison report's a and b are
+// row ids straight off a query string. Anything in that slot which is not
+// shaped like one was not written by us, so it is dropped rather than sent to
+// Postgres, where a malformed uuid fails the whole read.
+const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// Both spellings of each path, for the same reason tipSurface carries them: the
+// /dashboard-prefixed ones are where these screens used to live, and tips saved
+// back then still carry them.
+const ANALYSED_VIDEO_PATH =
+  /^(?:\/dashboard)?\/analysed-video\/([A-Za-z0-9_-]{1,64})\/?$/
+const COMPARISON_REPORT_PATH =
+  /^(?:\/dashboard)?\/video-comparator\/report\/?$/
+
+// How to find one video behind a tip: which column its id belongs to, since a
+// single video report names its video the way YouTube does and a comparison
+// report names its two by our own row ids.
+export type TipVideoRef =
+  | { by: "youtubeId"; id: string }
+  | { by: "analysedVideoId"; id: string }
+
+/**
+ * The videos the report at this path was about: one for a single video report,
+ * two for a comparison, none for anything else.
+ *
+ * Purely a reading of the path. Whether those videos still exist, and what they
+ * are called, is settled by the lookup below.
+ */
+export function tipVideoRefs(
+  sourcePath: string | null | undefined,
+): TipVideoRef[] {
+  const [path, query] = (sourcePath ?? "").split("?")
+
+  const single = path.match(ANALYSED_VIDEO_PATH)
+  if (single) return [{ by: "youtubeId", id: single[1] }]
+
+  if (COMPARISON_REPORT_PATH.test(path)) {
+    const params = new URLSearchParams(query ?? "")
+    return (["a", "b"] as const)
+      .map((side) => params.get(side) ?? "")
+      .filter((id) => UUID.test(id))
+      .map((id) => ({ by: "analysedVideoId", id }) as const)
+  }
+
+  return []
+}
+
 // One line of the creator's checklist.
 export interface SavedTip {
   id: string
@@ -276,6 +345,11 @@ export interface SavedTip {
   category: TipCategory
   sourcePath: string | null
   createdAt: string
+  // The videos the report this tip came from was about, current titles, in the
+  // order the report reads them. One for a single video report, two for a
+  // comparison, and empty where the video has since been deleted or the tip was
+  // saved without a path we can read one off.
+  videoTitles: string[]
 }
 
 interface SavedTipRow {
@@ -307,6 +381,67 @@ export function tipCategoryCounts(
   })).filter(({ count }) => count > 0)
 }
 
+// The key one video is held under while the titles are being matched back to
+// the tips that named it. The two kinds of id are namespaced rather than mixed,
+// so a YouTube id could never be answered with the title of a row that happens
+// to carry the same string as its own id.
+function refKey(ref: TipVideoRef): string {
+  return `${ref.by}:${ref.id}`
+}
+
+/**
+ * The current titles of the videos these tips came from, keyed by ref.
+ *
+ * Best effort, deliberately: a title is context beside a line of the checklist,
+ * not the line itself, so a failed or partial read leaves those lines without a
+ * video rather than taking the creator's whole checklist down with it. A video
+ * that has since been deleted simply has no row to answer with, which is the
+ * same outcome and wants the same handling.
+ */
+async function readVideoTitles(
+  supabase: SupabaseClient,
+  userId: string,
+  refs: TipVideoRef[],
+): Promise<Map<string, string>> {
+  const titles = new Map<string, string>()
+
+  async function read(
+    by: TipVideoRef["by"],
+    column: "video_id" | "id",
+  ): Promise<void> {
+    const ids = [
+      ...new Set(refs.filter((ref) => ref.by === by).map((ref) => ref.id)),
+    ]
+    if (ids.length === 0) return
+
+    const { data, error } = await supabase
+      .from("analysed_videos")
+      .select(`${column}, video_title`)
+      .eq("user_id", userId)
+      .in(column, ids)
+
+    if (error) {
+      console.error("Failed to read the videos behind the saved tips", error)
+      return
+    }
+
+    for (const row of (data ?? []) as Record<string, string | null>[]) {
+      const id = row[column]
+      const title = row.video_title?.trim()
+      if (id && title) titles.set(refKey({ by, id } as TipVideoRef), title)
+    }
+  }
+
+  // One query per kind of id, and only for the kinds these tips actually name:
+  // a checklist kept entirely off single video reports never asks about row ids.
+  await Promise.all([
+    read("youtubeId", "video_id"),
+    read("analysedVideoId", "id"),
+  ])
+
+  return titles
+}
+
 /**
  * The creator's whole checklist, in the order they put it in. Read with the
  * signed-in user's client, so row level security scopes it to them on top of
@@ -331,7 +466,13 @@ export async function listSavedTips(
     throw new Error(`Failed to load saved tips: ${error.message}`)
   }
 
-  return ((data ?? []) as SavedTipRow[]).map((row) => ({
+  const rows = (data ?? []) as SavedTipRow[]
+  // Worked out once per tip and kept, so the same path is not read twice: once
+  // to ask about its videos and again to hand them back.
+  const refs = rows.map((row) => tipVideoRefs(row.source_path))
+  const titles = await readVideoTitles(supabase, userId, refs.flat())
+
+  return rows.map((row, index) => ({
     id: row.id,
     tip: row.tip,
     section: row.section,
@@ -343,6 +484,9 @@ export async function listSavedTips(
       : tipCategoryForSection(row.section),
     sourcePath: row.source_path,
     createdAt: row.created_at,
+    videoTitles: refs[index]
+      .map((ref) => titles.get(refKey(ref)))
+      .filter((title): title is string => title !== undefined),
   }))
 }
 
