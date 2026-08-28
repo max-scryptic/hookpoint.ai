@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Sora } from "next/font/google";
+import { Inter, JetBrains_Mono, Sora } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
@@ -10,6 +10,24 @@ import "./globals.css";
 const sora = Sora({
   subsets: ["latin"],
   variable: "--font-sora",
+  display: "swap",
+});
+
+// Inter is the body face across the app and the only face on the landing page,
+// which sets its own headings to it. Loaded as a variable font because the type
+// there sits on weights the static cuts do not have: 510 and 590, between
+// medium and semibold.
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
+// The monospaced face for anything that is a technical value rather than
+// writing: timestamps on a retention event, an issue-style id, a keyboard hint.
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains-mono",
   display: "swap",
 });
 
@@ -27,7 +45,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${sora.variable} font-sans`}
+      className={`${sora.variable} ${inter.variable} ${jetbrainsMono.variable} font-sans`}
       suppressHydrationWarning
     >
       <body>
