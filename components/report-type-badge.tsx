@@ -9,10 +9,9 @@ export type ReportType = "basic" | "complete" | "processing"
 
 // What separates the two report types, and - for anyone who cannot upload a
 // source file yet - how to get the complete one. Shown from the info affordance
-// beside the analysed videos table's Report Type header, and from the badge at
-// the head of a report. The two report names and the thing that actually
-// distinguishes them carry the emphasis, so the paragraph can be skimmed rather
-// than read end to end.
+// beside the analysed videos table's Report Type header. The two report names
+// and the thing that actually distinguishes them carry the emphasis, so the
+// paragraph can be skimmed rather than read end to end.
 export function ReportTypeExplainer() {
   return (
     <span>
@@ -36,10 +35,10 @@ export function ReportTypeUpgradeHint() {
 }
 
 // One pill per state, so a report type reads the same wherever it appears: the
-// analysed videos table, the source-file card, and the head of the report
-// itself. Complete earns the green; Basic stays neutral so the pair reads as a
-// ladder rather than two equal options; Processing borrows the amber the rest
-// of the pipeline's in-flight states use.
+// analysed videos table and the source-file card. Complete earns the green;
+// Basic stays neutral so the pair reads as a ladder rather than two equal
+// options; Processing borrows the amber the rest of the pipeline's in-flight
+// states use.
 const REPORT_TYPE_META: Record<
   ReportType,
   {
@@ -98,8 +97,8 @@ export function ReportTypeBadge({
 
 // The report type a video carries, from the two facts every caller has: whether
 // a source file has finished uploading, and whether its deeper analysis is
-// still running. Kept here so the table, the report and anything else that
-// shows the badge cannot drift apart on what counts as Complete.
+// still running. Kept here so the table and anything else that shows the badge
+// cannot drift apart on what counts as Complete.
 export function reportTypeFor({
   hasSourceFile,
   processing,
