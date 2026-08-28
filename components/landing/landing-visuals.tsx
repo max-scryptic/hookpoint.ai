@@ -559,10 +559,10 @@ export function EvidenceVisual({ className }: { className?: string }) {
           >
             <div
               className={cn(
-                "relative aspect-video overflow-hidden rounded-lg border bg-gradient-to-br transition duration-500",
+                "relative aspect-video overflow-hidden rounded-lg border transition duration-500",
                 index === 1
-                  ? "from-primary/30 to-accent ring-2 ring-primary group-hover:ring-[3px]"
-                  : "from-muted to-secondary group-hover:from-muted group-hover:to-accent/60"
+                  ? "bg-primary/10 ring-2 ring-primary group-hover:ring-[3px]"
+                  : "bg-muted group-hover:bg-accent/50"
               )}
             >
               {/* A suggestion of a frame: a horizon line and a subject. */}
@@ -804,9 +804,7 @@ export function TrendsVisual({ className }: { className?: string }) {
               <div
                 className={cn(
                   "landing-bar h-full rounded-full",
-                  trend.weak
-                    ? "bg-gradient-to-r from-destructive/50 to-destructive"
-                    : "bg-gradient-to-r from-primary to-chart-3"
+                  trend.weak ? "bg-destructive/80" : "bg-primary"
                 )}
                 style={{
                   width: `${trend.value}%`,
@@ -903,7 +901,9 @@ export function ChecklistVisual({ className }: { className?: string }) {
 /**
  * The soft brand wash that sits behind the hero and the closing call to action.
  * Two blurred colour fields plus a faint grid, so the page has depth without
- * anything competing with the copy.
+ * anything competing with the copy. The colour is deliberately at the edge of
+ * being noticed: it should read as the page being lit, never as a gradient
+ * laid over it.
  */
 export function BrandBackdrop({ className }: { className?: string }) {
   return (
@@ -922,8 +922,8 @@ export function BrandBackdrop({ className }: { className?: string }) {
       >
         {/* The two fields drift on long, opposed cycles, which keeps the wash
             behind the hero from ever reading as a fixed gradient. */}
-        <div className="landing-drift absolute -top-40 -left-32 size-[36rem] rounded-full bg-primary/20 blur-3xl dark:bg-primary/25" />
-        <div className="landing-drift-slow absolute -top-24 right-[-10rem] size-[32rem] rounded-full bg-chart-3/20 blur-3xl dark:bg-chart-3/20" />
+        <div className="landing-drift absolute -top-40 -left-32 size-[36rem] rounded-full bg-primary/[0.06] blur-3xl dark:bg-primary/[0.08]" />
+        <div className="landing-drift-slow absolute -top-24 right-[-10rem] size-[32rem] rounded-full bg-chart-3/[0.05] blur-3xl dark:bg-chart-3/[0.06]" />
         <div
           className="absolute inset-0 opacity-[0.4] dark:opacity-[0.15]"
           style={{
@@ -994,8 +994,8 @@ export function SectionTexture({
           className={cn(
             "landing-drift-slow absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl",
             subtle
-              ? "size-[30rem] bg-primary/[0.03] dark:bg-primary/[0.04]"
-              : "size-[44rem] bg-primary/10 dark:bg-primary/15"
+              ? "size-[30rem] bg-primary/[0.02] dark:bg-primary/[0.03]"
+              : "size-[44rem] bg-primary/[0.04] dark:bg-primary/[0.06]"
           )}
         />
         <div

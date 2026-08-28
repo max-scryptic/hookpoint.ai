@@ -286,11 +286,13 @@ function Hero({
           style={delayStyle(180)}
           className="landing-enter group relative min-w-0"
         >
-          {/* A soft glow behind the report so it lifts off the page. It warms
-              up when the pointer is over the report itself. */}
+          {/* A soft halo behind the report so it lifts off the page. One tone,
+              barely there, so it reads as light around the card rather than as
+              a colour wash of its own. It warms up a little when the pointer is
+              over the report itself. */}
           <div
             aria-hidden="true"
-            className="absolute -inset-6 rounded-[2rem] bg-gradient-to-br from-primary/20 via-chart-3/10 to-transparent opacity-75 blur-2xl transition-opacity duration-700 group-hover:opacity-100"
+            className="absolute -inset-6 rounded-[2rem] bg-primary/[0.05] opacity-75 blur-3xl transition-opacity duration-700 group-hover:opacity-100 dark:bg-primary/[0.07]"
           />
           {/* The report leans towards the pointer. The chips stay flat and
               floating outside the tilt, so they read as sitting above the card
@@ -325,8 +327,8 @@ const PROBLEM_POINTS = [
 ]
 
 // This band sits directly under the hero, so its texture stays quiet: the hero
-// and the closing CTA are the two places on the page where the brand gradient is
-// meant to carry.
+// and the closing CTA are the two places on the page where the brand wash is
+// meant to carry, and even there it is only a hint of colour.
 function Problem() {
   return (
     <Section
@@ -346,21 +348,21 @@ function Problem() {
                 lift it already had on hover: one element cannot carry both. */}
             <TiltCard className="h-full">
               <div
-                // The card is lit from the top so it reads as a raised surface
-                // in dark mode, where the page and the card sit only a few
-                // percent apart in lightness and a flat fill of --card
-                // disappears into the section behind it.
-                className="group relative h-full overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-b from-secondary/60 to-card p-6 shadow-lg shadow-black/5 transition duration-300 hover:-translate-y-1.5 hover:border-primary/40 hover:shadow-xl hover:shadow-primary/10 dark:shadow-black/20"
+                // The card is a flat fill of --card. In dark mode, where the
+                // page and the card sit only a few percent apart in lightness,
+                // the border and the shadow are what separate it from the
+                // section behind it.
+                className="group relative h-full overflow-hidden rounded-2xl border border-border/70 bg-card p-6 shadow-lg shadow-black/5 transition duration-300 hover:-translate-y-1.5 hover:border-primary/40 hover:shadow-xl hover:shadow-primary/10 dark:border-border dark:shadow-black/20"
               >
-                {/* A brand wash and a hairline along the top edge, both of which
-                    only exist while the pointer is on the card. */}
+                {/* A faint brand tint and a hairline along the top edge, both of
+                    which only exist while the pointer is on the card. */}
                 <span
                   aria-hidden="true"
-                  className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-chart-3/10 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                  className="pointer-events-none absolute inset-0 bg-primary/[0.03] opacity-0 transition-opacity duration-300 group-hover:opacity-100"
                 />
                 <span
                   aria-hidden="true"
-                  className="pointer-events-none absolute inset-x-0 top-0 h-px origin-left scale-x-0 bg-gradient-to-r from-transparent via-primary to-transparent transition-transform duration-500 group-hover:scale-x-100"
+                  className="pointer-events-none absolute inset-x-0 top-0 h-px origin-left scale-x-0 bg-primary/40 transition-transform duration-500 group-hover:scale-x-100"
                 />
                 {/* The number, oversized and nearly invisible, gives each card
                     something of its own behind the copy. */}
@@ -438,7 +440,7 @@ function HowItWorks() {
                 <span
                   aria-hidden="true"
                   style={delayStyle(index * 140 + 400)}
-                  className="landing-bar absolute top-6 left-14 -right-8 hidden h-px bg-gradient-to-r from-primary/40 to-transparent md:block"
+                  className="landing-bar absolute top-6 left-14 -right-8 hidden h-px bg-primary/20 md:block"
                 />
               )}
               <div className="flex size-12 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary transition duration-300 group-hover:-translate-y-0.5 group-hover:scale-105 group-hover:border-primary/40 group-hover:bg-primary/15 group-hover:shadow-lg group-hover:shadow-primary/20">
@@ -602,7 +604,7 @@ function Features() {
               >
                 <span
                   aria-hidden="true"
-                  className="pointer-events-none absolute -inset-4 rounded-[2rem] bg-gradient-to-br from-primary/15 via-chart-3/10 to-transparent opacity-0 blur-2xl transition-opacity duration-500 group-hover:opacity-100"
+                  className="pointer-events-none absolute -inset-4 rounded-[2rem] bg-primary/[0.06] opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100 dark:bg-primary/[0.08]"
                 />
                 <TiltCard className="relative" degrees={5}>
                   {feature.visual}
