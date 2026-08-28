@@ -6,7 +6,7 @@ import { ArrowUpDownIcon, SearchIcon } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import type { AdminUserRow } from "@/lib/admin/users"
-import type { PlanId } from "@/lib/plans"
+import { PLAN_RANK } from "@/lib/plans"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {
@@ -44,8 +44,9 @@ const SORT_OPTIONS = [
 
 type SortKey = (typeof SORT_OPTIONS)[number]["value"]
 
-// Higher tiers rank higher, so plan sorting reads Pro → Starter → Free.
-const PLAN_RANK: Record<PlanId, number> = { free: 0, starter: 1, pro: 2 }
+// Plan sorting reads Pro, then Starter, then Free: the ranking lives in
+// lib/plans, which is also what decides whether a gifted plan beats a
+// subscription, so the two can never drift apart.
 
 function initials(value: string): string {
   return value.slice(0, 2).toUpperCase()
@@ -104,15 +105,25 @@ function planBadgeClass(planId: AdminUserRow["planId"]): string {
   }
 }
 
+// The plan, plus a marker when it was gifted rather than paid for. Without the
+// marker a comped test account is indistinguishable from a paying customer in
+// this table, which is exactly the number an admin is most likely to misread.
 function PlanBadge({ user }: { user: AdminUserRow }) {
   return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-        planBadgeClass(user.planId),
+    <span className="inline-flex items-center gap-1.5">
+      <span
+        className={cn(
+          "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+          planBadgeClass(user.planId),
+        )}
+      >
+        {user.planName}
+      </span>
+      {user.planSource === "granted" && (
+        <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+          Gifted
+        </span>
       )}
-    >
-      {user.planName}
     </span>
   )
 }

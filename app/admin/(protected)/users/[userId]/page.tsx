@@ -14,6 +14,7 @@ import {
 
 import { AdminBillingHistoryTable } from "@/components/admin/admin-billing-history-table"
 import { AdminCostLogsPanel } from "@/components/admin/admin-cost-logs-panel"
+import { AdminPlanGrantCard } from "@/components/admin/admin-plan-grant-card"
 import { AdminVideoAnalysesTable } from "@/components/admin/admin-video-analyses-table"
 import { AdminVideoComparisonsTable } from "@/components/admin/admin-video-comparisons-table"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -30,6 +31,7 @@ import {
   type BillingSnapshot,
   type MeterStatus,
 } from "@/lib/billing/entitlements"
+import { getPlanGrantForUser } from "@/lib/billing/plan-grants"
 import { formatGbp, monthlyEquivalentPence } from "@/lib/plans"
 import { cn } from "@/lib/utils"
 
@@ -146,14 +148,18 @@ function PlanOverview({ snapshot }: { snapshot: BillingSnapshot | null }) {
 
   const isFree = snapshot.planId === "free"
   const isPaid = snapshot.source === "paid"
+  // A plan an admin gifted: paid features, no Stripe subscription behind them.
+  const isGranted = snapshot.source === "granted"
   const isCancelling = Boolean(snapshot.cancelAtPeriodEnd && !isFree)
   const includesDeepDives = snapshot.plan.deepCreditsPerMonth > 0
 
-  const statusValue = isFree
-    ? "No subscription"
-    : isCancelling
-      ? "Cancelling"
-      : "Active"
+  const statusValue = isGranted
+    ? "Complimentary"
+    : isFree
+      ? "No subscription"
+      : isCancelling
+        ? "Cancelling"
+        : "Active"
 
   const billingPeriodValue = snapshot.billingPeriod
     ? snapshot.billingPeriod === "annual"
@@ -162,26 +168,29 @@ function PlanOverview({ snapshot }: { snapshot: BillingSnapshot | null }) {
     : "-"
 
   const priceValue = (() => {
+    if (isGranted) return "Gifted"
     if (isFree || !snapshot.billingPeriod) return "Free"
     const perMonth = monthlyEquivalentPence(snapshot.plan, snapshot.billingPeriod)
     if (perMonth == null) return "-"
     return `${formatGbp(perMonth)}/mo`
   })()
 
-  // Paid plans show Stripe's subscription window; Free plans show the rolling
+  // Paid plans show Stripe's subscription window and gifted ones the window the
+  // grant runs for (which may have no end at all); Free plans show the rolling
   // usage window anchored to the account creation date.
-  const cycleStart = isPaid
-    ? snapshot.subscriptionPeriodStart
-    : snapshot.periodStart
-  const cycleEnd = isPaid ? snapshot.subscriptionPeriodEnd : snapshot.periodEnd
-  const cycleValue =
-    cycleStart && cycleEnd
+  const cycleStart =
+    isPaid || isGranted ? snapshot.subscriptionPeriodStart : snapshot.periodStart
+  const cycleEnd =
+    isPaid || isGranted ? snapshot.subscriptionPeriodEnd : snapshot.periodEnd
+  const cycleValue = !cycleStart
+    ? "-"
+    : cycleEnd
       ? `${formatDate(cycleStart)} - ${formatDate(cycleEnd)}`
-      : "-"
+      : `${formatDate(cycleStart)} - no expiry`
 
   const renewsCaption = isCancelling
     ? "Access ends"
-    : isFree || snapshot.billingPeriod === "annual"
+    : isFree || isGranted || snapshot.billingPeriod === "annual"
       ? "Usage resets"
       : "Renews"
   const renewsValue = formatDate(snapshot.periodEnd)
@@ -252,6 +261,7 @@ export default async function AdminUserDetailPage({
     videoAnalyses,
     videoComparisons,
     revenue,
+    planGrant,
   ] = await Promise.all([
       getUserKpis(user.id),
       getBillingSnapshot(user.id).catch((error) => {
@@ -274,6 +284,13 @@ export default async function AdminUserDetailPage({
       getUserRevenue(user.id).catch((error) => {
         console.error("Failed to load revenue for user", error)
         return "error" as const
+      }),
+      // Read on its own rather than off the billing snapshot, so the gifting
+      // card still shows what this account was given even on the render where
+      // the snapshot lookup failed.
+      getPlanGrantForUser(user.id).catch((error) => {
+        console.error("Failed to load plan grant for user", error)
+        return null
       }),
     ])
 
@@ -419,6 +436,24 @@ export default async function AdminUserDetailPage({
               </p>
             </div>
             <PlanOverview snapshot={snapshot} />
+          </section>
+
+          <section className="space-y-4">
+            <div>
+              <h2 className="text-lg font-semibold tracking-normal">
+                Gifted access
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Hand this account a paid plan without charging for it, and take
+                it back when it is no longer needed.
+              </p>
+            </div>
+            <AdminPlanGrantCard
+              userId={user.id}
+              grant={planGrant}
+              isEffective={snapshot?.source === "granted"}
+              effectivePlanName={snapshot?.plan.name ?? "Free"}
+            />
           </section>
 
           <section className="space-y-4">

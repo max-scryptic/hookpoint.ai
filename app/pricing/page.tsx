@@ -51,6 +51,9 @@ async function loadCurrentPlan(
   billingPeriod: BillingPeriod | null
   periodEnd: string | null
   cancelAtPeriodEnd: boolean
+  // True when the plan was gifted by an admin rather than bought, in which case
+  // there is no subscription for the Free card to cancel.
+  isComplimentary: boolean
 }> {
   try {
     const entitlement = await getEntitlement(userId)
@@ -59,6 +62,7 @@ async function loadCurrentPlan(
       billingPeriod: entitlement.billingPeriod,
       periodEnd: entitlement.subscriptionPeriodEnd?.toISOString() ?? null,
       cancelAtPeriodEnd: entitlement.cancelAtPeriodEnd,
+      isComplimentary: entitlement.source === "granted",
     }
   } catch (error) {
     console.error("Failed to resolve current plan for pricing", error)
@@ -67,6 +71,7 @@ async function loadCurrentPlan(
       billingPeriod: null,
       periodEnd: null,
       cancelAtPeriodEnd: false,
+      isComplimentary: false,
     }
   }
 }
@@ -82,6 +87,7 @@ export default async function PricingPage() {
     billingPeriod: currentBillingPeriod,
     periodEnd: currentPeriodEnd,
     cancelAtPeriodEnd,
+    isComplimentary,
   } = await loadCurrentPlan(user.id)
   const billingEnabled = isStripeEnabled()
   const channelAvatarUrl = await getChannelAvatarUrl(user.id)
@@ -131,6 +137,7 @@ export default async function PricingPage() {
                 currentBillingPeriod={currentBillingPeriod}
                 currentPeriodEnd={currentPeriodEnd}
                 cancelAtPeriodEnd={cancelAtPeriodEnd}
+                planIsComplimentary={isComplimentary}
                 billingEnabled={billingEnabled}
               />
             </Suspense>
