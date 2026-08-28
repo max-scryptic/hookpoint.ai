@@ -10,6 +10,7 @@ import {
   ChevronRightIcon,
   CircleCheckIcon,
   GlobeIcon,
+  InfoIcon,
   LinkIcon,
   ListFilterIcon,
   Loader2Icon,
@@ -37,6 +38,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { DatePickerWithRange } from "@/components/date-range-picker"
 import { useVideoProcessingStatus } from "@/hooks/use-video-processing-status"
 import {
@@ -55,8 +61,9 @@ import {
 
 type PrivacyFilter = "all" | VideoPrivacyStatus
 
-// Whether a row's raw source file has been uploaded. "all" leaves the set
-// untouched; the other two split rows by upload status.
+// Whether a row's raw source file has been uploaded, which is what decides the
+// report type it carries. "all" leaves the set untouched; the other two split
+// rows into Complete (source file uploaded) and Basic (none).
 type RawFileFilter = "all" | "uploaded" | "not-uploaded"
 
 // All analysed videos are loaded up front, so we page through them client-side.
@@ -78,9 +85,9 @@ const RAW_FILE_OPTIONS: Array<{
   value: RawFileFilter
   label: string
 }> = [
-  { value: "all", label: "All raw files" },
-  { value: "uploaded", label: "Raw file uploaded" },
-  { value: "not-uploaded", label: "No raw file" },
+  { value: "all", label: "All report types" },
+  { value: "uploaded", label: "Complete" },
+  { value: "not-uploaded", label: "Basic" },
 ]
 
 // Every analysed video is already in memory, so unlike the uploads list this
@@ -185,24 +192,63 @@ function formatAnalysedAt(iso: string): string {
   })
 }
 
-// A green tick shown for videos whose raw source file has been uploaded and whose
-// deep analysis has finished - the signal that a video has been deeply analysed
-// rather than only retention-scanned.
-function RawFileBadge() {
+// What separates the two report types, and - for anyone who cannot upload a
+// source file yet - how to get the complete one. Shown from the info affordance
+// on the Report Type column header.
+const REPORT_TYPE_EXPLAINER =
+  "Basic reports read your retention curve and transcript. Complete reports also read your uploaded source file frame by frame, so every key moment is judged on what viewers actually saw."
+
+const REPORT_TYPE_UPGRADE_HINT =
+  "Upgrade to Starter or Pro to upload your source files and unlock complete reports."
+
+// Shown for videos whose raw source file has been uploaded and whose deep
+// analysis has finished - the signal that a video carries the complete report
+// rather than only a retention scan.
+function CompleteReportBadge() {
   return (
-    <span className="inline-flex items-center text-sm font-medium text-emerald-600 dark:text-emerald-500">
-      <CircleCheckIcon className="size-4" />
-      <span className="sr-only">Uploaded</span>
+    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-600 dark:text-emerald-500">
+      <CircleCheckIcon className="size-4 shrink-0" />
+      Complete
     </span>
   )
 }
 
-// Shown in place of the tick while a raw file has landed but its deeper analysis
-// (transcoding, scene detection, event synthesis, …) is still running in the
-// background, so the row makes clear the video isn't fully analysed yet. The
-// table keeps polling while any row is in this state (see
-// useVideoProcessingStatus below), so the badge gives way to the tick on its own
-// once the pipeline finishes.
+// The default for a video analysed without its source file: everything the
+// retention curve and transcript can tell us, and nothing from the footage.
+function BasicReportBadge() {
+  return <span className="text-sm text-muted-foreground">Basic</span>
+}
+
+// The info affordance beside the Report Type header. Explains what the two
+// values mean, and points anyone whose plan has no uploads at the tiers that do.
+function ReportTypeInfo({ showUpgradeHint }: { showUpgradeHint: boolean }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            className="inline-flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none"
+            aria-label="What Basic and Complete reports include"
+          />
+        }
+      >
+        <InfoIcon className="size-3.5" />
+      </TooltipTrigger>
+      <TooltipContent className="flex max-w-xs flex-col items-start gap-1.5 py-2 text-left leading-relaxed">
+        <span>{REPORT_TYPE_EXPLAINER}</span>
+        {showUpgradeHint && <span>{REPORT_TYPE_UPGRADE_HINT}</span>}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+// Shown in place of "Complete" while a raw file has landed but its deeper
+// analysis (transcoding, scene detection, event synthesis, …) is still running
+// in the background, so the row makes clear the complete report isn't ready yet.
+// The table keeps polling while any row is in this state (see
+// useVideoProcessingStatus below), so the badge gives way to "Complete" on its
+// own once the pipeline finishes.
 function ProcessingBadge() {
   return (
     <span
@@ -219,14 +265,20 @@ export function AnalysedVideoBrowser({
   videos,
   rawFileVideoIds = [],
   processingVideoIds = [],
+  canUploadSourceFiles = false,
 }: {
   videos: AnalysedVideo[]
   // YouTube video IDs whose raw source file has finished uploading. Checked per
-  // row to flag which analysed videos have had their raw file uploaded.
+  // row to decide which analysed videos carry a Complete report.
   rawFileVideoIds?: string[]
   // The subset of the above whose deep analysis is still running post-upload.
-  // Those rows show a "Processing…" indicator instead of the uploaded tick.
+  // Those rows show a "Processing…" indicator instead of the Complete badge.
   processingVideoIds?: string[]
+  // Whether this creator's plan includes source-file uploads. Only when it does
+  // not is the Report Type tooltip worth pointing at the paid tiers - a creator
+  // who can already upload needs no upgrade, just the file. Defaults to false so
+  // a caller that cannot resolve the plan still explains how to get Complete.
+  canUploadSourceFiles?: boolean
 }) {
   const router = useRouter()
   const rows = useMemo(() => videos.map(toRow), [videos])
@@ -552,7 +604,10 @@ export function AnalysedVideoBrowser({
                   Analysed
                 </TableHead>
                 <TableHead className="hidden px-4 py-3 text-accent-foreground sm:table-cell">
-                  Raw file uploaded
+                  <span className="inline-flex items-center gap-1">
+                    Report Type
+                    <ReportTypeInfo showUpgradeHint={!canUploadSourceFiles} />
+                  </span>
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -605,17 +660,15 @@ export function AnalysedVideoBrowser({
                           <span className="sm:hidden">
                             Analysed {formatAnalysedAt(dateAnalysed)}
                           </span>
-                          {processing ? (
-                            <span className="sm:hidden">
+                          <span className="sm:hidden">
+                            {processing ? (
                               <ProcessingBadge />
-                            </span>
-                          ) : (
-                            rawFileUploaded && (
-                              <span className="sm:hidden">
-                                <RawFileBadge />
-                              </span>
-                            )
-                          )}
+                            ) : rawFileUploaded ? (
+                              <CompleteReportBadge />
+                            ) : (
+                              <BasicReportBadge />
+                            )}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -643,9 +696,9 @@ export function AnalysedVideoBrowser({
                     {processing ? (
                       <ProcessingBadge />
                     ) : rawFileUploaded ? (
-                      <RawFileBadge />
+                      <CompleteReportBadge />
                     ) : (
-                      <span className="text-sm text-muted-foreground">-</span>
+                      <BasicReportBadge />
                     )}
                   </TableCell>
                 </TableRow>

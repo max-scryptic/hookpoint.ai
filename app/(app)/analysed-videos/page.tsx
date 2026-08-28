@@ -7,6 +7,8 @@ import {
   getVideoProcessingStatus,
   type VideoProcessingStatus,
 } from "@/lib/retention-window-media-progress"
+import { getEntitlement } from "@/lib/billing/entitlements"
+import { planIncludesUploads } from "@/lib/plans"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -59,12 +61,28 @@ async function loadRawFileStatuses(
   }
 }
 
+// Whether this creator's plan includes source-file uploads. Only used to decide
+// whether the Report Type tooltip points at the paid tiers, so a failed lookup
+// falls back to "cannot upload" - the same fail-closed default the billing code
+// uses, and the reading that still explains how a Complete report is unlocked.
+async function loadCanUploadSourceFiles(userId: string): Promise<boolean> {
+  try {
+    const entitlement = await getEntitlement(userId)
+    return planIncludesUploads(entitlement.plan)
+  } catch (error) {
+    console.error("Failed to resolve plan for the report type tooltip", error)
+    return false
+  }
+}
+
 export default async function Page() {
   const user = await requireAuthenticatedUser()
-  const [result, { rawFileVideoIds, processingVideoIds }] = await Promise.all([
-    loadAnalysedVideos(user.id),
-    loadRawFileStatuses(user.id),
-  ])
+  const [result, { rawFileVideoIds, processingVideoIds }, canUploadSourceFiles] =
+    await Promise.all([
+      loadAnalysedVideos(user.id),
+      loadRawFileStatuses(user.id),
+      loadCanUploadSourceFiles(user.id),
+    ])
 
   return (
     <>
@@ -100,6 +118,7 @@ export default async function Page() {
             videos={result.videos}
             rawFileVideoIds={rawFileVideoIds}
             processingVideoIds={processingVideoIds}
+            canUploadSourceFiles={canUploadSourceFiles}
           />
         )}
 
