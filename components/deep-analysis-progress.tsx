@@ -17,6 +17,7 @@ import {
   XCircleIcon,
 } from "lucide-react"
 
+import { ReportTypeBadge } from "@/components/report-type-badge"
 import type { DeepAnalysisPipelineRunSummary } from "@/lib/deep-analysis-pipeline-runs"
 import type {
   DeepAnalysisProgress as ProgressResponse,
@@ -271,19 +272,11 @@ export function useDeepAnalysisStatus(): DeepAnalysisStatusValue {
 }
 
 // The source-file card's live indicator that the footage-based half of the
-// analysis is still running. Deliberately the same amber spinner the analysed
-// videos table shows against a processing row, so the two places a video's
-// deeper analysis surfaces read as one state.
+// analysis is still running. Deliberately the same amber pill the analysed
+// videos table and the head of the report show against a processing video, so
+// every place a video's deeper analysis surfaces reads as one state.
 export function DeepAnalysisProcessingBadge() {
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-600 dark:text-amber-500"
-      title="Deeper analysis is still running. This updates automatically when it finishes."
-    >
-      <Loader2Icon className="size-3.5 animate-spin" />
-      Processing…
-    </span>
-  )
+  return <ReportTypeBadge type="processing" />
 }
 
 // The bare per-stage checklist. Presentational only: given a stage snapshot it
