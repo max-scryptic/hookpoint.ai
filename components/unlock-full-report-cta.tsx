@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { LockIcon } from "lucide-react"
 
+import { ReportComparisonDialog } from "@/components/report-comparison-dialog"
 import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -29,9 +30,14 @@ export function UpgradeToUploadPrompt({ message }: { message?: string }) {
       <h3 className="font-heading text-sm font-medium">
         Unlock the full report
       </h3>
+      {/* The prompt names the upgrade but not what it buys, so the popup
+          carries the side-by-side of a basic report against a complete one.
+          It sits inside the paragraph, at the end of the copy it explains,
+          rather than competing with the upgrade button below. */}
       <p className="text-sm text-muted-foreground">
         {message ??
-          "Upgrade to Starter or Pro to upload your raw source file and analyse every key moment frame by frame."}
+          "Upgrade to Starter or Pro to upload your raw source file and analyse every key moment frame by frame."}{" "}
+        <ReportComparisonDialog />
       </p>
       <Link href="/pricing" className={cn(buttonVariants())}>
         Upgrade plan
