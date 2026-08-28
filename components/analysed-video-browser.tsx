@@ -8,12 +8,10 @@ import {
   ArrowUpDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  CircleCheckIcon,
   GlobeIcon,
   InfoIcon,
   LinkIcon,
   ListFilterIcon,
-  Loader2Icon,
   LockIcon,
   SearchIcon,
   VideoOffIcon,
@@ -45,6 +43,12 @@ import {
 } from "@/components/ui/tooltip"
 import { DatePickerWithRange } from "@/components/date-range-picker"
 import { useVideoProcessingStatus } from "@/hooks/use-video-processing-status"
+import {
+  REPORT_TYPE_EXPLAINER,
+  REPORT_TYPE_UPGRADE_HINT,
+  ReportTypeBadge,
+  reportTypeFor,
+} from "@/components/report-type-badge"
 import {
   Thumbnail,
   VisibilityCell,
@@ -192,33 +196,6 @@ function formatAnalysedAt(iso: string): string {
   })
 }
 
-// What separates the two report types, and - for anyone who cannot upload a
-// source file yet - how to get the complete one. Shown from the info affordance
-// on the Report Type column header.
-const REPORT_TYPE_EXPLAINER =
-  "Basic reports read your retention curve and transcript. Complete reports also read your uploaded source file frame by frame, so every key moment is judged on what viewers actually saw."
-
-const REPORT_TYPE_UPGRADE_HINT =
-  "Upgrade to Starter or Pro to upload your source files and unlock complete reports."
-
-// Shown for videos whose raw source file has been uploaded and whose deep
-// analysis has finished - the signal that a video carries the complete report
-// rather than only a retention scan.
-function CompleteReportBadge() {
-  return (
-    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-600 dark:text-emerald-500">
-      <CircleCheckIcon className="size-4 shrink-0" />
-      Complete
-    </span>
-  )
-}
-
-// The default for a video analysed without its source file: everything the
-// retention curve and transcript can tell us, and nothing from the footage.
-function BasicReportBadge() {
-  return <span className="text-sm text-muted-foreground">Basic</span>
-}
-
 // The info affordance beside the Report Type header. Explains what the two
 // values mean, and points anyone whose plan has no uploads at the tiers that do.
 function ReportTypeInfo({ showUpgradeHint }: { showUpgradeHint: boolean }) {
@@ -240,24 +217,6 @@ function ReportTypeInfo({ showUpgradeHint }: { showUpgradeHint: boolean }) {
         {showUpgradeHint && <span>{REPORT_TYPE_UPGRADE_HINT}</span>}
       </TooltipContent>
     </Tooltip>
-  )
-}
-
-// Shown in place of "Complete" while a raw file has landed but its deeper
-// analysis (transcoding, scene detection, event synthesis, …) is still running
-// in the background, so the row makes clear the complete report isn't ready yet.
-// The table keeps polling while any row is in this state (see
-// useVideoProcessingStatus below), so the badge gives way to "Complete" on its
-// own once the pipeline finishes.
-function ProcessingBadge() {
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-600 dark:text-amber-500"
-      title="Deeper analysis is still running. This updates automatically when it finishes."
-    >
-      <Loader2Icon className="size-3.5 animate-spin" />
-      Processing…
-    </span>
   )
 }
 
@@ -614,8 +573,17 @@ export function AnalysedVideoBrowser({
             <TableBody>
               {pageRows.map(({ video, dateAnalysed, privacyKnown }) => {
                 const href = `/analysed-video/${video.id}`
-                const rawFileUploaded = rawFileIds.has(video.id)
-                const processing = processingIds.has(video.id)
+                // "Processing…" while a raw file has landed but its deeper
+                // analysis (transcoding, scene detection, event synthesis, …)
+                // is still running, so the row makes clear the complete report
+                // isn't ready yet. The table keeps polling while any row is in
+                // that state (see useVideoProcessingStatus above), so the pill
+                // gives way to "Complete" on its own once the pipeline
+                // finishes.
+                const reportType = reportTypeFor({
+                  hasSourceFile: rawFileIds.has(video.id),
+                  processing: processingIds.has(video.id),
+                })
                 return (
                 <TableRow
                   key={video.id}
@@ -661,13 +629,7 @@ export function AnalysedVideoBrowser({
                             Analysed {formatAnalysedAt(dateAnalysed)}
                           </span>
                           <span className="sm:hidden">
-                            {processing ? (
-                              <ProcessingBadge />
-                            ) : rawFileUploaded ? (
-                              <CompleteReportBadge />
-                            ) : (
-                              <BasicReportBadge />
-                            )}
+                            <ReportTypeBadge type={reportType} />
                           </span>
                         </div>
                       </div>
@@ -693,13 +655,7 @@ export function AnalysedVideoBrowser({
                     {formatAnalysedAt(dateAnalysed)}
                   </TableCell>
                   <TableCell className="hidden px-4 py-3 align-top sm:table-cell">
-                    {processing ? (
-                      <ProcessingBadge />
-                    ) : rawFileUploaded ? (
-                      <CompleteReportBadge />
-                    ) : (
-                      <BasicReportBadge />
-                    )}
+                    <ReportTypeBadge type={reportType} />
                   </TableCell>
                 </TableRow>
                 )
