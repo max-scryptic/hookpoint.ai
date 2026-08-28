@@ -10,11 +10,17 @@ import {
   creditsForDurationSeconds,
   getPlan,
   maxUploadBytesForPlan,
+  planRanksAtLeast,
   type Plan,
   type PlanId,
 } from "@/lib/plans"
 import type { BillingPeriod } from "@/lib/plans"
 import { getSubscriptionForUser } from "@/lib/billing/subscriptions"
+import {
+  getPlanGrantForUser,
+  planGrantIsActive,
+  type PlanGrant,
+} from "@/lib/billing/plan-grants"
 
 // Subscription statuses that grant the paid plan (past_due keeps access during
 // Stripe's dunning grace period; the subscription is only truly gone once it
@@ -36,15 +42,22 @@ export type Entitlement = {
   // window automatically starts every tally at zero.
   periodStart: Date
   periodEnd: Date
-  // The Stripe subscription period for paid users. Annual plans use this for
-  // paid-through/cancellation display while usage still rolls monthly.
+  // The Stripe subscription period for paid users, or the grant's window for a
+  // complimentary plan. Annual plans use this for paid-through/cancellation
+  // display while usage still rolls monthly.
   subscriptionPeriodStart: Date | null
   subscriptionPeriodEnd: Date | null
-  // "paid" when a Stripe subscription is driving the window, "free" when it is
-  // anchored to the account creation date.
-  source: "paid" | "free"
+  // "paid" when a Stripe subscription is driving the window, "granted" when an
+  // admin gifted the plan, "free" when it is anchored to the account creation
+  // date.
+  source: "paid" | "granted" | "free"
   billingPeriod: BillingPeriod | null
   cancelAtPeriodEnd: boolean
+  // The complimentary plan on the account, when it has one. Present whether or
+  // not it is the thing currently entitling them (a grant that has lapsed, or
+  // that a better paid subscription outranks, still shows up here), so the
+  // admin surface can report exactly what was given.
+  grant: PlanGrant | null
 }
 
 function daysInUtcMonth(year: number, month: number): number {
@@ -145,18 +158,95 @@ async function getAccountCreatedAt(userId: string): Promise<Date> {
   return created ? new Date(created) : new Date()
 }
 
-// Resolves the user's effective plan and usage window. Monthly paid
-// subscriptions use Stripe's monthly period directly; annual paid subscriptions
-// derive a monthly usage window inside Stripe's yearly paid-through period.
-// Otherwise the user is Free with a window anchored to their account creation
-// date.
+// A complimentary plan is metered exactly like a paid one: a monthly allowance,
+// anchored to the day the grant was issued, with the final month capped at the
+// grant's expiry so a time-boxed gift cannot hand out an allowance past the day
+// it lapses. An open-ended grant simply rolls monthly forever.
+export function computeGrantUsageWindow(
+  grantStart: Date,
+  grantEnd: Date | null,
+  now: Date,
+): { start: Date; end: Date } {
+  const window = computeMonthlyUsageWindow(grantStart, now)
+  if (!grantEnd) return window
+  return {
+    start: window.start,
+    end:
+      window.end.getTime() > grantEnd.getTime() ? grantEnd : window.end,
+  }
+}
+
+// Which of the two things that can entitle an account wins, given both.
+//
+// A gift never downgrades anyone: an admin granting Starter to a creator who is
+// paying for Pro leaves the Pro subscription in charge. Otherwise the grant
+// wins, because that is the whole point of issuing one, and it carries its own
+// usage window so a gifted account is not metered against a Stripe period it
+// has nothing to do with.
+export function resolveEntitlementSource(
+  subscription: { status: string; currentPeriodEnd: string | Date; planId: PlanId } | null,
+  grant: { planId: PlanId; startsAt: string | Date; expiresAt: string | Date | null } | null,
+  now: Date,
+): "paid" | "granted" | "free" {
+  const paidActive = Boolean(
+    subscription && subscriptionGrantsPaidAccess(subscription, now),
+  )
+  const grantActive = Boolean(grant && planGrantIsActive(grant, now))
+
+  if (grantActive && grant) {
+    if (!paidActive || !subscription) return "granted"
+    return planRanksAtLeast(grant.planId, subscription.planId)
+      ? "granted"
+      : "paid"
+  }
+  return paidActive ? "paid" : "free"
+}
+
+// Resolves the user's effective plan and usage window. A complimentary plan an
+// admin granted comes first (unless the account is paying for a better one).
+// Otherwise: monthly paid subscriptions use Stripe's monthly period directly;
+// annual paid subscriptions derive a monthly usage window inside Stripe's
+// yearly paid-through period; and a user with neither is Free, with a window
+// anchored to their account creation date.
 export async function getEntitlement(
   userId: string,
   now: Date = new Date(),
 ): Promise<Entitlement> {
-  const subscription = await getSubscriptionForUser(userId)
+  const [subscription, grant] = await Promise.all([
+    getSubscriptionForUser(userId),
+    // A grant is an admin-issued extra, so a lookup failure must not take down
+    // an otherwise resolvable entitlement (in particular before the migration
+    // that creates the table has been applied). Falling back to null resolves
+    // the plan the user pays for, or Free.
+    getPlanGrantForUser(userId).catch((error) => {
+      console.error("Failed to load plan grant", error)
+      return null
+    }),
+  ])
 
-  if (subscription && subscriptionGrantsPaidAccess(subscription, now)) {
+  const source = resolveEntitlementSource(subscription, grant, now)
+
+  if (source === "granted" && grant) {
+    const grantStart = new Date(grant.startsAt)
+    const grantEnd = grant.expiresAt ? new Date(grant.expiresAt) : null
+    const usageWindow = computeGrantUsageWindow(grantStart, grantEnd, now)
+
+    return {
+      planId: grant.planId,
+      plan: getPlan(grant.planId),
+      periodStart: usageWindow.start,
+      periodEnd: usageWindow.end,
+      subscriptionPeriodStart: grantStart,
+      subscriptionPeriodEnd: grantEnd,
+      source: "granted",
+      // No money is changing hands, so there is no billing interval to name.
+      billingPeriod: null,
+      cancelAtPeriodEnd: false,
+      grant,
+    }
+  }
+
+  if (source === "paid" && subscription) {
     const subscriptionStart = new Date(subscription.currentPeriodStart)
     const subscriptionEnd = new Date(subscription.currentPeriodEnd)
     const usageWindow =
@@ -174,6 +264,7 @@ export async function getEntitlement(
       source: "paid",
       billingPeriod: subscription.billingPeriod,
       cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+      grant,
     }
   }
 
@@ -189,6 +280,7 @@ export async function getEntitlement(
     source: "free",
     billingPeriod: null,
     cancelAtPeriodEnd: false,
+    grant,
   }
 }
 

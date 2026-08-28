@@ -1,6 +1,11 @@
 import { createAdminClient } from "@/lib/supabase/admin"
 import { subscriptionGrantsPaidAccess } from "@/lib/billing/entitlements"
-import { getPlan, type PlanId } from "@/lib/plans"
+import {
+  listPlanGrants,
+  planGrantIsActive,
+  type PlanGrant,
+} from "@/lib/billing/plan-grants"
+import { getPlan, planRanksAtLeast, type PlanId } from "@/lib/plans"
 
 // Data-access helpers for the admin interface. Everything here uses the
 // service-role client, so it bypasses Row Level Security and MUST only be
@@ -13,10 +18,15 @@ export type AdminUserRow = {
   email: string
   avatarUrl: string | null
   isAdmin: boolean
-  // The user's effective plan, resolved the same way entitlements are: a paid
-  // subscription that currently grants access wins, otherwise Free.
+  // The user's effective plan, resolved the same way entitlements are: a
+  // complimentary plan an admin granted wins unless the account pays for a
+  // better one, then a paid subscription that currently grants access,
+  // otherwise Free.
   planId: PlanId
   planName: string
+  // Where that plan comes from, so a gifted account is distinguishable from a
+  // paying one at a glance in the table.
+  planSource: "paid" | "granted" | "free"
   createdAt: string
 }
 
@@ -50,19 +60,45 @@ async function loadPaidPlansByUser(now: Date): Promise<Map<string, PlanId>> {
   return plans
 }
 
+// Builds a map of user id -> currently entitling complimentary plan. Lapsed and
+// not-yet-started grants are left out, so this map only ever holds gifts that
+// are live right now. The table is an admin-only extra, so a lookup failure
+// (most likely the migration not being applied yet) reports no grants rather
+// than sinking the whole users page.
+async function loadGrantedPlansByUser(
+  now: Date,
+): Promise<Map<string, PlanGrant>> {
+  const grants = new Map<string, PlanGrant>()
+  let rows: PlanGrant[]
+  try {
+    rows = await listPlanGrants()
+  } catch (error) {
+    console.error("Failed to load plan grants", error)
+    return grants
+  }
+
+  for (const grant of rows) {
+    if (planGrantIsActive(grant, now)) {
+      grants.set(grant.userId, grant)
+    }
+  }
+  return grants
+}
+
 // Lists users for the management table, newest first. Capped so the page stays
 // responsive; pagination/search can be layered on later if the base grows.
 // Each user is annotated with their effective plan so the table can show it.
 export async function listUsers(now: Date = new Date()): Promise<AdminUserRow[]> {
   const supabase = createAdminClient()
 
-  const [{ data, error }, paidPlans] = await Promise.all([
+  const [{ data, error }, paidPlans, grantedPlans] = await Promise.all([
     supabase
       .from("users")
       .select("id, username, email, avatar_url, is_admin, created_at")
       .order("created_at", { ascending: false })
       .limit(500),
     loadPaidPlansByUser(now),
+    loadGrantedPlansByUser(now),
   ])
 
   if (error) {
@@ -71,7 +107,18 @@ export async function listUsers(now: Date = new Date()): Promise<AdminUserRow[]>
 
   return (data ?? []).map((row) => {
     const id = row.id as string
-    const planId = paidPlans.get(id) ?? "free"
+    const paidPlanId = paidPlans.get(id) ?? null
+    const grantedPlanId = grantedPlans.get(id)?.planId ?? null
+
+    // The same precedence the entitlement resolver applies: a gift wins unless
+    // the account is paying for a plan it does not beat.
+    const granted =
+      grantedPlanId != null &&
+      (paidPlanId == null || planRanksAtLeast(grantedPlanId, paidPlanId))
+    const planId: PlanId = granted
+      ? (grantedPlanId as PlanId)
+      : (paidPlanId ?? "free")
+
     return {
       id,
       username: row.username as string,
@@ -80,6 +127,7 @@ export async function listUsers(now: Date = new Date()): Promise<AdminUserRow[]>
       isAdmin: Boolean(row.is_admin),
       planId,
       planName: getPlan(planId).name,
+      planSource: granted ? "granted" : planId === "free" ? "free" : "paid",
       createdAt: row.created_at as string,
     }
   })

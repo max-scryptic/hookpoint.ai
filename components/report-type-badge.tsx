@@ -10,12 +10,30 @@ export type ReportType = "basic" | "complete" | "processing"
 // What separates the two report types, and - for anyone who cannot upload a
 // source file yet - how to get the complete one. Shown from the info affordance
 // beside the analysed videos table's Report Type header, and from the badge at
-// the head of a report.
-export const REPORT_TYPE_EXPLAINER =
-  "Basic reports read your retention curve and transcript. Complete reports also read your uploaded source file frame by frame, so every key moment is judged on what viewers actually saw."
+// the head of a report. The two report names and the thing that actually
+// distinguishes them carry the emphasis, so the paragraph can be skimmed rather
+// than read end to end.
+export function ReportTypeExplainer() {
+  return (
+    <span>
+      <strong className="font-semibold">Basic</strong> reports read your
+      retention curve and transcript.{" "}
+      <strong className="font-semibold">Complete</strong> reports also read your
+      uploaded source file{" "}
+      <strong className="font-semibold">frame by frame</strong>, so every key
+      moment is judged on what viewers actually saw.
+    </span>
+  )
+}
 
-export const REPORT_TYPE_UPGRADE_HINT =
-  "Upgrade to Starter or Pro to upload your source files and unlock complete reports."
+export function ReportTypeUpgradeHint() {
+  return (
+    <span>
+      Upgrade to <strong className="font-semibold">Starter or Pro</strong> to
+      upload your source files and unlock complete reports.
+    </span>
+  )
+}
 
 // One pill per state, so a report type reads the same wherever it appears: the
 // analysed videos table, the source-file card, and the head of the report

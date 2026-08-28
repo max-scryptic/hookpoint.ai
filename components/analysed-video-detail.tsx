@@ -47,8 +47,8 @@ import {
 } from "@/components/onboarding-hints"
 import { useDeepAnalysisStatus } from "@/components/deep-analysis-progress"
 import {
-  REPORT_TYPE_EXPLAINER,
   ReportTypeBadge,
+  ReportTypeExplainer,
   type ReportType,
 } from "@/components/report-type-badge"
 import {
@@ -1611,7 +1611,7 @@ function ReportTypeHeaderBadge({ reportType }: { reportType: ReportType }) {
         <ReportTypeBadge type={live} className="text-sm" />
       </TooltipTrigger>
       <TooltipContent className="max-w-xs py-2 text-left leading-relaxed">
-        {REPORT_TYPE_EXPLAINER}
+        <ReportTypeExplainer />
       </TooltipContent>
     </Tooltip>
   )

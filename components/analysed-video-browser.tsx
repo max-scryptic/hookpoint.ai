@@ -44,9 +44,9 @@ import {
 import { DatePickerWithRange } from "@/components/date-range-picker"
 import { useVideoProcessingStatus } from "@/hooks/use-video-processing-status"
 import {
-  REPORT_TYPE_EXPLAINER,
-  REPORT_TYPE_UPGRADE_HINT,
   ReportTypeBadge,
+  ReportTypeExplainer,
+  ReportTypeUpgradeHint,
   reportTypeFor,
 } from "@/components/report-type-badge"
 import {
@@ -213,8 +213,8 @@ function ReportTypeInfo({ showUpgradeHint }: { showUpgradeHint: boolean }) {
         <InfoIcon className="size-3.5" />
       </TooltipTrigger>
       <TooltipContent className="flex max-w-xs flex-col items-start gap-1.5 py-2 text-left leading-relaxed">
-        <span>{REPORT_TYPE_EXPLAINER}</span>
-        {showUpgradeHint && <span>{REPORT_TYPE_UPGRADE_HINT}</span>}
+        <ReportTypeExplainer />
+        {showUpgradeHint && <ReportTypeUpgradeHint />}
       </TooltipContent>
     </Tooltip>
   )

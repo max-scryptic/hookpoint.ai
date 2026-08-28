@@ -108,6 +108,18 @@ export const PLAN_BY_ID: Record<PlanId, Plan> = Object.fromEntries(
 // because it has no Stripe price and is never "purchased".
 export const PAID_PLAN_IDS: readonly PlanId[] = ["starter", "pro"] as const
 
+// How the tiers rank against each other, so "which of these two plans is the
+// better one" is answered in one place. Used to sort the admin users table and,
+// more importantly, to decide whether a complimentary plan an admin granted
+// beats the subscription an account is already paying for (see
+// lib/billing/entitlements): a gift must never quietly downgrade a paying user.
+export const PLAN_RANK: Record<PlanId, number> = { free: 0, starter: 1, pro: 2 }
+
+// True when `planId` is at least as good as `other`.
+export function planRanksAtLeast(planId: PlanId, other: PlanId): boolean {
+  return PLAN_RANK[planId] >= PLAN_RANK[other]
+}
+
 export function isPaidPlanId(value: string): value is "starter" | "pro" {
   return value === "starter" || value === "pro"
 }

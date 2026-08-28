@@ -69,20 +69,33 @@ export function SettingsBillingUsage({
 }) {
   const planName = snapshot?.plan.name ?? "Free"
   const isFree = (snapshot?.planId ?? "free") === "free"
+  // A complimentary plan: the paid features, given rather than bought. There is
+  // no subscription behind it, so nothing here may offer to manage one.
+  const isGranted = snapshot?.source === "granted"
   const isCancelling = Boolean(snapshot?.cancelAtPeriodEnd && !isFree)
   const includesDeepDives = (snapshot?.plan.deepCreditsPerMonth ?? 0) > 0
   const renewsLabel = snapshot ? formatDate(snapshot.periodEnd.toISOString()) : "N/A"
   const renewsCaption = snapshot?.cancelAtPeriodEnd
     ? "Access ends"
-    : isFree || snapshot?.billingPeriod === "annual"
+    : isFree || isGranted || snapshot?.billingPeriod === "annual"
       ? "Usage resets"
       : "Renews"
+  // The date a gifted plan runs out, when it has one. Read off the grant window
+  // rather than the usage window, which rolls monthly inside it.
+  const grantEndsLabel =
+    isGranted && snapshot?.subscriptionPeriodEnd
+      ? formatDate(snapshot.subscriptionPeriodEnd.toISOString())
+      : null
   const planDescription = isCancelling ? (
     <>
       Your {planName} plan has been{" "}
       <span className="underline">cancelled</span>. You keep access until{" "}
       {renewsLabel}, then your account moves to Free.
     </>
+  ) : isGranted ? (
+    grantEndsLabel
+      ? `You have complimentary access to the ${planName} plan until ${grantEndsLabel}. There is nothing to pay.`
+      : `You have complimentary access to the ${planName} plan. There is nothing to pay.`
   ) : isFree ? (
     "You’re on the Free plan."
   ) : (
@@ -172,10 +185,12 @@ export function SettingsBillingUsage({
             every plan. Only subscribers have a card - one is entered during the
             Checkout that pays for the plan, never added from here - so on Free
             it shows an empty state rather than an action. */}
+        {/* A gifted plan is not a subscription: there is no card behind it and
+            no renewal to change, so it counts as "not a subscriber" here. */}
         <BillingPaymentMethod
           card={paymentCard}
           enabled={billingEnabled}
-          isSubscriber={!isFree}
+          isSubscriber={!isFree && !isGranted}
         />
 
 
