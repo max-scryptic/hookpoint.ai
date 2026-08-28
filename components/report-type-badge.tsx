@@ -28,8 +28,9 @@ export function ReportTypeExplainer() {
 export function ReportTypeUpgradeHint() {
   return (
     <span>
-      Upgrade to <strong className="font-semibold">Starter or Pro</strong> to
-      upload your source files and unlock complete reports.
+      Upgrade to <strong className="font-semibold">Starter</strong> or{" "}
+      <strong className="font-semibold">Pro</strong> to upload your source files
+      and unlock complete reports.
     </span>
   )
 }
