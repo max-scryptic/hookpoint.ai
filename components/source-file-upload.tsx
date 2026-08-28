@@ -3,14 +3,17 @@
 import { useEffect, useRef, useState } from "react"
 import {
   AlertTriangleIcon,
+  CheckIcon,
   CheckCircle2Icon,
   FileVideoIcon,
   Loader2Icon,
   RefreshCwIcon,
   TrashIcon,
   UploadIcon,
+  XIcon,
   XCircleIcon,
 } from "lucide-react"
+import { useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -304,6 +307,7 @@ export function SourceFileUpload({
   filenameSimilarityThreshold: number
   initialSourceFile: SerialisedSourceFile | null
 }) {
+  const router = useRouter()
   const [sourceFile, setSourceFile] = useState<SerialisedSourceFile | null>(
     initialSourceFile,
   )
@@ -318,6 +322,7 @@ export function SourceFileUpload({
   // Shows the "upload succeeded, analysis started in the background" dialog once
   // a fresh upload completes validation.
   const [showUploadedDialog, setShowUploadedDialog] = useState(false)
+  const [showUpgradeDialog, setShowUpgradeDialog] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Whether a stored record is in a settled (non-in-flight) state.
@@ -419,6 +424,11 @@ export function SourceFileUpload({
       const hasTarget =
         "upload" in initData || "multipartUpload" in initData
       if (!initRes.ok || !hasTarget) {
+        if ("error" in initData && initData.error === "uploads_not_included") {
+          setClient({ phase: "idle" })
+          setShowUpgradeDialog(true)
+          return
+        }
         setClient({
           phase: "error",
           message:
@@ -650,7 +660,143 @@ export function SourceFileUpload({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ReportComparisonDialog
+        open={showUpgradeDialog}
+        onOpenChange={setShowUpgradeDialog}
+        onUpgrade={() => router.push("/pricing")}
+      />
     </section>
+  )
+}
+
+function ReportComparisonDialog({
+  open,
+  onOpenChange,
+  onUpgrade,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onUpgrade: () => void
+}) {
+  const rows = [
+    {
+      feature: "Retention curve and key moments",
+      basic: true,
+      complete: true,
+    },
+    { feature: "Script analysis", basic: true, complete: true },
+    { feature: "Pacing analysis", basic: true, complete: true },
+    { feature: "Title and thumbnail check", basic: true, complete: true },
+    { feature: "Video analysis, frame by frame", basic: false, complete: true },
+    { feature: "Audio analysis", basic: false, complete: true },
+    { feature: "Cuts and scene changes", basic: false, complete: true },
+    {
+      feature: "Play key moments back in the report",
+      basic: false,
+      complete: true,
+    },
+  ]
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-5xl gap-8 overflow-y-auto bg-[#222943] p-6 text-white sm:p-10 lg:p-12">
+        <DialogHeader className="gap-4 pr-8">
+          <DialogTitle className="text-xl font-semibold text-white sm:text-2xl">
+            Basic and complete reports
+          </DialogTitle>
+          <DialogDescription className="max-w-4xl text-base leading-7 text-slate-300 sm:text-lg sm:leading-8">
+            A basic report reads your retention curve and your script. A
+            complete report also watches the video itself, so it can tell you
+            what was on screen when people left.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(4.75rem,12rem)_minmax(4.75rem,12rem)] items-center sm:grid-cols-[minmax(0,1fr)_minmax(7rem,12rem)_minmax(7rem,12rem)]">
+          <div />
+          <PlanColumnHeader title="Basic" subtitle="Free" />
+          <PlanColumnHeader
+            title="Complete"
+            subtitle={
+              <>
+                <span className="font-semibold text-white">Starter</span> and{" "}
+                <span className="font-semibold text-white">Pro</span>
+              </>
+            }
+          />
+
+          {rows.map((row) => (
+            <ReportComparisonRow
+              key={row.feature}
+              feature={row.feature}
+              basic={row.basic}
+              complete={row.complete}
+            />
+          ))}
+        </div>
+
+        <div className="-mx-4 rounded-xl bg-[#202740] p-4 sm:-mx-6 sm:p-6">
+          <p className="text-lg font-medium leading-7 text-slate-300">
+            Upgrade to{" "}
+            <span className="font-semibold text-white">Starter</span> or{" "}
+            <span className="font-semibold text-white">Pro</span> to unlock
+            complete reports, and much more, now.
+          </p>
+          <Button className="mt-6 px-5 text-base" onClick={onUpgrade}>
+            Upgrade Plan
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function PlanColumnHeader({
+  title,
+  subtitle,
+}: {
+  title: string
+  subtitle: React.ReactNode
+}) {
+  return (
+    <div className="border-b border-white/15 px-3 pb-4 text-center sm:px-6">
+      <p className="text-base font-semibold text-white sm:text-lg">{title}</p>
+      <p className="mt-1 text-sm font-medium text-slate-300 sm:text-base">
+        {subtitle}
+      </p>
+    </div>
+  )
+}
+
+function ReportComparisonRow({
+  feature,
+  basic,
+  complete,
+}: {
+  feature: string
+  basic: boolean
+  complete: boolean
+}) {
+  return (
+    <>
+      <div className="border-b border-white/15 py-4 text-base font-semibold text-white sm:text-lg">
+        {feature}
+      </div>
+      <ReportComparisonCell included={basic} />
+      <ReportComparisonCell included={complete} />
+    </>
+  )
+}
+
+function ReportComparisonCell({ included }: { included: boolean }) {
+  return (
+    <div className="flex justify-center border-b border-white/15 px-3 py-4 sm:px-6">
+      {included ? (
+        <CheckIcon className="size-5 text-emerald-400" />
+      ) : (
+        <XIcon className="size-5 text-slate-500" />
+      )}
+    </div>
   )
 }
 
