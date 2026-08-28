@@ -1,4 +1,4 @@
-import { CircleCheckIcon, FileTextIcon, Loader2Icon } from "lucide-react"
+import { Loader2Icon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -38,29 +38,26 @@ export function ReportTypeUpgradeHint() {
 // analysed videos table and the source-file card. Complete earns the green;
 // Basic stays neutral so the pair reads as a ladder rather than two equal
 // options; Processing borrows the amber the rest of the pipeline's in-flight
-// states use.
+// states use. The settled states are text alone - only Processing keeps an
+// icon, and only because the spinner carries the "still running" part.
 const REPORT_TYPE_META: Record<
   ReportType,
   {
     label: string
-    icon: typeof CircleCheckIcon
     tone: string
     title?: string
   }
 > = {
   basic: {
     label: "Basic",
-    icon: FileTextIcon,
     tone: "border-border bg-muted text-foreground/80",
   },
   complete: {
     label: "Complete",
-    icon: CircleCheckIcon,
     tone: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-400/10 dark:text-emerald-300",
   },
   processing: {
     label: "Processing…",
-    icon: Loader2Icon,
     tone: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:border-amber-400/40 dark:bg-amber-400/10 dark:text-amber-300",
     title:
       "Deeper analysis is still running. This updates automatically when it finishes.",
@@ -74,7 +71,7 @@ export function ReportTypeBadge({
   type: ReportType
   className?: string
 }) {
-  const { label, icon: Icon, tone, title } = REPORT_TYPE_META[type]
+  const { label, tone, title } = REPORT_TYPE_META[type]
   return (
     <span
       title={title}
@@ -84,12 +81,9 @@ export function ReportTypeBadge({
         className,
       )}
     >
-      <Icon
-        className={cn(
-          "size-3.5 shrink-0",
-          type === "processing" && "animate-spin",
-        )}
-      />
+      {type === "processing" && (
+        <Loader2Icon className="size-3.5 shrink-0 animate-spin" />
+      )}
       {label}
     </span>
   )
