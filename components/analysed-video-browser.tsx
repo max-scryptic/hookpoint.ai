@@ -194,12 +194,30 @@ function formatAnalysedAt(iso: string): string {
 
 // What separates the two report types, and - for anyone who cannot upload a
 // source file yet - how to get the complete one. Shown from the info affordance
-// on the Report Type column header.
-const REPORT_TYPE_EXPLAINER =
-  "Basic reports read your retention curve and transcript. Complete reports also read your uploaded source file frame by frame, so every key moment is judged on what viewers actually saw."
+// on the Report Type column header. The two report names and the thing that
+// actually distinguishes them carry the emphasis, so the paragraph can be
+// skimmed rather than read end to end.
+function ReportTypeExplainer() {
+  return (
+    <span>
+      <strong className="font-semibold">Basic</strong> reports read your
+      retention curve and transcript.{" "}
+      <strong className="font-semibold">Complete</strong> reports also read your
+      uploaded source file{" "}
+      <strong className="font-semibold">frame by frame</strong>, so every key
+      moment is judged on what viewers actually saw.
+    </span>
+  )
+}
 
-const REPORT_TYPE_UPGRADE_HINT =
-  "Upgrade to Starter or Pro to upload your source files and unlock complete reports."
+function ReportTypeUpgradeHint() {
+  return (
+    <span>
+      Upgrade to <strong className="font-semibold">Starter or Pro</strong> to
+      upload your source files and unlock complete reports.
+    </span>
+  )
+}
 
 // Shown for videos whose raw source file has been uploaded and whose deep
 // analysis has finished - the signal that a video carries the complete report
@@ -236,8 +254,8 @@ function ReportTypeInfo({ showUpgradeHint }: { showUpgradeHint: boolean }) {
         <InfoIcon className="size-3.5" />
       </TooltipTrigger>
       <TooltipContent className="flex max-w-xs flex-col items-start gap-1.5 py-2 text-left leading-relaxed">
-        <span>{REPORT_TYPE_EXPLAINER}</span>
-        {showUpgradeHint && <span>{REPORT_TYPE_UPGRADE_HINT}</span>}
+        <ReportTypeExplainer />
+        {showUpgradeHint && <ReportTypeUpgradeHint />}
       </TooltipContent>
     </Tooltip>
   )
