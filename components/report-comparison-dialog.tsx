@@ -127,7 +127,7 @@ export function ReportComparisonDialog() {
 
         {/* The close: one line and a button. The table above has already made
             the case, so this only has to name the next step. */}
-        <div className="flex flex-col items-start gap-3 rounded-lg border bg-muted/30 p-4">
+        <div className="flex flex-col items-start gap-3 rounded-lg bg-muted/30 p-4">
           <p className="text-sm leading-relaxed text-muted-foreground">
             Upgrade to Starter or Pro to unlock complete reports, and much more,
             now.
