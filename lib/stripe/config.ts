@@ -34,12 +34,14 @@ export function getAppBaseUrl(): string | null {
   return null
 }
 
-// The settings page users are sent back to after adding/managing a card. Stripe
-// requires absolute URLs for redirects, so build them from the base URL.
-export function getBillingReturnUrl(status?: "added" | "cancelled"): string {
+// The settings page users are sent back to after a visit to the Stripe Customer
+// Portal. Stripe requires absolute URLs for redirects, so build it from the base
+// URL. The `billing=updated` flag tells the settings page to reconcile against
+// Stripe on arrival rather than wait for the webhook.
+export function getBillingReturnUrl(): string {
   const base = getAppBaseUrl() ?? ""
   const url = new URL("/settings", base || "http://localhost:3000")
-  if (status) url.searchParams.set("billing", status)
+  url.searchParams.set("billing", "updated")
   return url.toString()
 }
 
