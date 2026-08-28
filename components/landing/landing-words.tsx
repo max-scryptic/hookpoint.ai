@@ -34,6 +34,12 @@ export type WordRun = {
 
 const SWEEP_FROM = "var(--color-primary)"
 const SWEEP_TO = "var(--color-chart-3)"
+/**
+ * How far along the sweep the last word gets, as a percentage. Well short of
+ * the far end, so the run stays one colour that shifts rather than reading as a
+ * two-tone gradient laid across the heading.
+ */
+const SWEEP_SPAN = 35
 
 export function RevealWords({
   runs,
@@ -103,7 +109,8 @@ function sweepStyle(
 
   const ends = sweep === true ? {} : sweep
   // A single word sits at the start of the sweep rather than dividing by zero.
-  const position = count > 1 ? Math.round((index / (count - 1)) * 100) : 0
+  const position =
+    count > 1 ? Math.round((index / (count - 1)) * SWEEP_SPAN) : 0
 
   return {
     color: `color-mix(in oklch, ${ends.from ?? SWEEP_FROM}, ${
