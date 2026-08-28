@@ -11,9 +11,22 @@ import { syncSubscriptionFromStripe } from "@/lib/billing/subscriptions"
 // would buffer/transform it.
 export const runtime = "nodejs"
 
-// Re-reads the customer's current default card from Stripe and writes it to our
-// cache. Clearing (no default) is expressed by passing null, which the settings
-// page renders as "no payment method on file".
+// The card of a payment method object, or null when it isn't a card (or wasn't
+// expanded into a full object).
+function cardOf(
+  paymentMethod: string | Stripe.PaymentMethod | null | undefined,
+): Stripe.PaymentMethod.Card | null {
+  if (!paymentMethod || typeof paymentMethod === "string") return null
+  return paymentMethod.type === "card" ? (paymentMethod.card ?? null) : null
+}
+
+// Re-reads the card that future invoices will be charged to and writes it to our
+// cache. The customer's invoice_settings default wins; failing that we fall back
+// to the payment method on their subscription, which is what subscription-mode
+// Checkout sets. Without that fallback a subscriber who paid through Checkout
+// can end up with no cached card at all - and since cards are only ever entered
+// during Checkout or in the Customer Portal, the settings page would then show
+// an empty card for a paying user. Null means "no card on file".
 async function syncDefaultCard(
   stripe: Stripe,
   customerId: string,
@@ -24,11 +37,17 @@ async function syncDefaultCard(
 
   if (customer.deleted) return
 
-  const defaultPm = customer.invoice_settings?.default_payment_method
-  const card =
-    defaultPm && typeof defaultPm !== "string" && defaultPm.type === "card"
-      ? (defaultPm.card ?? null)
-      : null
+  let card = cardOf(customer.invoice_settings?.default_payment_method)
+
+  if (!card) {
+    const subscriptions = await stripe.subscriptions.list({
+      customer: customerId,
+      status: "all",
+      limit: 1,
+      expand: ["data.default_payment_method"],
+    })
+    card = cardOf(subscriptions.data[0]?.default_payment_method)
+  }
 
   await updateCachedCard(customerId, card)
 }
@@ -69,47 +88,27 @@ export async function POST(request: NextRequest) {
 
   try {
     switch (event.type) {
+      // A "subscription mode" Checkout finished: the subscription now exists.
+      // Persist our projection of it so the user's plan + billing window take
+      // effect immediately, without waiting for the separate
+      // customer.subscription.created event. The card the user just entered is
+      // cached here too - Checkout is the only place a card is ever added, so
+      // this is what fills the settings page's payment method.
       case "checkout.session.completed": {
         const session = event.data.object
+        if (session.mode !== "subscription" || !session.subscription) break
 
-        // A "subscription mode" Checkout finished: the subscription now exists.
-        // Persist our projection of it so the user's plan + billing window take
-        // effect immediately, without waiting for the separate
-        // customer.subscription.created event.
-        if (session.mode === "subscription" && session.subscription) {
-          const subscriptionId =
-            typeof session.subscription === "string"
-              ? session.subscription
-              : session.subscription.id
-          await syncSubscriptionFromStripe(subscriptionId)
-          break
-        }
-
-        // A "setup mode" Checkout finished: the card is saved to the customer
-        // but not yet their default. Promote it, then cache it.
-        if (session.mode !== "setup" || !session.setup_intent) break
-
-        const setupIntentId =
-          typeof session.setup_intent === "string"
-            ? session.setup_intent
-            : session.setup_intent.id
-        const setupIntent = await stripe.setupIntents.retrieve(setupIntentId)
+        const subscriptionId =
+          typeof session.subscription === "string"
+            ? session.subscription
+            : session.subscription.id
+        await syncSubscriptionFromStripe(subscriptionId)
 
         const customerId =
-          typeof setupIntent.customer === "string"
-            ? setupIntent.customer
-            : (setupIntent.customer?.id ?? null)
-        const paymentMethodId =
-          typeof setupIntent.payment_method === "string"
-            ? setupIntent.payment_method
-            : (setupIntent.payment_method?.id ?? null)
-
-        if (!customerId || !paymentMethodId) break
-
-        await stripe.customers.update(customerId, {
-          invoice_settings: { default_payment_method: paymentMethodId },
-        })
-        await syncDefaultCard(stripe, customerId)
+          typeof session.customer === "string"
+            ? session.customer
+            : (session.customer?.id ?? null)
+        if (customerId) await syncDefaultCard(stripe, customerId)
         break
       }
 
@@ -127,7 +126,17 @@ export async function POST(request: NextRequest) {
       case "customer.subscription.created":
       case "customer.subscription.updated":
       case "customer.subscription.deleted": {
-        await syncSubscriptionFromStripe(event.data.object.id)
+        const subscription = event.data.object
+        await syncSubscriptionFromStripe(subscription.id)
+
+        // A card swapped in the Customer Portal lands on the subscription, which
+        // doesn't always touch invoice_settings (and so doesn't always fire
+        // customer.updated). Re-read here so the cached card follows it.
+        const customerId =
+          typeof subscription.customer === "string"
+            ? subscription.customer
+            : (subscription.customer?.id ?? null)
+        if (customerId) await syncDefaultCard(stripe, customerId)
         break
       }
 

@@ -162,9 +162,18 @@ export function SettingsBillingUsage({
 
       <SettingsSection
         title="Payments & Invoices"
-        description="Manage your payment method and review past invoices."
+        description={
+          isFree
+            ? "Review your past invoices."
+            : "Manage your payment method and review past invoices."
+        }
       >
-        <BillingPaymentMethod card={paymentCard} enabled={billingEnabled} />
+        {/* Only subscribers have a card: one is entered during the Checkout that
+            pays for the plan, never added from here. On Free there is nothing to
+            manage, so the card is hidden rather than shown empty. */}
+        {isFree ? null : (
+          <BillingPaymentMethod card={paymentCard} enabled={billingEnabled} />
+        )}
 
         <Card>
           <CardHeader>

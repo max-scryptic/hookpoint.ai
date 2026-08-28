@@ -43,15 +43,16 @@ function firstSearchParam(value: string | string[] | undefined): string | null {
   return value ?? null
 }
 
-// If Stripe redirects back after a portal cancellation, reconcile immediately
-// before rendering. The webhook still handles eventual consistency for every
-// other visit.
+// When Stripe redirects back from the Customer Portal, reconcile immediately
+// before rendering so a change made there (a swapped card, a cancellation) shows
+// up at once. The webhook still handles eventual consistency for every other
+// visit.
 async function syncBillingReturn(
   userId: string,
   searchParams: SettingsPageProps["searchParams"],
 ): Promise<void> {
   const params = searchParams ? await searchParams : {}
-  if (firstSearchParam(params.billing) !== "cancelled" || !isStripeEnabled()) {
+  if (firstSearchParam(params.billing) !== "updated" || !isStripeEnabled()) {
     return
   }
 

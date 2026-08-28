@@ -19,10 +19,11 @@ function formatBrand(brand: string): string {
   return brand.charAt(0).toUpperCase() + brand.slice(1)
 }
 
-// The "Payment method" card. When Stripe is configured, the button starts a
-// Stripe-hosted flow: a Checkout "setup" session to add a first card, or the
-// Customer Portal to manage/remove an existing one. Both redirect to Stripe and
-// back to /settings; the card shown here is our webhook-synced cache.
+// The "Payment method" card, rendered only for users on a paid plan. Cards are
+// never added here: a card arrives with the subscription itself, entered during
+// the Stripe Checkout that pays for the plan. All this offers is the Stripe
+// Customer Portal, where a subscriber can replace the card that future renewals
+// will be charged to. The card shown is our webhook-synced cache.
 export function BillingPaymentMethod({
   card,
   enabled,
@@ -33,13 +34,11 @@ export function BillingPaymentMethod({
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function go(endpoint: "setup-session" | "portal") {
+  async function openPortal() {
     setIsLoading(true)
     setError(null)
     try {
-      const response = await fetch(`/api/billing/${endpoint}`, {
-        method: "POST",
-      })
+      const response = await fetch("/api/billing/portal", { method: "POST" })
       const data = (await response.json()) as { url?: string; error?: string }
       if (!response.ok || !data.url) {
         throw new Error(data.error ?? "Something went wrong.")
@@ -51,9 +50,6 @@ export function BillingPaymentMethod({
       setIsLoading(false)
     }
   }
-
-  const actionLabel = card ? "Manage payment method" : "Add payment method"
-  const endpoint = card ? "portal" : "setup-session"
 
   const expiry =
     card?.expMonth && card.expYear
@@ -72,9 +68,9 @@ export function BillingPaymentMethod({
             variant="outline"
             size="sm"
             disabled={!enabled || isLoading}
-            onClick={() => go(endpoint)}
+            onClick={openPortal}
           >
-            {isLoading ? "Redirecting…" : actionLabel}
+            {isLoading ? "Redirecting…" : "Manage payment method"}
           </Button>
         </CardAction>
       </CardHeader>
@@ -99,7 +95,7 @@ export function BillingPaymentMethod({
           <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
             {!enabled
               ? "Card payments aren’t enabled yet."
-              : "Add a card to upgrade your plan and unlock paid features."}
+              : "We couldn’t load the card on your subscription. Open the billing portal to review it."}
           </div>
         )}
         {error ? (
