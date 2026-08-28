@@ -79,7 +79,10 @@ export function ReportComparisonDialog() {
           </DialogDescription>
         </DialogHeader>
 
-        <table className="w-full border-separate border-spacing-0 text-sm">
+        {/* The vertical margins are on top of the dialog's own gap: the table
+            reads as cramped without a little more air above the column headers
+            and below the last row. */}
+        <table className="my-3 w-full border-separate border-spacing-0 text-sm">
           <thead>
             <tr>
               <th scope="col" className="sr-only">
@@ -129,7 +132,7 @@ export function ReportComparisonDialog() {
             the case, so this only has to name the next step. No inset panel
             here, so the copy starts on the same left edge as the title, the
             description and the table rows. */}
-        <div className="flex flex-col items-start gap-3 pt-1">
+        <div className="flex flex-col items-start gap-3">
           <p className="text-sm leading-relaxed text-muted-foreground">
             Upgrade to Starter or Pro to unlock complete reports, and much more,
             now.
