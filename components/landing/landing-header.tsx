@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { MenuIcon, MoonIcon, SunIcon, XIcon } from "lucide-react"
-import { useTheme } from "next-themes"
+import { MenuIcon, XIcon } from "lucide-react"
 
 import { BrandLogo } from "@/components/brand-logo"
 import { cn } from "@/lib/utils"
@@ -11,6 +10,15 @@ import { cn } from "@/lib/utils"
 // The landing page is one page, so the nav is not navigation in the usual
 // sense: every link is an anchor that scrolls to a section further down. The
 // only links that leave the page are the account ones on the right.
+//
+// LOOK: a fixed bar with no fill of its own over the hero, typographic links at
+// 13px, and one high-contrast control at the end. That control is the white
+// pill, not the acid-lime button: lime is spent on the action inside the page,
+// and two of them in one view would leave neither reading as the one to press.
+//
+// There is no theme switch here. The page holds its own dark theme whatever the
+// app is set to (see #landing-root in globals.css), so a control offering to
+// change it would have nothing to change. The app's own switch is in settings.
 //
 // COPY GUARDRAIL: no em or en dashes anywhere in this file. Hyphens are fine.
 
@@ -70,31 +78,33 @@ export function LandingHeader({ isAuthenticated }: { isAuthenticated: boolean })
   return (
     <header
       className={cn(
-        "fixed inset-x-0 top-0 z-50 transition-colors duration-200",
+        "fixed inset-x-0 top-0 z-50 border-b transition-colors duration-200",
         scrolled || menuOpen
-          ? "border-b bg-background/85 backdrop-blur-lg"
-          : "border-b border-transparent"
+          ? "border-graphite bg-void/80 backdrop-blur-lg"
+          : "border-transparent"
       )}
     >
-      <div className="mx-auto flex h-16 w-full max-w-6xl items-center gap-3 px-4 sm:px-6">
+      <div className="mx-auto flex h-16 w-full max-w-[1200px] items-center gap-3 px-4 sm:px-6">
         <Link
           href="/"
-          className="flex items-center gap-2 font-heading text-base font-semibold tracking-tight"
+          className="flex items-center gap-2.5 text-[16px] font-w510 tracking-ui text-paper"
         >
-          <BrandLogo className="size-8" />
+          {/* White tile, not lime: the mark identifies the product, it is not
+              something to press. */}
+          <BrandLogo className="size-7 rounded-[6px] bg-paper" />
           Viewlio
         </Link>
 
-        <nav className="ml-6 hidden items-center gap-1 md:flex">
+        <nav className="ml-8 hidden items-center gap-1 md:flex">
           {SECTIONS.map((section) => (
             <a
               key={section.id}
               href={`#${section.id}`}
               className={cn(
-                "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+                "px-3 py-2 text-[13px] transition-colors",
                 activeSection === section.id
-                  ? "text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
+                  ? "text-paper"
+                  : "text-mist hover:text-paper"
               )}
             >
               {section.label}
@@ -102,13 +112,11 @@ export function LandingHeader({ isAuthenticated }: { isAuthenticated: boolean })
           ))}
         </nav>
 
-        <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
-          <ThemeToggle />
-
+        <div className="ml-auto flex items-center gap-1 sm:gap-2">
           {isAuthenticated ? (
             <Link
               href="/analyse-video"
-              className="inline-flex h-9 items-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              className="inline-flex h-9 items-center rounded-full bg-paper px-4 text-[13px] font-w510 tracking-ui text-void transition-colors hover:bg-bone"
             >
               Go to app
             </Link>
@@ -116,13 +124,14 @@ export function LandingHeader({ isAuthenticated }: { isAuthenticated: boolean })
             <>
               <Link
                 href="/login"
-                className="hidden h-9 items-center rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:inline-flex"
+                className="hidden h-9 items-center rounded-[6px] px-3 text-[13px] text-mist transition-colors hover:text-paper sm:inline-flex"
               >
                 Log in
               </Link>
+              {/* The one high-contrast control in the bar. */}
               <Link
                 href="/signup"
-                className="inline-flex h-9 items-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+                className="inline-flex h-9 items-center rounded-full bg-paper px-4 text-[13px] font-w510 tracking-ui text-void transition-colors hover:bg-bone"
               >
                 Start free
               </Link>
@@ -134,7 +143,7 @@ export function LandingHeader({ isAuthenticated }: { isAuthenticated: boolean })
             aria-label={menuOpen ? "Close menu" : "Open menu"}
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((open) => !open)}
-            className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:hidden"
+            className="inline-flex size-9 items-center justify-center rounded-[6px] text-fog transition-colors hover:bg-white/5 hover:text-paper md:hidden"
           >
             {menuOpen ? (
               <XIcon className="size-5" />
@@ -146,13 +155,13 @@ export function LandingHeader({ isAuthenticated }: { isAuthenticated: boolean })
       </div>
 
       {menuOpen && (
-        <nav className="border-t bg-background/95 px-4 py-3 backdrop-blur-lg md:hidden">
+        <nav className="border-t border-graphite bg-void/95 px-4 py-3 backdrop-blur-lg md:hidden">
           {SECTIONS.map((section) => (
             <a
               key={section.id}
               href={`#${section.id}`}
               onClick={() => setMenuOpen(false)}
-              className="block rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="block rounded-[6px] px-3 py-2.5 text-[13px] text-mist transition-colors hover:bg-white/5 hover:text-paper"
             >
               {section.label}
             </a>
@@ -161,7 +170,7 @@ export function LandingHeader({ isAuthenticated }: { isAuthenticated: boolean })
             <Link
               href="/login"
               onClick={() => setMenuOpen(false)}
-              className="block rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:hidden"
+              className="block rounded-[6px] px-3 py-2.5 text-[13px] text-mist transition-colors hover:bg-white/5 hover:text-paper sm:hidden"
             >
               Log in
             </Link>
@@ -169,28 +178,5 @@ export function LandingHeader({ isAuthenticated }: { isAuthenticated: boolean })
         </nav>
       )}
     </header>
-  )
-}
-
-// A two-state light and dark switch. The app itself offers a third "system"
-// option, but a marketing page wants one small control, so this flips between
-// the two resolved states and leaves the richer picker to the settings screen.
-function ThemeToggle() {
-  const { resolvedTheme, setTheme } = useTheme()
-
-  return (
-    <button
-      type="button"
-      aria-label="Toggle light and dark theme"
-      onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-      className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-    >
-      {/* Which glyph shows is decided by the theme class on the document rather
-          than by React state. The server cannot know the reader's theme, so
-          picking the icon in render would either mismatch on hydration or need
-          a mounted flag and a frame of empty space; CSS just gets it right. */}
-      <SunIcon className="hidden size-[1.15rem] dark:block" />
-      <MoonIcon className="size-[1.15rem] dark:hidden" />
-    </button>
   )
 }

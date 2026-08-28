@@ -22,6 +22,12 @@ import { cn } from "@/lib/utils"
 // here is the button: nobody on this page has an account yet, so each card
 // points at sign-up rather than at a checkout session.
 //
+// LOOK: three cards on one row of carbon, separated from the canvas by their
+// hairlines rather than by any shadow. Exactly one button in the row is filled
+// with the accent, on the featured plan, and the other two are outlined: a row
+// of three lime buttons would be three of the page's single loudest element
+// side by side, and none of them would mean anything.
+//
 // COPY GUARDRAIL: no em or en dashes anywhere in this file. Hyphens are fine.
 
 export function LandingPricing({
@@ -47,7 +53,7 @@ export function LandingPricing({
         ))}
       </div>
 
-      <p className="text-center text-xs text-muted-foreground">
+      <p className="text-center text-[13px] leading-[1.4] text-fog">
         Prices in GBP. Cancel or change plan at any time from your settings.
       </p>
     </div>
@@ -68,7 +74,7 @@ function BillingToggle({
       <div
         role="radiogroup"
         aria-label="Billing period"
-        className="inline-flex items-center gap-1 rounded-xl border bg-card p-1"
+        className="inline-flex items-center gap-1 rounded-full border border-graphite bg-carbon p-1"
       >
         {(["monthly", "annual"] as const).map((option) => (
           <button
@@ -78,20 +84,22 @@ function BillingToggle({
             aria-checked={period === option}
             onClick={() => onChange(option)}
             className={cn(
-              "rounded-lg px-4 py-2 text-sm font-medium transition-colors",
+              "rounded-full px-4 py-1.5 text-[13px] tracking-ui transition-colors",
+              // The selected side is a neutral fill, not the accent one. This
+              // is a filter, not the thing the section is asking for.
               period === option
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:text-foreground"
+                ? "bg-white/10 text-paper"
+                : "text-fog hover:text-paper"
             )}
           >
             {option === "monthly" ? "Monthly" : "Annual"}
             {option === "annual" && saving > 0 && (
               <span
                 className={cn(
-                  "ml-2 rounded-md px-1.5 py-0.5 text-[10px] font-semibold",
+                  "ml-2 rounded-[4px] px-1.5 py-0.5 text-[12px] leading-[1.5]",
                   period === "annual"
-                    ? "bg-primary-foreground/20"
-                    : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                    ? "bg-white/10 text-mist"
+                    : "bg-pulse-green/15 text-pulse-green"
                 )}
               >
                 Save {saving}%
@@ -127,30 +135,35 @@ function PlanCard({
     <Reveal
       delay={delay}
       className={cn(
-        "group relative flex flex-col rounded-2xl border bg-card p-6 transition duration-300 hover:-translate-y-1.5",
+        // The featured card is picked out by a near-white edge, which is the
+        // brightest an edge gets in this system, rather than by a shadow or a
+        // tint. Everything else is a graphite hairline that warms on hover.
+        "group relative flex flex-col rounded-[12px] border bg-carbon p-6 transition-colors duration-300",
         plan.featured
-          ? "border-primary/40 shadow-xl shadow-primary/10 ring-1 ring-primary/20 hover:shadow-2xl hover:shadow-primary/20"
-          : "hover:border-primary/30 hover:shadow-xl hover:shadow-primary/5"
+          ? "border-mist/60 hover:border-mist"
+          : "border-graphite hover:border-smoke"
       )}
     >
       {plan.featured && (
-        <span className="absolute -top-3 left-6 rounded-full bg-primary px-3 py-1 text-[11px] font-semibold text-primary-foreground shadow-lg shadow-primary/25">
+        <span className="absolute -top-3 left-6 rounded-full bg-paper px-3 py-1 text-[12px] leading-[1.4] font-w510 tracking-ui text-void">
           Most popular
         </span>
       )}
 
-      <h3 className="font-heading text-lg font-semibold">{plan.name}</h3>
-      <p className="mt-1 text-sm text-muted-foreground">{plan.tagline}</p>
+      <h3 className="text-[17px] leading-[1.4] font-w590 tracking-copy text-paper">
+        {plan.name}
+      </h3>
+      <p className="mt-1.5 text-[13px] leading-[1.4] text-fog">{plan.tagline}</p>
 
-      <div className="mt-5 flex items-baseline gap-1.5">
-        <span className="font-heading text-4xl font-semibold tracking-tight">
+      <div className="mt-6 flex items-baseline gap-1.5">
+        <span className="text-[32px] leading-[1.13] font-w510 tracking-display text-paper">
           {pence == null || pence === 0 ? "Free" : formatGbp(pence)}
         </span>
         {pence != null && pence > 0 && (
-          <span className="text-sm text-muted-foreground">/ month</span>
+          <span className="text-[13px] text-fog">/ month</span>
         )}
       </div>
-      <p className="mt-1 h-4 text-xs text-muted-foreground">
+      <p className="mt-1.5 h-4 text-[12px] leading-[1.4] text-fog">
         {!isFree &&
           period === "annual" &&
           plan.priceAnnualPence != null &&
@@ -161,29 +174,36 @@ function PlanCard({
 
       <ul className="mt-6 flex-1 space-y-3">
         {plan.features.map((feature) => (
-          <li key={feature.label} className="flex items-start gap-2.5 text-sm">
+          <li
+            key={feature.label}
+            className="flex items-start gap-2.5 text-[15px]"
+          >
             <CheckIcon
               className={cn(
-                "mt-0.5 size-4 shrink-0",
-                plan.featured ? "text-primary" : "text-muted-foreground"
+                "mt-[3px] size-3.5 shrink-0",
+                plan.featured ? "text-mist" : "text-fog"
               )}
             />
-            <span className="text-foreground/85">{feature.label}</span>
+            <span className="leading-[1.6] tracking-ui text-mist">
+              {feature.label}
+            </span>
           </li>
         ))}
       </ul>
 
       {hasCredits && (
-        <p className="mt-4 text-xs text-muted-foreground">{CREDITS_TOOLTIP}</p>
+        <p className="mt-4 text-[12px] leading-[1.5] text-fog">
+          {CREDITS_TOOLTIP}
+        </p>
       )}
 
       <Link
         href={href}
         className={cn(
-          "mt-6 inline-flex h-10 items-center justify-center rounded-lg text-sm font-medium transition duration-300",
+          "mt-6 inline-flex h-10 items-center justify-center rounded-[6px] text-sm font-w510 tracking-ui transition-colors duration-200",
           plan.featured
-            ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20 hover:bg-primary/90 hover:shadow-lg hover:shadow-primary/30"
-            : "border bg-background hover:border-primary/30 hover:bg-muted"
+            ? "linear-action-shadow bg-acid-lime text-void hover:bg-[#eefa4a]"
+            : "border border-graphite text-mist hover:border-smoke hover:bg-white/[0.03] hover:text-paper"
         )}
       >
         {isFree ? "Start for free" : `Choose ${plan.name}`}

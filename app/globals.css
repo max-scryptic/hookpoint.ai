@@ -92,17 +92,64 @@ body {
   }
 }
 
+/* Inter is loaded in app/layout.tsx and reached through its variable. The name
+ * on its own only ever matched a copy the reader happened to have installed,
+ * which for most of them meant the system face instead. */
 body {
   margin: 0;
   font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+    var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * The landing palette
+ * ---------------------------------------------------------------------------
+ * A fixed, midnight scale used by the public front page and nothing else. It is
+ * a flat set of literals rather than another pair of light/dark token tiers,
+ * because the landing page has one look: a near-black canvas, paper-white type,
+ * a grey scale for everything in between, and a single electric accent that is
+ * only ever worn by the one action a screen is asking for.
+ *
+ * The supporting chromatics (violet, lavender, teal, green, coral) are for
+ * tags, chart lines and the imagery. They are never actions.
+ */
+@theme {
+  --color-void: #08090a;
+  --color-carbon: #0f1011;
+  --color-obsidian: #161718;
+  --color-graphite: #23252a;
+  --color-smoke: #383b3f;
+  --color-ash: #62666d;
+  --color-fog: #8a8f98;
+  --color-mist: #d0d6e0;
+  --color-bone: #e5e5e6;
+  --color-paper: #ffffff;
+  --color-acid-lime: #e4f222;
+  --color-pulse-green: #27a644;
+  --color-coral-red: #eb5757;
+  --color-signal-teal: #02b8cc;
+  --color-iris-violet: #6366f1;
+  --color-lavender: #8b5cf6;
+
+  /* The weight band the landing page stays inside. Nothing on it is bolder
+   * than 590: emphasis comes from colour and size, never from weight. */
+  --font-weight-w510: 510;
+  --font-weight-w590: 590;
+
+  /* Tracking tightens as type grows. `display` is for 32px and up, `copy` for
+   * the 20 to 24px band, `ui` for buttons, labels and small copy. */
+  --tracking-display: -0.022em;
+  --tracking-copy: -0.012em;
+  --tracking-ui: -0.011em;
 }
 
 @theme inline {
-  --font-heading: var(--font-sora), Inter, ui-sans-serif, system-ui, sans-serif;
-  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", sans-serif;
+  --font-heading: var(--font-sora), var(--font-inter), ui-sans-serif, system-ui,
+    sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -189,6 +236,137 @@ body {
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.7 0.13 292);
   --landing-band: oklch(0.237 0.038 270);
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * The landing page's own theme
+ * ---------------------------------------------------------------------------
+ * The public front page is a dark surface whatever the app is set to. Rather
+ * than a second set of components, it re-points the same tokens the shared ones
+ * already read, scoped to the page's root: a card inside it is carbon on void,
+ * a border is a graphite hairline, and --primary is the acid lime the one live
+ * action on a screen is drawn in. Custom properties resolve against the nearest
+ * ancestor that sets them, so everything under #landing-root picks these up and
+ * nothing else in the app moves.
+ *
+ * The app's own light and dark themes are untouched. Following any link off
+ * this page lands in them.
+ */
+#landing-root {
+  color-scheme: dark;
+
+  /* Surfaces, in the order they stack: void is the canvas, carbon holds cards,
+   * obsidian is what floats above one, graphite is an interactive fill. */
+  --background: #08090a;
+  --foreground: #ffffff;
+  --card: #0f1011;
+  --card-foreground: #ffffff;
+  --popover: #161718;
+  --popover-foreground: #ffffff;
+  --muted: #161718;
+  --muted-foreground: #8a8f98;
+  --secondary: #161718;
+  --secondary-foreground: #d0d6e0;
+  --accent: #23252a;
+  --accent-foreground: #d0d6e0;
+
+  /* The one chromatic control on the page. */
+  --primary: #e4f222;
+  --primary-foreground: #08090a;
+
+  --destructive: #eb5757;
+  --border: #23252a;
+  --input: #23252a;
+  /* Focus does not tint: the edge simply brightens to near-white. */
+  --ring: #d0d6e0;
+
+  /* Chart colour is supporting punctuation, never the action colour: the
+   * retention curve is read as data, not as something to press. */
+  --chart-1: #6366f1;
+  --chart-2: #8b5cf6;
+  --chart-3: #02b8cc;
+  --chart-4: #27a644;
+  --chart-5: #62666d;
+
+  /* Barely above the canvas. On this page a band is a change of ground, and
+   * the hairline borders on the cards are what separate them from it. */
+  --landing-band: #0b0c0d;
+
+  /* Six for buttons and inputs, which makes the derived scale land on the
+   * three radii this page uses: 6, ~9 and ~11 for a card. */
+  --radius: 0.375rem;
+
+  /* One typeface for everything, with the alternate glyphs that give the page
+   * its voice: a single-storey a, a straight-tailed l, a slashed zero. */
+  --font-heading: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo,
+    Monaco, Consolas, monospace;
+
+  font-family: var(--font-sans);
+  font-feature-settings: "cv01" on, "ss03" on, "zero" on;
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+/* The page's canvas continues past the page itself, so an overscroll at either
+ * end shows void rather than a strip of the app's theme. */
+body:has(#landing-root) {
+  background-color: #08090a;
+}
+
+/*
+ * Elevation on the landing page is a hairline, not a shadow. A black shadow on
+ * a near-black canvas says nothing, so a surface is defined by its edge: an
+ * inset ring that sits exactly on the border box and follows whatever radius
+ * the element already has.
+ */
+.linear-edge {
+  box-shadow: inset 0 0 0 1px var(--color-graphite);
+}
+
+.linear-edge-soft {
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.04);
+}
+
+/*
+ * The one real shadow in the system, worn by the acid-lime action only: a tight
+ * stack that presses the button into the page rather than floating it above.
+ */
+.linear-action-shadow {
+  box-shadow:
+    rgba(0, 0, 0, 0.01) 0px 5px 2px 0px,
+    rgba(0, 0, 0, 0.04) 0px 3px 2px 0px,
+    rgba(0, 0, 0, 0.07) 0px 1px 1px 0px,
+    rgba(0, 0, 0, 0.08) 0px 0px 1px 0px;
+}
+
+/*
+ * The atmospheric floor under the hero: a wash that runs from the canvas up
+ * into a pale light, masked away at the sides so it reads as the product
+ * screenshot standing on something rather than as a gradient laid over the
+ * page. It is the only gradient on the landing page.
+ */
+.linear-hero-floor {
+  background-image: linear-gradient(
+    to top,
+    rgb(208 214 224 / 0.16) 0%,
+    rgb(208 214 224 / 0.05) 38%,
+    rgb(8 9 10 / 0) 100%
+  );
+  mask-image: radial-gradient(
+    ellipse 62% 100% at 50% 100%,
+    black 10%,
+    transparent 78%
+  );
+  -webkit-mask-image: radial-gradient(
+    ellipse 62% 100% at 50% 100%,
+    black 10%,
+    transparent 78%
+  );
 }
 
 @layer base {
@@ -441,18 +619,6 @@ body {
   }
 }
 
-/* The two blurred colour fields behind the hero, breathing slowly enough that
- * it reads as depth rather than as something moving on the page. */
-@keyframes landing-drift {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(2%, 4%, 0) scale(1.08);
-  }
-}
-
 @media (scripting: enabled) and (prefers-reduced-motion: no-preference) {
   /* The hero is on screen before anything has hydrated, so it plays itself in
    * from the stylesheet at first paint rather than waiting to be told to. Its
@@ -534,14 +700,6 @@ body {
    * rendered at all. */
   details[open] > .faq-answer {
     animation: landing-rise 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-
-  .landing-drift {
-    animation: landing-drift 22s ease-in-out infinite;
-  }
-
-  .landing-drift-slow {
-    animation: landing-drift 30s ease-in-out infinite reverse;
   }
 
   /* Headings, word by word. The mask is structural and always applied (see
