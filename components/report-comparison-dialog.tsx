@@ -125,20 +125,12 @@ export function ReportComparisonDialog() {
           </tbody>
         </table>
 
-        {/* Cross-video intelligence is the one thing that cannot be shown as a
-            row: it is not a section of the report but something every complete
-            report quietly adds to, and it is read on its own page rather than
-            in the report. Kept in the same words the locked Channel Trends
-            page uses, so the two never describe the feature differently. */}
+        {/* The close: one line and a button. The table above has already made
+            the case, so this only has to name the next step. */}
         <div className="flex flex-col items-start gap-3 rounded-lg border bg-muted/30 p-4">
-          <h3 className="font-heading text-sm font-medium">
-            Plus Channel Trends
-          </h3>
           <p className="text-sm leading-relaxed text-muted-foreground">
-            Every complete report adds what it found to a private library of
-            your channel. The Channel Trends page then shows what repeats across
-            all your videos: what loses viewers, what holds them, and what your
-            best videos do. No single report can tell you that.
+            Upgrade to Starter or Pro to unlock complete reports, and much more,
+            now.
           </p>
           <Link href="/pricing" className={cn(buttonVariants({ size: "sm" }))}>
             Upgrade to Starter or Pro
