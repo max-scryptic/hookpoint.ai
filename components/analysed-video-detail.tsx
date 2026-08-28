@@ -45,12 +45,6 @@ import {
   HintTargetGlow,
   useOnboardingHint,
 } from "@/components/onboarding-hints"
-import { useDeepAnalysisStatus } from "@/components/deep-analysis-progress"
-import {
-  ReportTypeBadge,
-  ReportTypeExplainer,
-  type ReportType,
-} from "@/components/report-type-badge"
 import {
   ALIGNMENT_PART_LABEL,
   PackagingAlignmentScore,
@@ -1580,43 +1574,6 @@ function MetadataHygieneSection({ video }: { video: VideoDetails }) {
 // Top-level detail
 // ---------------------------------------------------------------------------
 
-// The report type at the head of the report, kept live off the same poll the
-// source-file card reads. A creator who uploads while reading watches the pill
-// go from Basic to Processing… and, once the run lands and the poll refreshes
-// this route, to Complete, without ever reloading the page.
-function ReportTypeHeaderBadge({ reportType }: { reportType: ReportType }) {
-  const { analysing, failed } = useDeepAnalysisStatus()
-
-  // The refresh that turns a finished run into a Complete report arrives a
-  // moment after the poll stops calling itself analysing. Holding the pill on
-  // "Processing…" across that gap is what stops it blinking back to "Basic"
-  // between the two. A failed run releases the hold: nothing is coming.
-  const [sawAnalysing, setSawAnalysing] = useState(false)
-  if (analysing && !sawAnalysing) setSawAnalysing(true)
-  const awaitingRefresh = sawAnalysing && !failed && reportType !== "complete"
-
-  const live: ReportType =
-    analysing || awaitingRefresh ? "processing" : reportType
-
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <button
-            type="button"
-            className="shrink-0 cursor-default rounded-full focus-visible:outline-none"
-          />
-        }
-      >
-        <ReportTypeBadge type={live} className="text-sm" />
-      </TooltipTrigger>
-      <TooltipContent className="max-w-xs py-2 text-left leading-relaxed">
-        <ReportTypeExplainer />
-      </TooltipContent>
-    </Tooltip>
-  )
-}
-
 export function AnalysedVideoDetail({
   video,
   retention,
@@ -1629,7 +1586,6 @@ export function AnalysedVideoDetail({
   deepAnalysisEvidence = null,
   showDeepRecommendations = true,
   deepAnalysisComplete = false,
-  reportType = "basic",
 }: {
   video: VideoDetails
   retention: RetentionPoint[]
@@ -1650,11 +1606,6 @@ export function AnalysedVideoDetail({
   // teaching playback while the analysis still ran would spend the one showing
   // each hint gets on half the news.
   deepAnalysisComplete?: boolean
-  // Which of the two reports this page is, as the server read it. Defaults to
-  // Basic, the reading for a video with no source file - and the safe one for a
-  // caller that cannot resolve it, since a report claiming footage it never saw
-  // would be worse than one that undersells itself.
-  reportType?: ReportType
 }) {
   const [previewTime, setPreviewTime] = useState<number | null>(null)
   const [playbackWindow, setPlaybackWindow] = useState<{
@@ -1986,16 +1937,9 @@ export function AnalysedVideoDetail({
             />
           </div>
           <div className="flex flex-1 flex-col">
-            <div className="flex items-start justify-between gap-3">
-              <h1 className="text-2xl font-semibold tracking-normal">
-                {video.title}
-              </h1>
-              {/* Which of the two reports this page is: the same pill the
-                  analysed videos table carries, so a creator who picked a row
-                  out by its type finds it again at the head of what they
-                  opened. */}
-              <ReportTypeHeaderBadge reportType={reportType} />
-            </div>
+            <h1 className="text-2xl font-semibold tracking-normal">
+              {video.title}
+            </h1>
             <p className="mt-1 text-sm text-muted-foreground">
               Audience retention across this video, with the moments where you
               lost and held the most viewers.

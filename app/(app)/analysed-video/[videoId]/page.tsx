@@ -542,18 +542,6 @@ export default async function Page({
   const deepAnalysisComplete =
     readySourceFile != null && initialDeepAnalysisProgress?.complete === true
 
-  // Which of the two reports this page is, read the same way the analysed
-  // videos table reads it: a video with no fully-uploaded source file carries
-  // the Basic report, one whose footage is still being analysed is on its way
-  // to Complete, and only a settled pipeline has actually got there. The badge
-  // at the head of the report tracks the poll onwards from this.
-  const reportType =
-    readySourceFile == null
-      ? ("basic" as const)
-      : deepAnalysisComplete
-        ? ("complete" as const)
-        : ("processing" as const)
-
   return (
     <>
       <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
@@ -582,10 +570,9 @@ export default async function Page({
       </header>
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         {result.status === "ok" && (
-          // One poll of the deep-analysis pipeline for the whole report: the
-          // header reads it for its "Processing…" badge while a run is in
-          // flight, and the source-file card below reads it to prompt a retry
-          // when the last run failed.
+          // One poll of the deep-analysis pipeline for the whole report: it
+          // refreshes this route when a run lands, and the source-file card
+          // below reads it to prompt a retry when the last run failed.
           <DeepAnalysisStatusProvider
             videoId={videoId}
             initialProgress={initialDeepAnalysisProgress}
@@ -609,7 +596,6 @@ export default async function Page({
                 }
                 showDeepRecommendations={deepAnalysisRollout.recommendations}
                 deepAnalysisComplete={deepAnalysisComplete}
-                reportType={reportType}
               />
               {/* The foot of the report is the one slot that leads to the
                   footage-based half of it. On a paid plan that is the upload
