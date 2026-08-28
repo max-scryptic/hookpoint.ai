@@ -16,6 +16,7 @@ import { BrandLogo } from "@/components/brand-logo"
 import { LandingFaq } from "@/components/landing/landing-faq"
 import { LandingHeader } from "@/components/landing/landing-header"
 import { delayStyle } from "@/components/landing/landing-motion"
+import { Magnetic, TiltCard } from "@/components/landing/landing-pointer"
 import { LandingPricing } from "@/components/landing/landing-pricing"
 import { Reveal } from "@/components/landing/landing-reveal"
 import {
@@ -24,10 +25,12 @@ import {
   ComparisonVisual,
   EventsVisual,
   EvidenceVisual,
+  HeroChips,
   ReportVisual,
   SectionTexture,
   TrendsVisual,
 } from "@/components/landing/landing-visuals"
+import { RevealWords } from "@/components/landing/landing-words"
 import { getAuthenticatedUser } from "@/lib/auth"
 import { PLAN_BY_ID } from "@/lib/plans"
 import { cn } from "@/lib/utils"
@@ -106,7 +109,9 @@ function Section({
       // is jumped to from the nav.
       className={cn(
         "relative scroll-mt-20 px-4 py-20 sm:px-6 sm:py-24",
-        backdrop != null && "overflow-hidden",
+        // A section that clips its decoration also names the timeline that
+        // decoration parallaxes on. See landing-parallax in globals.css.
+        backdrop != null && "landing-parallax-scope overflow-hidden",
         className
       )}
     >
@@ -127,14 +132,21 @@ function SectionHeading({
   description: string
   align?: "center" | "start"
 }) {
+  // The heading animates itself a word at a time, so the wrapper only reports
+  // that the block has arrived and the eyebrow and the description ride in
+  // around it: label, then the line reading itself into place, then the
+  // paragraph once the line has finished.
+  const wordCount = title.trim().split(/\s+/).length
+
   return (
     <Reveal
+      quiet
       className={cn(
         "max-w-2xl",
         align === "center" ? "mx-auto text-center" : "text-left"
       )}
     >
-      <p className="text-sm font-semibold text-primary">
+      <p className="landing-rise text-sm font-semibold text-primary">
         <span
           // A short rule either side of the eyebrow, so the label reads as a
           // marker for the section rather than as a stray line of blue text.
@@ -154,9 +166,12 @@ function SectionHeading({
         />
       </p>
       <h2 className="mt-3 font-heading text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
-        {title}
+        <RevealWords runs={[title]} delay={90} />
       </h2>
-      <p className="mt-4 text-base leading-relaxed text-muted-foreground text-pretty">
+      <p
+        style={delayStyle(160 + wordCount * 30)}
+        className="landing-rise mt-4 text-base leading-relaxed text-muted-foreground text-pretty"
+      >
         {description}
       </p>
     </Reveal>
@@ -173,18 +188,21 @@ function PrimaryCta({
   className?: string
 }) {
   return (
-    <Link
-      href={href}
-      className={cn(
-        "group/cta inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition duration-300 hover:-translate-y-0.5 hover:bg-primary/90 hover:shadow-xl hover:shadow-primary/35",
-        className
-      )}
-    >
-      {children}
-      {/* The arrow leans into the direction it points as the button is
-          approached, which is the whole of the button's animation. */}
-      <ArrowRightIcon className="size-4 transition-transform duration-300 group-hover/cta:translate-x-1" />
-    </Link>
+    // The button leans out towards a pointer coming for it, from a wrapper that
+    // carries the pull so the link keeps its own hover lift. Any width the
+    // caller asks for is worn by both, so a full width button stays full width
+    // and the wrapper never becomes a box of its own.
+    <Magnetic className={className}>
+      <Link
+        href={href}
+        className="group/cta inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition duration-300 hover:-translate-y-0.5 hover:bg-primary/90 hover:shadow-xl hover:shadow-primary/35"
+      >
+        {children}
+        {/* The arrow leans into the direction it points as the button is
+            approached, which is the whole of the button's animation. */}
+        <ArrowRightIcon className="size-4 transition-transform duration-300 group-hover/cta:translate-x-1" />
+      </Link>
+    </Magnetic>
   )
 }
 
@@ -200,7 +218,7 @@ function Hero({
   primaryLabel: string
 }) {
   return (
-    <section className="relative overflow-hidden px-4 pt-32 pb-20 sm:px-6 sm:pt-40 sm:pb-28">
+    <section className="landing-parallax-scope relative overflow-hidden px-4 pt-32 pb-20 sm:px-6 sm:pt-40 sm:pb-28">
       <BrandBackdrop />
 
       <div className="relative mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
@@ -208,21 +226,27 @@ function Hero({
             landing-enter one: pure CSS, playing at first paint, rather than the
             observer-driven Reveal the rest of the page uses. Waiting for
             hydration here would mean a blank hero for as long as that took. */}
-        <div className="text-center lg:text-left">
+        {/* Both columns hold themselves to the track they are given. Without
+            that, the report card's own minimum width sets the single column a
+            phone lays this out in, and the copy beside it is dragged wider than
+            the screen. */}
+        <div className="min-w-0 text-center lg:text-left">
           <span className="landing-enter inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary">
             <SparklesIcon className="size-3.5" />
             AI retention analysis for YouTube creators
           </span>
 
-          <h1
-            style={delayStyle(70)}
-            className="landing-enter mt-6 font-heading text-4xl leading-[1.05] font-semibold tracking-tight text-balance sm:text-5xl lg:text-6xl"
-          >
-            Know exactly where your viewers leave.
-            <span className="bg-gradient-to-r from-primary to-chart-3 bg-clip-text text-transparent">
-              {" "}
-              And what to change.
-            </span>
+          {/* The headline reads itself into place a word at a time. The second
+              sentence steps along the brand sweep as it goes, so the payoff
+              still arrives in colour now that each word is a box of its own. */}
+          <h1 className="landing-enter landing-quiet mt-6 font-heading text-4xl leading-[1.05] font-semibold tracking-tight text-balance sm:text-5xl lg:text-6xl">
+            <RevealWords
+              delay={70}
+              runs={[
+                "Know exactly where your viewers leave.",
+                { text: "And what to change.", sweep: true },
+              ]}
+            />
           </h1>
 
           <p
@@ -258,14 +282,23 @@ function Hero({
           </p>
         </div>
 
-        <div style={delayStyle(180)} className="landing-enter group relative">
+        <div
+          style={delayStyle(180)}
+          className="landing-enter group relative min-w-0"
+        >
           {/* A soft glow behind the report so it lifts off the page. It warms
               up when the pointer is over the report itself. */}
           <div
             aria-hidden="true"
             className="absolute -inset-6 rounded-[2rem] bg-gradient-to-br from-primary/20 via-chart-3/10 to-transparent opacity-75 blur-2xl transition-opacity duration-700 group-hover:opacity-100"
           />
-          <ReportVisual className="relative" />
+          {/* The report leans towards the pointer. The chips stay flat and
+              floating outside the tilt, so they read as sitting above the card
+              rather than being stuck to it. */}
+          <TiltCard className="relative" degrees={5}>
+            <ReportVisual />
+          </TiltCard>
+          <HeroChips />
         </div>
       </div>
     </section>
@@ -308,43 +341,47 @@ function Problem() {
 
       <div className="mt-12 grid gap-4 md:grid-cols-3">
         {PROBLEM_POINTS.map((point, index) => (
-          <Reveal
-            key={point.title}
-            delay={index * 110}
-            // The card is lit from the top so it reads as a raised surface in
-            // dark mode, where the page and the card sit only a few percent
-            // apart in lightness and a flat fill of --card disappears into the
-            // section behind it.
-            className="group relative overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-b from-secondary/60 to-card p-6 shadow-lg shadow-black/5 transition duration-300 hover:-translate-y-1.5 hover:border-primary/40 hover:shadow-xl hover:shadow-primary/10 dark:shadow-black/20"
-          >
-            {/* A brand wash and a hairline along the top edge, both of which
-                only exist while the pointer is on the card. */}
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-chart-3/10 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-            />
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 top-0 h-px origin-left scale-x-0 bg-gradient-to-r from-transparent via-primary to-transparent transition-transform duration-500 group-hover:scale-x-100"
-            />
-            {/* The number, oversized and nearly invisible, gives each card
-                something of its own behind the copy. */}
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute -top-6 -right-2 font-heading text-8xl font-semibold text-primary/[0.06] transition-colors duration-300 group-hover:text-primary/[0.1]"
-            >
-              0{index + 1}
-            </span>
+          <Reveal key={point.title} delay={index * 110} className="h-full">
+            {/* The tilt is a layer of its own so the card underneath keeps the
+                lift it already had on hover: one element cannot carry both. */}
+            <TiltCard className="h-full">
+              <div
+                // The card is lit from the top so it reads as a raised surface
+                // in dark mode, where the page and the card sit only a few
+                // percent apart in lightness and a flat fill of --card
+                // disappears into the section behind it.
+                className="group relative h-full overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-b from-secondary/60 to-card p-6 shadow-lg shadow-black/5 transition duration-300 hover:-translate-y-1.5 hover:border-primary/40 hover:shadow-xl hover:shadow-primary/10 dark:shadow-black/20"
+              >
+                {/* A brand wash and a hairline along the top edge, both of which
+                    only exist while the pointer is on the card. */}
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-chart-3/10 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                />
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-x-0 top-0 h-px origin-left scale-x-0 bg-gradient-to-r from-transparent via-primary to-transparent transition-transform duration-500 group-hover:scale-x-100"
+                />
+                {/* The number, oversized and nearly invisible, gives each card
+                    something of its own behind the copy. */}
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -top-6 -right-2 font-heading text-8xl font-semibold text-primary/[0.06] transition-colors duration-300 group-hover:text-primary/[0.1]"
+                >
+                  0{index + 1}
+                </span>
 
-            <span className="relative flex size-9 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 font-heading text-sm font-semibold text-primary transition duration-300 group-hover:scale-105 group-hover:border-primary/40 group-hover:bg-primary/15">
-              0{index + 1}
-            </span>
-            <h3 className="relative mt-4 font-heading text-lg font-semibold transition-colors duration-300 group-hover:text-primary">
-              {point.title}
-            </h3>
-            <p className="relative mt-2 text-sm leading-relaxed text-muted-foreground">
-              {point.body}
-            </p>
+                <span className="relative flex size-9 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 font-heading text-sm font-semibold text-primary transition duration-300 group-hover:scale-105 group-hover:border-primary/40 group-hover:bg-primary/15">
+                  0{index + 1}
+                </span>
+                <h3 className="relative mt-4 font-heading text-lg font-semibold transition-colors duration-300 group-hover:text-primary">
+                  {point.title}
+                </h3>
+                <p className="relative mt-2 text-sm leading-relaxed text-muted-foreground">
+                  {point.body}
+                </p>
+              </div>
+            </TiltCard>
           </Reveal>
         ))}
       </div>
@@ -567,7 +604,9 @@ function Features() {
                   aria-hidden="true"
                   className="pointer-events-none absolute -inset-4 rounded-[2rem] bg-gradient-to-br from-primary/15 via-chart-3/10 to-transparent opacity-0 blur-2xl transition-opacity duration-500 group-hover:opacity-100"
                 />
-                <div className="relative">{feature.visual}</div>
+                <TiltCard className="relative" degrees={5}>
+                  {feature.visual}
+                </TiltCard>
               </div>
             </Reveal>
           )
@@ -651,21 +690,35 @@ function ClosingCta({
   primaryLabel: string
 }) {
   return (
-    <section className="relative overflow-hidden border-t px-4 py-24 sm:px-6">
+    <section className="landing-parallax-scope relative overflow-hidden border-t px-4 py-24 sm:px-6">
       <BrandBackdrop className="opacity-80" />
-      <Reveal className="relative mx-auto max-w-2xl text-center">
-        <BrandLogo className="mx-auto size-14" />
+      {/* Same shape as a section heading: the mark and the copy ride in around
+          the line, which reads itself into place a word at a time. */}
+      <Reveal quiet className="relative mx-auto max-w-2xl text-center">
+        <BrandLogo className="landing-rise mx-auto size-14" />
         <h2 className="mt-6 font-heading text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
-          Your next video does not have to repeat this one
+          <RevealWords
+            delay={90}
+            runs={["Your next video does not have to repeat this one"]}
+          />
         </h2>
-        <p className="mt-4 leading-relaxed text-muted-foreground text-pretty">
+        <p
+          style={delayStyle(420)}
+          className="landing-rise mt-4 leading-relaxed text-muted-foreground text-pretty"
+        >
           Connect your channel, run your first analysis, and find out what the
           curve has been trying to tell you.
         </p>
-        <div className="mt-8 flex justify-center">
+        <div
+          style={delayStyle(500)}
+          className="landing-rise mt-8 flex justify-center"
+        >
           <PrimaryCta href={primaryHref}>{primaryLabel}</PrimaryCta>
         </div>
-        <p className="mt-4 text-sm text-muted-foreground">
+        <p
+          style={delayStyle(560)}
+          className="landing-rise mt-4 text-sm text-muted-foreground"
+        >
           Free to start. Upgrade only when you want the deep dives.
         </p>
       </Reveal>
