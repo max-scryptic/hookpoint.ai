@@ -176,25 +176,23 @@ function ChannelSnapshotCards({ snapshot }: { snapshot: ChannelSnapshot }) {
 
 function BuildingCard() {
   return (
-    <Card>
-      <CardContent className="flex flex-col items-start gap-3">
-        <TrendingUpIcon className="size-5 text-muted-foreground" />
-        <div className="w-full">
-          <p className="text-sm text-muted-foreground">
-            Every deep analysis adds its retention events to a private{" "}
-            <span className="font-medium text-foreground">Content Library</span>{" "}
-            of your content.
-          </p>
-          <p className="mt-3 text-sm text-muted-foreground">
-            Once {EARLY_TRENDS_VIDEO_THRESHOLD} videos are in, this page starts
-            surfacing the patterns that repeat across your channel: what loses
-            viewers, what holds them, and how your hooks behave.
-          </p>
-        </div>
-        <Link href="/analyse-video" className={buttonVariants()}>
-          Analyse a video
-        </Link>
-      </CardContent>
+    <Card className="flex flex-col items-start gap-3 p-6">
+      <TrendingUpIcon className="size-5 text-muted-foreground" />
+      <div className="w-full">
+        <p className="text-sm text-muted-foreground">
+          Every deep analysis adds its retention events to a private{" "}
+          <span className="font-semibold text-foreground">Content Library</span>{" "}
+          of your content.
+        </p>
+        <p className="mt-3 text-sm text-muted-foreground">
+          Once {EARLY_TRENDS_VIDEO_THRESHOLD} videos are in, this page starts
+          surfacing the patterns that repeat across your channel: what loses
+          viewers, what holds them, and how your hooks behave.
+        </p>
+      </div>
+      <Link href="/analyse-video" className={buttonVariants()}>
+        Analyse a video
+      </Link>
     </Card>
   )
 }
@@ -281,25 +279,25 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
 // data.
 export function ChannelTrendsLocked() {
   return (
-    <Card>
-      <CardContent className="flex flex-col items-start gap-3">
-        <LockIcon className="size-5 text-muted-foreground" />
-        <div>
-          <h2 className="font-heading text-base font-medium">
-            Cross-video intelligence is a paid feature
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            On Starter and Pro, every deep analysis adds its retention events to
-            a private library of your content. This page then surfaces the
-            trends that repeat across your channel: what loses viewers, what
-            holds them, how your packaging earns reach and what your best videos
-            say - insight no single video can give you.
-          </p>
-        </div>
-        <Link href="/pricing" className={buttonVariants()}>
-          See plans
-        </Link>
-      </CardContent>
+    <Card className="flex flex-col items-start gap-3 p-6">
+      <LockIcon className="size-5 text-muted-foreground" />
+      <div className="w-full">
+        <p className="text-sm text-muted-foreground">
+          Cross-video intelligence is a paid feature, available to{" "}
+          <span className="font-semibold text-foreground">Starter</span> and{" "}
+          <span className="font-semibold text-foreground">Pro</span> users.
+        </p>
+        <p className="mt-3 text-sm text-muted-foreground">
+          Every deep analysis adds its retention events to a private library of
+          your content. This page then surfaces the trends that repeat across
+          your channel: what loses viewers, what holds them, how your packaging
+          earns reach and what your best videos say - insight no single video
+          can give you.
+        </p>
+      </div>
+      <Link href="/pricing" className={buttonVariants()}>
+        See plans
+      </Link>
     </Card>
   )
 }
