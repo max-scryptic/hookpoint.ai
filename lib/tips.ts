@@ -129,13 +129,15 @@ export const TIP_CATEGORIES = [
 export type TipCategory = (typeof TIP_CATEGORIES)[number]
 
 // Written so two neighbouring groups can never be confused for each other, and
-// so each one names the work rather than the place it came from: "Retaining
-// Attention" is what every retention insight is ultimately asking for, and
-// "Packaging Alignment" is what the title, thumbnail and hook are measured on.
+// so each one names the work rather than the place it came from: "Retention" is
+// what every retention insight is ultimately asking for, and "Packaging" is the
+// one job the title, the thumbnail and the hook are doing together. Both are
+// single words, so the labels read as a set beside Script, Delivery and Other
+// and fit a badge on a checklist row without wrapping.
 export const TIP_CATEGORY_LABELS: Record<TipCategory, string> = {
-  attention: "Retaining Attention",
+  attention: "Retention",
   script: "Script",
-  packaging: "Packaging Alignment",
+  packaging: "Packaging",
   delivery: "Delivery",
   other: "Other",
 }
