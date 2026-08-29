@@ -422,7 +422,7 @@ export const DEMO_COMPARISON_SECTIONS = [
 export const DEMO_SAVED_TIPS: { tip: string; section: string }[] = [
   {
     tip: "Open on the result the title promised, then explain how you got there.",
-    section: "Hook",
+    section: "Packaging: Hook",
   },
   {
     tip: "Cut silent working footage to under fifteen seconds, or talk over it.",

@@ -188,40 +188,50 @@ describe("tipCategoryForSection", () => {
   // with the group it must land in on the checklist. If a call site starts
   // naming its section differently, add it here.
   it.each([
-    ["Retention: Hook", "hook"],
-    ["Retention: Drop-off", "retention"],
+    ["Retention: Hook", "attention"],
+    ["Retention: Drop-off", "attention"],
     ["Retention: Gain", "attention"],
     ["Retention: Hold", "attention"],
     ["Pacing", "attention"],
     ["Packaging: Title", "packaging"],
     ["Packaging: Thumbnail", "packaging"],
+    ["Packaging: Hook", "packaging"],
     ["Packaging head-to-head: Thumbnail", "packaging"],
-    ["Retention head-to-head: Hook and opening", "hook"],
-    ["Retention head-to-head: Emotion and energy", "retention"],
+    ["Retention head-to-head: Hook and opening", "attention"],
+    ["Retention head-to-head: Emotion and energy", "attention"],
     ["Script head-to-head: Structure", "script"],
     ["Deep analysis: Non-verbal takeaway", "delivery"],
   ])("files %s under %s", (section, category) => {
     expect(tipCategoryForSection(section)).toBe(category)
   })
 
-  it("files a tip by the tab it sits on before the moment it came from", () => {
-    // A script rewrite for a drop-off is script work, and a note about what the
-    // video looked like there is delivery work, whatever the moment was.
-    expect(tipCategoryForSection("Retention: Drop-off: Script")).toBe("script")
-    expect(tipCategoryForSection("Retention: Hook: Script")).toBe("script")
-    expect(tipCategoryForSection("Retention: Drop-off: Deep analysis")).toBe(
-      "delivery",
-    )
+  it("files every retention insight by its list, not by the tab beneath it", () => {
+    // The footage tabs sit inside a retention row, so a script rewrite for a
+    // drop-off is still work on that drop-off and belongs beside it. Only the
+    // script and deep analysis surfaces that stand on their own elsewhere are
+    // read as script and delivery work.
+    for (const section of [
+      "Retention: Hook: Script",
+      "Retention: Hook: Deep analysis",
+      "Retention: Drop-off: Script",
+      "Retention: Drop-off: Deep analysis",
+      "Retention: Gain: Script",
+      "Retention: Hold: Deep analysis",
+    ]) {
+      expect(tipCategoryForSection(section)).toBe("attention")
+    }
   })
 
-  it("keeps losing viewers apart from holding them", () => {
-    expect(tipCategoryForSection("Retention: Drop-off")).not.toBe(
-      tipCategoryForSection("Retention: Hold"),
-    )
+  it("reads the hook on a packaging card as one of the three surfaces", () => {
+    // The only place the word means alignment rather than a retention moment:
+    // the spoken opening judged against the title and the thumbnail.
+    expect(tipCategoryForSection("Packaging: Hook")).toBe("packaging")
+    expect(tipCategoryForSection("Retention: Hook")).toBe("attention")
   })
 
   it("ignores casing", () => {
-    expect(tipCategoryForSection("RETENTION: HOOK")).toBe("hook")
+    expect(tipCategoryForSection("RETENTION: HOOK")).toBe("attention")
+    expect(tipCategoryForSection("PACKAGING: TITLE")).toBe("packaging")
   })
 
   it("leaves a section it does not recognise uncategorised", () => {
@@ -306,18 +316,18 @@ describe("tipCategoryCounts", () => {
     expect(
       tipCategoryCounts([
         tip("1", "packaging"),
-        tip("2", "hook"),
-        tip("3", "hook"),
+        tip("2", "attention"),
+        tip("3", "attention"),
       ]),
     ).toEqual([
-      { category: "hook", count: 2 },
+      { category: "attention", count: 2 },
       { category: "packaging", count: 1 },
     ])
   })
 
   it("leaves out a category with nothing kept under it", () => {
-    const counted = tipCategoryCounts([tip("1", "hook")])
-    expect(counted).toEqual([{ category: "hook", count: 1 }])
+    const counted = tipCategoryCounts([tip("1", "attention")])
+    expect(counted).toEqual([{ category: "attention", count: 1 }])
     expect(counted.every(({ count }) => count > 0)).toBe(true)
   })
 
@@ -327,10 +337,10 @@ describe("tipCategoryCounts", () => {
     const counted = tipCategoryCounts([
       tip("1", "other"),
       tip("2", "packaging"),
-      tip("3", "hook"),
+      tip("3", "attention"),
     ])
     expect(counted.map(({ category }) => category)).toEqual([
-      "hook",
+      "attention",
       "packaging",
       "other",
     ])
