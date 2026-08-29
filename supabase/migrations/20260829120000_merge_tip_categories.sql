@@ -7,11 +7,10 @@
 -- one job. A creator working through their checklist is not doing hook work and
 -- then separately drop-off work; the hook window, the drop-offs, the gains, the
 -- holds and the pacing stretches are all asking for the same thing, which is
--- that a viewer stays. They are now one category, "Retaining Attention", and
--- the list a tip was read from decides it rather than the footage tab beneath
--- the row. The same fold applies to the title, the thumbnail and the spoken
--- hook, which are only ever worth judging against one another and are now read
--- as "Packaging Alignment".
+-- that a viewer stays. They are now one category, "Retention", and the list a
+-- tip was read from decides it rather than the footage tab beneath the row. The
+-- same fold applies to the title, the thumbnail and the spoken hook, which are
+-- only ever worth judging against one another and are now read as "Packaging".
 --
 -- So 'hook' and 'retention' no longer exist and the rows holding them have to
 -- move. Unlike a tuning of the rules -- which the column exists to protect a
