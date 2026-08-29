@@ -106,14 +106,19 @@ export function tipSurface(
 }
 
 // What a tip is actually about, as opposed to the surface it was read on. A
-// creator reading their checklist thinks in these terms ("what am I fixing
-// about the hook?"), not in report sections, so each line is labelled with it
-// and the admin can see which kind of advice keeps missing.
+// creator reading their checklist thinks in these terms ("what am I doing about
+// the people who leave?"), not in report sections, so each line is labelled with
+// it and the admin can see which kind of advice keeps missing.
 //
-// Listed in the order they are worked through when planning a video.
+// Listed in the order they are worked through when planning a video. The two
+// big ones are named after the job the tips under them do rather than
+// after the report list they were read from. A creator does not sit down to
+// work on "drop-offs" and then separately on "gains": both, and the hook window
+// and the holds and the pacing stretches with them, are one piece of work -
+// keeping a viewer watching - so they are one group. The same goes for the
+// title, the thumbnail and the spoken hook, which are only ever worth judging
+// against each other.
 export const TIP_CATEGORIES = [
-  "hook",
-  "retention",
   "attention",
   "script",
   "packaging",
@@ -123,15 +128,14 @@ export const TIP_CATEGORIES = [
 
 export type TipCategory = (typeof TIP_CATEGORIES)[number]
 
-// Written so two neighbouring groups can never be confused for each other:
-// "Retention" and "Attention" side by side say nothing, "Drop-offs" and
-// "Keeping attention" say exactly what belongs under each.
+// Written so two neighbouring groups can never be confused for each other, and
+// so each one names the work rather than the place it came from: "Retaining
+// Attention" is what every retention insight is ultimately asking for, and
+// "Packaging Alignment" is what the title, thumbnail and hook are measured on.
 export const TIP_CATEGORY_LABELS: Record<TipCategory, string> = {
-  hook: "Hook",
-  retention: "Drop-offs",
-  attention: "Keeping attention",
+  attention: "Retaining Attention",
   script: "Script",
-  packaging: "Packaging",
+  packaging: "Packaging Alignment",
   delivery: "Delivery",
   other: "Other",
 }
@@ -143,28 +147,39 @@ export function isTipCategory(value: unknown): value is TipCategory {
 // Ordered rules read against the section a tip was rendered in, first match
 // wins. Order carries the meaning here, so the list is worth reading top down:
 //
-//  - The tab a tip sits on is the strongest signal there is, so a "... : Script"
-//    or "... : Deep analysis" suffix decides the category before anything in the
-//    rest of the section can. A script rewrite for the hook is a script tip.
-//  - "Drop-off" is separated from the other retention moments on purpose: a gain
-//    or a hold is about keeping the viewers already watching, a drop-off is
-//    about losing them, and the two want different work.
-//  - A bare "Retention: ..." that matched nothing more specific lands on
-//    retention last, so the generic word never steals a gain or a hold.
+//  - The report a tip was read on is the strongest signal there is, and every
+//    section names it first, so the two anchored rules go before anything that
+//    reads the rest of the string.
+//  - Everything in the retention insights is attention work: the hook window,
+//    the drop-offs, the gains, the holds and the pacing stretches, and with them
+//    the Script and Deep analysis tabs beneath each of those rows. The list a
+//    row belongs to therefore decides its category rather than the footage tab
+//    the tip happened to be open on, so a script rewrite for a drop-off is filed
+//    next to the drop-off it fixes and not among the script head-to-head notes.
+//    "Retention head-to-head: ..." is the same work read across two videos.
+//  - Packaging next, so the spoken hook on a packaging card ("Packaging: Hook")
+//    is read as one of the three surfaces being matched up rather than as a
+//    retention moment. It is the only place the word "hook" means alignment.
+//  - Only then the tabs that stand on their own elsewhere in the product: the
+//    script head-to-head, the deep analysis evidence.
+//  - The last rule catches a retention word in a section that named its report
+//    some other way, so a heading we did not anticipate still lands on attention
+//    rather than falling through.
 //
 // Sections are part model-written (comparison report headings), so anything
 // unrecognised falls through to "other" rather than being forced into a group.
 const TIP_CATEGORY_RULES: { pattern: RegExp; category: TipCategory }[] = [
+  { pattern: /^retention\b|^pacing\b/, category: "attention" },
+  { pattern: /packaging|thumbnails?|\btitles?\b/, category: "packaging" },
   { pattern: /\bscripts?\b/, category: "script" },
   {
     pattern: /deep analysis|non-?verbal|delivery|editing|visuals?\b/,
     category: "delivery",
   },
-  { pattern: /\bhooks?\b|\bopening?s?\b|first (few )?seconds/, category: "hook" },
-  { pattern: /packaging|thumbnails?|\btitles?\b/, category: "packaging" },
-  { pattern: /drop-?offs?|\bdrops?\b/, category: "retention" },
-  { pattern: /\bgains?\b|\bholds?\b|pacing|attention/, category: "attention" },
-  { pattern: /retention/, category: "retention" },
+  {
+    pattern: /retention|drop-?offs?|\bgains?\b|\bholds?\b|pacing|attention/,
+    category: "attention",
+  },
 ]
 
 /**
