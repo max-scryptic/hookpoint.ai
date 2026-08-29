@@ -7,8 +7,6 @@ import { buttonVariants } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
@@ -70,14 +68,9 @@ export function ReportComparisonDialog() {
       </DialogTrigger>
 
       <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-xl">
-        <DialogHeader>
-          <DialogTitle>Basic and complete reports</DialogTitle>
-          <DialogDescription className="leading-relaxed">
-            A basic report reads your retention curve and your script. A
-            complete report also watches the video itself, so it can tell you
-            what was on screen when people left.
-          </DialogDescription>
-        </DialogHeader>
+        {/* Title only. The table below says the same thing the summary line
+            used to, row by row, so a sentence above it just repeats itself. */}
+        <DialogTitle>Basic and complete reports</DialogTitle>
 
         {/* The vertical margins are on top of the dialog's own gap: the table
             reads as cramped without a little more air above the column headers
@@ -130,8 +123,8 @@ export function ReportComparisonDialog() {
 
         {/* The close: one line and a button. The table above has already made
             the case, so this only has to name the next step. No inset panel
-            here, so the copy starts on the same left edge as the title, the
-            description and the table rows. */}
+            here, so the copy starts on the same left edge as the title and the
+            table rows. */}
         <div className="flex flex-col items-start gap-3">
           <p className="text-sm leading-relaxed text-muted-foreground">
             Upgrade to Starter or Pro to unlock complete reports, and much more,
