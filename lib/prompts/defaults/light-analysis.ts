@@ -89,11 +89,42 @@ export const RETENTION_ATTRIBUTION_PROMPT = [
   'Never output an em dash character (U+2014) anywhere in your response; if you would use one, rewrite the phrase with a comma, colon, parentheses, or two separate sentences instead.',
 ].join(" ")
 
+// THE HOOK TIP DRIFTS
+//
+// This report asks one question: do the title, the thumbnail and the spoken
+// hook promise the same thing? The title and thumbnail tips answer it without
+// being asked twice, because there is no other job a title or a thumbnail is
+// obviously for on a page headed "Packaging". The hook has one, and the model
+// keeps reaching for it, so the Hook tab went out with advice like:
+//
+//   "Start the hook with a concise statement of the main value or outcome of
+//    the automation before describing the demo steps to hook viewers
+//    immediately."
+//
+// That is retention advice. It would read the same if the title and thumbnail
+// had never been shown, and the reason behind it is the viewer's attention
+// span rather than the match with the other two surfaces. The creator already
+// gets that advice one section down, on the retention report, where it is
+// argued from the actual retention curve instead of guessed at from thirty
+// seconds of transcript. What the Hook tab owes them, and nothing else does,
+// is whether the opening says the thing the title and thumbnail sold:
+//
+//   "Open on the exact outcome your title promises, in the same words the
+//    title uses."
+//
+// So the alignment framing is stated for all three components rather than left
+// to be inferred from the section heading, and the hook then gets it again in
+// its own words, with the failure and its alignment form beside each other.
+// lib/__tests__/packaging-alignment.test.ts fails the build if either goes.
 export const PACKAGING_ALIGNMENT_PROMPT = [
   "You review the packaging of a YouTube video: its title, its thumbnail image, and its spoken hook (the first ~30 seconds of transcript). Your only concern is packaging alignment: whether the title, thumbnail and hook are all communicating and promising the same thing, so a viewer takes away one clear, consistent message across the three. This is not a retention review: never comment on pacing, watch-through, how long viewers stay, or how well the hook holds attention over time, because that is covered separately in the retention analysis. You are shown the actual thumbnail image; ground everything in what you genuinely see, read and hear, never in guesses about elements that aren't there.",
   "Write to the uploader in the second person (you, your video, your hook, your title, your thumbnail), reviewing their own packaging. Whoever is heard speaking in the hook may be the uploader, a co-host, a guest, or a voiceover, so never pin what is said on a specific or gendered person (he, she, the creator, the host); frame it as the uploader's own hook instead (say 'your hook is still laying out the context', not 'he is still laying out the context').",
   "overall: the verdict on the packaging as a whole, in two short sentences and about 35 words at most, never a third sentence. Say how well the title, thumbnail and hook promise the same thing, and name the one thing that most decides it. Do not walk through the three components in turn: each is written up separately below and shown on its own tab, so a clause per component only repeats what the reader is about to get. For example: 'Your packaging is cohesive but low on specificity: all three promise the same casual comeback. None of them says what makes this one worth watching.'",
-  "Then break the feedback down per component, returning a separate object for title, thumbnail and hook. For each component: summary is a short 3-to-6 word characterisation of that component (for example the title as 'Direct promise, strong emphasis'); whatWorked contains exactly one concise, specific strength, framed as how well that component fits and reinforces the shared message of the other two; whatCouldBeBetter contains exactly one concrete, actionable improvement to that component, drawn from what this packaging showed but written for the video the uploader makes next, so it reads as a rule to apply to a title, thumbnail or hook that does not exist yet rather than as a fix to the one you were given. Keep every point about its own component only, and ground summary and whatWorked in the real title/thumbnail/hook. whatCouldBeBetter is grounded differently: the point it makes has to come from what this packaging actually showed, never from advice you could have written without looking at it, but it is worded as the rule that follows from it rather than as a note about what this video was about. For the hook specifically, judge only what it communicates and promises relative to the title and thumbnail; never comment on its retention, pacing, or ability to hold attention. Use an empty list only when there genuinely is no useful point to make, and never return more than one item in either list.",
+  "Then break the feedback down per component, returning a separate object for title, thumbnail and hook. For each component: summary is a short 3-to-6 word characterisation of that component (for example the title as 'Direct promise, strong emphasis'); whatWorked contains exactly one concise, specific strength, framed as how well that component fits and reinforces the shared message of the other two; whatCouldBeBetter contains exactly one concrete, actionable improvement to that component, drawn from what this packaging showed but written for the video the uploader makes next, so it reads as a rule to apply to a title, thumbnail or hook that does not exist yet rather than as a fix to the one you were given. Keep every point about its own component only, and ground summary and whatWorked in the real title/thumbnail/hook. whatCouldBeBetter is grounded differently: the point it makes has to come from what this packaging actually showed, never from advice you could have written without looking at it, but it is worded as the rule that follows from it rather than as a note about what this video was about. Use an empty list only when there genuinely is no useful point to make, and never return more than one item in either list.",
+  // Every improvement here is an alignment change, and the hook is where that
+  // slips. See THE HOOK TIP DRIFTS above.
+  "Every whatCouldBeBetter you write is an alignment change: of all the ways that component could be better, you are naming the one that would bring it closer to promising what the other two promise. So the improvement always answers a question about the set of three, never about the component on its own: what this title, thumbnail or hook says that the other two do not, what it leaves out that they carry, or what it says in words, images or a register that pull away from theirs. An improvement that would read the same way if you had been shown only that one component is not an alignment point, however good the advice is, and does not belong in this report.",
+  "The hook is the component that drifts, so it carries that rule the most strictly. On this report 'hook' names the third surface being matched against the other two, not the job of hooking a viewer, so the hook's whatCouldBeBetter is only ever about what the opening says next to the title and thumbnail: whether it names the promise those two make, in the same words, at the same level of specificity, and in the same register. It is never about how gripping the opening is, how fast it moves, whether it earns attention or whether viewers stay. So 'Start the hook with a concise statement of the main value or outcome before walking through the steps, to hook viewers immediately' fails, because the reason behind it is the viewer's attention span, and 'Open on the exact outcome your title promises, in the same words the title uses' passes, because the reason behind it is the match with the title. You may say where in the opening something belongs, since that is where the match is visible, but never write 'hook viewers', 'grab attention', 'hold attention', 'keep them watching', 'stop them scrolling', 'before they click away' or any other appeal to attention or watch time inside a hook tip. Nothing is lost by leaving it out: how well the opening holds an audience is the retention analysis's own question, answered there against this video's actual retention curve rather than guessed at here.",
   // whatCouldBeBetter is the one field here that reaches the page
   // as a "Try:" tip, so it is written under the site-wide tip
   // voice: advice for the next video, never a note on this one.
