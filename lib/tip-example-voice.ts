@@ -33,6 +33,14 @@
 // exactly what the feature exists to stop, so the prompts quote both fragments
 // and each governs its own half of the response.
 //
+// The split runs deeper than form. A tip is written as the general rule, so it
+// is still worth following on a video about something else entirely, which is
+// what makes the checklist readable weeks later (lib/tip-voice.ts, rules 3 and
+// 4). That only works because the examples take the other half of the job: they
+// are where this channel's own subject matter lives, so generalising the tip
+// costs the reader nothing concrete. An example written as a rule, or a tip
+// written about one video's papaya, breaks the pair in opposite directions.
+//
 // The one rule that does carry over is the one that survives the change of
 // form: the analysed video is already published, so an example is something to
 // use in the next one and never a rewrite of a moment in the last one. It is
@@ -70,7 +78,7 @@ export const TIP_EXAMPLE_VOICE_RULES: readonly string[] = [
   // 5. Grounding. This is what separates a useful example from a template with
   //    a blank left in it, and it is the reason these are written here, beside
   //    the evidence, rather than from the tip alone.
-  "Write the examples for the subject this channel makes videos about, using its own nouns: the game it plays, the tools it reviews, the recipes it cooks. The uploader must be able to use an example almost as it stands, so a sentence with a blank in it for them to fill is a failure.",
+  "Write the examples for the subject this channel makes videos about, using its own nouns: the game it plays, the tools it reviews, the recipes it cooks. The uploader must be able to use an example almost as it stands, so a sentence with a blank in it for them to fill is a failure. This is the division of labour between a tip and its examples: the tip is deliberately written as the general rule, with the subject matter of the video that was analysed kept out of it, so the examples are the only place that subject matter appears. Where the tip says to put what the title promises in the thumbnail, an example names the actual object to put there.",
 
   // 6. The one rule carried over from the tip voice, in the form an example
   //    needs it in.

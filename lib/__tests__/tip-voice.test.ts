@@ -64,6 +64,19 @@ describe("tip voice", () => {
     expect(TIP_VOICE_PROMPT).toMatch(/does not exist yet/)
     expect(TIP_VOICE_PROMPT).toMatch(/this deck/)
 
+    // "Show the papaya prominently in the thumbnail" points at no moment and is
+    // still one video's note: the next video is not about papaya, so the tip
+    // carries the rule and the worked examples carry this channel's nouns.
+    expect(TIP_VOICE_PROMPT).toMatch(/general rule/)
+    expect(TIP_VOICE_PROMPT).toMatch(/papaya/)
+    expect(TIP_VOICE_PROMPT).toMatch(/worked examples/)
+
+    // And the opposite failure, which is why generalising is stated with its
+    // floor attached: advice that could have been written without watching
+    // anything is what the "too_generic" feedback reason is for.
+    expect(TIP_VOICE_PROMPT).toMatch(/General is not vague/)
+    expect(TIP_VOICE_PROMPT).toMatch(/without watching anything/)
+
     // A comparative grades the next video against the one just watched.
     expect(TIP_VOICE_PROMPT).toMatch(/punchier/)
     expect(TIP_VOICE_PROMPT).toMatch(/plain adjective/)
