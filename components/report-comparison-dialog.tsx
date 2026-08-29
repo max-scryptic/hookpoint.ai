@@ -7,6 +7,8 @@ import { buttonVariants } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
@@ -68,9 +70,17 @@ export function ReportComparisonDialog() {
       </DialogTrigger>
 
       <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-xl">
-        {/* Title only. The table below says the same thing the summary line
-            used to, row by row, so a sentence above it just repeats itself. */}
-        <DialogTitle>Basic and complete reports</DialogTitle>
+        {/* One line under the title, and only one. It names what actually
+            separates the two columns (the uploaded file) rather than listing
+            what the rows already list. The header keeps the two lines close
+            together instead of the dialog's own wider gap. */}
+        <DialogHeader>
+          <DialogTitle>Basic and complete reports</DialogTitle>
+          <DialogDescription>
+            Every report reads your retention curve and your script. A complete
+            report also watches the video itself.
+          </DialogDescription>
+        </DialogHeader>
 
         {/* The vertical margins are on top of the dialog's own gap: the table
             reads as cramped without a little more air above the column headers
