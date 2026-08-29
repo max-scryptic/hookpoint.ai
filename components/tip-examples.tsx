@@ -247,6 +247,25 @@ export function TipExamples({
           </p>
         </TabsContent>
       ))}
+      {/* All three examples again, with no height, purely to set the width.
+          The card around this panel is sized to its contents rather than held
+          open at a fixed width, and only one example is on screen at a time,
+          so without this the card would grow and shrink as the creator moved
+          between tabs. A zero-height copy of all three still counts towards
+          the widest thing in the card, which fixes the width at the longest
+          example (or at the card's cap, whichever comes first) whatever tab is
+          showing. The negative margin cancels the column gap this would
+          otherwise add below the panel. */}
+      <div aria-hidden="true" className="-mt-2.5 h-0 overflow-hidden">
+        {examples.map((example, index) => (
+          <div key={index} className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium">{example.label}</span>
+            <p className="border-l-2 pl-3 text-sm leading-relaxed">
+              {example.example}
+            </p>
+          </div>
+        ))}
+      </div>
     </Tabs>
   )
 }
