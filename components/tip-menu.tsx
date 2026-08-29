@@ -9,6 +9,7 @@ import {
   ThumbsDownIcon,
 } from "lucide-react"
 
+import { useOnboardingHint } from "@/components/onboarding-hints"
 import { useSavedTips } from "@/components/saved-tips-provider"
 import { TipExamples } from "@/components/tip-examples"
 import { TipFeedbackDialog } from "@/components/tip-feedback-dialog"
@@ -130,6 +131,13 @@ export function TipMenu({
   // are looking at before they keep it.
   const category = useMemo(() => tipCategoryForSection(section), [section])
 
+  // Opening any tip is the whole of what the report's "Tips open up" coach mark
+  // asks for, so that is what retires it - whether the tip opened was the one
+  // the bubble pointed at or another one further down. A no-op once the hint has
+  // gone, and outside a report page there is no hint to retire. See
+  // ONBOARDING_HINTS in lib/onboarding-hints.ts.
+  const tipActionsHint = useOnboardingHint("report_tip_actions")
+
   const [open, setOpen] = useState(false)
   // Read once, when the card is opened, rather than during render: the path is
   // a browser fact, and a server render has no window to read it from. Both the
@@ -237,7 +245,10 @@ export function TipMenu({
       <Popover
         open={open}
         onOpenChange={(nextOpen) => {
-          if (nextOpen) setSourcePath(currentPath() ?? "")
+          if (nextOpen) {
+            setSourcePath(currentPath() ?? "")
+            tipActionsHint.dismiss()
+          }
           setOpen(nextOpen)
         }}
       >

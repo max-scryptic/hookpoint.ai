@@ -40,6 +40,7 @@ import {
   RetentionChart,
   type RetentionChartInsight,
 } from "@/components/retention-chart"
+import { FirstTipHintProvider } from "@/components/first-tip-hint"
 import {
   HintCallout,
   HintTargetGlow,
@@ -1923,287 +1924,300 @@ export function AnalysedVideoDetail({
     ),
   ]
 
+  // Once the footage has been analysed, point at the first highlight on the
+  // curve: nothing else on the page says that clicking one now plays that
+  // moment back. Read here rather than inline below because the tip coach mark
+  // stands down while it is up.
+  const showPlaybackHint =
+    playbackHint.pending && deepAnalysisComplete && chartInsights.length > 0
+
+  // Whether the report's first tip wears the mark saying that a tip opens.
+  //
+  // It stands down while either footage coach mark is on screen. Those two
+  // announce something that has just landed and are worth the one showing they
+  // get; this one is about advice that has been on the page since the report
+  // was opened and will be there on the next report too. Three bubbles at once
+  // over one report teaches none of them.
+  const showTipActionsHint = !showPlaybackHint && !showFootageTabsHint
+
   return (
-    <div className="flex flex-col gap-6">
-      <div ref={insightAreaRef} className="flex flex-col gap-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-stretch">
-          {/* Rendered even without a usable thumbnail (private and scheduled
-              uploads have one YouTube won't serve), so the header keeps its
-              shape and shows the placeholder rather than collapsing. */}
-          <div className="shrink-0 sm:self-start">
-            <SourceVideoThumbnail
-              thumbnailUrl={video.thumbnailUrl}
-              title={video.title}
-            />
-          </div>
-          <div className="flex flex-1 flex-col">
-            <h1 className="text-2xl font-semibold tracking-normal">
-              {video.title}
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Audience retention across this video, with the moments where you
-              lost and held the most viewers.
-            </p>
-            {analyticsSummary && (
-              <div className="mt-4 flex flex-wrap items-end gap-x-8 gap-y-3 sm:mt-auto sm:pt-4">
-                <Metric
-                  label="Views"
-                  value={formatCompactNumber(
-                    preferredViewCount(video, analyticsSummary),
-                  )}
-                />
-                <Metric
-                  label="Subscribers gained"
-                  value={formatCompactNumber(
-                    netSubscribersGained(analyticsSummary),
-                  )}
-                />
-                <Metric
-                  label="Avg. view duration"
-                  value={
-                    analyticsSummary.averageViewDurationSeconds != null
-                      ? formatTimestamp(
-                          analyticsSummary.averageViewDurationSeconds,
-                        )
-                      : "N/A"
-                  }
-                />
-                {analyticsSummary.impressionClickThroughRate != null && (
+    <FirstTipHintProvider enabled={showTipActionsHint}>
+      <div className="flex flex-col gap-6">
+        <div ref={insightAreaRef} className="flex flex-col gap-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-stretch">
+            {/* Rendered even without a usable thumbnail (private and scheduled
+                uploads have one YouTube won't serve), so the header keeps its
+                shape and shows the placeholder rather than collapsing. */}
+            <div className="shrink-0 sm:self-start">
+              <SourceVideoThumbnail
+                thumbnailUrl={video.thumbnailUrl}
+                title={video.title}
+              />
+            </div>
+            <div className="flex flex-1 flex-col">
+              <h1 className="text-2xl font-semibold tracking-normal">
+                {video.title}
+              </h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Audience retention across this video, with the moments where you
+                lost and held the most viewers.
+              </p>
+              {analyticsSummary && (
+                <div className="mt-4 flex flex-wrap items-end gap-x-8 gap-y-3 sm:mt-auto sm:pt-4">
                   <Metric
-                    label="Thumbnail CTR"
-                    value={formatClickThroughRate(
-                      analyticsSummary.impressionClickThroughRate,
+                    label="Views"
+                    value={formatCompactNumber(
+                      preferredViewCount(video, analyticsSummary),
                     )}
                   />
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <section className="flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <PackageIcon className="size-4 text-muted-foreground" />
-            <h2 className="text-sm font-medium">Packaging</h2>
-          </div>
-
-          <Tabs defaultValue="packaging">
-            <TabsList>
-              <TabsTrigger value="packaging">
-                <AlignHorizontalJustifyCenterIcon className="text-purple-600 dark:text-purple-400" />
-                Title, Thumbnail &amp; Hook
-              </TabsTrigger>
-              <TabsTrigger value="metadata">
-                <ListChecksIcon className="text-teal-600 dark:text-teal-400" />
-                Metadata
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="packaging">
-              <PackagingAlignmentSection
-                alignment={packagingAlignment}
-                hasThumbnail={Boolean(video.thumbnailUrl)}
-                hookQuote={hookQuote}
-              />
-            </TabsContent>
-
-            <TabsContent value="metadata">
-              <MetadataHygieneSection video={video} />
-            </TabsContent>
-          </Tabs>
-        </section>
-
-        <section className="flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <AreaChartIcon className="size-4 text-muted-foreground" />
-            <h2 className="text-sm font-medium">Audience retention</h2>
-          </div>
-          {/* The chart and its insight lists share one positioning context so the
-              floating source video can be `position: sticky` across both. It
-              starts over the empty top-right of the chart (its highest point,
-              page-wise) and, once the page scrolls far enough that it would slide
-              off the top, pins just below the top of the viewport and rides down
-              with the scroll - staying visible while the reader works through a
-              long list - until the bottom of this section scrolls past. */}
-          <div className="relative flex flex-col gap-3">
-            {video.thumbnailUrl && (
-              <div className="pointer-events-none absolute inset-0 z-20">
-                <div className="sticky top-4 flex justify-end px-5 pt-5">
-                  <div className="w-1/2 max-w-84">
-                    <SourceVideoPlayer
-                      videoId={video.id}
-                      thumbnailUrl={video.thumbnailUrl}
-                      title={video.title}
-                      scrubTime={previewTime}
-                      playbackWindow={playbackWindow}
-                      onClose={() => setPlaybackWindow(null)}
+                  <Metric
+                    label="Subscribers gained"
+                    value={formatCompactNumber(
+                      netSubscribersGained(analyticsSummary),
+                    )}
+                  />
+                  <Metric
+                    label="Avg. view duration"
+                    value={
+                      analyticsSummary.averageViewDurationSeconds != null
+                        ? formatTimestamp(
+                            analyticsSummary.averageViewDurationSeconds,
+                          )
+                        : "N/A"
+                    }
+                  />
+                  {analyticsSummary.impressionClickThroughRate != null && (
+                    <Metric
+                      label="Thumbnail CTR"
+                      value={formatClickThroughRate(
+                        analyticsSummary.impressionClickThroughRate,
+                      )}
                     />
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <section className="flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <PackageIcon className="size-4 text-muted-foreground" />
+              <h2 className="text-sm font-medium">Packaging</h2>
+            </div>
+
+            <Tabs defaultValue="packaging">
+              <TabsList>
+                <TabsTrigger value="packaging">
+                  <AlignHorizontalJustifyCenterIcon className="text-purple-600 dark:text-purple-400" />
+                  Title, Thumbnail &amp; Hook
+                </TabsTrigger>
+                <TabsTrigger value="metadata">
+                  <ListChecksIcon className="text-teal-600 dark:text-teal-400" />
+                  Metadata
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="packaging">
+                <PackagingAlignmentSection
+                  alignment={packagingAlignment}
+                  hasThumbnail={Boolean(video.thumbnailUrl)}
+                  hookQuote={hookQuote}
+                />
+              </TabsContent>
+
+              <TabsContent value="metadata">
+                <MetadataHygieneSection video={video} />
+              </TabsContent>
+            </Tabs>
+          </section>
+
+          <section className="flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <AreaChartIcon className="size-4 text-muted-foreground" />
+              <h2 className="text-sm font-medium">Audience retention</h2>
+            </div>
+            {/* The chart and its insight lists share one positioning context so the
+                floating source video can be `position: sticky` across both. It
+                starts over the empty top-right of the chart (its highest point,
+                page-wise) and, once the page scrolls far enough that it would slide
+                off the top, pins just below the top of the viewport and rides down
+                with the scroll - staying visible while the reader works through a
+                long list - until the bottom of this section scrolls past. */}
+            <div className="relative flex flex-col gap-3">
+              {video.thumbnailUrl && (
+                <div className="pointer-events-none absolute inset-0 z-20">
+                  <div className="sticky top-4 flex justify-end px-5 pt-5">
+                    <div className="w-1/2 max-w-84">
+                      <SourceVideoPlayer
+                        videoId={video.id}
+                        thumbnailUrl={video.thumbnailUrl}
+                        title={video.title}
+                        scrubTime={previewTime}
+                        playbackWindow={playbackWindow}
+                        onClose={() => setPlaybackWindow(null)}
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-            <RetentionChart
-              points={retention}
-              durationSeconds={video.durationSeconds}
-              insights={chartInsights}
-              selectedInsightId={playbackWindow?.id ?? null}
-              hint={
-                // Once the footage has been analysed, point at the first
-                // highlight on the curve: nothing else on the page says that
-                // clicking one now plays that moment back.
-                playbackHint.pending &&
-                deepAnalysisComplete &&
-                chartInsights.length > 0
-                  ? {
-                      insightId: chartInsights[0].id,
-                      render: (arrow) => (
-                        <HintCallout
-                          title="Your footage is in"
-                          arrow={arrow}
-                          onDismiss={playbackHint.dismiss}
-                        >
-                          Click a highlight to watch that exact moment back from
-                          the file you uploaded.
-                        </HintCallout>
-                      ),
-                    }
-                  : null
-              }
-              onScrubTimeChange={setPreviewTime}
-              onInsightSelect={(insight) => {
-                setPlaybackWindow(
-                  insight
+              )}
+              <RetentionChart
+                points={retention}
+                durationSeconds={video.durationSeconds}
+                insights={chartInsights}
+                selectedInsightId={playbackWindow?.id ?? null}
+                hint={
+                  showPlaybackHint
                     ? {
-                        id: insight.id,
-                        fromSeconds: insight.fromSeconds,
-                        toSeconds: insight.toSeconds,
+                        insightId: chartInsights[0].id,
+                        render: (arrow) => (
+                          <HintCallout
+                            title="Your footage is in"
+                            arrow={arrow}
+                            onDismiss={playbackHint.dismiss}
+                          >
+                            Click a highlight to watch that exact moment back from
+                            the file you uploaded.
+                          </HintCallout>
+                        ),
                       }
-                    : null,
-                )
-                // Bring the tab holding this insight forward so its highlighted
-                // row is the one on show. Leave the tab as-is when clicking off.
-                if (insight) setRetentionTab(TAB_FOR_INSIGHT_KIND[insight.kind])
-                // Opening a highlight is the thing the hint was asking for, so
-                // it has served its purpose whether or not it was read.
-                if (insight) playbackHint.dismiss()
-              }}
-            />
+                    : null
+                }
+                onScrubTimeChange={setPreviewTime}
+                onInsightSelect={(insight) => {
+                  setPlaybackWindow(
+                    insight
+                      ? {
+                          id: insight.id,
+                          fromSeconds: insight.fromSeconds,
+                          toSeconds: insight.toSeconds,
+                        }
+                      : null,
+                  )
+                  // Bring the tab holding this insight forward so its highlighted
+                  // row is the one on show. Leave the tab as-is when clicking off.
+                  if (insight) setRetentionTab(TAB_FOR_INSIGHT_KIND[insight.kind])
+                  // Opening a highlight is the thing the hint was asking for, so
+                  // it has served its purpose whether or not it was read.
+                  if (insight) playbackHint.dismiss()
+                }}
+              />
 
-            {!defaultRetentionTab && (
-              <NoRetentionTips deepAnalysisComplete={deepAnalysisComplete} />
-            )}
-
-            {defaultRetentionTab && (
-              <Tabs
-                value={retentionTab ?? defaultRetentionTab}
-                onValueChange={(value) => setRetentionTab(value as string)}
-              >
-              {/* The info affordance sits inline to the right of the tabs, so
-                  the explanation of how a window is picked (and what it takes
-                  to earn a tip) is one click from the list it describes. */}
-              <div className="flex items-center gap-1">
-                <TabsList>
-                  {hookWindows.length > 0 && (
-                    <TabsTrigger value="hook">
-                      <HookIcon className="text-yellow-500 dark:text-yellow-400" />
-                      Hook
-                    </TabsTrigger>
-                  )}
-                  {drops.length > 0 && (
-                    <TabsTrigger value="drop-offs">
-                      <TrendingDownIcon className="text-destructive" />
-                      Drop-offs
-                    </TabsTrigger>
-                  )}
-                  {gains.length > 0 && (
-                    <TabsTrigger value="gains">
-                      <TrendingUpIcon className="text-emerald-600 dark:text-emerald-400" />
-                      Gains
-                    </TabsTrigger>
-                  )}
-                  {holds.length > 0 && (
-                    <TabsTrigger value="holds">
-                      <MinusIcon className="text-teal-600 dark:text-teal-400" />
-                      Holds
-                    </TabsTrigger>
-                  )}
-                  {pacingStretches.length > 0 && (
-                    <TabsTrigger value="pacing">
-                      <GaugeIcon className="text-blue-600 dark:text-blue-400" />
-                      Pacing
-                    </TabsTrigger>
-                  )}
-                </TabsList>
-                <RetentionEventsInfo />
-              </div>
-
-              {hookWindows.length > 0 && (
-                <TabsContent value="hook">
-                  <RetentionWindows
-                    windows={hookWindows}
-                    transcript={transcript}
-                    attribution={hookSection.attribution}
-                    deepFeedback={hookSection.deepFeedback}
-                    highlightedId={playbackWindow?.id ?? null}
-                    footageTabsHint={showFootageTabsHint}
-                  />
-                </TabsContent>
+              {!defaultRetentionTab && (
+                <NoRetentionTips deepAnalysisComplete={deepAnalysisComplete} />
               )}
 
-              {drops.length > 0 && (
-                <TabsContent value="drop-offs">
-                  <DropList
-                    drops={drops}
-                    transcript={transcript}
-                    attribution={dropSection.attribution}
-                    deepFeedback={dropSection.deepFeedback}
-                    highlightedId={playbackWindow?.id ?? null}
-                    footageTabsHint={showFootageTabsHint}
-                  />
-                </TabsContent>
-              )}
+              {defaultRetentionTab && (
+                <Tabs
+                  value={retentionTab ?? defaultRetentionTab}
+                  onValueChange={(value) => setRetentionTab(value as string)}
+                >
+                {/* The info affordance sits inline to the right of the tabs, so
+                    the explanation of how a window is picked (and what it takes
+                    to earn a tip) is one click from the list it describes. */}
+                <div className="flex items-center gap-1">
+                  <TabsList>
+                    {hookWindows.length > 0 && (
+                      <TabsTrigger value="hook">
+                        <HookIcon className="text-yellow-500 dark:text-yellow-400" />
+                        Hook
+                      </TabsTrigger>
+                    )}
+                    {drops.length > 0 && (
+                      <TabsTrigger value="drop-offs">
+                        <TrendingDownIcon className="text-destructive" />
+                        Drop-offs
+                      </TabsTrigger>
+                    )}
+                    {gains.length > 0 && (
+                      <TabsTrigger value="gains">
+                        <TrendingUpIcon className="text-emerald-600 dark:text-emerald-400" />
+                        Gains
+                      </TabsTrigger>
+                    )}
+                    {holds.length > 0 && (
+                      <TabsTrigger value="holds">
+                        <MinusIcon className="text-teal-600 dark:text-teal-400" />
+                        Holds
+                      </TabsTrigger>
+                    )}
+                    {pacingStretches.length > 0 && (
+                      <TabsTrigger value="pacing">
+                        <GaugeIcon className="text-blue-600 dark:text-blue-400" />
+                        Pacing
+                      </TabsTrigger>
+                    )}
+                  </TabsList>
+                  <RetentionEventsInfo />
+                </div>
 
-              {gains.length > 0 && (
-                <TabsContent value="gains">
-                  <GainList
-                    gains={gains}
-                    transcript={transcript}
-                    attribution={gainSection.attribution}
-                    deepFeedback={gainSection.deepFeedback}
-                    highlightedId={playbackWindow?.id ?? null}
-                    footageTabsHint={showFootageTabsHint}
-                  />
-                </TabsContent>
-              )}
+                {hookWindows.length > 0 && (
+                  <TabsContent value="hook">
+                    <RetentionWindows
+                      windows={hookWindows}
+                      transcript={transcript}
+                      attribution={hookSection.attribution}
+                      deepFeedback={hookSection.deepFeedback}
+                      highlightedId={playbackWindow?.id ?? null}
+                      footageTabsHint={showFootageTabsHint}
+                    />
+                  </TabsContent>
+                )}
 
-              {holds.length > 0 && (
-                <TabsContent value="holds">
-                  <HoldList
-                    holds={holds}
-                    transcript={transcript}
-                    attribution={holdSection.attribution}
-                    deepFeedback={holdSection.deepFeedback}
-                    highlightedId={playbackWindow?.id ?? null}
-                    footageTabsHint={showFootageTabsHint}
-                  />
-                </TabsContent>
-              )}
+                {drops.length > 0 && (
+                  <TabsContent value="drop-offs">
+                    <DropList
+                      drops={drops}
+                      transcript={transcript}
+                      attribution={dropSection.attribution}
+                      deepFeedback={dropSection.deepFeedback}
+                      highlightedId={playbackWindow?.id ?? null}
+                      footageTabsHint={showFootageTabsHint}
+                    />
+                  </TabsContent>
+                )}
 
-              {pacingStretches.length > 0 && (
-                <TabsContent value="pacing">
-                  <PacingAnalysisSection
-                    analysis={pacingAnalysisWithTips}
-                    transcript={transcript}
-                    hasTranscript={transcript.length > 0}
-                    highlightedId={playbackWindow?.id ?? null}
-                  />
-                </TabsContent>
+                {gains.length > 0 && (
+                  <TabsContent value="gains">
+                    <GainList
+                      gains={gains}
+                      transcript={transcript}
+                      attribution={gainSection.attribution}
+                      deepFeedback={gainSection.deepFeedback}
+                      highlightedId={playbackWindow?.id ?? null}
+                      footageTabsHint={showFootageTabsHint}
+                    />
+                  </TabsContent>
+                )}
+
+                {holds.length > 0 && (
+                  <TabsContent value="holds">
+                    <HoldList
+                      holds={holds}
+                      transcript={transcript}
+                      attribution={holdSection.attribution}
+                      deepFeedback={holdSection.deepFeedback}
+                      highlightedId={playbackWindow?.id ?? null}
+                      footageTabsHint={showFootageTabsHint}
+                    />
+                  </TabsContent>
+                )}
+
+                {pacingStretches.length > 0 && (
+                  <TabsContent value="pacing">
+                    <PacingAnalysisSection
+                      analysis={pacingAnalysisWithTips}
+                      transcript={transcript}
+                      hasTranscript={transcript.length > 0}
+                      highlightedId={playbackWindow?.id ?? null}
+                    />
+                  </TabsContent>
+                )}
+              </Tabs>
               )}
-            </Tabs>
-            )}
-          </div>
-        </section>
+            </div>
+          </section>
+        </div>
       </div>
-    </div>
+    </FirstTipHintProvider>
   )
 }
