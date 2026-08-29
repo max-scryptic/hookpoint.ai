@@ -383,13 +383,17 @@ export const DEMO_PACKAGING_COPY = {
   ],
   hookWorked: [
     "The first sentence states the outcome, so the promise is confirmed before any setup.",
-    "The stake is established inside the first eight seconds.",
+    "The stake the thumbnail shows is the first thing the opening line names.",
     "The opening line uses the same words as the title, which confirms the click.",
   ],
+  // Alignment points, like the title and thumbnail lists above: what the
+  // opening says next to the other two surfaces, never how well it holds an
+  // audience, which is the retention report's question. See THE HOOK TIP
+  // DRIFTS in lib/prompts/defaults/light-analysis.ts.
   hookBetter: [
-    "The channel intro sits between the promise and the payoff. Move it or drop it.",
-    "The first fifteen seconds are context that could be inferred from the footage.",
-    "The promise is restated twice before anything new is said.",
+    "The channel intro sits between the title's promise and the line that picks it up.",
+    "The opening names the subject in different words from the title, so the click is not confirmed.",
+    "The thumbnail's claim is the one thing the opening never mentions.",
   ],
 } as const
 
