@@ -11,8 +11,8 @@
 --   • one thumbnail image, in its own private bucket;
 --   • the source footage, which reuses the existing source_files pipeline
 --     (direct-to-storage upload, then the Qencode proxy transcode).
--- From those we transcribe the opening ~30 seconds into `hook_transcript` and
--- store the model's packaging read in `packaging_plan`.
+-- From those we transcribe the spoken script into `transcript` and store the
+-- model's packaging read in `packaging_plan`.
 --
 -- Retention prediction (which stretches of the new video are likely to lose
 -- viewers, learned from the creator's published catalogue) is the next thing
