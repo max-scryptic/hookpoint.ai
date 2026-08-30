@@ -7,6 +7,7 @@ import {
   completeSourceFileUpload,
   discardSourceFile,
   initiateSourceFileUpload,
+  initiateVideoPlanSourceFileUpload,
   isStaleSourceFile,
 } from "@/lib/source-files/upload-service"
 import { mapSourceFileRow } from "@/lib/source-files/source-files"
@@ -403,6 +404,153 @@ describe("completeSourceFileUpload", () => {
       upload_status: "ready",
       validation_status: "warning",
       duration_validation_status: null,
+      uploaded_duration_seconds: null,
+    })
+  })
+})
+
+// The same row as a video plan owns it: no analysed video, no YouTube id, and
+// none of the validation columns those two feed.
+function planSourceFileRow(overrides: Record<string, unknown> = {}) {
+  return sourceFileRow({
+    analysed_video_id: null,
+    youtube_video_id: null,
+    video_plan_id: "plan-1",
+    youtube_duration_seconds: null,
+    storage_path: "user-1/plans/plan-1/sf-1/clip.mp4",
+    ...overrides,
+  })
+}
+
+describe("initiateVideoPlanSourceFileUpload", () => {
+  function makePlanSupabase(planExists: boolean): SupabaseClient {
+    return makeFakeSupabase(({ table, op }) => {
+      if (table === "video_plans") {
+        return {
+          data: planExists
+            ? {
+                id: "plan-1",
+                user_id: "user-1",
+                titles: ["A title"],
+                thumbnail_storage_path: null,
+                thumbnail_mime_type: null,
+                thumbnail_size_bytes: null,
+                status: "draft",
+                failure_reason: null,
+                hook_transcript: null,
+                packaging_plan: null,
+                created_at: "2026-08-30T00:00:00Z",
+                updated_at: "2026-08-30T00:00:00Z",
+              }
+            : null,
+          error: null,
+        }
+      }
+      if (table === "source_files" && op === "select") {
+        return { data: null, error: null }
+      }
+      if (table === "source_files" && op === "insert") {
+        return { data: planSourceFileRow({ upload_status: "pending" }), error: null }
+      }
+      if (table === "source_files" && op === "update") {
+        return { data: planSourceFileRow(), error: null }
+      }
+      return { data: null, error: null }
+    })
+  }
+
+  it("writes the footage under the plan's own object path", async () => {
+    const storage = fakeStorage(true)
+    await initiateVideoPlanSourceFileUpload(makePlanSupabase(true), storage, {
+      userId: "user-1",
+      videoPlanId: "plan-1",
+      originalFilename: "clip.mp4",
+    })
+
+    expect(storage.createSignedUpload).toHaveBeenCalledWith(
+      "user-1/plans/plan-1/sf-1/clip.mp4",
+    )
+  })
+
+  it("refuses a plan that isn't on this account", async () => {
+    await expect(
+      initiateVideoPlanSourceFileUpload(makePlanSupabase(false), fakeStorage(true), {
+        userId: "user-1",
+        videoPlanId: "someone-elses",
+        originalFilename: "clip.mp4",
+      }),
+    ).rejects.toMatchObject({ code: "video_not_found" })
+  })
+
+  it("enforces the accepted formats, as the analysed-video path does", async () => {
+    await expect(
+      initiateVideoPlanSourceFileUpload(makePlanSupabase(true), fakeStorage(true), {
+        userId: "user-1",
+        videoPlanId: "plan-1",
+        originalFilename: "notes.pdf",
+      }),
+    ).rejects.toMatchObject({ code: "unsupported_type" })
+  })
+})
+
+describe("completeSourceFileUpload for a video plan", () => {
+  // There is no published video to check a plan's footage against: no duration
+  // to match and no title for the filename to resemble. It settles on "ready"
+  // and records only what the browser measured.
+  it("skips the YouTube validation entirely", async () => {
+    let updatePayload: Record<string, unknown> | undefined
+    const supabase = makeFakeSupabase(({ table, op, payload }) => {
+      if (table === "source_files" && op === "select") {
+        return { data: planSourceFileRow(), error: null }
+      }
+      if (table === "source_files" && op === "update") {
+        updatePayload = payload as Record<string, unknown>
+        return { data: planSourceFileRow({ upload_status: "ready" }), error: null }
+      }
+      // Reaching analysed_videos at all would mean the branch was not taken.
+      if (table === "analysed_videos") {
+        throw new Error("a plan upload must not look for an analysed video")
+      }
+      return { data: null, error: null }
+    })
+
+    await completeSourceFileUpload(supabase, fakeStorage(true), {
+      userId: "user-1",
+      sourceFileId: "sf-1",
+      clientDurationSeconds: 431,
+    })
+
+    expect(updatePayload).toMatchObject({
+      upload_status: "ready",
+      validation_status: "passed",
+      uploaded_duration_seconds: 431,
+      duration_validation_status: null,
+      failure_reason: null,
+    })
+  })
+
+  it("records no duration when the browser could not read one", async () => {
+    let updatePayload: Record<string, unknown> | undefined
+    const supabase = makeFakeSupabase(({ table, op, payload }) => {
+      if (table === "source_files" && op === "select") {
+        return { data: planSourceFileRow(), error: null }
+      }
+      if (table === "source_files" && op === "update") {
+        updatePayload = payload as Record<string, unknown>
+        return { data: planSourceFileRow({ upload_status: "ready" }), error: null }
+      }
+      return { data: null, error: null }
+    })
+
+    await completeSourceFileUpload(supabase, fakeStorage(true), {
+      userId: "user-1",
+      sourceFileId: "sf-1",
+    })
+
+    // Still ready: an unreadable duration is a fact about the container, not a
+    // reason to refuse footage nothing is being checked against.
+    expect(updatePayload).toMatchObject({
+      upload_status: "ready",
       uploaded_duration_seconds: null,
     })
   })

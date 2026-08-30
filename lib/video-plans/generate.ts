@@ -19,7 +19,7 @@ import {
   type SourceFile,
 } from "@/lib/source-files/source-files"
 import type { StorageProvider } from "@/lib/storage"
-import { getThumbnailStorageProvider } from "@/lib/video-plans/config"
+import { getThumbnailStorageProvider } from "@/lib/video-plans/storage"
 import { transcribeHook } from "@/lib/video-plans/hook-transcript"
 import {
   generateVideoPlanPackaging,

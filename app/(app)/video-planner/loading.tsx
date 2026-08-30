@@ -1,5 +1,3 @@
-import { ClapperboardIcon } from "lucide-react"
-
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -13,9 +11,9 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 
 // Loading boundary for /video-planner. There is no ancestor boundary above it
 // to fall back on, so without this file the previous page would stay frozen on
-// screen until Video Planner resolved. This page is static "coming soon"
-// content with no data fetch, so we render its full chrome and card here - the
-// swap to the real page is seamless.
+// screen until the planner resolved. The page's own reads are its plan list and
+// its entitlement, so the chrome and the heading are drawn for real and only
+// the three builder cards below them are stood in for.
 export default function Loading() {
   return (
     <>
@@ -41,18 +39,19 @@ export default function Loading() {
             Video Planner
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Plan your next upload before it goes live on YouTube.
+            Check your packaging before it goes live. Upload the cut, enter the
+            titles you are weighing up, add the thumbnail, and we will tell you
+            which title fits and what to change.
           </p>
         </div>
 
-        <Card className="flex flex-col items-start gap-3 p-6">
-          <ClapperboardIcon className="size-5 text-muted-foreground" />
-          <div className="w-full space-y-3">
-            <Skeleton className="h-4 w-72" />
+        {[0, 1, 2].map((index) => (
+          <Card key={index} className="gap-4 p-6">
+            <Skeleton className="h-4 w-40" />
             <Skeleton className="h-4 w-full max-w-xl" />
-            <Skeleton className="h-4 w-5/6 max-w-xl" />
-          </div>
-        </Card>
+            <Skeleton className="h-9 w-44" />
+          </Card>
+        ))}
       </div>
     </>
   )

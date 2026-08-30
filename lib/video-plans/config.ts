@@ -1,11 +1,12 @@
 // Configuration for the Video Planner: the thumbnail bucket and the limits its
 // uploads are held to. The footage side of a plan is configured by
 // lib/source-files/config.ts, which it shares with every other upload.
-
-import { getS3Config } from "@/lib/source-files/config"
-import type { StorageProvider } from "@/lib/storage"
-import { S3StorageProvider } from "@/lib/storage/s3-storage"
-import { SupabaseStorageProvider } from "@/lib/storage/supabase-storage"
+//
+// Imports nothing, so the builder form can read the accepted formats and the
+// size cap straight from here and enforce in the browser exactly what the
+// server will. The provider that actually reaches the bucket lives in
+// lib/video-plans/storage.ts, which pulls in the storage SDKs and must never be
+// imported from a client component.
 
 // Private bucket the plan thumbnails live in, mirroring the source-files bucket:
 // access is only ever through a server-minted signed URL.
@@ -57,19 +58,6 @@ export function thumbnailExtensionForMimeType(mimeType: string): string {
 
 export function isAcceptedThumbnailMimeType(mimeType: string): boolean {
   return ACCEPTED_THUMBNAIL_MIME_TYPES.includes(mimeType)
-}
-
-// The storage provider bound to the thumbnail bucket. Same provider choice as
-// the source files (S3-compatible when configured, Supabase Storage otherwise),
-// pointed at a different bucket - thumbnails are images, and the source-files
-// bucket only admits video containers.
-export function getThumbnailStorageProvider(): StorageProvider {
-  const bucket = getVideoPlanThumbnailBucket()
-  const s3 = getS3Config()
-  if (s3) {
-    return new S3StorageProvider(bucket, s3)
-  }
-  return new SupabaseStorageProvider(bucket)
 }
 
 // The opening stretch of the footage treated as "the hook", matching the window

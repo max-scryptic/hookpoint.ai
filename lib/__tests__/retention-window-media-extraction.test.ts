@@ -11,10 +11,7 @@ import {
   type SceneCueScanner,
 } from "@/lib/retention-window-media-extraction"
 import type { RetentionWindowSceneCueScan } from "@/lib/video-scene-cues"
-import type {
-  AnalysedVideoSourceFile,
-  SourceFile,
-} from "@/lib/source-files/source-files"
+import type { AnalysedVideoSourceFile } from "@/lib/source-files/source-files"
 import type { StorageProvider } from "@/lib/storage"
 import type { VideoExtractor } from "@/lib/media/video-extraction"
 import type { OcrEngine } from "@/lib/media/ocr"

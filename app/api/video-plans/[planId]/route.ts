@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getStorageProvider } from "@/lib/storage/provider"
 import { getSourceFileForVideoPlan } from "@/lib/source-files/source-files"
-import { getThumbnailStorageProvider } from "@/lib/video-plans/config"
+import { getThumbnailStorageProvider } from "@/lib/video-plans/storage"
 import { serialiseVideoPlan } from "@/lib/video-plans/serialise"
 import { deleteVideoPlan, getVideoPlan } from "@/lib/video-plans/video-plans"
 

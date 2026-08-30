@@ -4,11 +4,11 @@ import { createClient } from "@/lib/supabase/server"
 import { buildVideoPlanThumbnailObjectPath } from "@/lib/storage/provider"
 import {
   getMaxThumbnailBytes,
-  getThumbnailStorageProvider,
   isAcceptedThumbnailMimeType,
   thumbnailExtensionForMimeType,
   ACCEPTED_THUMBNAIL_EXTENSIONS,
 } from "@/lib/video-plans/config"
+import { getThumbnailStorageProvider } from "@/lib/video-plans/storage"
 import { getVideoPlan, updateVideoPlan } from "@/lib/video-plans/video-plans"
 
 // POST /api/video-plans/:planId/thumbnail
