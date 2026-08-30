@@ -8,13 +8,18 @@
 // The broad category of a logged cost. Kept in sync with the cost_type check
 // constraint in the 20260720130000_create_cost_logs migration. This is the
 // top-level split; call_type below only further breaks down LLM calls.
-export const COST_TYPES = ["llm_call", "qencode_transcode"] as const
+export const COST_TYPES = [
+  "llm_call",
+  "qencode_transcode",
+  "openai_transcription",
+] as const
 
 export type CostType = (typeof COST_TYPES)[number]
 
 export const COST_TYPE_LABELS: Record<CostType, string> = {
   llm_call: "LLM call",
   qencode_transcode: "Qencode Transcode",
+  openai_transcription: "OpenAI Transcription",
 }
 
 // The specific kind of LLM call - the variety of LLM work we do. Kept in sync
@@ -104,6 +109,7 @@ export const COST_SCOPES = [
   "llm_call:analysis",
   "llm_call:comparison",
   "qencode_transcode",
+  "openai_transcription",
 ] as const
 
 export type CostScope = (typeof COST_SCOPES)[number]
@@ -113,6 +119,7 @@ export const COST_SCOPE_LABELS: Record<CostScope, string> = {
   "llm_call:analysis": "LLM calls · analysis",
   "llm_call:comparison": "LLM calls · comparison reports",
   qencode_transcode: "Qencode Transcode",
+  openai_transcription: "OpenAI Transcription",
 }
 
 // The dropdown value for a (cost type, call group) pair - the empty string when
@@ -151,7 +158,7 @@ export function callTypeInScope(
 ): LlmCallType | undefined {
   if (!callType) return undefined
   const { costType, callGroup } = costScopeFilters(scope)
-  if (costType === "qencode_transcode") return undefined
+  if (costType && costType !== "llm_call") return undefined
   if (callGroup && llmCallGroup(callType) !== callGroup) return undefined
   return callType
 }
@@ -179,6 +186,10 @@ export function analysisCostBucket(
   callType: LlmCallType | null,
 ): AnalysisCostBucket {
   if (costType === "qencode_transcode") return "deep"
+  // Transcription only ever happens for a video plan, which has no analysed
+  // video to be bucketed against. It is named for exhaustiveness and lands in
+  // "light", the same default an untyped call gets.
+  if (costType === "openai_transcription") return "light"
   if (callType && DEEP_LLM_CALL_TYPES.has(callType)) return "deep"
   return "light"
 }

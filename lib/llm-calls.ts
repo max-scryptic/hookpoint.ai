@@ -113,6 +113,31 @@ export async function recordLlmCallCost(
   )
 }
 
+// Convenience for an OpenAI transcription: an 'openai_transcription' cost with
+// no call type and no tokens, because transcription is billed per minute of
+// audio rather than per token. The model is recorded (unlike the transcode
+// below, which has none) because the per-minute rate differs between them.
+export async function recordTranscriptionCall(
+  costUsd: number,
+  model: string,
+  context: LlmLogContext,
+  admin?: SupabaseClient,
+): Promise<void> {
+  await recordCostLog(
+    {
+      costType: "openai_transcription",
+      callType: null,
+      provider: "openai",
+      model,
+      costUsd,
+      userId: context.userId,
+      analysedVideoId: context.analysedVideoId,
+      userEmail: context.userEmail,
+    },
+    admin,
+  )
+}
+
 // Convenience for a Qencode transcoding job: a 'qencode_transcode' cost with no
 // call type, model or tokens - just the derived dollar cost against the
 // user/video whose upload was transcoded.

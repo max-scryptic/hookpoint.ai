@@ -45,10 +45,18 @@ create table public.video_plans (
     check (status in ('draft', 'processing', 'ready', 'failed')),
   failure_reason text,
 
-  -- The spoken opening, transcribed from the uploaded footage. This is the
-  -- planner's stand-in for the caption transcript a published video has: there
-  -- are no YouTube captions for a video nobody can watch yet.
-  hook_transcript text,
+  -- The whole spoken script, transcribed from the uploaded footage: an array of
+  -- { startSeconds, endSeconds, text } cues, exactly the TranscriptCue[] shape
+  -- analysed_videos.transcript holds for a published video.
+  --
+  -- The planner's stand-in for the caption track a published video has, because
+  -- there are no YouTube captions for a video nobody can watch yet. Packaging
+  -- only reads the first thirty seconds of it, but the shape and the coverage
+  -- are deliberately the full published-video ones: every light-analysis pass
+  -- retention prediction will need (pacing, retention attribution, script
+  -- taxonomy) takes exactly this, so a plan transcribed hook-only would have to
+  -- be re-transcribed from scratch the moment that lands.
+  transcript jsonb,
 
   -- The model's read of the packaging (lib/video-plans/packaging-plan.ts).
   packaging_plan jsonb,
@@ -191,6 +199,18 @@ on conflict (id) do nothing;
 -- --------------------------------------------------------------------------
 -- Cost logging
 -- --------------------------------------------------------------------------
+-- Transcribing a plan's footage is a new kind of paid cost: OpenAI bills it per
+-- minute of audio, so it has no tokens and no model rate card, exactly like the
+-- Qencode transcode beside it. Recreate the cost_type check with it added,
+-- keeping both previously permitted types.
+alter table public.cost_logs
+  drop constraint if exists cost_logs_cost_type_check;
+
+alter table public.cost_logs
+  add constraint cost_logs_cost_type_check check (
+    cost_type in ('llm_call', 'qencode_transcode', 'openai_transcription')
+  );
+
 -- The planner's packaging read is a new call_type. Recreate the check
 -- constraint with it added, keeping every previously permitted type.
 alter table public.cost_logs

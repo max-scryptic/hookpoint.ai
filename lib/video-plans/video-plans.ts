@@ -9,6 +9,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import type { TranscriptCue } from "@/lib/youtube/youtube"
 import type { VideoPlanPackaging } from "@/lib/video-plans/packaging-plan"
 
 export type VideoPlanStatus = "draft" | "processing" | "ready" | "failed"
@@ -22,7 +23,9 @@ export interface VideoPlan {
   thumbnailSizeBytes: number | null
   status: VideoPlanStatus
   failureReason: string | null
-  hookTranscript: string | null
+  // The whole spoken script, in the same shape a published video's caption
+  // track is stored in, so the retention passes can take it unchanged.
+  transcript: TranscriptCue[] | null
   packagingPlan: VideoPlanPackaging | null
   createdAt: string
   updatedAt: string
@@ -37,14 +40,14 @@ interface VideoPlanRow {
   thumbnail_size_bytes: number | null
   status: VideoPlanStatus
   failure_reason: string | null
-  hook_transcript: string | null
+  transcript: TranscriptCue[] | null
   packaging_plan: VideoPlanPackaging | null
   created_at: string
   updated_at: string
 }
 
 const COLUMNS =
-  "id, user_id, titles, thumbnail_storage_path, thumbnail_mime_type, thumbnail_size_bytes, status, failure_reason, hook_transcript, packaging_plan, created_at, updated_at"
+  "id, user_id, titles, thumbnail_storage_path, thumbnail_mime_type, thumbnail_size_bytes, status, failure_reason, transcript, packaging_plan, created_at, updated_at"
 
 export function mapVideoPlanRow(row: VideoPlanRow): VideoPlan {
   return {
@@ -56,7 +59,7 @@ export function mapVideoPlanRow(row: VideoPlanRow): VideoPlan {
     thumbnailSizeBytes: row.thumbnail_size_bytes,
     status: row.status,
     failureReason: row.failure_reason,
-    hookTranscript: row.hook_transcript,
+    transcript: row.transcript,
     packagingPlan: row.packaging_plan,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -131,7 +134,7 @@ export interface UpdateVideoPlanInput {
   thumbnailSizeBytes?: number | null
   status?: VideoPlanStatus
   failureReason?: string | null
-  hookTranscript?: string | null
+  transcript?: TranscriptCue[] | null
   packagingPlan?: VideoPlanPackaging | null
 }
 
@@ -146,7 +149,7 @@ function toRow(input: UpdateVideoPlanInput): Record<string, unknown> {
     row.thumbnail_size_bytes = input.thumbnailSizeBytes
   if ("status" in input) row.status = input.status
   if ("failureReason" in input) row.failure_reason = input.failureReason
-  if ("hookTranscript" in input) row.hook_transcript = input.hookTranscript
+  if ("transcript" in input) row.transcript = input.transcript
   if ("packagingPlan" in input) row.packaging_plan = input.packagingPlan
   return row
 }

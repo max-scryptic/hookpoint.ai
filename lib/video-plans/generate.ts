@@ -14,13 +14,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { scrubDashes } from "@/lib/copy-guardrails"
+import { transcriptForSegment } from "@/lib/youtube/youtube"
 import {
   resolveAnalysisSourceStoragePath,
   type SourceFile,
 } from "@/lib/source-files/source-files"
 import type { StorageProvider } from "@/lib/storage"
 import { getThumbnailStorageProvider } from "@/lib/video-plans/storage"
-import { transcribeHook } from "@/lib/video-plans/hook-transcript"
+import { PLAN_HOOK_WINDOW_SECONDS } from "@/lib/video-plans/config"
+import { transcribeFootage } from "@/lib/video-plans/transcript"
 import {
   generateVideoPlanPackaging,
   type VideoPlanPackaging,
@@ -94,10 +96,11 @@ export async function generatePlanPackaging(
   const readiness = planReadiness(plan, footageIsReady)
   if (!readiness.ready) return { status: "processing" }
 
-  const source = sourceFile
-    ? resolveAnalysisSourceStoragePath(sourceFile)
-    : null
-  if (!source) {
+  // planReadiness above already established the footage is ready, which it can
+  // only be with a source file present; narrowed here so the storage path and
+  // the measured duration below can both be read off it.
+  const source = sourceFile ? resolveAnalysisSourceStoragePath(sourceFile) : null
+  if (!source || !sourceFile) {
     return await fail(
       supabase,
       userId,
@@ -118,19 +121,37 @@ export async function generatePlanPackaging(
       ),
     ])
 
-    const hookTranscript = await transcribeHook(sourceUrl)
+    // The whole script, not just the opening. Packaging reads the first thirty
+    // seconds of it below; the rest is stored because retention prediction is
+    // built on exactly this and re-transcribing later would be paying twice.
+    //
+    // Transcribing is by far the longest step (one ffmpeg decode and one upload
+    // per ten minutes of footage), so it is stored the moment it finishes,
+    // before the packaging call. That way an invocation killed part-way through
+    // the read does not throw away a transcript the creator has already paid
+    // for: the retry below finds it and goes straight to packaging.
+    let cues = plan.transcript
+    if (!cues) {
+      const transcribed = await transcribeFootage(sourceUrl, {
+        durationSeconds: sourceFile.uploadedDurationSeconds,
+        logContext: { userId },
+      })
+      cues = transcribed.cues
+      await updateVideoPlan(supabase, userId, planId, { transcript: cues })
+    }
 
     const packaging = await generateVideoPlanPackaging(
       {
         titles: plan.titles,
         thumbnailDataUri,
-        hookTranscript,
+        // Sliced with the same helper the published report uses, so "the hook"
+        // means the same span of speech on both.
+        hookTranscript: transcriptForSegment(cues, 0, PLAN_HOOK_WINDOW_SECONDS),
       },
       { userId },
     )
 
     const updated = await updateVideoPlan(supabase, userId, planId, {
-      hookTranscript,
       // Model-written prose rendered verbatim on the page, so it is scrubbed of
       // dashes on the way in. See the copy guardrail in lib/copy-guardrails.ts.
       packagingPlan: scrubDashes<VideoPlanPackaging>(packaging),
