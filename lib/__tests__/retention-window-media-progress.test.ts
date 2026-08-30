@@ -14,6 +14,7 @@ function makeSourceFile(overrides: Partial<SourceFile> = {}): SourceFile {
     id: "sf-1",
     userId: "user-1",
     analysedVideoId: "av-1",
+    videoPlanId: null,
     youtubeVideoId: "vid-1",
     originalFilename: "clip.mp4",
     storageProvider: "fake",
@@ -55,6 +56,7 @@ function makeFakeSupabase(tables: Record<string, Record<string, unknown>[]>) {
         select: () => builder,
         eq: () => builder,
         in: () => builder,
+        not: () => builder,
         then: (resolve: (v: unknown) => unknown) =>
           Promise.resolve({ data: tables[table] ?? [], error: null }).then(resolve),
       }
@@ -345,6 +347,7 @@ function makeProcessingFakeSupabase(rows: Record<string, unknown>[]) {
         select: () => builder,
         eq: () => builder,
         in: () => builder,
+        not: () => builder,
         then: (resolve: (v: unknown) => unknown) =>
           Promise.resolve({ data: rows, error: null }).then(resolve),
       }

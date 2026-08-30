@@ -22,6 +22,7 @@ function makeSourceFile(overrides: Partial<SourceFile> = {}): SourceFile {
     id: "sf-1",
     userId: "user-1",
     analysedVideoId: "av-1",
+    videoPlanId: null,
     youtubeVideoId: "vid-1",
     originalFilename: "clip.mp4",
     storageProvider: "fake",

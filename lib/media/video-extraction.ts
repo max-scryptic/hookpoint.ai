@@ -85,6 +85,43 @@ export const defaultVideoExtractor: VideoExtractor = {
   extractAudioSegment,
 }
 
+// ffmpeg prints the container's duration on stderr as "Duration: 00:12:34.56"
+// while it opens the input. Exported for direct testing against real ffmpeg
+// output.
+export function parseMediaDuration(stderr: string): number | null {
+  const match = stderr.match(/Duration:\s*(\d+):(\d{2}):(\d{2})(?:\.(\d+))?/)
+  if (!match) return null
+  const [, hours, minutes, seconds, fraction] = match
+  const total =
+    Number(hours) * 3600 +
+    Number(minutes) * 60 +
+    Number(seconds) +
+    (fraction ? Number(`0.${fraction}`) : 0)
+  return Number.isFinite(total) && total > 0 ? total : null
+}
+
+// Reads a source's duration without decoding it: ffmpeg opens the input, prints
+// the header it found, and is stopped immediately by an empty output. Cheap
+// enough to run against a signed URL, because opening the input only range-reads
+// the container header rather than streaming the file.
+//
+// There is no ffprobe binary in this environment - @ffmpeg-installer ships
+// ffmpeg alone - which is why this reads the figure off ffmpeg's own log.
+export async function measureMediaDuration(
+  sourceUrl: string,
+): Promise<number | null> {
+  const { stderr } = await runFfmpegCapturingOutput([
+    "-i",
+    sourceUrl,
+    "-f",
+    "null",
+    "-t",
+    "0",
+    "-",
+  ])
+  return parseMediaDuration(stderr)
+}
+
 export interface AudioSignalStats {
   // Mean loudness in dB, as ffmpeg's volumedetect filter measures it (0 is
   // maximum digital amplitude, so this is always <= 0). Null if the filter's
