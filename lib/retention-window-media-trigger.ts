@@ -45,7 +45,10 @@ import {
   extractPendingRetentionWindowMedia,
   isSourceFileReady,
 } from "@/lib/retention-window-media-extraction"
-import type { SourceFile } from "@/lib/source-files/source-files"
+import type {
+  AnalysedVideoSourceFile,
+  SourceFile,
+} from "@/lib/source-files/source-files"
 import { synthesizeRetentionWindowEvents } from "@/lib/retention-window-event-synthesis"
 import {
   claimDeepAnalysisPipelineRun,
@@ -87,7 +90,10 @@ export function triggerRetentionWindowMediaExtraction(
     // actually spending, not just the part after the lease was claimed.
     const budget = createDeepAnalysisInvocationBudget()
     const admin = createAdminClient()
-    const file = sourceFile as SourceFile
+    // isSourceFileReady above narrowed this to an analysed-video upload, but
+    // the closure loses that: TypeScript can't know the guard still holds by
+    // the time after() runs it.
+    const file = sourceFile as AnalysedVideoSourceFile
     const run = await claimDeepAnalysisPipelineRun(
       admin,
       file.userId,

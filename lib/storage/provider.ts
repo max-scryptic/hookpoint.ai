@@ -30,6 +30,31 @@ export function buildSourceFileObjectPath(params: {
   return `${params.userId}/${params.youtubeVideoId}/${params.sourceFileId}/${safeName}`
 }
 
+// The same path shape for a video plan's footage, keyed on the plan instead of
+// a YouTube video. The "plans/" segment keeps the two namespaces from ever
+// colliding on a user whose plan id and video id could otherwise sit at the
+// same depth.
+export function buildVideoPlanSourceFileObjectPath(params: {
+  userId: string
+  videoPlanId: string
+  sourceFileId: string
+  originalFilename: string
+}): string {
+  const safeName = sanitiseFilename(params.originalFilename)
+  return `${params.userId}/plans/${params.videoPlanId}/${params.sourceFileId}/${safeName}`
+}
+
+// Where a plan's thumbnail lives, in its own bucket. One object per plan,
+// replaced in place when a new thumbnail is picked, with the extension carried
+// over so storage reports a sensible content type.
+export function buildVideoPlanThumbnailObjectPath(params: {
+  userId: string
+  videoPlanId: string
+  extension: string
+}): string {
+  return `${params.userId}/${params.videoPlanId}/thumbnail.${params.extension}`
+}
+
 // Reduces a client-provided filename to a safe storage leaf: keeps the
 // extension, strips path separators and anything that isn't an alnum/dot/dash/
 // underscore, and caps the length.

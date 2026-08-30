@@ -84,8 +84,10 @@ import {
   getProxyTargetHeight,
 } from "@/lib/source-files/normalisation-config"
 import {
+  isAnalysedVideoSourceFile,
   resolveAnalysisSourceStoragePath,
   resolvePlaybackStoragePath,
+  type AnalysedVideoSourceFile,
   type SourceFile,
 } from "@/lib/source-files/source-files"
 import type { StorageProvider } from "@/lib/storage"
@@ -139,9 +141,17 @@ export function defaultRetentionWindowMediaExtractionDeps(): RetentionWindowMedi
 // True when a source file is actually readable right now - the normalised
 // proxy or the original master, whichever resolvePlaybackStoragePath resolves
 // to. Extraction can run against either.
-export function isSourceFileReady(sourceFile: SourceFile | null): boolean {
+//
+// It also asserts the file belongs to an analysed video, which is what makes
+// this the gate on the whole deep-analysis pipeline: a video-plan upload has no
+// retention windows to extract media for, so it is not merely skipped here, it
+// cannot be passed on.
+export function isSourceFileReady(
+  sourceFile: SourceFile | null,
+): sourceFile is AnalysedVideoSourceFile {
   return (
     sourceFile != null &&
+    isAnalysedVideoSourceFile(sourceFile) &&
     sourceFile.uploadStatus === "ready" &&
     resolvePlaybackStoragePath(sourceFile) != null
   )
@@ -280,7 +290,7 @@ export function sliceSceneCues(
 export async function extractPendingRetentionWindowMedia(
   admin: SupabaseClient,
   sourceStorage: StorageProvider,
-  sourceFile: SourceFile,
+  sourceFile: AnalysedVideoSourceFile,
   deps: RetentionWindowMediaExtractionDeps = defaultRetentionWindowMediaExtractionDeps(),
 ): Promise<void> {
   const analysisSource = resolveAnalysisSourceStoragePath(sourceFile)
@@ -568,7 +578,7 @@ export async function extractPendingRetentionWindowMedia(
 // snapshot rows, and the scan's own status.
 async function scanMergedSpan(
   admin: SupabaseClient,
-  sourceFile: SourceFile,
+  sourceFile: AnalysedVideoSourceFile,
   source: string,
   span: MergedScanSpan,
   deps: RetentionWindowMediaExtractionDeps,

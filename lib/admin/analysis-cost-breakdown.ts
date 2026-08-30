@@ -41,6 +41,11 @@ export const ANALYSIS_COST_SECTION_LABELS: Record<AnalysisCostSection, string> =
     // is named here because the section type covers every call type, not
     // because a line for it can appear on this tab.
     tip_examples: "Tip examples",
+    // Also never billed against a video: a video plan is about footage that has
+    // no analysed video behind it at all, so its packaging read is logged
+    // against the user alone (see lib/video-plans/generate.ts). Named here for
+    // the same reason as tip_examples.
+    video_plan_packaging: "Video plan packaging",
     qencode_transcode: "Transcoding",
   }
 
