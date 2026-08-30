@@ -35,6 +35,7 @@ export const LLM_CALL_TYPES = [
   "event_synthesis",
   "transcript_taxonomy",
   "tip_examples",
+  "video_plan_packaging",
 ] as const
 
 export type LlmCallType = (typeof LLM_CALL_TYPES)[number]
@@ -53,6 +54,7 @@ export const LLM_CALL_TYPE_LABELS: Record<LlmCallType, string> = {
   event_synthesis: "Deep video analysis · event synthesis",
   transcript_taxonomy: "Deep video analysis · transcript taxonomy",
   tip_examples: "Tips · worked examples",
+  video_plan_packaging: "Video planner · packaging",
 }
 
 // The two kinds of LLM work we bill for, one level above call_type: the

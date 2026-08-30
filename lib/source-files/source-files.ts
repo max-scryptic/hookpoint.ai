@@ -30,8 +30,13 @@ export type NormalisationStatus =
 export interface SourceFile {
   id: string
   userId: string
-  analysedVideoId: string
-  youtubeVideoId: string
+  // Exactly one of these two is set (enforced by source_files_owner_check): an
+  // upload belongs either to an analysed YouTube video or to a video plan.
+  // A plan-owned file has no YouTube video behind it, which is why the id and
+  // the video id it carries are both nullable.
+  analysedVideoId: string | null
+  youtubeVideoId: string | null
+  videoPlanId: string | null
   originalFilename: string
   storageProvider: string
   storagePath: string | null
@@ -67,11 +72,31 @@ export interface SourceFile {
   updatedAt: string
 }
 
+// A source file that belongs to an analysed YouTube video, with the two ids
+// that ownership guarantees narrowed to non-null. The whole deep-analysis
+// pipeline is about published videos - it works against retention windows, which
+// only exist once a video has an audience - so every entry point into it takes
+// this rather than a bare SourceFile, and a plan-owned upload is turned away by
+// the type system rather than by a runtime check nobody remembers to write.
+export type AnalysedVideoSourceFile = SourceFile & {
+  analysedVideoId: string
+  youtubeVideoId: string
+}
+
+export function isAnalysedVideoSourceFile(
+  sourceFile: SourceFile,
+): sourceFile is AnalysedVideoSourceFile {
+  return (
+    sourceFile.analysedVideoId != null && sourceFile.youtubeVideoId != null
+  )
+}
+
 interface SourceFileRow {
   id: string
   user_id: string
-  analysed_video_id: string
-  youtube_video_id: string
+  analysed_video_id: string | null
+  youtube_video_id: string | null
+  video_plan_id: string | null
   original_filename: string
   storage_provider: string
   storage_path: string | null
@@ -102,7 +127,7 @@ interface SourceFileRow {
 }
 
 const COLUMNS =
-  "id, user_id, analysed_video_id, youtube_video_id, original_filename, storage_provider, storage_path, file_size_bytes, mime_type, uploaded_duration_seconds, youtube_duration_seconds, duration_difference_seconds, duration_validation_status, filename_validation_status, filename_similarity_score, validation_status, upload_status, failure_reason, delete_after, proxy_storage_path, proxy_size_bytes, analysis_proxy_storage_path, analysis_proxy_size_bytes, normalisation_status, normalisation_provider, normalisation_task_token, normalisation_error, original_deleted_at, deep_credits_charged, created_at, updated_at"
+  "id, user_id, analysed_video_id, youtube_video_id, video_plan_id, original_filename, storage_provider, storage_path, file_size_bytes, mime_type, uploaded_duration_seconds, youtube_duration_seconds, duration_difference_seconds, duration_validation_status, filename_validation_status, filename_similarity_score, validation_status, upload_status, failure_reason, delete_after, proxy_storage_path, proxy_size_bytes, analysis_proxy_storage_path, analysis_proxy_size_bytes, normalisation_status, normalisation_provider, normalisation_task_token, normalisation_error, original_deleted_at, deep_credits_charged, created_at, updated_at"
 
 export function mapSourceFileRow(row: SourceFileRow): SourceFile {
   return {
@@ -110,6 +135,7 @@ export function mapSourceFileRow(row: SourceFileRow): SourceFile {
     userId: row.user_id,
     analysedVideoId: row.analysed_video_id,
     youtubeVideoId: row.youtube_video_id,
+    videoPlanId: row.video_plan_id,
     originalFilename: row.original_filename,
     storageProvider: row.storage_provider,
     storagePath: row.storage_path,
@@ -236,6 +262,44 @@ export async function createSourceFile(
   return mapSourceFileRow(data as SourceFileRow)
 }
 
+export interface CreateVideoPlanSourceFileInput {
+  userId: string
+  videoPlanId: string
+  originalFilename: string
+  mimeType: string | null
+  storageProvider: string
+}
+
+// The plan-owned counterpart of createSourceFile. There is no YouTube video
+// behind a plan, so none of the duration/title validation columns are seeded:
+// the upload is the only copy of this footage that exists, so there is nothing
+// to check it against. It goes straight to "pending" and, on completion, to
+// "ready" (see completeSourceFileUpload).
+export async function createVideoPlanSourceFile(
+  supabase: SupabaseClient,
+  input: CreateVideoPlanSourceFileInput,
+): Promise<SourceFile> {
+  const { data, error } = await supabase
+    .from("source_files")
+    .insert({
+      user_id: input.userId,
+      video_plan_id: input.videoPlanId,
+      original_filename: input.originalFilename,
+      mime_type: input.mimeType,
+      storage_provider: input.storageProvider,
+      upload_status: "pending",
+      validation_status: "pending",
+    })
+    .select(COLUMNS)
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to create video plan source file: ${error.message}`)
+  }
+
+  return mapSourceFileRow(data as SourceFileRow)
+}
+
 // Replaces any existing source file for an analysed video with a fresh pending
 // record (the table allows one per analysed video). Returns the old storage path
 // so the caller can clean up the orphaned object. Used for re-upload/retry.
@@ -295,6 +359,67 @@ export async function getSourceFileById(
   return data ? mapSourceFileRow(data as SourceFileRow) : null
 }
 
+// Replaces any existing source file for a video plan with a fresh pending
+// record (one per plan, as for an analysed video). Returns the old storage
+// paths so the caller can clean up the orphaned objects.
+export async function replaceVideoPlanSourceFile(
+  supabase: SupabaseClient,
+  input: CreateVideoPlanSourceFileInput,
+): Promise<{
+  sourceFile: SourceFile
+  previousStoragePaths: (string | null)[]
+}> {
+  const existing = await getSourceFileForVideoPlan(
+    supabase,
+    input.userId,
+    input.videoPlanId,
+  )
+
+  if (existing) {
+    const { error } = await supabase
+      .from("source_files")
+      .delete()
+      .eq("id", existing.id)
+      .eq("user_id", input.userId)
+    if (error) {
+      throw new Error(`Failed to clear existing source file: ${error.message}`)
+    }
+  }
+
+  const sourceFile = await createVideoPlanSourceFile(supabase, input)
+  return {
+    sourceFile,
+    previousStoragePaths: [
+      existing?.storagePath ?? null,
+      existing?.proxyStoragePath ?? null,
+      existing?.analysisProxyStoragePath ?? null,
+    ],
+  }
+}
+
+// Fetches the source file for a video plan (one per plan), scoped to the owner.
+// Returns null when nothing has been uploaded for it yet.
+export async function getSourceFileForVideoPlan(
+  supabase: SupabaseClient,
+  userId: string,
+  videoPlanId: string,
+): Promise<SourceFile | null> {
+  const { data, error } = await supabase
+    .from("source_files")
+    .select(COLUMNS)
+    .eq("user_id", userId)
+    .eq("video_plan_id", videoPlanId)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(
+      `Failed to load source file for video plan: ${error.message}`,
+    )
+  }
+
+  return data ? mapSourceFileRow(data as SourceFileRow) : null
+}
+
 // Fetches the source file for a given YouTube video (one per video), scoped to
 // the owner. Returns null when none has been uploaded.
 export async function getSourceFileForVideo(
@@ -329,6 +454,10 @@ export async function listReadySourceFileVideoIds(
     .select("youtube_video_id")
     .eq("user_id", userId)
     .eq("upload_status", "ready")
+    // Video-plan uploads live in this table too and carry no YouTube video, so
+    // they are excluded from everything that answers "which of my analysed
+    // videos have a raw file".
+    .not("analysed_video_id", "is", null)
 
   if (error) {
     throw new Error(
@@ -366,6 +495,9 @@ export async function listReadySourceFileSummaries(
     .select("analysed_video_id, youtube_video_id, normalisation_status")
     .eq("user_id", userId)
     .eq("upload_status", "ready")
+    // See listReadySourceFileVideoIds: plan-owned uploads are not analysed
+    // videos and must not be counted as one.
+    .not("analysed_video_id", "is", null)
 
   if (error) {
     throw new Error(

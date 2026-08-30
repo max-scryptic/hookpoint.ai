@@ -41,6 +41,7 @@ import {
   SCRIPT_TAXONOMY_PROMPT,
 } from "@/lib/prompts/defaults/light-analysis"
 import { TIP_EXAMPLES_PROMPT } from "@/lib/prompts/defaults/tips"
+import { VIDEO_PLAN_PACKAGING_PROMPT } from "@/lib/prompts/defaults/video-planner"
 import { TIP_EXAMPLE_VOICE_PROMPT } from "@/lib/tip-example-voice"
 import { TIP_VOICE_PROMPT } from "@/lib/tip-voice"
 
@@ -51,6 +52,7 @@ export const PROMPT_GROUPS = [
   "light_analysis",
   "deep_analysis",
   "comparison",
+  "video_planner",
   "tips",
   "shared",
 ] as const
@@ -61,6 +63,7 @@ export const PROMPT_GROUP_LABELS: Record<PromptGroup, string> = {
   light_analysis: "Light analysis",
   deep_analysis: "Deep analysis",
   comparison: "Video comparison",
+  video_planner: "Video planner",
   tips: "Tips",
   shared: "Shared fragments",
 }
@@ -71,6 +74,8 @@ export const PROMPT_GROUP_DESCRIPTIONS: Record<PromptGroup, string> = {
   deep_analysis:
     "The opt-in pass over an uploaded source file: frames, audio and the retention curve read together.",
   comparison: "The head-to-head reports generated between two videos.",
+  video_planner:
+    "The read of a video that has not been published yet: its candidate titles, its thumbnail and the hook transcribed from the footage.",
   tips: "The fallback that writes a tip's worked examples when the prompt that wrote the tip did not. Every prompt above that writes a tip now writes its examples too.",
   shared:
     "Rules quoted by other prompts rather than sent on their own. Editing one changes every prompt that references it.",
@@ -301,6 +306,20 @@ const DEFINITIONS: readonly PromptDefinition[] = [
     modelEnvVar: "OPENAI_EVENT_SYNTHESIS_MODEL",
     default: EVENT_SYNTHESIS_PROMPT,
     fragments: [PLAIN_NUMBERS_KEY],
+  },
+
+  // --- Video planner --------------------------------------------------------
+  {
+    key: "video_plan_packaging",
+    label: "Video plan packaging",
+    group: "video_planner",
+    role: "developer",
+    description:
+      "Reads one to three candidate titles against the intended thumbnail and the hook transcribed from the unpublished footage, then recommends a title and the changes to make before publishing. Sent with the thumbnail image.",
+    source: "lib/video-plans/packaging-plan.ts",
+    modelEnvVar: "OPENAI_VIDEO_PLAN_PACKAGING_MODEL",
+    default: VIDEO_PLAN_PACKAGING_PROMPT,
+    fragments: [TIP_VOICE_KEY, TIP_EXAMPLE_VOICE_KEY, PLAIN_NUMBERS_KEY],
   },
 
   // --- Tips -----------------------------------------------------------------
