@@ -55,7 +55,7 @@ function Included({ included }: { included: boolean }) {
       {included ? (
         <CheckIcon className="mx-auto size-4 text-emerald-600 dark:text-emerald-500" />
       ) : (
-        <XIcon className="mx-auto size-4 text-muted-foreground/60" />
+        <XIcon className="mx-auto size-4 text-red-600 dark:text-red-500" />
       )}
       <span className="sr-only">{included ? "Included" : "Not included"}</span>
     </>
