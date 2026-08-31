@@ -48,6 +48,23 @@ describe("normaliseTitles", () => {
     expect(() => normaliseTitles("not an array")).toThrow(InvalidTitlesError)
   })
 
+  it("lets a draft hold no titles at all", () => {
+    expect(normaliseTitles([], { allowEmpty: true })).toEqual([])
+    expect(normaliseTitles(["", "  "], { allowEmpty: true })).toEqual([])
+    // "New plan" sends no titles at all, which is the same empty draft.
+    expect(normaliseTitles(undefined, { allowEmpty: true })).toEqual([])
+    expect(normaliseTitles(null, { allowEmpty: true })).toEqual([])
+  })
+
+  it("still rejects something that is not a title list, draft or not", () => {
+    expect(() => normaliseTitles("not an array", { allowEmpty: true })).toThrow(
+      InvalidTitlesError,
+    )
+    expect(() =>
+      normaliseTitles(["x".repeat(TITLE_MAX_LENGTH + 1)], { allowEmpty: true }),
+    ).toThrow(InvalidTitlesError)
+  })
+
   it("rejects a title past YouTube's own limit", () => {
     expect(() => normaliseTitles(["x".repeat(TITLE_MAX_LENGTH + 1)])).toThrow(
       InvalidTitlesError,

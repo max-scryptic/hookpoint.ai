@@ -6,10 +6,16 @@ import { createVideoPlan } from "@/lib/video-plans/video-plans"
 import { InvalidTitlesError, normaliseTitles } from "@/lib/video-plans/titles"
 
 // POST /api/video-plans
-// Body: { titles: string[] }
-// Creates the draft plan the builder then attaches a thumbnail and footage to.
-// The row exists first because both of those need something to hang off: the
-// thumbnail's object path is keyed on the plan id, and so is the source file's.
+// Body: { titles?: string[] }
+// Creates the draft plan its own page then attaches titles, a thumbnail and
+// footage to. The row exists first because all of those need something to hang
+// off: the thumbnail's object path is keyed on the plan id, and so is the
+// source file's, and the row is what the planner's list has to show while the
+// creator is still filling it in.
+//
+// Titles are optional here. "New plan" opens an empty draft, and the creator
+// types into it on the plan's own page; what a plan cannot be read without is
+// enforced where the read is started (planReadiness), not here.
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
   const {
@@ -46,7 +52,7 @@ export async function POST(request: NextRequest) {
 
   let titles: string[]
   try {
-    titles = normaliseTitles(body.titles)
+    titles = normaliseTitles(body.titles, { allowEmpty: true })
   } catch (error) {
     if (error instanceof InvalidTitlesError) {
       return NextResponse.json(
