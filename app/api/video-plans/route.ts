@@ -2,6 +2,10 @@ import { NextResponse, type NextRequest } from "next/server"
 
 import { createClient } from "@/lib/supabase/server"
 import { checkUploadAllowed } from "@/lib/billing/entitlements"
+import {
+  countDeeplyAnalysedVideos,
+  VIDEO_PLANNER_VIDEO_THRESHOLD,
+} from "@/lib/deep-analysis-library"
 import { createVideoPlan } from "@/lib/video-plans/video-plans"
 import { InvalidTitlesError, normaliseTitles } from "@/lib/video-plans/titles"
 
@@ -42,6 +46,28 @@ export async function POST(request: NextRequest) {
       { error: uploadCheck.reason, message: uploadCheck.message },
       { status: 402 },
     )
+  }
+
+  // The second gate: a plan is read against the creator's own library, so it
+  // needs enough deeply analysed videos underneath it to have something to read
+  // against. Same threshold the page shows its meter against
+  // (app/(app)/video-planner/page.tsx), enforced here so the gate is not just a
+  // hidden button. Best-effort in the same direction as the page: a failed
+  // count lets the plan through rather than refusing a creator over a database
+  // hiccup.
+  try {
+    const libraryVideoCount = await countDeeplyAnalysedVideos(supabase, user.id)
+    if (libraryVideoCount < VIDEO_PLANNER_VIDEO_THRESHOLD) {
+      return NextResponse.json(
+        {
+          error: "library_too_small",
+          message: `The Video Planner opens once ${VIDEO_PLANNER_VIDEO_THRESHOLD} of your videos have been deeply analysed. You have ${libraryVideoCount} so far.`,
+        },
+        { status: 403 },
+      )
+    }
+  } catch (error) {
+    console.error("Failed to count deeply analysed videos", error)
   }
 
   let titles: string[]
