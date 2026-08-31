@@ -2,7 +2,6 @@ import Link from "next/link"
 import {
   EyeIcon,
   GaugeIcon,
-  LockIcon,
   MousePointerClickIcon,
   TrendingUpIcon,
   UserPlusIcon,
@@ -26,6 +25,7 @@ import {
   plural,
 } from "@/components/channel-trends-shared"
 import { ChannelTrendsTabs } from "@/components/channel-trends-tabs"
+import { PaidFeatureCard } from "@/components/paid-feature-card"
 import { buttonVariants } from "@/components/ui/button"
 import {
   Card,
@@ -279,25 +279,12 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
 // data.
 export function ChannelTrendsLocked() {
   return (
-    <Card className="flex flex-col items-start gap-3 p-6">
-      <LockIcon className="size-5 text-muted-foreground" />
-      <div className="w-full">
-        <p className="text-sm text-muted-foreground">
-          Cross-video intelligence is a paid feature, available to{" "}
-          <span className="font-semibold text-foreground">Starter</span> and{" "}
-          <span className="font-semibold text-foreground">Pro</span> users.
-        </p>
-        <p className="mt-3 text-sm text-muted-foreground">
-          Every deep analysis adds its retention events to a private library of
-          your content. This page then surfaces the trends that repeat across
-          your channel: what loses viewers, what holds them, how your packaging
-          earns reach and what your best videos say - insight no single video
-          can give you.
-        </p>
-      </div>
-      <Link href="/pricing" className={buttonVariants()}>
-        See plans
-      </Link>
-    </Card>
+    <PaidFeatureCard feature="Cross-video intelligence">
+      Every deep analysis adds its retention events to a private library of your
+      content. This page then surfaces the trends that repeat across your
+      channel: what loses viewers, what holds them, how your packaging earns
+      reach and what your best videos say - insight no single video can give
+      you.
+    </PaidFeatureCard>
   )
 }

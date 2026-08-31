@@ -6,7 +6,7 @@ import { getEntitlement } from "@/lib/billing/entitlements"
 import { planIncludesUploads } from "@/lib/plans"
 import { createClient } from "@/lib/supabase/server"
 import { listVideoPlans, type VideoPlan } from "@/lib/video-plans/video-plans"
-import { UpgradeToUploadPrompt } from "@/components/unlock-full-report-cta"
+import { PaidFeatureCard } from "@/components/paid-feature-card"
 import { VideoPlanBuilder } from "@/components/video-plan-builder"
 import {
   Breadcrumb,
@@ -14,7 +14,6 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
 } from "@/components/ui/breadcrumb"
-import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 
@@ -85,9 +84,12 @@ export default async function Page() {
         {canUpload ? (
           <VideoPlanBuilder />
         ) : (
-          <Card className="p-6">
-            <UpgradeToUploadPrompt message="Upgrade to Starter or Pro to plan a video before you publish it: upload the cut, weigh up your titles, and check the packaging holds together." />
-          </Card>
+          <PaidFeatureCard feature="Video planning">
+            Any cut can be checked before it goes live: upload the footage with
+            the titles you are weighing up and the thumbnail, and the plan tells
+            you which title the video actually delivers on, how the thumbnail
+            holds up beside it, and what to change before you publish.
+          </PaidFeatureCard>
         )}
 
         {plans.length > 0 && (
