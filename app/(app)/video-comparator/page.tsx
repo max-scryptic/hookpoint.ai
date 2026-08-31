@@ -1,6 +1,7 @@
 import Link from "next/link"
-import { ArrowLeftRightIcon, LockIcon, SparklesIcon } from "lucide-react"
+import { ArrowLeftRightIcon, SparklesIcon } from "lucide-react"
 
+import { PaidFeatureCard } from "@/components/paid-feature-card"
 import { PreviousComparisons } from "@/components/previous-comparisons"
 import { RetentionComparePicker } from "@/components/retention-compare-picker"
 import { buttonVariants } from "@/components/ui/button"
@@ -192,25 +193,11 @@ export default async function Page() {
           </Card>
         )}
         {result.status === "locked" && (
-          <Card className="flex flex-col items-start gap-3 p-6">
-            <LockIcon className="size-5 text-muted-foreground" />
-            <div className="w-full">
-              <p className="text-sm text-muted-foreground">
-                Video comparison is a paid feature, available to{" "}
-                <span className="font-semibold text-foreground">Starter</span>{" "}
-                and <span className="font-semibold text-foreground">Pro</span>{" "}
-                users.
-              </p>
-              <p className="mt-3 text-sm text-muted-foreground">
-                Any two analysed videos can be compared side by side: where
-                their retention curves diverge, how their hooks stack up, and
-                the event evidence for what happened in each stretch.
-              </p>
-            </div>
-            <Link href="/pricing" className={buttonVariants()}>
-              See plans
-            </Link>
-          </Card>
+          <PaidFeatureCard feature="Video comparison">
+            Any two analysed videos can be compared side by side: where their
+            retention curves diverge, how their hooks stack up, and the event
+            evidence for what happened in each stretch.
+          </PaidFeatureCard>
         )}
         {result.status === "error" && (
           <div className="rounded-xl border bg-card p-8 text-sm text-muted-foreground">
