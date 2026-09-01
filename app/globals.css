@@ -76,6 +76,19 @@
    * reads as a change in tone rather than as a purple stripe.
    */
   --landing-band: oklch(0.925 0.003 291);
+  /*
+   * Dashed placeholder outlines - the empty-state panels and thumbnail slots
+   * that mark out "nothing here yet". They cannot use --border: a dash pattern
+   * lays down roughly half the ink of a solid rule of the same colour, and most
+   * of these sit on the page tier (0.958) rather than on a white card, so a
+   * border only 0.048 below the page reads as solid when drawn continuously
+   * and all but disappears once it is broken up. This is a step of about 0.14
+   * instead, which is what it takes for the outline to hold its shape at that
+   * duty cycle. Light mode only - dark mode's --border is translucent white,
+   * which already carries a dashed edge clearly, so the rule below is scoped
+   * away from it and this token goes unread there.
+   */
+  --dashed-border: oklch(0.82 0.018 285);
 }
 
 * {
@@ -209,6 +222,21 @@ body {
   }
   html {
     @apply font-sans;
+  }
+}
+
+/*
+ * Colour every dashed edge in light mode from --dashed-border rather than from
+ * the `*` rule above, so the placeholder panels are visible against the page.
+ * It lives in the utilities layer, and is wrapped in :where() so it carries no
+ * specificity of its own: that puts it above the base `*` border-color it is
+ * replacing, and below any element that names its own border colour, so
+ * `border-dashed border-primary/40` and the chart legend's inline
+ * `border-(--color-border)` keep the colour they ask for.
+ */
+@layer utilities {
+  :where(html:not(.dark) [class~="border-dashed"]) {
+    border-color: var(--dashed-border);
   }
 }
 
