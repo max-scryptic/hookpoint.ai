@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ClapperboardIcon, TrendingUpIcon } from "lucide-react"
+import { TrendingUpIcon } from "lucide-react"
 
 import { requireAuthenticatedUser } from "@/lib/auth"
 import { getEntitlement } from "@/lib/billing/entitlements"
@@ -12,15 +12,18 @@ import { createClient } from "@/lib/supabase/server"
 import { listVideoPlans, type VideoPlan } from "@/lib/video-plans/video-plans"
 import { LibraryProgress } from "@/components/library-progress"
 import { PaidFeatureCard } from "@/components/paid-feature-card"
-import { VideoPlanBuilder } from "@/components/video-plan-builder"
-import { buttonVariants } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
+import {
+  VideoPlanList,
+  type VideoPlanListItem,
+} from "@/components/video-plan-list"
 import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbList,
   BreadcrumbPage,
 } from "@/components/ui/breadcrumb"
+import { buttonVariants } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 
@@ -32,6 +35,10 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 // make one), then the library (a plan reads a cut against the channel it is
 // going out on, so it needs enough deeply analysed videos underneath it to
 // have something to read it against).
+//
+// Neither gate hides the list itself. Plans already made stay reachable
+// whatever the account can do today; what a gate withholds is the button that
+// starts another one.
 type PlannerAccess =
   // The account's plan carries no uploads: the upgrade wall.
   | { status: "locked" }
@@ -40,8 +47,8 @@ type PlannerAccess =
   | { status: "ok" }
 
 // Whether this account can upload at all. Best-effort - a failed entitlement
-// read shows the builder rather than an upgrade wall, and the two upload routes
-// behind it enforce the same rule anyway.
+// read opens the planner rather than showing an upgrade wall, and the two
+// upload routes behind it enforce the same rule anyway.
 async function loadCanUpload(userId: string): Promise<boolean> {
   try {
     const entitlement = await getEntitlement(userId)
@@ -93,6 +100,21 @@ async function loadPlans(userId: string): Promise<VideoPlan[]> {
   }
 }
 
+// A plan as the list needs it. The thumbnail is addressed through the signing
+// route rather than by storage path, which is the only way a private object
+// reaches the browser.
+function toListItem(plan: VideoPlan): VideoPlanListItem {
+  return {
+    id: plan.id,
+    titles: plan.titles,
+    thumbnailUrls: plan.thumbnailStoragePath
+      ? [`/api/video-plans/${plan.id}/thumbnail`]
+      : [],
+    status: plan.status,
+    createdAt: plan.createdAt,
+  }
+}
+
 export default async function Page() {
   const user = await requireAuthenticatedUser()
   const [access, plans] = await Promise.all([
@@ -124,13 +146,13 @@ export default async function Page() {
             Video Planner
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Check your packaging before it goes live. Upload the cut, enter the
-            titles you are weighing up, add the thumbnail, and we will tell you
-            which title fits and what to change.
+            Check your packaging before it goes live. Every video you are
+            planning is here: open one to add the cut, the titles you are
+            weighing up and the thumbnail, and we will tell you which title fits
+            and what to change.
           </p>
         </div>
 
-        {access.status === "ok" && <VideoPlanBuilder />}
         {access.status === "building" && (
           <BuildingLibrary videoCount={access.videoCount} />
         )}
@@ -143,18 +165,10 @@ export default async function Page() {
           </PaidFeatureCard>
         )}
 
-        {plans.length > 0 && (
-          <div className="mt-4 flex flex-col gap-3">
-            <h2 className="text-sm font-medium text-muted-foreground">
-              Your plans
-            </h2>
-            <div className="flex flex-col gap-2">
-              {plans.map((plan) => (
-                <PlanRow key={plan.id} plan={plan} />
-              ))}
-            </div>
-          </div>
-        )}
+        <VideoPlanList
+          plans={plans.map(toListItem)}
+          canCreate={access.status === "ok"}
+        />
       </div>
     </>
   )
@@ -200,62 +214,4 @@ function BuildingLibrary({ videoCount }: { videoCount: number }) {
       </Card>
     </div>
   )
-}
-
-function PlanRow({ plan }: { plan: VideoPlan }) {
-  // The title the creator led with names the plan. A plan with no titles can
-  // only be one whose creation was interrupted, so it says so rather than
-  // rendering a blank row.
-  const name = plan.titles[0] ?? "Untitled plan"
-  const alternatives = plan.titles.length - 1
-
-  return (
-    <Link
-      href={`/video-planner/${plan.id}`}
-      className="flex items-center gap-3 rounded-xl border bg-card p-4 transition-colors hover:bg-accent/50"
-    >
-      <ClapperboardIcon className="size-4 shrink-0 text-muted-foreground" />
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{name}</p>
-        <p className="text-sm text-muted-foreground">
-          {alternatives > 0
-            ? `${alternatives} other title ${alternatives === 1 ? "idea" : "ideas"}`
-            : "One title"}
-        </p>
-      </div>
-      <PlanStatusBadge plan={plan} />
-    </Link>
-  )
-}
-
-function PlanStatusBadge({ plan }: { plan: VideoPlan }) {
-  const { label, className } = planBadge(plan)
-  return (
-    <span
-      className={`shrink-0 rounded-md border px-2 py-0.5 text-xs font-medium ${className}`}
-    >
-      {label}
-    </span>
-  )
-}
-
-function planBadge(plan: VideoPlan): { label: string; className: string } {
-  switch (plan.status) {
-    case "ready":
-      return {
-        label: "Ready",
-        className:
-          "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-      }
-    case "failed":
-      return {
-        label: "Needs a retry",
-        className:
-          "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-      }
-    case "processing":
-      return { label: "Reading…", className: "text-muted-foreground" }
-    default:
-      return { label: "Draft", className: "text-muted-foreground" }
-  }
 }

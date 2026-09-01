@@ -24,15 +24,27 @@ export class InvalidTitlesError extends Error {
   }
 }
 
+export interface NormaliseTitlesOptions {
+  // Whether an empty result is allowed. A draft plan is filled in over several
+  // visits, so the row exists before its titles do and a creator is free to
+  // clear the box again while they think; the read that spends a model call is
+  // where "at least one" is actually required.
+  allowEmpty?: boolean
+}
+
 // Normalises the raw title list from the form into what gets stored: trimmed,
 // blank entries dropped, case-insensitive duplicates collapsed (keeping the
 // first spelling the creator typed), capped at MAX_TITLES.
 //
-// Throws when nothing usable survives, or when a title is over YouTube's limit
-// - the two cases where quietly carrying on would store a plan the creator did
-// not describe.
-export function normaliseTitles(input: unknown): string[] {
+// Throws when nothing usable survives (unless the caller allows an empty
+// draft), or when a title is over YouTube's limit - the two cases where quietly
+// carrying on would store a plan the creator did not describe.
+export function normaliseTitles(
+  input: unknown,
+  options: NormaliseTitlesOptions = {},
+): string[] {
   if (!Array.isArray(input)) {
+    if (options.allowEmpty && input == null) return []
     throw new InvalidTitlesError("Add at least one title idea.")
   }
 
@@ -58,7 +70,7 @@ export function normaliseTitles(input: unknown): string[] {
     if (titles.length === MAX_TITLES) break
   }
 
-  if (titles.length === 0) {
+  if (titles.length === 0 && !options.allowEmpty) {
     throw new InvalidTitlesError("Add at least one title idea.")
   }
 
