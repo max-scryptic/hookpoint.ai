@@ -24,16 +24,20 @@
    * The page tier is kept meaningfully darker than the grey tier so a white
    * surface reads as clearly elevated above both.
    *
-   * The page deliberately carries almost no chroma. A lavender tint spread
-   * across a full viewport is the one place a small chroma reads loudly, and
-   * it drags every genuinely purple thing on top of it - the primary button,
-   * the accent chips, the charts - towards the same hue, so they stop reading
-   * as colour. What is left (0.002 at the brand hue) is enough to keep the
-   * grey from going cold against those purples without tinting the page.
+   * The page carries a small amount of chroma at the brand hue, and no more.
+   * A lavender tint spread across a full viewport is the one place a small
+   * chroma reads loudly, and past a point it drags every genuinely purple
+   * thing on top of it - the primary button, the accent chips, the charts -
+   * towards the same hue, so they stop reading as colour. What is here (0.006
+   * at the brand hue) is enough for the page to read as part of the same
+   * family as the surfaces on it, rather than as a neutral grey the app was
+   * dropped onto, while staying well under the chroma of the tiers above it
+   * (--muted at 0.008, --accent at 0.03) so the elevation scale still runs on
+   * lightness rather than on colour.
    */
   --muted: oklch(0.972 0.008 289);
   --accent: oklch(0.95 0.03 292);
-  --background: oklch(0.958 0.002 291);
+  --background: oklch(0.958 0.006 291);
   --foreground: oklch(0.18 0.02 274);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.18 0.02 274);
@@ -72,10 +76,10 @@
    * mode lifts above it. Both land a step of roughly 0.03 in lightness, which
    * is visible without cutting the page into stripes, and in both themes a
    * white/raised card still sits clearly above the band. In light mode the
-   * band stays as near-neutral as the page it alternates with, so the funnel
-   * reads as a change in tone rather than as a purple stripe.
+   * band tracks the page's own chroma, so the funnel reads as a change in
+   * lightness rather than as a purple stripe against a greyer page.
    */
-  --landing-band: oklch(0.925 0.003 291);
+  --landing-band: oklch(0.925 0.007 291);
 }
 
 * {
