@@ -20,7 +20,6 @@ import { Magnetic, TiltCard } from "@/components/landing/landing-pointer"
 import { LandingPricing } from "@/components/landing/landing-pricing"
 import { Reveal } from "@/components/landing/landing-reveal"
 import {
-  BrandBackdrop,
   ChecklistVisual,
   ComparisonVisual,
   EventsVisual,
@@ -218,9 +217,7 @@ function Hero({
   primaryLabel: string
 }) {
   return (
-    <section className="landing-parallax-scope relative overflow-hidden px-4 pt-32 pb-20 sm:px-6 sm:pt-40 sm:pb-28">
-      <BrandBackdrop />
-
+    <section className="relative overflow-hidden px-4 pt-32 pb-20 sm:px-6 sm:pt-40 sm:pb-28">
       <div className="relative mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
         {/* The hero is above the fold on every screen, so its entrance is the
             landing-enter one: pure CSS, playing at first paint, rather than the
@@ -286,13 +283,13 @@ function Hero({
           style={delayStyle(180)}
           className="landing-enter group relative min-w-0"
         >
-          {/* A soft halo behind the report so it lifts off the page. One tone,
-              barely there, so it reads as light around the card rather than as
-              a colour wash of its own. It warms up a little when the pointer is
-              over the report itself. */}
+          {/* A soft halo behind the report, lit only while the pointer is over
+              the card. At rest the section stays a flat fill, so the halo reads
+              as the card answering the pointer rather than as a wash sitting on
+              the page. */}
           <div
             aria-hidden="true"
-            className="absolute -inset-6 rounded-[2rem] bg-primary/[0.05] opacity-75 blur-3xl transition-opacity duration-700 group-hover:opacity-100 dark:bg-primary/[0.07]"
+            className="absolute -inset-6 rounded-[2rem] bg-primary/[0.05] opacity-0 blur-3xl transition-opacity duration-700 group-hover:opacity-100 dark:bg-primary/[0.07]"
           />
           {/* The report leans towards the pointer. The chips stay flat and
               floating outside the tilt, so they read as sitting above the card
@@ -692,8 +689,7 @@ function ClosingCta({
   primaryLabel: string
 }) {
   return (
-    <section className="landing-parallax-scope relative overflow-hidden border-t px-4 py-24 sm:px-6">
-      <BrandBackdrop className="opacity-80" />
+    <section className="relative overflow-hidden border-t px-4 py-24 sm:px-6">
       {/* Same shape as a section heading: the mark and the copy ride in around
           the line, which reads itself into place a word at a time. */}
       <Reveal quiet className="relative mx-auto max-w-2xl text-center">

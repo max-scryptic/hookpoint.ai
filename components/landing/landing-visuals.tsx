@@ -899,63 +899,6 @@ export function ChecklistVisual({ className }: { className?: string }) {
 }
 
 /**
- * The soft brand wash that sits behind the hero and the closing call to action.
- * Two blurred colour fields plus a faint grid, so the page has depth without
- * anything competing with the copy. The colour is deliberately at the edge of
- * being noticed: it should read as the page being lit, never as a gradient
- * laid over it.
- */
-export function BrandBackdrop({ className }: { className?: string }) {
-  return (
-    <div
-      aria-hidden="true"
-      className={cn("pointer-events-none absolute inset-0 overflow-hidden", className)}
-    >
-      {/* Everything with colour in it rides the scroll a little faster than the
-          page does, so passing the hero reads as moving through the wash rather
-          than sliding it along. The clip stays on the wrapper above, which is
-          why the parallax is a layer of its own: a moving clip edge would drag
-          a hard line across the blur. */}
-      <div
-        className="landing-parallax absolute inset-0"
-        style={{ "--landing-parallax": "12%" } as React.CSSProperties}
-      >
-        {/* The two fields drift on long, opposed cycles, which keeps the wash
-            behind the hero from ever reading as a fixed gradient. */}
-        <div className="landing-drift absolute -top-40 -left-32 size-[36rem] rounded-full bg-primary/[0.06] blur-3xl dark:bg-primary/[0.08]" />
-        <div className="landing-drift-slow absolute -top-24 right-[-10rem] size-[32rem] rounded-full bg-chart-3/[0.05] blur-3xl dark:bg-chart-3/[0.06]" />
-        <div
-          className="absolute inset-0 opacity-[0.4] dark:opacity-[0.15]"
-          style={{
-            backgroundImage:
-              "linear-gradient(to right, var(--color-border) 1px, transparent 1px), linear-gradient(to bottom, var(--color-border) 1px, transparent 1px)",
-            backgroundSize: "56px 56px",
-            maskImage:
-              "radial-gradient(ellipse 80% 60% at 50% 0%, black 30%, transparent 75%)",
-            WebkitMaskImage:
-              "radial-gradient(ellipse 80% 60% at 50% 0%, black 30%, transparent 75%)",
-          }}
-        />
-      </div>
-
-      {/* A single set of hairlines raked across the whole backdrop. It is fixed
-          to the page rather than parallaxed, so the drifting colour behind it
-          has something still to move against. */}
-      <div
-        className="absolute inset-0 opacity-[0.5] dark:opacity-[0.35]"
-        style={{
-          backgroundImage:
-            "repeating-linear-gradient(115deg, var(--color-border) 0px, var(--color-border) 1px, transparent 1px, transparent 56px)",
-          maskImage: "linear-gradient(to bottom, black 0%, transparent 85%)",
-          WebkitMaskImage:
-            "linear-gradient(to bottom, black 0%, transparent 85%)",
-        }}
-      />
-    </div>
-  )
-}
-
-/**
  * The ground a banded section sits on: one soft brand-coloured pool in the
  * middle and a faint dot field over it, both masked away at the edges. It gives
  * a section enough texture that the cards on top of it read as objects sitting
