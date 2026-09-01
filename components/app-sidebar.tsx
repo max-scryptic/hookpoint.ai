@@ -66,6 +66,7 @@ const navSections = [
         title: "Video Planner",
         url: "/video-planner",
         icon: <ClapperboardIcon />,
+        badge: "Beta",
       },
     ],
   },
