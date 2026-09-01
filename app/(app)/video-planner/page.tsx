@@ -1,8 +1,16 @@
+import Link from "next/link"
+import { TrendingUpIcon } from "lucide-react"
+
 import { requireAuthenticatedUser } from "@/lib/auth"
 import { getEntitlement } from "@/lib/billing/entitlements"
+import {
+  countDeeplyAnalysedVideos,
+  VIDEO_PLANNER_VIDEO_THRESHOLD,
+} from "@/lib/deep-analysis-library"
 import { planIncludesUploads } from "@/lib/plans"
 import { createClient } from "@/lib/supabase/server"
 import { listVideoPlans, type VideoPlan } from "@/lib/video-plans/video-plans"
+import { LibraryProgress } from "@/components/library-progress"
 import { PaidFeatureCard } from "@/components/paid-feature-card"
 import {
   VideoPlanList,
@@ -14,14 +22,33 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
 } from "@/components/ui/breadcrumb"
+import { buttonVariants } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 
-// Whether this account can upload at all, which is what the planner is gated
-// on: a plan is footage plus an image, so a tier without uploads has no way to
-// make one. Best-effort - a failed entitlement read offers the planner rather
-// than an upgrade wall, and the two upload routes behind it enforce the same
-// rule anyway.
+// COPY GUARDRAIL: no em or en dashes anywhere in this file (comments
+// included). Hyphens are fine.
+
+// What the page can offer this account. Two gates, in this order: the plan
+// (a plan is footage plus an image, so a tier without uploads has no way to
+// make one), then the library (a plan reads a cut against the channel it is
+// going out on, so it needs enough deeply analysed videos underneath it to
+// have something to read it against).
+//
+// Neither gate hides the list itself. Plans already made stay reachable
+// whatever the account can do today; what a gate withholds is the button that
+// starts another one.
+type PlannerAccess =
+  // The account's plan carries no uploads: the upgrade wall.
+  | { status: "locked" }
+  // Paid, but the library is still too thin to ground a plan in: the meter.
+  | { status: "building"; videoCount: number }
+  | { status: "ok" }
+
+// Whether this account can upload at all. Best-effort - a failed entitlement
+// read opens the planner rather than showing an upgrade wall, and the two
+// upload routes behind it enforce the same rule anyway.
 async function loadCanUpload(userId: string): Promise<boolean> {
   try {
     const entitlement = await getEntitlement(userId)
@@ -30,6 +57,35 @@ async function loadCanUpload(userId: string): Promise<boolean> {
     console.error("Failed to load entitlement for the video planner", error)
     return true
   }
+}
+
+// How many videos this account has deeply analysed, which is what the library
+// gate reads. Best-effort in the same way and for the same reason as the
+// entitlement above: a database hiccup must not read as an account that has
+// analysed nothing, so a failed count opens the planner and POST
+// /api/video-plans applies the same threshold when the plan is actually
+// started.
+async function loadLibraryVideoCount(userId: string): Promise<number | null> {
+  try {
+    const supabase = await createClient()
+    return await countDeeplyAnalysedVideos(supabase, userId)
+  } catch (error) {
+    console.error("Failed to count deeply analysed videos", error)
+    return null
+  }
+}
+
+async function loadAccess(userId: string): Promise<PlannerAccess> {
+  const [canUpload, videoCount] = await Promise.all([
+    loadCanUpload(userId),
+    loadLibraryVideoCount(userId),
+  ])
+
+  if (!canUpload) return { status: "locked" }
+  if (videoCount != null && videoCount < VIDEO_PLANNER_VIDEO_THRESHOLD) {
+    return { status: "building", videoCount }
+  }
+  return { status: "ok" }
 }
 
 // The creator's existing plans. Best-effort for the same reason: being unable
@@ -61,8 +117,8 @@ function toListItem(plan: VideoPlan): VideoPlanListItem {
 
 export default async function Page() {
   const user = await requireAuthenticatedUser()
-  const [canUpload, plans] = await Promise.all([
-    loadCanUpload(user.id),
+  const [access, plans] = await Promise.all([
+    loadAccess(user.id),
     loadPlans(user.id),
   ])
 
@@ -97,7 +153,10 @@ export default async function Page() {
           </p>
         </div>
 
-        {!canUpload && (
+        {access.status === "building" && (
+          <BuildingLibrary videoCount={access.videoCount} />
+        )}
+        {access.status === "locked" && (
           <PaidFeatureCard feature="Video planning">
             Any cut can be checked before it goes live: upload the footage with
             the titles you are weighing up and the thumbnail, and the plan tells
@@ -106,8 +165,53 @@ export default async function Page() {
           </PaidFeatureCard>
         )}
 
-        <VideoPlanList plans={plans.map(toListItem)} canCreate={canUpload} />
+        <VideoPlanList
+          plans={plans.map(toListItem)}
+          canCreate={access.status === "ok"}
+        />
       </div>
     </>
+  )
+}
+
+// The library gate: the same meter Channel Trends counts up on, then one card
+// saying why the planner waits for it. A plan is only worth as much as the
+// channel it is read against, so the wait is framed as the work that makes the
+// verdicts good rather than as a wall.
+function BuildingLibrary({ videoCount }: { videoCount: number }) {
+  const remaining = VIDEO_PLANNER_VIDEO_THRESHOLD - videoCount
+  const message =
+    videoCount === 0
+      ? `Deeply analyse ${VIDEO_PLANNER_VIDEO_THRESHOLD} videos to unlock the Video Planner.`
+      : `Deeply analyse ${remaining} more video${remaining === 1 ? "" : "s"} to unlock the Video Planner.`
+
+  return (
+    <div className="flex flex-col gap-4">
+      <LibraryProgress
+        message={message}
+        count={videoCount}
+        target={VIDEO_PLANNER_VIDEO_THRESHOLD}
+      />
+      <Card className="flex flex-col items-start gap-3 p-6">
+        <TrendingUpIcon className="size-5 text-muted-foreground" />
+        <div className="w-full">
+          <p className="text-sm text-muted-foreground">
+            A plan reads your cut against{" "}
+            <span className="font-semibold text-foreground">your channel</span>:
+            the titles that earned your clicks, the thumbnails that held up
+            beside them, and the hooks that kept viewers watching.
+          </p>
+          <p className="mt-3 text-sm text-muted-foreground">
+            That takes grounding data. Once{" "}
+            {VIDEO_PLANNER_VIDEO_THRESHOLD} of your videos have been deeply
+            analysed, the planner opens and every verdict it gives is measured
+            against what already works for you.
+          </p>
+        </div>
+        <Link href="/analyse-video" className={buttonVariants()}>
+          Analyse a video
+        </Link>
+      </Card>
+    </div>
   )
 }
