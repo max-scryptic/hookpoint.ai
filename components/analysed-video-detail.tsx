@@ -1392,7 +1392,7 @@ function PackagingComponentTabs({
 // The coloured name every packaging tab opens with.
 function PackagingComponentBadge({ label }: { label: string }) {
   return (
-    <span className="w-fit rounded-md border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-sm font-semibold text-purple-700 dark:border-blue-400/40 dark:bg-blue-400/10 dark:text-blue-300">
+    <span className="w-fit rounded-md border border-blue-500/40 bg-blue-500/10 px-2 py-0.5 text-sm font-semibold text-blue-700 dark:border-blue-400/40 dark:bg-blue-400/10 dark:text-blue-300">
       {label}
     </span>
   )
@@ -2008,7 +2008,7 @@ export function AnalysedVideoDetail({
             <Tabs defaultValue="packaging">
               <TabsList>
                 <TabsTrigger value="packaging">
-                  <AlignHorizontalJustifyCenterIcon className="text-purple-600 dark:text-blue-400" />
+                  <AlignHorizontalJustifyCenterIcon className="text-blue-600 dark:text-blue-400" />
                   Title, Thumbnail &amp; Hook
                 </TabsTrigger>
                 <TabsTrigger value="metadata">
