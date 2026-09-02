@@ -77,7 +77,7 @@ const SURFACE_BADGE_CLASSES: Record<TipSurface, string> = {
   video_analysis:
     "bg-blue-500/10 text-blue-700 dark:bg-blue-400/10 dark:text-blue-300",
   comparison_report:
-    "bg-violet-500/10 text-violet-700 dark:bg-violet-400/10 dark:text-violet-300",
+    "bg-violet-500/10 text-violet-700 dark:bg-sky-400/10 dark:text-sky-300",
   unknown: "bg-muted text-muted-foreground",
 }
 

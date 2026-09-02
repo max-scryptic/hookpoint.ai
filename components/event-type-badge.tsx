@@ -5,7 +5,8 @@ import type { RetentionWindowEventType } from "@/lib/retention-window-events"
 // event type always reads the same across the product.
 const EVENT_TYPE_STYLES: Record<RetentionWindowEventType, string> = {
   scene_cut: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
-  topic_shift: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
+  topic_shift:
+    "bg-violet-500/10 text-violet-700 dark:bg-sky-400/10 dark:text-sky-300",
   visual_change: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
   audio_change: "bg-pink-500/10 text-pink-700 dark:text-pink-400",
   pacing_change: "bg-orange-500/10 text-orange-700 dark:text-orange-400",
