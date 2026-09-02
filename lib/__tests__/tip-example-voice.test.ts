@@ -94,6 +94,15 @@ describe("tip example voice", () => {
     expect(TIP_EXAMPLE_VOICE_PROMPT).toContain("exactly three examples")
   })
 
+  // The other half of the division of labour: the tip is written as the general
+  // rule (lib/tip-voice.ts), so the examples are the only place this channel's
+  // own subject matter appears. Dropping this leaves the tips general and the
+  // examples abstract, which is worse than either failure on its own.
+  it("keeps the channel's own subject matter in the examples", () => {
+    expect(TIP_EXAMPLE_VOICE_PROMPT).toMatch(/this channel makes videos about/)
+    expect(TIP_EXAMPLE_VOICE_PROMPT).toMatch(/general rule/)
+  })
+
   it("contains no em or en dashes", () => {
     expect(TIP_EXAMPLE_VOICE_PROMPT.includes(EM_DASH)).toBe(false)
     expect(TIP_EXAMPLE_VOICE_PROMPT.includes(EN_DASH)).toBe(false)

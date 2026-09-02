@@ -7,7 +7,9 @@ import type { SourceFile } from "@/lib/source-files/source-files"
 
 export interface SerialisedSourceFile {
   id: string
-  youtubeVideoId: string
+  // Null for a video-plan upload, which has no published video behind it.
+  youtubeVideoId: string | null
+  videoPlanId: string | null
   originalFilename: string
   fileSizeBytes: number | null
   mimeType: string | null
@@ -42,6 +44,7 @@ export function serialiseSourceFile(sourceFile: SourceFile): SerialisedSourceFil
   return {
     id: sourceFile.id,
     youtubeVideoId: sourceFile.youtubeVideoId,
+    videoPlanId: sourceFile.videoPlanId,
     originalFilename: sourceFile.originalFilename,
     fileSizeBytes: sourceFile.fileSizeBytes,
     mimeType: sourceFile.mimeType,

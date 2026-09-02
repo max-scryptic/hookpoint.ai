@@ -67,7 +67,7 @@ function ReportStatus({ ready, label }: { ready: boolean; label: string }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+        "inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium",
         ready
           ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
           : "bg-amber-500/10 text-amber-700 dark:text-amber-500",

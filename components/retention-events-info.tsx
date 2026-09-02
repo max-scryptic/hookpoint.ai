@@ -58,7 +58,7 @@ export function RetentionEventsInfo() {
         render={
           <button
             type="button"
-            className="inline-flex size-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none"
+            className="inline-flex size-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none"
             aria-label="How retention windows are picked"
           />
         }

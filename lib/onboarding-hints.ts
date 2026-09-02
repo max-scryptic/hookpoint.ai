@@ -23,6 +23,12 @@ export const ONBOARDING_HINTS = [
   // withdrew the answer to "what do I do with this box".
   "first_video_analysis_url",
   "first_video_analysis_row_menu",
+  // A tip on a report is a control, not a line of text: clicking it opens three
+  // worked examples of the advice, with the two things a creator can do with a
+  // tip underneath. Nothing about a blue line of advice says so, and a creator
+  // reading their first report has no reason to try clicking one. Points at the
+  // first tip on the page, whichever section that turns out to be.
+  "report_tip_actions",
   // The retention chart's highlights play their window back from the uploaded
   // footage. Points at the first highlight on the curve.
   "retention_insight_playback",

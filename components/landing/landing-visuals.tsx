@@ -241,6 +241,84 @@ export function ReportVisual({ className }: { className?: string }) {
   )
 }
 
+// The chips that float around the hero report: three facts the report itself is
+// making, lifted off the card and onto the page so the eye has somewhere to go
+// after the curve. They are decoration over a figure that already says all of
+// this, which is why they are hidden from assistive technology and only drawn
+// once there is a column wide enough to hold them without landing on the copy.
+//
+// Each one is placed on an edge of the card or over the chart, never over the
+// report's own writing: a chip that covers a line of the report is worth less
+// than the line it covers.
+const HERO_CHIPS = [
+  {
+    label: "Hook",
+    value: "71% held",
+    tone: "bg-amber-500",
+    position: "top-[46%] -left-6",
+    delay: 1500,
+    float: "0.5rem",
+    duration: "6s",
+  },
+  {
+    label: "Fixes ready",
+    value: "3 for the next edit",
+    tone: "bg-primary",
+    position: "-top-8 right-6",
+    delay: 1650,
+    float: "0.65rem",
+    duration: "7.5s",
+  },
+  {
+    label: "Deep dive",
+    value: "Frame level",
+    tone: "bg-emerald-500",
+    position: "-bottom-6 left-14",
+    delay: 1800,
+    float: "0.45rem",
+    duration: "6.8s",
+  },
+] as const
+
+export function HeroChips() {
+  return (
+    <div aria-hidden="true" className="pointer-events-none">
+      {HERO_CHIPS.map((chip) => (
+        <span
+          key={chip.label}
+          style={delayStyle(chip.delay)}
+          className={cn(
+            "landing-pop absolute z-10 hidden lg:block",
+            chip.position
+          )}
+        >
+          {/* The bob lives on the inside, so it never has to share the
+              transform with the entrance on the wrapper. */}
+          <span
+            className="landing-float flex items-center gap-2.5 rounded-xl border bg-popover/80 px-3 py-2 shadow-lg shadow-black/5 backdrop-blur-md dark:shadow-black/30"
+            style={
+              {
+                "--landing-float": chip.float,
+                "--landing-float-duration": chip.duration,
+              } as React.CSSProperties
+            }
+          >
+            <span className={cn("size-2 rounded-full", chip.tone)} />
+            <span className="text-left">
+              <span className="block text-[10px] leading-none font-semibold tracking-wide text-muted-foreground uppercase">
+                {chip.label}
+              </span>
+              <span className="mt-1 block text-xs leading-none font-semibold">
+                {chip.value}
+              </span>
+            </span>
+          </span>
+        </span>
+      ))}
+    </div>
+  )
+}
+
 function Marker({
   className,
   tone,
@@ -481,10 +559,10 @@ export function EvidenceVisual({ className }: { className?: string }) {
           >
             <div
               className={cn(
-                "relative aspect-video overflow-hidden rounded-lg border bg-gradient-to-br transition duration-500",
+                "relative aspect-video overflow-hidden rounded-lg border transition duration-500",
                 index === 1
-                  ? "from-primary/30 to-accent ring-2 ring-primary group-hover:ring-[3px]"
-                  : "from-muted to-secondary group-hover:from-muted group-hover:to-accent/60"
+                  ? "bg-primary/10 ring-2 ring-primary group-hover:ring-[3px]"
+                  : "bg-muted group-hover:bg-accent/50"
               )}
             >
               {/* A suggestion of a frame: a horizon line and a subject. */}
@@ -495,7 +573,7 @@ export function EvidenceVisual({ className }: { className?: string }) {
                   frame.subject
                 )}
               />
-              <span className="absolute top-1.5 left-1.5 rounded bg-background/70 px-1 text-[8px] font-medium text-muted-foreground">
+              <span className="absolute top-1.5 left-1.5 rounded-sm bg-background/70 px-1 text-[8px] font-medium text-muted-foreground">
                 {frame.time}
               </span>
             </div>
@@ -720,15 +798,13 @@ export function TrendsVisual({ className }: { className?: string }) {
                 {trend.note}
               </p>
             </div>
-            <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
+            <div className="mt-1.5 h-2 overflow-hidden rounded-sm bg-muted">
               {/* The bar is sized in the markup and grown with a scale, so the
                   animation never reflows the row it sits in. */}
               <div
                 className={cn(
-                  "landing-bar h-full rounded-full",
-                  trend.weak
-                    ? "bg-gradient-to-r from-destructive/50 to-destructive"
-                    : "bg-gradient-to-r from-primary to-chart-3"
+                  "landing-bar h-full rounded-sm",
+                  trend.weak ? "bg-destructive/80" : "bg-primary"
                 )}
                 style={{
                   width: `${trend.value}%`,
@@ -784,7 +860,7 @@ export function ChecklistVisual({ className }: { className?: string }) {
           >
             <span
               className={cn(
-                "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border transition-colors duration-300",
+                "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-sm border transition-colors duration-300",
                 tip.done
                   ? "border-primary bg-primary text-primary-foreground"
                   : "border-border"
@@ -823,37 +899,6 @@ export function ChecklistVisual({ className }: { className?: string }) {
 }
 
 /**
- * The soft brand wash that sits behind the hero and the closing call to action.
- * Two blurred colour fields plus a faint grid, so the page has depth without
- * anything competing with the copy.
- */
-export function BrandBackdrop({ className }: { className?: string }) {
-  return (
-    <div
-      aria-hidden="true"
-      className={cn("pointer-events-none absolute inset-0 overflow-hidden", className)}
-    >
-      {/* The two fields drift on long, opposed cycles, which keeps the wash
-          behind the hero from ever reading as a fixed gradient. */}
-      <div className="landing-drift absolute -top-40 -left-32 size-[36rem] rounded-full bg-primary/20 blur-3xl dark:bg-primary/25" />
-      <div className="landing-drift-slow absolute -top-24 right-[-10rem] size-[32rem] rounded-full bg-chart-3/20 blur-3xl dark:bg-chart-3/20" />
-      <div
-        className="absolute inset-0 opacity-[0.4] dark:opacity-[0.15]"
-        style={{
-          backgroundImage:
-            "linear-gradient(to right, var(--color-border) 1px, transparent 1px), linear-gradient(to bottom, var(--color-border) 1px, transparent 1px)",
-          backgroundSize: "56px 56px",
-          maskImage:
-            "radial-gradient(ellipse 80% 60% at 50% 0%, black 30%, transparent 75%)",
-          WebkitMaskImage:
-            "radial-gradient(ellipse 80% 60% at 50% 0%, black 30%, transparent 75%)",
-        }}
-      />
-    </div>
-  )
-}
-
-/**
  * The ground a banded section sits on: one soft brand-coloured pool in the
  * middle and a faint dot field over it, both masked away at the edges. It gives
  * a section enough texture that the cards on top of it read as objects sitting
@@ -882,29 +927,36 @@ export function SectionTexture({
         className
       )}
     >
+      {/* Same trick as the hero: the ground moves at its own pace behind the
+          cards standing on it, and the clip above it holds still. */}
       <div
-        className={cn(
-          "landing-drift-slow absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl",
-          subtle
-            ? "size-[30rem] bg-primary/[0.03] dark:bg-primary/[0.04]"
-            : "size-[44rem] bg-primary/10 dark:bg-primary/15"
-        )}
-      />
-      <div
-        className={cn(
-          "absolute inset-0",
-          subtle ? "opacity-40 dark:opacity-25" : "opacity-60 dark:opacity-40"
-        )}
-        style={{
-          backgroundImage:
-            "radial-gradient(var(--color-border) 1px, transparent 1px)",
-          backgroundSize: "24px 24px",
-          maskImage:
-            "radial-gradient(ellipse 70% 70% at 50% 50%, black 10%, transparent 80%)",
-          WebkitMaskImage:
-            "radial-gradient(ellipse 70% 70% at 50% 50%, black 10%, transparent 80%)",
-        }}
-      />
+        className="landing-parallax absolute inset-0"
+        style={{ "--landing-parallax": "8%" } as React.CSSProperties}
+      >
+        <div
+          className={cn(
+            "landing-drift-slow absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl",
+            subtle
+              ? "size-[30rem] bg-primary/[0.02] dark:bg-primary/[0.03]"
+              : "size-[44rem] bg-primary/[0.04] dark:bg-primary/[0.06]"
+          )}
+        />
+        <div
+          className={cn(
+            "absolute inset-0",
+            subtle ? "opacity-40 dark:opacity-25" : "opacity-60 dark:opacity-40"
+          )}
+          style={{
+            backgroundImage:
+              "radial-gradient(var(--color-border) 1px, transparent 1px)",
+            backgroundSize: "24px 24px",
+            maskImage:
+              "radial-gradient(ellipse 70% 70% at 50% 50%, black 10%, transparent 80%)",
+            WebkitMaskImage:
+              "radial-gradient(ellipse 70% 70% at 50% 50%, black 10%, transparent 80%)",
+          }}
+        />
+      </div>
     </div>
   )
 }

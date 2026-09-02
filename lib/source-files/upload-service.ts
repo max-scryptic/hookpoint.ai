@@ -18,12 +18,14 @@ import {
   deleteSourceFileRow,
   getSourceFileById,
   replaceSourceFile,
+  replaceVideoPlanSourceFile,
   updateSourceFile,
   type SourceFile,
 } from "@/lib/source-files/source-files"
 import {
   computeValidationOutcome,
   defaultValidationDeps,
+  type ValidationOutcome,
 } from "@/lib/source-files/validation-service"
 import { startNormalisation } from "@/lib/source-files/normalisation-service"
 import type {
@@ -32,7 +34,11 @@ import type {
   SignedUpload,
   StorageProvider,
 } from "@/lib/storage"
-import { buildSourceFileObjectPath } from "@/lib/storage/provider"
+import {
+  buildSourceFileObjectPath,
+  buildVideoPlanSourceFileObjectPath,
+} from "@/lib/storage/provider"
+import { getVideoPlan } from "@/lib/video-plans/video-plans"
 
 // A tagged error so route handlers can map service failures to the right HTTP
 // status without leaking internals.
@@ -84,39 +90,7 @@ export async function initiateSourceFileUpload(
   storage: StorageProvider,
   params: InitiateUploadParams,
 ): Promise<InitiateUploadResult> {
-  const filename = params.originalFilename?.trim()
-  if (!filename) {
-    throw new UploadError("invalid", "A filename is required.")
-  }
-
-  // Server-side format enforcement (the client checks too, for UX only).
-  if (!isAcceptedExtension(filename)) {
-    throw new UploadError(
-      "unsupported_type",
-      "Unsupported file type. Upload an mp4, mov, m4v, mkv or webm file.",
-    )
-  }
-  if (
-    params.mimeType &&
-    params.mimeType !== "" &&
-    !ACCEPTED_MIME_TYPES.includes(params.mimeType)
-  ) {
-    throw new UploadError(
-      "unsupported_type",
-      "Unsupported file type. Upload an mp4, mov, m4v, mkv or webm file.",
-    )
-  }
-
-  const maxBytes = params.maxUploadBytes ?? getMaxUploadBytes()
-  if (
-    typeof params.declaredSizeBytes === "number" &&
-    params.declaredSizeBytes > maxBytes
-  ) {
-    throw new UploadError(
-      "file_too_large",
-      `That file is larger than the ${formatGb(maxBytes)} upload limit.`,
-    )
-  }
+  const filename = assertUploadableFile(params)
 
   // The video must already be analysed and owned by this user. getAnalysedVideo
   // is RLS-scoped, so a video on someone else's account simply returns null.
@@ -173,6 +147,143 @@ export async function initiateSourceFileUpload(
     originalFilename: filename,
   })
 
+  return mintUploadTarget(supabase, storage, {
+    userId: params.userId,
+    sourceFile,
+    path,
+    declaredSizeBytes: params.declaredSizeBytes ?? null,
+    mimeType: params.mimeType ?? null,
+  })
+}
+
+export interface InitiateVideoPlanUploadParams {
+  userId: string
+  videoPlanId: string
+  originalFilename: string
+  mimeType?: string | null
+  declaredSizeBytes?: number | null
+  maxUploadBytes?: number | null
+}
+
+// The video-plan counterpart of initiateSourceFileUpload. Same format and size
+// enforcement, same direct-to-storage target; what differs is the owner it
+// proves (the plan, not an analysed video) and the object path it writes to.
+export async function initiateVideoPlanSourceFileUpload(
+  supabase: SupabaseClient,
+  storage: StorageProvider,
+  params: InitiateVideoPlanUploadParams,
+): Promise<InitiateUploadResult> {
+  const filename = assertUploadableFile(params)
+
+  // getVideoPlan is RLS-scoped, so another account's plan simply reads as null
+  // and can never be uploaded into.
+  const plan = await getVideoPlan(supabase, params.userId, params.videoPlanId)
+  if (!plan) {
+    throw new UploadError(
+      "video_not_found",
+      "We couldn't find that video plan on your account.",
+    )
+  }
+
+  const { sourceFile, previousStoragePaths } = await replaceVideoPlanSourceFile(
+    supabase,
+    {
+      userId: params.userId,
+      videoPlanId: params.videoPlanId,
+      originalFilename: filename,
+      mimeType: params.mimeType ?? null,
+      storageProvider: storage.name,
+    },
+  )
+
+  // Best-effort cleanup of the replaced upload's objects, as for an analysed
+  // video: a stale-object delete must never block a new upload.
+  for (const stalePath of previousStoragePaths) {
+    if (!stalePath) continue
+    try {
+      await storage.deleteObject(stalePath)
+    } catch (error) {
+      console.error("Failed to delete previous source-file object", error)
+    }
+  }
+
+  const path = buildVideoPlanSourceFileObjectPath({
+    userId: params.userId,
+    videoPlanId: params.videoPlanId,
+    sourceFileId: sourceFile.id,
+    originalFilename: filename,
+  })
+
+  return mintUploadTarget(supabase, storage, {
+    userId: params.userId,
+    sourceFile,
+    path,
+    declaredSizeBytes: params.declaredSizeBytes ?? null,
+    mimeType: params.mimeType ?? null,
+  })
+}
+
+// The checks that don't care who owns the upload: a filename is present, the
+// container is one we accept, and the claimed size is inside the plan's cap.
+// Returns the trimmed filename. Throws an UploadError the routes map to a
+// status code.
+function assertUploadableFile(params: {
+  originalFilename: string
+  mimeType?: string | null
+  declaredSizeBytes?: number | null
+  maxUploadBytes?: number | null
+}): string {
+  const filename = params.originalFilename?.trim()
+  if (!filename) {
+    throw new UploadError("invalid", "A filename is required.")
+  }
+
+  // Server-side format enforcement (the client checks too, for UX only).
+  if (!isAcceptedExtension(filename)) {
+    throw new UploadError(
+      "unsupported_type",
+      "Unsupported file type. Upload an mp4, mov, m4v, mkv or webm file.",
+    )
+  }
+  if (
+    params.mimeType &&
+    params.mimeType !== "" &&
+    !ACCEPTED_MIME_TYPES.includes(params.mimeType)
+  ) {
+    throw new UploadError(
+      "unsupported_type",
+      "Unsupported file type. Upload an mp4, mov, m4v, mkv or webm file.",
+    )
+  }
+
+  const maxBytes = params.maxUploadBytes ?? getMaxUploadBytes()
+  if (
+    typeof params.declaredSizeBytes === "number" &&
+    params.declaredSizeBytes > maxBytes
+  ) {
+    throw new UploadError(
+      "file_too_large",
+      `That file is larger than the ${formatGb(maxBytes)} upload limit.`,
+    )
+  }
+
+  return filename
+}
+
+// Mints the signed direct-to-storage target for a freshly created record and
+// moves it to "uploading". Shared by both owners: the only thing that varies
+// upstream is which row was created and which object path it writes to.
+async function mintUploadTarget(
+  supabase: SupabaseClient,
+  storage: StorageProvider,
+  params: {
+    userId: string
+    sourceFile: SourceFile
+    path: string
+    declaredSizeBytes: number | null
+    mimeType: string | null
+  },
+): Promise<InitiateUploadResult> {
   // Use a parallel multipart upload when the provider supports it and the file
   // is large enough to benefit; otherwise mint a single signed PUT. Multipart is
   // what lets the browser open several streams and actually fill the uplink on a
@@ -186,16 +297,16 @@ export async function initiateSourceFileUpload(
   let multipartUpload: MultipartUpload | undefined
   try {
     if (useMultipart) {
-      multipartUpload = await storage.createMultipartUpload!(path, {
+      multipartUpload = await storage.createMultipartUpload!(params.path, {
         totalSizeBytes: params.declaredSizeBytes!,
-        contentType: params.mimeType ?? null,
+        contentType: params.mimeType,
       })
     } else {
-      upload = await storage.createSignedUpload(path)
+      upload = await storage.createSignedUpload(params.path)
     }
   } catch (error) {
     // Record the failure on the row so the UI can show a retry CTA.
-    await updateSourceFile(supabase, params.userId, sourceFile.id, {
+    await updateSourceFile(supabase, params.userId, params.sourceFile.id, {
       uploadStatus: "failed",
       validationStatus: "failed",
       failureReason: "Could not start the upload. Please try again.",
@@ -203,10 +314,15 @@ export async function initiateSourceFileUpload(
     throw error
   }
 
-  const updated = await updateSourceFile(supabase, params.userId, sourceFile.id, {
-    storagePath: path,
-    uploadStatus: "uploading",
-  })
+  const updated = await updateSourceFile(
+    supabase,
+    params.userId,
+    params.sourceFile.id,
+    {
+      storagePath: params.path,
+      uploadStatus: "uploading",
+    },
+  )
 
   return { sourceFile: updated, upload, multipartUpload }
 }
@@ -311,25 +427,35 @@ export async function completeSourceFileUpload(
   // is pure and instant, so we compute the verdict and write the final state in
   // one update - the row goes straight from "uploading" to a terminal state with
   // no probing step in between that could time out and strand it.
-  const analysed = await getAnalysedVideo(
-    supabase,
-    params.userId,
-    sourceFile.youtubeVideoId,
-  )
-  const outcome = computeValidationOutcome(
-    {
-      originalFilename: sourceFile.originalFilename,
-      youtubeDurationSeconds:
-        sourceFile.youtubeDurationSeconds ??
-        analysed?.videoDetails?.durationSeconds ??
-        0,
-      videoTitle: analysed?.videoTitle ?? "",
-      uploadedDurationSeconds: normaliseClientDuration(
-        params.clientDurationSeconds,
-      ),
-    },
-    defaultValidationDeps(),
-  )
+  //
+  // A plan-owned upload has nothing to validate against: the video is not
+  // published, so there is no YouTube duration to match and no title for the
+  // filename to resemble. Both checks would be answering a question nobody
+  // asked, so it skips straight to "ready" and only records what the browser
+  // measured.
+  const measuredDuration = normaliseClientDuration(params.clientDurationSeconds)
+  let outcome: ValidationOutcome
+  if (sourceFile.videoPlanId) {
+    outcome = videoPlanValidationOutcome(measuredDuration)
+  } else {
+    const analysed = await getAnalysedVideo(
+      supabase,
+      params.userId,
+      sourceFile.youtubeVideoId ?? "",
+    )
+    outcome = computeValidationOutcome(
+      {
+        originalFilename: sourceFile.originalFilename,
+        youtubeDurationSeconds:
+          sourceFile.youtubeDurationSeconds ??
+          analysed?.videoDetails?.durationSeconds ??
+          0,
+        videoTitle: analysed?.videoTitle ?? "",
+        uploadedDurationSeconds: measuredDuration,
+      },
+      defaultValidationDeps(),
+    )
+  }
 
   const updated = await updateSourceFile(supabase, params.userId, sourceFile.id, {
     fileSizeBytes: info.sizeBytes,
@@ -353,6 +479,27 @@ export async function completeSourceFileUpload(
   }
 
   return updated
+}
+
+// The settled state of a video-plan upload. There is no published video to
+// check it against, so the only two verdicts a plan file can reach are "the
+// object landed" (ready) and the failures completeSourceFileUpload has already
+// written by the time it gets here (missing object, over the size cap). The
+// duration is still recorded, because the packaging read needs to know the
+// footage is long enough to hold a hook.
+function videoPlanValidationOutcome(
+  uploadedDurationSeconds: number | null,
+): ValidationOutcome {
+  return {
+    uploadStatus: "ready",
+    validationStatus: "passed",
+    uploadedDurationSeconds,
+    durationDifferenceSeconds: null,
+    durationValidationStatus: null,
+    filenameValidationStatus: "unknown",
+    filenameSimilarityScore: null,
+    failureReason: null,
+  }
 }
 
 // Coerces the client-supplied duration into a usable positive number, or null

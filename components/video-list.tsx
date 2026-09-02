@@ -101,7 +101,7 @@ export function Thumbnail({ video }: { video: RecentVideo }) {
         className="object-cover transition-transform group-hover:scale-105"
       />
       {duration && (
-        <span className="absolute bottom-1 right-1 rounded bg-black/80 px-1 py-0.5 text-xs font-medium text-white">
+        <span className="absolute bottom-1 right-1 rounded-sm bg-black/80 px-1 py-0.5 text-xs font-medium text-white">
           {duration}
         </span>
       )}

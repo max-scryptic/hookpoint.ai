@@ -7,6 +7,7 @@ import {
   GripVerticalIcon,
   ListChecksIcon,
   ListFilterIcon,
+  MoreVerticalIcon,
   Trash2Icon,
 } from "lucide-react"
 import Link from "next/link"
@@ -15,10 +16,19 @@ import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import {
   TIP_CATEGORY_LABELS,
   tipCategoryCounts,
@@ -32,14 +42,22 @@ import { cn } from "@/lib/utils"
 // off here. A tip is either worth keeping, in which case it stays and can be
 // dragged to where it belongs, or it is not, in which case it goes.
 //
-// One flat list, not grouped by what each tip is about: the order is now the
-// creator's own priority order, and grouping would cut it into runs that cannot
-// be compared. Each line still says which category it belongs to, so the
-// grouping is readable off the list without being imposed on it.
+// A table rather than a list of cards, and the video is why. Most of this
+// advice was written about one specific video ("hint at why the papaya quest is
+// exciting"), and read on its own weeks later a tip like that is unattributable:
+// the creator has to open the report to find out which video they were being
+// told about. So the video the tip came from is a column, and the columns beside
+// it are the other three things worth scanning down: what the tip is about, when
+// it was kept, and the way back to where it came from.
 //
-// The filter above the list is how a creator working on one thing gets to just
-// that: it narrows what is shown without touching the order underneath, so
-// putting it back on All puts the whole list back exactly as they left it.
+// One flat table, not grouped by what each tip is about: the order is the
+// creator's own priority order, and grouping would cut it into runs that cannot
+// be compared. The category column still says which group each line belongs to,
+// so the grouping is readable off the table without being imposed on it.
+//
+// The filter above it is how a creator working on one thing gets to just that:
+// it narrows what is shown without touching the order underneath, so putting it
+// back on All puts the whole list back exactly as they left it.
 //
 // Reordering is driven by pointer events rather than HTML5 drag and drop, so
 // dragging works the same with a finger as with a mouse, and the handle is a
@@ -63,7 +81,14 @@ function sameOrder(a: SavedTip[], b: SavedTip[]): boolean {
   return a.length === b.length && a.every((tip, index) => tip.id === b[index].id)
 }
 
-// The filter above the list. Every choice is a category the creator has
+// The videos a tip was written about, as one line. A comparison report is about
+// a pair, and both of them are named: which of the two a head-to-head tip is
+// aimed at is half of what it says.
+function videoLabel(tip: SavedTip): string | null {
+  return tip.videoTitles.length > 0 ? tip.videoTitles.join(" vs ") : null
+}
+
+// The filter above the table. Every choice is a category the creator has
 // actually kept something under, so opening it doubles as a read on what their
 // checklist is made of before they narrow it to anything.
 //
@@ -119,6 +144,69 @@ function CategoryFilter({
   )
 }
 
+// Tinted the same colour as the Title / Thumbnail / Hook badges on a video's
+// packaging cards, so a category reads as a label at a glance rather than as
+// another grey line of metadata.
+function CategoryBadge({ category }: { category: TipCategory }) {
+  return (
+    <span className="inline-block rounded-md border border-purple-500/40 bg-purple-500/10 px-1.5 py-0.5 text-xs font-medium whitespace-nowrap text-purple-700 dark:border-blue-400/40 dark:bg-blue-400/10 dark:text-blue-300">
+      {TIP_CATEGORY_LABELS[category]}
+    </span>
+  )
+}
+
+// Everything that can be done to one tip, behind the row's own menu: opening
+// the report it came from, and taking it off the checklist. Both were buttons
+// on the row before; at four columns wide they would be competing with the
+// content for the same space, and neither is pressed often enough to earn it.
+function TipActions({
+  tip,
+  busy,
+  onRemove,
+}: {
+  tip: SavedTip
+  busy: boolean
+  onRemove: () => void
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8 shrink-0 text-muted-foreground"
+            aria-label="Actions for this tip"
+          />
+        }
+      >
+        <MoreVerticalIcon className="size-4" />
+      </DropdownMenuTrigger>
+      {/* Width sizes to content rather than to the icon trigger, so the labels
+          stay on one line. */}
+      <DropdownMenuContent align="end" className="w-auto">
+        {/* A tip saved without a readable path, or one whose report has since
+            been deleted, has nowhere to go back to, so the item is left out
+            rather than offered dead. */}
+        {tip.sourcePath && (
+          <DropdownMenuItem render={<Link href={tip.sourcePath} />}>
+            <ArrowUpRightIcon className="size-4" />
+            Open the report
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem
+          variant="destructive"
+          disabled={busy}
+          onClick={onRemove}
+        >
+          <Trash2Icon className="size-4" />
+          Remove from checklist
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 function TipRow({
   tip,
   index,
@@ -138,82 +226,78 @@ function TipRow({
   onRemove: () => void
   busy: boolean
 }) {
+  const video = videoLabel(tip)
+  const saved = format(new Date(tip.createdAt), "d MMM yyyy")
+
   return (
-    <li
+    <TableRow
       data-tip-id={tip.id}
-      className={cn(
-        "flex items-start gap-3 bg-card p-4 transition-colors",
-        dragging && "bg-muted",
-      )}
+      className={cn("align-top", dragging && "bg-muted hover:bg-muted")}
     >
-      <button
-        type="button"
-        aria-label={`Reorder this tip. Currently ${index + 1} of ${total}. Use the up and down arrow keys to move it.`}
-        onPointerDown={onDragStart}
-        onKeyDown={(event) => {
-          if (event.key === "ArrowUp") {
-            event.preventDefault()
-            onMoveByKey(-1)
-          }
-          if (event.key === "ArrowDown") {
-            event.preventDefault()
-            onMoveByKey(1)
-          }
-        }}
-        className={cn(
-          "mt-0.5 flex size-6 shrink-0 touch-none items-center justify-center rounded-md text-muted-foreground",
-          "hover:bg-muted hover:text-foreground",
-          "focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-          dragging ? "cursor-grabbing" : "cursor-grab",
-        )}
-      >
-        <GripVerticalIcon className="size-4" />
-      </button>
-
-      <div className="min-w-0 flex-1">
-        <p className="text-sm leading-relaxed">{tip.tip}</p>
-        {/* Three things under a tip, and only three: what it is about, when it
-            was kept, and the way back to where it came from. The section a tip
-            was read in ("Retention: Hook: Script") used to sit here too and is
-            deliberately gone: it ended on the very word the category badge
-            already carries, so the line opened by saying the same thing twice
-            and the two pieces that are worth reading were buried in the middle
-            of it. */}
-        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          {/* Tinted the same colour as the Title / Thumbnail / Hook badges on
-              a video's packaging cards, so a category reads as a label at a
-              glance rather than as another grey line of metadata. */}
-          <span className="rounded-md border border-purple-500/40 bg-purple-500/10 px-1.5 py-0.5 font-medium text-purple-700 dark:border-blue-400/40 dark:bg-blue-400/10 dark:text-blue-300">
-            {TIP_CATEGORY_LABELS[tip.category]}
-          </span>
-          <span>Saved {format(new Date(tip.createdAt), "d MMM yyyy")}</span>
-          {/* The one thing on this line that can be clicked, so it is the one
-              thing on it that is not grey: coloured and weighted like the
-              links everywhere else in the app, rather than reading as a third
-              piece of metadata until the cursor happens to cross it. */}
-          {tip.sourcePath && (
-            <Link
-              href={tip.sourcePath}
-              className="inline-flex items-center gap-0.5 font-medium text-primary underline-offset-4 hover:underline"
-            >
-              Open the report
-              <ArrowUpRightIcon className="size-3" />
-            </Link>
+      {/* Every cell aligns to the top of the row explicitly: the base cell
+          centres its content, which on a row as tall as a three line tip would
+          leave the video, the category and the date floating in the middle of
+          it, well below the first line of the advice they belong to. */}
+      <TableCell className="py-3 pr-0 pl-2 align-top">
+        <button
+          type="button"
+          aria-label={`Reorder this tip. Currently ${index + 1} of ${total}. Use the up and down arrow keys to move it.`}
+          onPointerDown={onDragStart}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowUp") {
+              event.preventDefault()
+              onMoveByKey(-1)
+            }
+            if (event.key === "ArrowDown") {
+              event.preventDefault()
+              onMoveByKey(1)
+            }
+          }}
+          className={cn(
+            "flex size-6 shrink-0 touch-none items-center justify-center rounded-md text-muted-foreground",
+            "hover:bg-muted hover:text-foreground",
+            "focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+            dragging ? "cursor-grabbing" : "cursor-grab",
           )}
-        </div>
-      </div>
+        >
+          <GripVerticalIcon className="size-4" />
+        </button>
+      </TableCell>
 
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Remove this tip"
-        disabled={busy}
-        onClick={onRemove}
-        className="shrink-0 text-muted-foreground hover:text-destructive"
-      >
-        <Trash2Icon />
-      </Button>
-    </li>
+      <TableCell className="px-4 py-3 align-top whitespace-normal">
+        <p className="text-sm leading-relaxed">{tip.tip}</p>
+        {/* Compact metadata shown only when the columns holding it are hidden.
+            Each piece appears at exactly the width its own column disappears
+            at, so nothing is ever said twice on the same screen. */}
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground lg:hidden">
+          {video && <span className="md:hidden">{video}</span>}
+          <span className="sm:hidden">
+            <CategoryBadge category={tip.category} />
+          </span>
+          <span>Saved {saved}</span>
+        </div>
+      </TableCell>
+
+      <TableCell className="hidden max-w-3xs px-4 py-3 align-top text-sm whitespace-normal text-muted-foreground md:table-cell">
+        {video ?? (
+          // The report is what named the video, so a tip that no longer has one
+          // says why rather than leaving the cell blank and unexplained.
+          <span className="text-muted-foreground/70">No video recorded</span>
+        )}
+      </TableCell>
+
+      <TableCell className="hidden px-4 py-3 align-top sm:table-cell">
+        <CategoryBadge category={tip.category} />
+      </TableCell>
+
+      <TableCell className="hidden px-4 py-3 align-top text-sm text-muted-foreground lg:table-cell">
+        {saved}
+      </TableCell>
+
+      <TableCell className="px-2 py-3 text-right align-top">
+        <TipActions tip={tip} busy={busy} onRemove={onRemove} />
+      </TableCell>
+    </TableRow>
   )
 }
 
@@ -227,7 +311,7 @@ export function TipChecklist({ tips: initialTips }: { tips: SavedTip[] }) {
 
   const counts = tipCategoryCounts(tips)
   // Removing the last tip of the category being shown would otherwise leave the
-  // creator looking at an empty list filtered to something they no longer have
+  // creator looking at an empty table filtered to something they no longer have
   // anything under, so the filter falls back to the whole list instead.
   const active = counts.some((count) => count.category === category)
     ? category
@@ -285,9 +369,9 @@ export function TipChecklist({ tips: initialTips }: { tips: SavedTip[] }) {
   // so a drag the creator can see is applied to the order they cannot.
   //
   // The dragged tip only takes the other one's place once it is past that row's
-  // halfway line. Tips are several lines long and no two are the same height, so
-  // swapping the moment the rows overlap would put the cursor back over the tip
-  // it just displaced and swap it straight back, over and over.
+  // halfway line. Tips are several lines long and no two rows are the same
+  // height, so swapping the moment the rows overlap would put the cursor back
+  // over the tip it just displaced and swap it straight back, over and over.
   function dragOver(event: PointerEvent) {
     if (draggingId === null) return
     const over = document
@@ -392,12 +476,6 @@ export function TipChecklist({ tips: initialTips }: { tips: SavedTip[] }) {
       <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed p-10 text-center">
         <ListChecksIcon className="size-6 text-muted-foreground" />
         <p className="text-sm font-medium">Your checklist is empty</p>
-        <p className="max-w-md text-sm text-muted-foreground">
-          Every report ends its sections on a blue tip: &quot;Try:&quot; where
-          something could be better, &quot;Maintain:&quot; where something
-          already worked. Click one and add it to your checklist, and it will be
-          waiting here the next time you plan a video.
-        </p>
       </div>
     )
   }
@@ -414,26 +492,52 @@ export function TipChecklist({ tips: initialTips }: { tips: SavedTip[] }) {
       {counts.length > 1 && (
         <CategoryFilter counts={counts} active={active} onChange={setCategory} />
       )}
-      <ul
+      <div
         className={cn(
-          "divide-y overflow-hidden rounded-xl border bg-card",
+          "overflow-hidden rounded-xl border bg-card",
           draggingId !== null && "select-none",
         )}
       >
-        {visible.map((tip, index) => (
-          <TipRow
-            key={tip.id}
-            tip={tip}
-            index={index}
-            total={visible.length}
-            dragging={draggingId === tip.id}
-            busy={pendingId === tip.id}
-            onDragStart={(event) => startDrag(event, tip)}
-            onMoveByKey={(direction) => moveByKey(tip, direction)}
-            onRemove={() => remove(tip)}
-          />
-        ))}
-      </ul>
+        <Table className="text-left">
+          <TableHeader>
+            <TableRow className="bg-accent text-xs text-accent-foreground hover:bg-accent">
+              <TableHead className="w-10 py-3 pr-0 pl-2">
+                <span className="sr-only">Order</span>
+              </TableHead>
+              <TableHead className="px-4 py-3 text-accent-foreground">
+                Tip
+              </TableHead>
+              <TableHead className="hidden px-4 py-3 text-accent-foreground md:table-cell">
+                Video
+              </TableHead>
+              <TableHead className="hidden px-4 py-3 text-accent-foreground sm:table-cell">
+                Category
+              </TableHead>
+              <TableHead className="hidden px-4 py-3 text-accent-foreground lg:table-cell">
+                Date added
+              </TableHead>
+              <TableHead className="w-12 px-2 py-3">
+                <span className="sr-only">Actions</span>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {visible.map((tip, index) => (
+              <TipRow
+                key={tip.id}
+                tip={tip}
+                index={index}
+                total={visible.length}
+                dragging={draggingId === tip.id}
+                busy={pendingId === tip.id}
+                onDragStart={(event) => startDrag(event, tip)}
+                onMoveByKey={(direction) => moveByKey(tip, direction)}
+                onRemove={() => remove(tip)}
+              />
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   )
 }

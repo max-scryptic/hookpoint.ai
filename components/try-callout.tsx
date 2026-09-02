@@ -1,6 +1,14 @@
-import { SparklesIcon } from "lucide-react"
-import type { ReactNode } from "react"
+"use client"
 
+import { SparklesIcon } from "lucide-react"
+import { useCallback, useRef, type ReactNode } from "react"
+
+import { useFirstTipHint } from "@/components/first-tip-hint"
+import {
+  AnchoredHintCallout,
+  HintCallout,
+  HintTargetGlow,
+} from "@/components/onboarding-hints"
 import { TipMenu } from "@/components/tip-menu"
 import { cleanCopy } from "@/lib/copy-guardrails"
 import type { TipExample } from "@/lib/tip-examples"
@@ -10,6 +18,9 @@ import { tipLabelForSection } from "@/lib/tips"
 // wears most of the time, but the label itself is not fixed: a tip about a
 // moment that went right is introduced with "Maintain:" rather than "Try:".
 // tipLabelForSection (lib/tips.ts) is where that is decided and why.
+//
+// COPY GUARDRAIL: no em or en dashes (U+2014 / U+2013), ever, in any text in
+// this file. Hyphens are fine. Enforced by lib/__tests__/copy-guardrails.
 export function TryCallout({
   children,
   section,
@@ -43,12 +54,45 @@ export function TryCallout({
   // worked. Both are one word and a colon, so a row keeps the same shape
   // whichever it gets.
   const label = `${tipLabelForSection(section)}:`
+  const clickable = actions && typeof tip === "string"
+  // A report shows the coach mark on its first clickable tip and nowhere else.
+  // Every tip offers itself; the provider (components/first-tip-hint.tsx) picks
+  // the one that comes first in the page, and all the others get `shown: false`
+  // and render exactly as they always have.
+  const {
+    ref: registerTip,
+    shown: showTipHint,
+    dismiss: dismissTipHint,
+  } = useFirstTipHint(clickable)
+  // The same box the provider ranks, kept here as well because that is what the
+  // bubble hangs off. Merged into one ref callback rather than two, since an
+  // element takes one ref: it fills this in, registers the tip, and undoes both
+  // when the tip goes.
+  const tipBoxRef = useRef<HTMLParagraphElement>(null)
+  const tipBoxCallbackRef = useCallback(
+    (node: HTMLParagraphElement | null) => {
+      tipBoxRef.current = node
+      const unregister = registerTip(node)
+      return () => {
+        tipBoxRef.current = null
+        unregister?.()
+      }
+    },
+    [registerTip],
+  )
   // One tip and one only, everywhere in the app. A section that has more advice
   // to give holds it back rather than stacking a second line under this one: two
   // suggestions at once read as padding, and the reader has to work out which of
   // them is the one to act on.
   return (
-    <p className="inline-flex w-fit max-w-full items-start gap-2 text-sm text-blue-600 dark:text-blue-400">
+    <p
+      // The whole line is what the mark is drawn around and what the bubble
+      // hangs off, rather than the advice alone: an inline run that wraps
+      // mid-sentence has no box to ring, and the sparkle in front of it is part
+      // of what a creator is being pointed at.
+      ref={tipBoxCallbackRef}
+      className="relative inline-flex w-fit max-w-full items-start gap-2 text-sm text-blue-600 dark:text-blue-400"
+    >
       <SparklesIcon className="mt-0.5 size-4 shrink-0" />
       {/* Keep and flag live behind the tip itself. Only advice this component
           scrubbed is clickable: a richer node is someone else's copy, and there
@@ -56,9 +100,9 @@ export function TryCallout({
           label goes inside the tip, so the label and the advice wrap as one
           sentence rather than sitting on separate lines. */}
       <span>
-        {actions && typeof tip === "string" ? (
+        {clickable ? (
           <TipMenu
-            tip={tip}
+            tip={tip as string}
             section={section}
             examples={examples}
             label={label}
@@ -70,6 +114,21 @@ export function TryCallout({
           </>
         )}
       </span>
+      {/* Held a hair off the text on every side, so the ring reads as something
+          drawn around the line rather than as a border the tip has grown. */}
+      <HintTargetGlow shown={showTipHint} className="-inset-1" />
+      {showTipHint && (
+        <AnchoredHintCallout anchorRef={tipBoxRef}>
+          <HintCallout
+            title="Tips open up"
+            arrow={{ side: "top", align: "end" }}
+            onDismiss={dismissTipHint}
+          >
+            Click the advice for three worked examples of it, and to keep it on
+            your checklist.
+          </HintCallout>
+        </AnchoredHintCallout>
+      )}
     </p>
   )
 }

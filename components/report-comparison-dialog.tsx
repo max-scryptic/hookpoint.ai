@@ -55,7 +55,7 @@ function Included({ included }: { included: boolean }) {
       {included ? (
         <CheckIcon className="mx-auto size-4 text-emerald-600 dark:text-emerald-500" />
       ) : (
-        <XIcon className="mx-auto size-4 text-muted-foreground/60" />
+        <XIcon className="mx-auto size-4 text-red-600 dark:text-red-500" />
       )}
       <span className="sr-only">{included ? "Included" : "Not included"}</span>
     </>
@@ -70,16 +70,22 @@ export function ReportComparisonDialog() {
       </DialogTrigger>
 
       <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-xl">
+        {/* One line under the title, and only one. It names what actually
+            separates the two columns (the uploaded file) rather than listing
+            what the rows already list. The header keeps the two lines close
+            together instead of the dialog's own wider gap. */}
         <DialogHeader>
           <DialogTitle>Basic and complete reports</DialogTitle>
-          <DialogDescription className="leading-relaxed">
-            A basic report reads your retention curve and your script. A
-            complete report also watches the video itself, so it can tell you
-            what was on screen when people left.
+          <DialogDescription>
+            Every report reads your retention curve and your script. A complete
+            report also watches the video itself.
           </DialogDescription>
         </DialogHeader>
 
-        <table className="w-full border-separate border-spacing-0 text-sm">
+        {/* The vertical margins are on top of the dialog's own gap: the table
+            reads as cramped without a little more air above the column headers
+            and below the last row. */}
+        <table className="my-3 w-full border-separate border-spacing-0 text-sm">
           <thead>
             <tr>
               <th scope="col" className="sr-only">
@@ -126,8 +132,10 @@ export function ReportComparisonDialog() {
         </table>
 
         {/* The close: one line and a button. The table above has already made
-            the case, so this only has to name the next step. */}
-        <div className="flex flex-col items-start gap-3 rounded-lg bg-muted/30 p-4">
+            the case, so this only has to name the next step. No inset panel
+            here, so the copy starts on the same left edge as the title and the
+            table rows. */}
+        <div className="flex flex-col items-start gap-3">
           <p className="text-sm leading-relaxed text-muted-foreground">
             Upgrade to Starter or Pro to unlock complete reports, and much more,
             now.

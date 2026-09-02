@@ -9,6 +9,7 @@ import {
   ThumbsDownIcon,
 } from "lucide-react"
 
+import { useOnboardingHint } from "@/components/onboarding-hints"
 import { useSavedTips } from "@/components/saved-tips-provider"
 import { TipExamples } from "@/components/tip-examples"
 import { TipFeedbackDialog } from "@/components/tip-feedback-dialog"
@@ -130,6 +131,13 @@ export function TipMenu({
   // are looking at before they keep it.
   const category = useMemo(() => tipCategoryForSection(section), [section])
 
+  // Opening any tip is the whole of what the report's "Tips open up" coach mark
+  // asks for, so that is what retires it - whether the tip opened was the one
+  // the bubble pointed at or another one further down. A no-op once the hint has
+  // gone, and outside a report page there is no hint to retire. See
+  // ONBOARDING_HINTS in lib/onboarding-hints.ts.
+  const tipActionsHint = useOnboardingHint("report_tip_actions")
+
   const [open, setOpen] = useState(false)
   // Read once, when the card is opened, rather than during render: the path is
   // a browser fact, and a server render has no window to read it from. Both the
@@ -237,7 +245,10 @@ export function TipMenu({
       <Popover
         open={open}
         onOpenChange={(nextOpen) => {
-          if (nextOpen) setSourcePath(currentPath() ?? "")
+          if (nextOpen) {
+            setSourcePath(currentPath() ?? "")
+            tipActionsHint.dismiss()
+          }
           setOpen(nextOpen)
         }}
       >
@@ -277,18 +288,24 @@ export function TipMenu({
           {tip}
         </PopoverTrigger>
 
-        {/* Wide enough for a quoted line of narration to read as one, and
-            capped against the viewport so a tip opened on a phone stays on
-            screen. Half again as wide as it first was: an example is two or
-            three sentences of spoken narration, and at the old width every one
-            of them broke into four or five short lines, which reads as a
-            column of fragments rather than as something a creator could say.
-            The padding is per section rather than on the popup, so the rule
-            above the actions runs the full width of the card. */}
+        {/* The card is as wide as what is in it, up to 40rem. That cap is the
+            width an example wants: two or three sentences of spoken narration,
+            which at anything narrower broke into four or five short lines and
+            read as a column of fragments rather than as something a creator
+            could say. Below it there is nothing to gain from holding the card
+            open at full width, and a title suggestion sitting in a card twice
+            its length reads as a mistake, so the card shrinks to its contents
+            and a longer example wraps against the cap instead of pushing past
+            it. Capped against the viewport too, so a tip opened on a phone
+            stays on screen. The examples panel sizes itself to the longest of
+            the three (see TipExamples), so moving between tabs does not resize
+            the card underneath the cursor. The padding is per section rather
+            than on the popup, so the rule above the actions runs the full
+            width of the card. */}
         <PopoverContent
           align="start"
           aria-label={`Examples and options for the tip: ${tip}`}
-          className="w-[40rem] max-w-[calc(100vw-2rem)] p-0"
+          className="w-fit max-w-[min(40rem,calc(100vw-2rem))] p-0"
         >
           <div className="flex flex-col gap-3 p-4">
             <div className="flex flex-col gap-0.5">

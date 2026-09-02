@@ -35,6 +35,7 @@ describe("onboarding hint keys", () => {
   it("accepts only known hints", () => {
     expect(isOnboardingHint("first_video_analysis_url")).toBe(true)
     expect(isOnboardingHint("first_video_analysis_row_menu")).toBe(true)
+    expect(isOnboardingHint("report_tip_actions")).toBe(true)
     expect(isOnboardingHint("retention_insight_playback")).toBe(true)
     expect(isOnboardingHint("deep_analysis_window_tabs")).toBe(true)
     expect(isOnboardingHint("retention_insight_playback ")).toBe(false)
@@ -68,6 +69,7 @@ describe("getPendingOnboardingHints", () => {
     ).resolves.toEqual([
       "first_video_analysis_url",
       "first_video_analysis_row_menu",
+      "report_tip_actions",
       "deep_analysis_window_tabs",
     ])
   })

@@ -679,9 +679,9 @@ function StyleDimensionRow({
             <span className="truncate text-sm">
               {taxonomyCategoryLabel(dimension.key, row.value)}
             </span>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+            <div className="h-1.5 w-full overflow-hidden rounded-sm bg-muted">
               <div
-                className="h-full rounded-full bg-muted-foreground/50"
+                className="h-full rounded-sm bg-muted-foreground/50"
                 style={{ width: `${Math.min(100, row.share * 100)}%` }}
               />
             </div>

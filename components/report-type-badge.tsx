@@ -28,8 +28,9 @@ export function ReportTypeExplainer() {
 export function ReportTypeUpgradeHint() {
   return (
     <span>
-      Upgrade to <strong className="font-semibold">Starter or Pro</strong> to
-      upload your source files and unlock complete reports.
+      Upgrade to <strong className="font-semibold">Starter</strong> or{" "}
+      <strong className="font-semibold">Pro</strong> to upload your source files
+      and unlock complete reports.
     </span>
   )
 }
@@ -76,7 +77,7 @@ export function ReportTypeBadge({
     <span
       title={title}
       className={cn(
-        "inline-flex w-fit items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold whitespace-nowrap",
+        "inline-flex w-fit items-center gap-1.5 rounded-sm border px-2.5 py-1 text-xs font-semibold whitespace-nowrap",
         tone,
         className,
       )}

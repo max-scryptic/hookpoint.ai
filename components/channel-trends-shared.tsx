@@ -141,7 +141,7 @@ export function CardEyebrow({
 
 export function Chip({ children }: { children: ReactNode }) {
   return (
-    <span className="rounded-full border bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground">
+    <span className="rounded-sm border bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground">
       {children}
     </span>
   )
@@ -178,9 +178,9 @@ export function SignalMeter({
   const band = signal >= strongThreshold ? "strong" : "emerging"
   return (
     <div className="flex items-center gap-2.5">
-      <div className="h-1.5 w-full max-w-48 overflow-hidden rounded-full bg-muted">
+      <div className="h-1.5 w-full max-w-48 overflow-hidden rounded-sm bg-muted">
         <div
-          className="h-full rounded-full bg-foreground/60"
+          className="h-full rounded-sm bg-foreground/60"
           style={{ width: `${Math.min(100, signal)}%` }}
         />
       </div>
@@ -255,9 +255,9 @@ export function EvidenceDisclosure({
 // where there is one number per axis rather than two to compare.
 export function ScoreBar({ value }: { value: number }) {
   return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+    <div className="h-1.5 w-full overflow-hidden rounded-sm bg-muted">
       <div
-        className="h-full rounded-full bg-foreground/60"
+        className="h-full rounded-sm bg-foreground/60"
         style={{ width: `${Math.min(100, Math.max(0, value * 10))}%` }}
       />
     </div>

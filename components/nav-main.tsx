@@ -15,6 +15,9 @@ export type NavItem = {
   url: string
   icon?: React.ReactNode
   isActive?: boolean
+  // Short pill shown after the title, e.g. "Beta". Hidden while the sidebar is
+  // collapsed to icons, where there is no room for it.
+  badge?: string
 }
 
 export type NavSection = {
@@ -37,7 +40,12 @@ export function NavMain({ sections }: { sections: NavSection[] }) {
                   render={<Link href={item.url} />}
                 >
                   {item.icon}
-                  <span>{item.title}</span>
+                  <span className="truncate">{item.title}</span>
+                  {item.badge && (
+                    <span className="ml-auto shrink-0 rounded-sm border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] leading-none font-semibold tracking-wide text-primary uppercase group-data-[collapsible=icon]:hidden">
+                      {item.badge}
+                    </span>
+                  )}
                 </SidebarMenuButton>
               </SidebarMenuItem>
             ))}

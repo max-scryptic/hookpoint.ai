@@ -1,8 +1,9 @@
 import type { ReactNode } from "react"
 import Link from "next/link"
-import { ArrowLeftIcon, LockIcon } from "lucide-react"
+import { ArrowLeftIcon } from "lucide-react"
 
 import { PackagingComparison } from "@/components/packaging-comparison"
+import { PaidFeatureCard } from "@/components/paid-feature-card"
 import { ScriptComparison } from "@/components/script-comparison"
 import { RetentionComparisonVideos } from "@/components/retention-comparison"
 import { VideoComparisonTabs } from "@/components/video-comparison-tabs"
@@ -361,25 +362,11 @@ export default async function Page({
           </Card>
         )}
         {result.status === "locked" && (
-          <Card className="flex flex-col items-start gap-3 p-6">
-            <LockIcon className="size-5 text-muted-foreground" />
-            <div className="w-full">
-              <p className="text-sm text-muted-foreground">
-                Video comparison is a paid feature, available to{" "}
-                <span className="font-semibold text-foreground">Starter</span>{" "}
-                and <span className="font-semibold text-foreground">Pro</span>{" "}
-                users.
-              </p>
-              <p className="mt-3 text-sm text-muted-foreground">
-                Any two analysed videos can be compared side by side: where
-                their retention curves diverge, how their hooks stack up, and
-                the event evidence for what happened in each stretch.
-              </p>
-            </div>
-            <Link href="/pricing" className={buttonVariants()}>
-              See plans
-            </Link>
-          </Card>
+          <PaidFeatureCard feature="Video comparison">
+            Any two analysed videos can be compared side by side: where their
+            retention curves diverge, how their hooks stack up, and the event
+            evidence for what happened in each stretch.
+          </PaidFeatureCard>
         )}
         {result.status === "error" && (
           <div className="rounded-xl border bg-card p-8 text-sm text-muted-foreground">

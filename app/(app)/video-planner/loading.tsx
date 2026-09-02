@@ -1,21 +1,18 @@
-import { ClapperboardIcon } from "lucide-react"
-
 import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbList,
   BreadcrumbPage,
 } from "@/components/ui/breadcrumb"
-import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 
 // Loading boundary for /video-planner. There is no ancestor boundary above it
 // to fall back on, so without this file the previous page would stay frozen on
-// screen until Video Planner resolved. This page is static "coming soon"
-// content with no data fetch, so we render its full chrome and card here - the
-// swap to the real page is seamless.
+// screen until the planner resolved. The page's own reads are its plan list and
+// its entitlement, so the chrome and the heading are drawn for real and only
+// the list of planned videos below them is stood in for.
 export default function Loading() {
   return (
     <>
@@ -41,18 +38,30 @@ export default function Loading() {
             Video Planner
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Plan your next upload before it goes live on YouTube.
+            Check your packaging before it goes live. Every video you are
+            planning is here: open one to add the cut, the titles you are
+            weighing up and the thumbnail, and we will tell you which title fits
+            and what to change.
           </p>
         </div>
 
-        <Card className="flex flex-col items-start gap-3 p-6">
-          <ClapperboardIcon className="size-5 text-muted-foreground" />
-          <div className="w-full space-y-3">
-            <Skeleton className="h-4 w-72" />
-            <Skeleton className="h-4 w-full max-w-xl" />
-            <Skeleton className="h-4 w-5/6 max-w-xl" />
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-sm font-medium text-muted-foreground">
+              Planned videos
+            </h2>
+            <Skeleton className="h-9 w-32" />
           </div>
-        </Card>
+
+          <div className="flex flex-col gap-3 rounded-xl border bg-card p-4">
+            {[0, 1, 2].map((index) => (
+              <div key={index} className="flex items-center gap-3">
+                <Skeleton className="aspect-video w-24 shrink-0 sm:w-28" />
+                <Skeleton className="h-4 w-full max-w-sm" />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </>
   )

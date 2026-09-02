@@ -74,9 +74,9 @@ export function ScoreBar({
   className?: string
 }) {
   return (
-    <div className={cn("h-1.5 overflow-hidden rounded-full bg-muted", className)}>
+    <div className={cn("h-1.5 overflow-hidden rounded-sm bg-muted", className)}>
       <div
-        className="h-full rounded-full"
+        className="h-full rounded-sm"
         style={{
           width: `${Math.min(100, Math.max(0, value * 10))}%`,
           backgroundColor: color,
@@ -106,7 +106,7 @@ export function PackagingAlignmentScore({
     // so it wears the evidence frame like everything else in a column, and the
     // channel trends card reads the same way.
     <EvidencePanel className={className}>
-      <div className="@container flex flex-col gap-3">
+      <div className="flex flex-col gap-3">
         <div>
           <div className="flex items-baseline gap-1.5">
             <span className="text-3xl leading-none font-semibold tabular-nums">
@@ -120,12 +120,11 @@ export function PackagingAlignmentScore({
         </div>
         <ScoreBar value={score} color={color} />
         {parts.length > 0 && (
-          // Side by side once the block itself is wide enough to hold two of
-          // these rows, which is the full-width card on channel trends and on a
-          // single video's report, and not the narrow columns of the
-          // head-to-head. Measured on the block rather than the window so a wide
-          // screen never splits a narrow column.
-          <div className="grid gap-x-10 gap-y-2 @2xl:grid-cols-2">
+          // One part per row, at every width. Side by side saved a little
+          // height on the wide cards but read as one run-on line of labels and
+          // numbers, so each part keeps its own row and its own bar under the
+          // headline bar.
+          <div className="flex flex-col gap-2">
             {parts.map((part) => (
               <div key={part.label} className="flex items-center gap-3">
                 <span className="flex-1 text-xs text-muted-foreground">

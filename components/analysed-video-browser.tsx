@@ -205,7 +205,7 @@ function ReportTypeInfo({ showUpgradeHint }: { showUpgradeHint: boolean }) {
         render={
           <button
             type="button"
-            className="inline-flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none"
+            className="inline-flex size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none"
             aria-label="What Basic and Complete reports include"
           />
         }
@@ -526,7 +526,7 @@ export function AnalysedVideoBrowser({
       {/* Results */}
       {isEmpty ? (
         <div className="flex flex-col items-center justify-center gap-3 rounded-xl border bg-card px-6 py-16 text-center">
-          <div className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+          <div className="flex size-12 items-center justify-center rounded-md bg-muted text-muted-foreground">
             <VideoOffIcon className="size-6" />
           </div>
           <p className="text-sm text-muted-foreground">{emptyMessage}</p>

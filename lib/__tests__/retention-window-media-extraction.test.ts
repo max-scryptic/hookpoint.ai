@@ -11,16 +11,21 @@ import {
   type SceneCueScanner,
 } from "@/lib/retention-window-media-extraction"
 import type { RetentionWindowSceneCueScan } from "@/lib/video-scene-cues"
-import type { SourceFile } from "@/lib/source-files/source-files"
+import type { AnalysedVideoSourceFile } from "@/lib/source-files/source-files"
 import type { StorageProvider } from "@/lib/storage"
 import type { VideoExtractor } from "@/lib/media/video-extraction"
 import type { OcrEngine } from "@/lib/media/ocr"
 
-function makeSourceFile(overrides: Partial<SourceFile> = {}): SourceFile {
+// Extraction only ever runs against an analysed video's upload, so the fixture
+// is typed as one.
+function makeSourceFile(
+  overrides: Partial<AnalysedVideoSourceFile> = {},
+): AnalysedVideoSourceFile {
   return {
     id: "sf-1",
     userId: "user-1",
     analysedVideoId: "av-1",
+    videoPlanId: null,
     youtubeVideoId: "vid-1",
     originalFilename: "clip.mp4",
     storageProvider: "fake",

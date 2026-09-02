@@ -2,7 +2,6 @@ import Link from "next/link"
 import {
   EyeIcon,
   GaugeIcon,
-  LockIcon,
   MousePointerClickIcon,
   TrendingUpIcon,
   UserPlusIcon,
@@ -26,10 +25,11 @@ import {
   plural,
 } from "@/components/channel-trends-shared"
 import { ChannelTrendsTabs } from "@/components/channel-trends-tabs"
+import { LibraryProgress } from "@/components/library-progress"
+import { PaidFeatureCard } from "@/components/paid-feature-card"
 import { buttonVariants } from "@/components/ui/button"
 import {
   Card,
-  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
@@ -70,7 +70,9 @@ import {
 // The progressive-unlock meter. Building toward EARLY it counts down to the
 // first trends; from EARLY it counts toward full strength; at ESTABLISHED the
 // meter has nothing left to say, so it disappears and the snapshot tiles take
-// the top of the page.
+// the top of the page. The bar itself is the shared one every library-gated
+// feature uses (components/library-progress.tsx); this only decides the target
+// and what the line above it says.
 function StageProgress({ data }: { data: ChannelTrendsData }) {
   if (data.stage === "established") {
     return null
@@ -80,7 +82,6 @@ function StageProgress({ data }: { data: ChannelTrendsData }) {
     data.stage === "early"
       ? ESTABLISHED_TRENDS_VIDEO_THRESHOLD
       : EARLY_TRENDS_VIDEO_THRESHOLD
-  const progress = Math.min(100, (data.libraryVideoCount / target) * 100)
   const remaining = target - data.libraryVideoCount
   const message =
     data.stage === "early"
@@ -90,22 +91,11 @@ function StageProgress({ data }: { data: ChannelTrendsData }) {
         : `Deeply analyse ${plural(remaining, "more video")} to unlock early trends.`
 
   return (
-    <Card size="sm">
-      <CardContent className="flex flex-col gap-2">
-        <div className="flex items-center justify-between gap-2 text-sm">
-          <span>{message}</span>
-          <span className="font-mono text-xs tabular-nums text-muted-foreground">
-            {data.libraryVideoCount}/{target}
-          </span>
-        </div>
-        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-          <div
-            className="h-full rounded-full bg-primary transition-[width]"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      </CardContent>
-    </Card>
+    <LibraryProgress
+      message={message}
+      count={data.libraryVideoCount}
+      target={target}
+    />
   )
 }
 
@@ -279,25 +269,12 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
 // data.
 export function ChannelTrendsLocked() {
   return (
-    <Card className="flex flex-col items-start gap-3 p-6">
-      <LockIcon className="size-5 text-muted-foreground" />
-      <div className="w-full">
-        <p className="text-sm text-muted-foreground">
-          Cross-video intelligence is a paid feature, available to{" "}
-          <span className="font-semibold text-foreground">Starter</span> and{" "}
-          <span className="font-semibold text-foreground">Pro</span> users.
-        </p>
-        <p className="mt-3 text-sm text-muted-foreground">
-          Every deep analysis adds its retention events to a private library of
-          your content. This page then surfaces the trends that repeat across
-          your channel: what loses viewers, what holds them, how your packaging
-          earns reach and what your best videos say - insight no single video
-          can give you.
-        </p>
-      </div>
-      <Link href="/pricing" className={buttonVariants()}>
-        See plans
-      </Link>
-    </Card>
+    <PaidFeatureCard feature="Cross-video intelligence">
+      Every deep analysis adds its retention events to a private library of your
+      content. This page then surfaces the trends that repeat across your
+      channel: what loses viewers, what holds them, how your packaging earns
+      reach and what your best videos say - insight no single video can give
+      you.
+    </PaidFeatureCard>
   )
 }

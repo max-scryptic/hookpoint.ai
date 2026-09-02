@@ -8,65 +8,126 @@
   /*
    * Viewlio brand theme - carried over from Viewlio unchanged, and the
    * palette the Viewlio mark was drawn against.
-   * Brand blue (hue ~264) drives primary actions (buttons, focus rings, links);
-   * soft lavender carries the light-mode accent wash, and navy (hue ~270) sets
-   * the dark-mode surface to match the logo.
+   * Brand blue (hue ~264) drives primary actions (buttons, focus rings, links)
+   * and, in light mode, every tinted surface with it: the page, the card and
+   * widget tiers, the borders, the table headers, the tab track and the
+   * sidebar highlight all sit on that one hue. Charts keep their own spread of
+   * hues (they need the separation to tell series apart), and the purple
+   * Title / Thumbnail / Hook badges are drawn from Tailwind's own palette
+   * rather than from these tokens, so both are unaffected by the rule above.
+   * Navy (hue ~270) sets the dark-mode surface to match the logo, while its
+   * accent, table-header, tab, sidebar and chart hints now stay in the same
+   * blue family as the light theme.
    */
   color-scheme: light;
   /*
    * Light mode runs a three-tier surface scale so nothing blends into the
    * page:
-   *   1. --background  - a brand-lavender tinted page (the darkest tier).
+   *   1. --background  - a near-neutral grey page (the darkest tier).
    *   2. --card/--popover/--sidebar - pure white; primary cards, filter
    *      controls and empty-state panels sit here so they "pop" off the page.
    *   3. --muted/--secondary - a soft grey used for sub-cards (stat tiles),
    *      segmented-control tracks and other widgets nested inside white cards.
    * The page tier is kept meaningfully darker than the grey tier so a white
    * surface reads as clearly elevated above both.
+   *
+   * The page carries a small amount of chroma at the brand hue, and no more.
+   * A tint spread across a full viewport is the one place a small chroma reads
+   * loudly, and past a point it drags every genuinely coloured thing on top of
+   * it - the primary button, the accent chips, the charts - towards the same
+   * hue, so they stop reading as colour. What is here (0.006 at the brand hue)
+   * is enough for the page to read as part of the same family as the surfaces
+   * on it, rather than as a neutral grey the app was dropped onto, while
+   * staying well under the chroma of the tiers above it (--muted at 0.008,
+   * --accent at 0.03) so the elevation scale still runs on lightness rather
+   * than on colour.
+   *
+   * Every one of these tints sits at the brand hue rather than at the accent's
+   * former ~292. Off-hue by that much, a tint does not read as a quieter
+   * version of the blue it surrounds - it reads as a second colour, and a
+   * light page shows the mismatch far more than a dark one does, since there
+   * is no darkness to swallow it.
    */
-  --muted: oklch(0.972 0.008 289);
-  --accent: oklch(0.95 0.03 292);
-  --background: oklch(0.958 0.011 291);
-  --foreground: oklch(0.18 0.02 274);
+  --muted: oklch(0.972 0.008 264);
+  --accent: oklch(0.95 0.03 264);
+  --background: oklch(0.958 0.006 264);
+  --foreground: oklch(0.18 0.02 264);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.02 274);
+  --card-foreground: oklch(0.18 0.02 264);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.02 274);
+  --popover-foreground: oklch(0.18 0.02 264);
   --primary: oklch(0.54 0.2 264);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.975 0.013 285);
-  --secondary-foreground: oklch(0.32 0.05 274);
-  --muted-foreground: oklch(0.52 0.025 282);
-  --accent-foreground: oklch(0.44 0.15 292);
+  --secondary: oklch(0.975 0.013 264);
+  --secondary-foreground: oklch(0.32 0.05 264);
+  --muted-foreground: oklch(0.52 0.025 264);
+  --accent-foreground: oklch(0.44 0.15 264);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.91 0.012 285);
-  --input: oklch(0.91 0.012 285);
+  --border: oklch(0.91 0.012 264);
+  --input: oklch(0.91 0.012 264);
   --ring: oklch(0.54 0.2 264);
   --chart-1: oklch(0.54 0.2 264);
   --chart-2: oklch(0.62 0.15 292);
   --chart-3: oklch(0.7 0.12 305);
   --chart-4: oklch(0.66 0.16 250);
   --chart-5: oklch(0.58 0.13 280);
-  --radius: 0.625rem;
+  /*
+   * The app is square-cornered. This is 2px rather than 0 so edges stay
+   * anti-aliased instead of going visibly jagged where a border, a ring and a
+   * background meet at a corner - it reads as square, it just does not fray.
+   * Every rounded-* utility derives from this, so the whole surface moves
+   * together; nothing should hardcode a radius.
+   */
+  --radius: 0.125rem;
+  /*
+   * The one deliberate exception: the brand mark's tile. A logo is a fixed
+   * piece of identity rather than a piece of chrome, so it keeps the softer
+   * corner it was drawn with while everything around it squares off. (The
+   * other exception, the user avatar, is a full circle and needs no token.)
+   */
+  --radius-brand: 0.625rem;
   --sidebar: oklch(1 0 0);
-  --sidebar-foreground: oklch(0.18 0.02 274);
-  --sidebar-primary: oklch(0.55 0.16 292);
+  --sidebar-foreground: oklch(0.18 0.02 264);
+  --sidebar-primary: oklch(0.54 0.2 264);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.95 0.03 292);
-  --sidebar-accent-foreground: oklch(0.44 0.15 292);
-  --sidebar-border: oklch(0.91 0.012 285);
-  --sidebar-ring: oklch(0.55 0.16 292);
+  --sidebar-accent: oklch(0.95 0.03 264);
+  --sidebar-accent-foreground: oklch(0.44 0.15 264);
+  --sidebar-border: oklch(0.91 0.012 264);
+  --sidebar-ring: oklch(0.54 0.2 264);
   /*
    * The landing page alternates its sections between the page tier and this
    * band, so the funnel reads as a series of stops rather than one long wash.
    * It is its own token rather than a translucent --muted because the two
-   * themes need opposite moves: light mode deepens the lavender tint below the
-   * page (--muted is *lighter* than the page here, so a muted wash all but
-   * vanishes), dark mode lifts above it. Both land a step of roughly 0.03 in
-   * lightness, which is visible without cutting the page into stripes, and in
-   * both themes a white/raised card still sits clearly above the band.
+   * themes need opposite moves: light mode steps down below the page (--muted
+   * is *lighter* than the page here, so a muted wash all but vanishes), dark
+   * mode lifts above it. Both land a step of roughly 0.03 in lightness, which
+   * is visible without cutting the page into stripes, and in both themes a
+   * white/raised card still sits clearly above the band. In light mode the
+   * band tracks the page's own hue and chroma, so the funnel reads as a change
+   * in lightness rather than as a coloured stripe against a greyer page.
    */
-  --landing-band: oklch(0.925 0.019 291);
+  --landing-band: oklch(0.925 0.007 264);
+  /*
+   * Dashed placeholder outlines - the empty-state panels and thumbnail slots
+   * that mark out "nothing here yet". They cannot use --border: a dash pattern
+   * lays down roughly half the ink of a solid rule of the same colour, and most
+   * of these sit on the page tier (0.958) rather than on a white card, so a
+   * border only 0.048 below the page reads as solid when drawn continuously
+   * and all but disappears once it is broken up. This is a step of about 0.14
+   * instead, which is what it takes for the outline to hold its shape at that
+   * duty cycle. Light mode only - dark mode's --border is translucent white,
+   * which already carries a dashed edge clearly, so the rule below is scoped
+   * away from it and this token goes unread there.
+   */
+  --dashed-border: oklch(0.82 0.018 264);
+  /*
+   * The track a segmented control's tabs sit in. It cannot be --muted: the
+   * active tab is a white card, and --muted (0.972) is too close to white for
+   * the raised tab to separate from the track behind it. This is the one step
+   * darker that gives it somewhere to sit, which is also why dark mode has no
+   * such problem and reads --muted directly (see components/ui/tabs.tsx).
+   */
+  --tabs-track: oklch(0.915 0.035 264);
 }
 
 * {
@@ -135,13 +196,20 @@ body {
   --color-foreground: var(--foreground);
   --color-background: var(--background);
   --color-landing-band: var(--landing-band);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
+  --color-tabs-track: var(--tabs-track);
+  /*
+   * A flatter ramp than the shadcn default. The steps still rank - a dialog
+   * is softer than an input - but the whole range lives between 1px and 4px,
+   * so the largest surface in the app is still square to the eye.
+   */
+  --radius-xs: calc(var(--radius) * 0.5);
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.75);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-xl: calc(var(--radius) * 1.25);
+  --radius-2xl: calc(var(--radius) * 1.5);
+  --radius-3xl: calc(var(--radius) * 1.75);
+  --radius-4xl: calc(var(--radius) * 2);
 }
 
 .dark {
@@ -200,6 +268,21 @@ body {
   }
   html {
     @apply font-sans;
+  }
+}
+
+/*
+ * Colour every dashed edge in light mode from --dashed-border rather than from
+ * the `*` rule above, so the placeholder panels are visible against the page.
+ * It lives in the utilities layer, and is wrapped in :where() so it carries no
+ * specificity of its own: that puts it above the base `*` border-color it is
+ * replacing, and below any element that names its own border colour, so
+ * `border-dashed border-primary/40` and the chart legend's inline
+ * `border-(--color-border)` keep the colour they ask for.
+ */
+@layer utilities {
+  :where(html:not(.dark) [class~="border-dashed"]) {
+    border-color: var(--dashed-border);
   }
 }
 
@@ -324,10 +407,17 @@ body {
  * elements carry, so the two never fight over one declaration.
  */
 
+/* The blur on the way in is what makes an entrance read as something coming
+ * into focus rather than sliding around. It is deliberately absent from the
+ * closing keyframe: an omitted property finishes on the element's own value, so
+ * the animation resolves to no filter at all rather than leaving every revealed
+ * section wearing a permanent blur(0) and the compositing layer that comes with
+ * it. */
 @keyframes landing-reveal {
   from {
     opacity: 0;
     transform: translateY(1.5rem);
+    filter: blur(6px);
   }
   to {
     opacity: 1;
@@ -339,6 +429,23 @@ body {
   from {
     opacity: 0;
     transform: translateY(0.5rem);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* One word of a heading, rising out of the mask its wrapper clips it to. The
+ * words are staggered a few tens of milliseconds apart, so a headline reads
+ * itself into place left to right instead of arriving as a block. See
+ * components/landing/landing-words.tsx. */
+@keyframes landing-word {
+  from {
+    opacity: 0;
+    transform: translateY(110%);
+    filter: blur(8px);
   }
   to {
     opacity: 1;
@@ -379,6 +486,7 @@ body {
   from {
     opacity: 0;
     transform: scale(0.6);
+    filter: blur(4px);
   }
   60% {
     transform: scale(1.08);
@@ -386,6 +494,33 @@ body {
   to {
     opacity: 1;
     transform: none;
+  }
+}
+
+/* A card, a chip or a wash that rides the scroll at its own speed. Driven by a
+ * scroll-driven timeline rather than a listener, so there is no per-frame
+ * JavaScript behind it; browsers without the timeline simply hold the layer
+ * still, which is the same thing a reduced-motion reader gets. The distance is
+ * a variable so one keyframe covers a heavy wash and a light chip alike. */
+@keyframes landing-parallax {
+  from {
+    transform: translate3d(0, calc(var(--landing-parallax, 10%) * -0.5), 0);
+  }
+  to {
+    transform: translate3d(0, var(--landing-parallax, 10%), 0);
+  }
+}
+
+/* The idle bob on the chips around the hero report. Applied to an inner
+ * element, never to one carrying an entrance, so the two never fight over the
+ * transform. */
+@keyframes landing-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, calc(var(--landing-float, 0.5rem) * -1), 0);
   }
 }
 
@@ -491,4 +626,84 @@ body {
   .landing-drift-slow {
     animation: landing-drift 30s ease-in-out infinite reverse;
   }
+
+  /* Headings, word by word. The mask is structural and always applied (see
+   * below); this is only the motion inside it. */
+  .landing-reveal .landing-word {
+    opacity: 0;
+  }
+
+  .landing-enter .landing-word,
+  .landing-reveal[data-revealed="true"] .landing-word {
+    animation: landing-word 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: var(--landing-delay, 0ms);
+  }
+
+  .landing-float {
+    animation: landing-float var(--landing-float-duration, 6s) ease-in-out
+      infinite;
+    animation-delay: var(--landing-delay, 0ms);
+  }
+
+  /* A wrapper that exists only to tell its contents they have arrived: the
+   * heading whose words animate themselves does not want the block entrance on
+   * top of them. Written last so it wins over the rules above at equal
+   * specificity. */
+  .landing-quiet,
+  .landing-quiet[data-revealed="true"] {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/*
+ * Scroll-linked depth. The washes behind a section travel a little further than
+ * the page does, so scrolling past one reads as moving through it rather than
+ * over it. This needs no script at all, which is why it sits outside the block
+ * above: where the browser has no scroll-driven timelines the layer is simply
+ * static, and nothing else about the page changes.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    /*
+     * The section a parallax layer belongs to names the timeline, and the layer
+     * inside it animates on that name. The layer cannot work this out for
+     * itself: a section that clips its decoration is a scroll container as far
+     * as the timeline is concerned, and a bare view() inside one measures
+     * against a box that never scrolls, which holds the layer still at whatever
+     * offset it started on. The section, whose own scroller is the page, is the
+     * outermost element that still knows when this stretch is being read.
+     */
+    .landing-parallax-scope {
+      view-timeline-name: --landing-parallax-view;
+    }
+
+    .landing-parallax {
+      animation: landing-parallax linear both;
+      animation-timeline: --landing-parallax-view;
+      animation-range: cover 0% cover 100%;
+      will-change: transform;
+    }
+  }
+}
+
+/*
+ * The mask a heading's words rise out of. Structural rather than motion, so it
+ * is applied whatever the reader's preferences are: with no animation the words
+ * simply sit in their masks, which looks exactly like ordinary text.
+ *
+ * The padding and the matching negative margins buy the mask room for
+ * ascenders and descenders it would otherwise clip, without moving the text off
+ * the baseline it would have sat on.
+ */
+.landing-word-mask {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: bottom;
+  padding-block: 0.12em 0.16em;
+  margin-block: -0.12em -0.16em;
+}
+
+.landing-word {
+  display: inline-block;
 }
