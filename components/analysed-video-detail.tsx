@@ -46,10 +46,6 @@ import {
   HintTargetGlow,
   useOnboardingHint,
 } from "@/components/onboarding-hints"
-import {
-  ALIGNMENT_PART_LABEL,
-  PackagingAlignmentScore,
-} from "@/components/packaging-alignment-score"
 import { RecommendationCallout } from "@/components/recommendation-callout"
 import { RetentionEventsInfo } from "@/components/retention-events-info"
 import {
@@ -76,7 +72,6 @@ import {
   type PackagingComponentFeedback,
   type PackagingComponentKey,
 } from "@/lib/packaging-alignment"
-import type { PackagingTaxonomy } from "@/lib/packaging-taxonomy"
 import type {
   RetentionAttribution,
   RetentionMomentAttribution,
@@ -1165,10 +1160,8 @@ function HoldList({
 // Title / Thumbnail / Hook alignment (LLM + vision over the thumbnail)
 // ---------------------------------------------------------------------------
 
-// The model's read of the three surfaces a viewer meets, one per tab, with the
-// alignment score this video was given at analysis time behind a fourth tab
-// after them, all of it headed by the two-sentence summary of the packaging as
-// a whole.
+// The model's read of the three surfaces a viewer meets, one per tab, headed by
+// the two-sentence summary of the packaging as a whole.
 function PackagingAlignmentSection({
   alignment,
   hasThumbnail,
@@ -1195,33 +1188,26 @@ function PackagingAlignmentSection({
       {alignment.components ? (
         <PackagingComponentTabs
           components={alignment.components}
-          taxonomy={alignment.taxonomy}
           hookQuote={hookQuote}
         />
       ) : (
         // Older alignments were stored before the per-component breakdown
-        // existed, so there is no tab bar to hang the alignment read off:
-        // fall back to the flat two-column layout, with the alignment card
-        // heading it the way it used to head the tabs.
-        <>
-          {alignment.taxonomy && (
-            <AlignmentCard taxonomy={alignment.taxonomy} titled />
-          )}
-          <div className="grid gap-3 sm:grid-cols-2">
-            <PointsCard
-              title="What worked well"
-              tone="good"
-              points={(alignment.whatWorked ?? []).slice(0, 3)}
-            />
-            <PointsCard
-              title="What could be improved"
-              tone="warn"
-              points={prioritizePackagingImprovements(
-                alignment.whatCouldBeBetter ?? [],
-              ).slice(0, 3)}
-            />
-          </div>
-        </>
+        // existed, so there is nothing to hang a tab bar off: fall back to the
+        // flat two-column layout.
+        <div className="grid gap-3 sm:grid-cols-2">
+          <PointsCard
+            title="What worked well"
+            tone="good"
+            points={(alignment.whatWorked ?? []).slice(0, 3)}
+          />
+          <PointsCard
+            title="What could be improved"
+            tone="warn"
+            points={prioritizePackagingImprovements(
+              alignment.whatCouldBeBetter ?? [],
+            ).slice(0, 3)}
+          />
+        </div>
       )}
     </div>
   )
@@ -1247,55 +1233,6 @@ function PackagingSummary({ summary }: { summary: string }) {
       <p className="mt-2 text-sm text-muted-foreground">
         {limitSentences(cleanCopy(summary))}
       </p>
-    </div>
-  )
-}
-
-// How tightly this video's title, thumbnail and hook promise one thing, drawn
-// as the same readout channel trends puts behind a library-wide average and the
-// packaging head-to-head puts in each of its two columns
-// (components/packaging-alignment-score.tsx), so the number a creator meets here
-// is visibly the number those pages are averaging and ranking.
-//
-// It sits behind the fourth packaging tab, so it is normally framed by the same
-// badge the other three tabs open with; `titled` gives it the plain heading it
-// wore when it headed the section instead, for the older alignments that have no
-// tab bar to sit in.
-function AlignmentCard({
-  taxonomy,
-  titled = false,
-}: {
-  taxonomy: PackagingTaxonomy
-  titled?: boolean
-}) {
-  // Stored 0..1, printed 0-10 to one decimal, the same scaling the channel
-  // average uses, so 0.78 reads as 7.8 on both pages.
-  const score = Math.round(taxonomy.alignmentScore * 100) / 10
-
-  // The two links the headline is made of. Both come off the enriched (v2)
-  // taxonomy, so a video analysed before that existed shows the headline alone.
-  const cross = taxonomy.detail?.cross
-  const parts = cross
-    ? [
-        {
-          label: ALIGNMENT_PART_LABEL.titleThumbnailMatch,
-          value: cross.titleThumbnailMatch,
-        },
-        {
-          label: ALIGNMENT_PART_LABEL.hookDeliversPromise,
-          value: cross.hookDeliversPromise,
-        },
-      ]
-    : []
-
-  return (
-    <div className="flex w-full flex-col gap-3 rounded-xl border bg-card p-4">
-      {titled ? (
-        <h3 className="text-sm font-medium">Alignment</h3>
-      ) : (
-        <PackagingComponentBadge label="Alignment" />
-      )}
-      <PackagingAlignmentScore score={score} parts={parts} />
     </div>
   )
 }
@@ -1334,20 +1271,16 @@ const PACKAGING_COMPONENT_ORDER: PackagingComponentKey[] = [
   "hook",
 ]
 
-// The three surfaces a viewer meets, then how well they agree, in the same
-// reading order and behind the same glyphs as the packaging head-to-head
+// The three surfaces a viewer meets, in the same reading order and behind the
+// same glyphs as the packaging head-to-head
 // (components/packaging-comparison.tsx) and the channel-wide packaging strip
 // (components/channel-trends-packaging-tabs.tsx), so a creator meets the same
-// four objects wherever the product talks about packaging. Alignment comes last
-// because it is about the other three rather than a surface of its own, and it
-// is dropped where the video has no stored taxonomy to score.
+// objects wherever the product talks about packaging.
 function PackagingComponentTabs({
   components,
-  taxonomy = null,
   hookQuote = null,
 }: {
   components: NonNullable<PackagingAlignment["components"]>
-  taxonomy?: PackagingTaxonomy | null
   hookQuote?: string | null
 }) {
   return (
@@ -1362,12 +1295,6 @@ function PackagingComponentTabs({
             </TabsTrigger>
           )
         })}
-        {taxonomy && (
-          <TabsTrigger value="alignment">
-            <AlignHorizontalJustifyCenterIcon className="text-muted-foreground" />
-            Alignment
-          </TabsTrigger>
-        )}
       </TabsList>
 
       {PACKAGING_COMPONENT_ORDER.map((key) => (
@@ -1379,12 +1306,6 @@ function PackagingComponentTabs({
           />
         </TabsContent>
       ))}
-
-      {taxonomy && (
-        <TabsContent value="alignment" className="w-full">
-          <AlignmentCard taxonomy={taxonomy} />
-        </TabsContent>
-      )}
     </Tabs>
   )
 }
