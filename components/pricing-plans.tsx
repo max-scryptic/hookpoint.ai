@@ -115,7 +115,7 @@ function BillingToggle({
           onClick={() => onChange("annual")}
         >
           Annual
-          <span className="ml-1.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[0.65rem] font-semibold text-primary">
+          <span className="ml-1.5 rounded-sm bg-primary/10 px-1.5 py-0.5 text-[0.65rem] font-semibold text-primary">
             Save 33%
           </span>
         </ToggleOption>
@@ -188,7 +188,7 @@ function PlanCard({
       )}
     >
       {plan.featured ? (
-        <span className="absolute right-6 top-6 rounded-full bg-primary px-2.5 py-0.5 text-xs font-semibold text-primary-foreground">
+        <span className="absolute right-6 top-6 rounded-sm bg-primary px-2.5 py-0.5 text-xs font-semibold text-primary-foreground">
           Most popular
         </span>
       ) : null}

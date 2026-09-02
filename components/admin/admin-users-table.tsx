@@ -113,14 +113,14 @@ function PlanBadge({ user }: { user: AdminUserRow }) {
     <span className="inline-flex items-center gap-1.5">
       <span
         className={cn(
-          "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+          "inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium",
           planBadgeClass(user.planId),
         )}
       >
         {user.planName}
       </span>
       {user.planSource === "granted" && (
-        <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+        <span className="inline-flex items-center rounded-sm bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
           Gifted
         </span>
       )}

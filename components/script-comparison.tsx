@@ -160,13 +160,13 @@ function SectionColumns({
                 Video {SIDE_META[side].name}
               </span>
               {isTop && (
-                <span className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full bg-emerald-500/10 px-2 text-xs leading-none font-medium text-emerald-600 dark:text-emerald-500">
+                <span className="inline-flex h-5 shrink-0 items-center gap-1 rounded-sm bg-emerald-500/10 px-2 text-xs leading-none font-medium text-emerald-600 dark:text-emerald-500">
                   <TrophyIcon className="size-3.5" />
                   most views
                 </span>
               )}
               {isStronger && (
-                <span className="ml-auto inline-flex h-5 shrink-0 items-center rounded-full border bg-muted px-2 text-xs leading-none text-muted-foreground">
+                <span className="ml-auto inline-flex h-5 shrink-0 items-center rounded-sm border bg-muted px-2 text-xs leading-none text-muted-foreground">
                   stronger here
                 </span>
               )}

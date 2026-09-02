@@ -50,9 +50,9 @@ import type {
 // the whole claim and a single number would hide half of it.
 function FeatureContrastRow({ row }: { row: PackagingFeatureContrast }) {
   const bar = (count: number, total: number) => (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+    <div className="h-1.5 w-full overflow-hidden rounded-sm bg-muted">
       <div
-        className="h-full rounded-full bg-muted-foreground/50"
+        className="h-full rounded-sm bg-muted-foreground/50"
         style={{ width: `${total > 0 ? (count / total) * 100 : 0}%` }}
       />
     </div>

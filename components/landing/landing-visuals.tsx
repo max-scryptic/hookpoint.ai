@@ -573,7 +573,7 @@ export function EvidenceVisual({ className }: { className?: string }) {
                   frame.subject
                 )}
               />
-              <span className="absolute top-1.5 left-1.5 rounded bg-background/70 px-1 text-[8px] font-medium text-muted-foreground">
+              <span className="absolute top-1.5 left-1.5 rounded-sm bg-background/70 px-1 text-[8px] font-medium text-muted-foreground">
                 {frame.time}
               </span>
             </div>
@@ -798,12 +798,12 @@ export function TrendsVisual({ className }: { className?: string }) {
                 {trend.note}
               </p>
             </div>
-            <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
+            <div className="mt-1.5 h-2 overflow-hidden rounded-sm bg-muted">
               {/* The bar is sized in the markup and grown with a scale, so the
                   animation never reflows the row it sits in. */}
               <div
                 className={cn(
-                  "landing-bar h-full rounded-full",
+                  "landing-bar h-full rounded-sm",
                   trend.weak ? "bg-destructive/80" : "bg-primary"
                 )}
                 style={{
@@ -860,7 +860,7 @@ export function ChecklistVisual({ className }: { className?: string }) {
           >
             <span
               className={cn(
-                "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border transition-colors duration-300",
+                "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-sm border transition-colors duration-300",
                 tip.done
                   ? "border-primary bg-primary text-primary-foreground"
                   : "border-border"

@@ -42,7 +42,7 @@ export function NavMain({ sections }: { sections: NavSection[] }) {
                   {item.icon}
                   <span className="truncate">{item.title}</span>
                   {item.badge && (
-                    <span className="ml-auto shrink-0 rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] leading-none font-semibold tracking-wide text-primary uppercase group-data-[collapsible=icon]:hidden">
+                    <span className="ml-auto shrink-0 rounded-sm border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] leading-none font-semibold tracking-wide text-primary uppercase group-data-[collapsible=icon]:hidden">
                       {item.badge}
                     </span>
                   )}

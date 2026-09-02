@@ -139,14 +139,14 @@ export function BandDumbbell({
           than off the card. */}
       <div className="px-1.5">
         <div className="relative h-9">
-          <div className="absolute top-1/2 h-1.5 w-full -translate-y-1/2 rounded-full bg-muted" />
+          <div className="absolute top-1/2 h-1.5 w-full -translate-y-1/2 rounded-sm bg-muted" />
           {/* Taller than the track it sits in as well as darker, so the run
               between the two bands swells off the scale behind it rather than
               having to be picked out of it by tone alone. It belongs to the
               pair rather than to either band, so it fades whichever of the
               three is being pointed at. */}
           <div
-            className={`absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-foreground/40 ${BAND_TRANSITION} ${
+            className={`absolute top-1/2 h-2 -translate-y-1/2 rounded-sm bg-foreground/40 ${BAND_TRANSITION} ${
               highlighted != null ? "opacity-20" : ""
             }`}
             style={{

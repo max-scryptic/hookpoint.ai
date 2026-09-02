@@ -71,7 +71,21 @@
   --chart-3: oklch(0.7 0.12 305);
   --chart-4: oklch(0.66 0.16 250);
   --chart-5: oklch(0.58 0.13 280);
-  --radius: 0.625rem;
+  /*
+   * The app is square-cornered. This is 2px rather than 0 so edges stay
+   * anti-aliased instead of going visibly jagged where a border, a ring and a
+   * background meet at a corner - it reads as square, it just does not fray.
+   * Every rounded-* utility derives from this, so the whole surface moves
+   * together; nothing should hardcode a radius.
+   */
+  --radius: 0.125rem;
+  /*
+   * The one deliberate exception: the brand mark's tile. A logo is a fixed
+   * piece of identity rather than a piece of chrome, so it keeps the softer
+   * corner it was drawn with while everything around it squares off. (The
+   * other exception, the user avatar, is a full circle and needs no token.)
+   */
+  --radius-brand: 0.625rem;
   --sidebar: oklch(1 0 0);
   --sidebar-foreground: oklch(0.18 0.02 264);
   --sidebar-primary: oklch(0.54 0.2 264);
@@ -183,13 +197,19 @@ body {
   --color-background: var(--background);
   --color-landing-band: var(--landing-band);
   --color-tabs-track: var(--tabs-track);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
+  /*
+   * A flatter ramp than the shadcn default. The steps still rank - a dialog
+   * is softer than an input - but the whole range lives between 1px and 4px,
+   * so the largest surface in the app is still square to the eye.
+   */
+  --radius-xs: calc(var(--radius) * 0.5);
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.75);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-xl: calc(var(--radius) * 1.25);
+  --radius-2xl: calc(var(--radius) * 1.5);
+  --radius-3xl: calc(var(--radius) * 1.75);
+  --radius-4xl: calc(var(--radius) * 2);
 }
 
 .dark {

@@ -38,7 +38,9 @@ export function BrandLogo({ className }: BrandLogoProps) {
   return (
     <div
       className={cn(
-        "flex aspect-square shrink-0 items-center justify-center rounded-lg bg-primary",
+        // --radius-brand, not rounded-lg: the app squared its corners off, and
+        // the mark is one of the two things that deliberately did not follow.
+        "flex aspect-square shrink-0 items-center justify-center rounded-[var(--radius-brand)] bg-primary",
         className
       )}
     >

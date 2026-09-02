@@ -215,7 +215,7 @@ export function ComparisonProcessing({
 
       <div className="w-full space-y-1.5">
         <div
-          className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+          className="h-1.5 w-full overflow-hidden rounded-sm bg-muted"
           role="progressbar"
           aria-valuemin={0}
           aria-valuemax={100}
@@ -223,7 +223,7 @@ export function ComparisonProcessing({
           aria-label="Comparison progress"
         >
           <div
-            className="h-full rounded-full bg-primary transition-[width] duration-300 ease-out"
+            className="h-full rounded-sm bg-primary transition-[width] duration-300 ease-out"
             style={{ width: `${displayProgress}%` }}
           />
         </div>

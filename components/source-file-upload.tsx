@@ -448,7 +448,7 @@ export function SourceFileUpload({
       <Dialog open={showUploadedDialog} onOpenChange={setShowUploadedDialog}>
         <DialogContent className="gap-6 p-8">
           <DialogHeader className="items-center gap-4 text-center">
-            <div className="flex size-14 items-center justify-center rounded-full bg-emerald-500/10 ring-1 ring-emerald-500/20 dark:bg-emerald-500/15">
+            <div className="flex size-14 items-center justify-center rounded-md bg-emerald-500/10 ring-1 ring-emerald-500/20 dark:bg-emerald-500/15">
               <CheckCircle2Icon className="size-7 text-emerald-600 dark:text-emerald-500" />
             </div>
             <div className="flex flex-col gap-2.5">
@@ -602,9 +602,9 @@ function Body({
           <span className="truncate">Uploading {client.filename}…</span>
           <span className="ml-auto tabular-nums text-muted-foreground">{pct}%</span>
         </div>
-        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+        <div className="h-2 w-full overflow-hidden rounded-sm bg-muted">
           <div
-            className="h-full rounded-full bg-primary transition-[width] duration-150"
+            className="h-full rounded-sm bg-primary transition-[width] duration-150"
             style={{ width: `${pct}%` }}
           />
         </div>

@@ -128,7 +128,7 @@ export default async function Page() {
               Video Comparator
             </h1>
             {result.status === "ok" && result.firstComparisonFree && (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+              <span className="inline-flex items-center gap-1.5 rounded-sm border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
                 <SparklesIcon className="size-3.5" />
                 Your first comparison report is free
               </span>

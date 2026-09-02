@@ -40,9 +40,9 @@ export function LibraryProgress({
             {count}/{target}
           </span>
         </div>
-        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+        <div className="h-2 w-full overflow-hidden rounded-sm bg-muted">
           <div
-            className="h-full rounded-full bg-primary transition-[width]"
+            className="h-full rounded-sm bg-primary transition-[width]"
             style={{ width: `${progress}%` }}
           />
         </div>
