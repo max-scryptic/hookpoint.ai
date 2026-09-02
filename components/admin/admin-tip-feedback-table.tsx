@@ -101,7 +101,7 @@ function matchesSearch(row: AdminTipFeedbackRow, query: string): boolean {
 // surface pill, since it sits under the section it was read in.
 function CategoryBadge({ category }: { category: TipCategory }) {
   return (
-    <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs leading-tight font-medium text-muted-foreground">
+    <span className="inline-flex items-center rounded-sm bg-muted px-2 py-0.5 text-xs leading-tight font-medium text-muted-foreground">
       {TIP_CATEGORY_LABELS[category]}
     </span>
   )
@@ -111,7 +111,7 @@ function SurfaceBadge({ surface }: { surface: TipSurface }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2 py-0.5 text-xs leading-tight font-medium",
+        "inline-flex items-center rounded-sm px-2 py-0.5 text-xs leading-tight font-medium",
         SURFACE_BADGE_CLASSES[surface],
       )}
     >
@@ -122,7 +122,7 @@ function SurfaceBadge({ surface }: { surface: TipSurface }) {
 
 function ReasonBadge({ reason }: { reason: TipFeedbackReason }) {
   return (
-    <span className="inline-flex items-center rounded-full bg-destructive/10 px-2 py-0.5 text-xs leading-tight font-medium text-destructive">
+    <span className="inline-flex items-center rounded-sm bg-destructive/10 px-2 py-0.5 text-xs leading-tight font-medium text-destructive">
       {TIP_FEEDBACK_REASON_LABELS[reason]}
     </span>
   )

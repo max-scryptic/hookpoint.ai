@@ -228,7 +228,7 @@ function Hero({
             phone lays this out in, and the copy beside it is dragged wider than
             the screen. */}
         <div className="min-w-0 text-center lg:text-left">
-          <span className="landing-enter inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary">
+          <span className="landing-enter inline-flex items-center gap-2 rounded-sm border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary">
             <SparklesIcon className="size-3.5" />
             AI retention analysis for YouTube creators
           </span>
@@ -289,7 +289,7 @@ function Hero({
               the page. */}
           <div
             aria-hidden="true"
-            className="absolute -inset-6 rounded-[2rem] bg-primary/[0.05] opacity-0 blur-3xl transition-opacity duration-700 group-hover:opacity-100 dark:bg-primary/[0.07]"
+            className="absolute -inset-6 rounded-xl bg-primary/[0.05] opacity-0 blur-3xl transition-opacity duration-700 group-hover:opacity-100 dark:bg-primary/[0.07]"
           />
           {/* The report leans towards the pointer. The chips stay flat and
               floating outside the tilt, so they read as sitting above the card
@@ -601,7 +601,7 @@ function Features() {
               >
                 <span
                   aria-hidden="true"
-                  className="pointer-events-none absolute -inset-4 rounded-[2rem] bg-primary/[0.06] opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100 dark:bg-primary/[0.08]"
+                  className="pointer-events-none absolute -inset-4 rounded-xl bg-primary/[0.06] opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100 dark:bg-primary/[0.08]"
                 />
                 <TiltCard className="relative" degrees={5}>
                   {feature.visual}
@@ -627,7 +627,7 @@ function ComingSoon() {
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-heading text-lg font-semibold">Video Planner</h3>
-            <span className="rounded-full bg-accent px-2.5 py-0.5 text-[11px] font-semibold text-accent-foreground">
+            <span className="rounded-sm bg-accent px-2.5 py-0.5 text-[11px] font-semibold text-accent-foreground">
               Coming soon
             </span>
           </div>

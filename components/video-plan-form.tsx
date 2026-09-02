@@ -487,9 +487,9 @@ export function VideoPlanForm({
             </div>
 
             {footagePhase.phase === "uploading" && (
-              <div className="h-2 w-full max-w-md overflow-hidden rounded-full bg-muted">
+              <div className="h-2 w-full max-w-md overflow-hidden rounded-sm bg-muted">
                 <div
-                  className="h-full rounded-full bg-primary transition-[width] duration-150"
+                  className="h-full rounded-sm bg-primary transition-[width] duration-150"
                   style={{
                     width: `${Math.round(footagePhase.progress * 100)}%`,
                   }}

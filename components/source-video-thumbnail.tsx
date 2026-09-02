@@ -284,7 +284,7 @@ export function SourceVideoPlayer({
         <button
           type="button"
           onClick={onClose}
-          className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-black/55 px-3 py-1.5 text-xs font-medium text-white shadow-md backdrop-blur-sm transition-colors hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+          className="pointer-events-auto inline-flex items-center gap-1.5 rounded-sm bg-black/55 px-3 py-1.5 text-xs font-medium text-white shadow-md backdrop-blur-sm transition-colors hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
           aria-label="Close highlights"
         >
           <XIcon className="size-4" aria-hidden="true" />
@@ -347,7 +347,7 @@ export function SourceVideoPlayer({
             role="status"
             aria-label="Loading video"
           >
-            <span className="flex size-10 items-center justify-center rounded-full bg-black/55 text-white shadow-sm backdrop-blur-sm">
+            <span className="flex size-10 items-center justify-center rounded-md bg-black/55 text-white shadow-sm backdrop-blur-sm">
               <Loader2Icon className="size-5 animate-spin" aria-hidden="true" />
             </span>
           </div>
@@ -363,7 +363,7 @@ export function SourceVideoPlayer({
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-full top-0 z-10 mr-2 flex size-7 items-center justify-center rounded-full bg-black/55 text-white shadow-md backdrop-blur-sm transition-colors hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+          className="absolute right-full top-0 z-10 mr-2 flex size-7 items-center justify-center rounded-sm bg-black/55 text-white shadow-md backdrop-blur-sm transition-colors hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
           aria-label="Close video player"
         >
           <XIcon className="size-4" aria-hidden="true" />

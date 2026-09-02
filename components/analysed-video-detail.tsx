@@ -274,7 +274,7 @@ function RetentionWindows({
               <>
                 <div className="flex min-h-[2.625rem] items-center justify-between gap-2">
                   <div className="flex items-center gap-3">
-                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-sm bg-muted text-xs font-medium text-muted-foreground">
                       {index + 1}
                     </span>
                     <span className="font-mono text-sm">
@@ -301,7 +301,7 @@ function RetentionWindows({
                 header={(tabs) => (
                   <div className="flex min-h-[2.625rem] flex-wrap items-center justify-between gap-x-2 gap-y-2">
                     <div className="flex flex-wrap items-center gap-3">
-                      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                      <span className="flex size-7 shrink-0 items-center justify-center rounded-sm bg-muted text-xs font-medium text-muted-foreground">
                         {index + 1}
                       </span>
                       <span className="font-mono text-sm">
@@ -416,7 +416,7 @@ function PacingAnalysisSection({
               )}
             >
               <div className="flex min-h-[2.625rem] items-center gap-3">
-                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-sm bg-muted text-xs font-medium text-muted-foreground">
                   {index + 1}
                 </span>
                 <span className="font-mono text-sm">
@@ -935,7 +935,7 @@ function DropList({
               header={(tabs) => (
                 <div className="flex min-h-[2.625rem] items-center justify-between gap-4">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-sm bg-muted text-xs font-medium text-muted-foreground">
                       {index + 1}
                     </span>
                     <span className="font-mono text-sm">
@@ -990,7 +990,7 @@ function ScriptSegmentTooltip({
         render={
           <button
             type="button"
-            className="inline-flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none"
+            className="inline-flex size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none"
             aria-label="Show what was said in this window"
           />
         }
@@ -1053,7 +1053,7 @@ function GainList({
               header={(tabs) => (
                 <div className="flex min-h-[2.625rem] items-center justify-between gap-4">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-sm bg-muted text-xs font-medium text-muted-foreground">
                       {index + 1}
                     </span>
                     <span className="font-mono text-sm">
@@ -1134,7 +1134,7 @@ function HoldList({
               header={(tabs) => (
                 <div className="flex min-h-[2.625rem] items-center justify-between gap-4">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-sm bg-muted text-xs font-medium text-muted-foreground">
                       {index + 1}
                     </span>
                     <span className="font-mono text-sm">
@@ -1421,7 +1421,7 @@ function PackagingComponentCard({
                 render={
                   <button
                     type="button"
-                    className="inline-flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none"
+                    className="inline-flex size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none"
                     aria-label="Show the spoken hook"
                   />
                 }

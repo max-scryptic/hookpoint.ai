@@ -54,12 +54,12 @@ function ScoreMeter({
         </span>
         <span className="text-xs font-medium tabular-nums">{value}/10</span>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+      <div className="h-1.5 overflow-hidden rounded-sm bg-muted">
         <div
           className={
             descriptive
-              ? "h-full rounded-full bg-muted-foreground/50"
-              : "h-full rounded-full bg-[var(--chart-1)]"
+              ? "h-full rounded-sm bg-muted-foreground/50"
+              : "h-full rounded-sm bg-[var(--chart-1)]"
           }
           style={{ width: `${Math.min(100, (value / 10) * 100)}%` }}
         />
@@ -70,7 +70,7 @@ function ScoreMeter({
 
 function Chip({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center rounded-full border bg-muted/50 px-2 py-0.5 text-xs">
+    <span className="inline-flex items-center rounded-sm border bg-muted/50 px-2 py-0.5 text-xs">
       {children}
     </span>
   )
@@ -120,7 +120,7 @@ function TopicMap({ segments }: { segments: ScriptTaxonomy["segments"] }) {
         {segments.map((beat, index) => (
           <span
             key={`${beat.approxStartSeconds}-${index}`}
-            className="inline-flex items-center gap-1 rounded-full border bg-muted/50 px-2 py-0.5 text-[11px]"
+            className="inline-flex items-center gap-1 rounded-sm border bg-muted/50 px-2 py-0.5 text-[11px]"
           >
             <span className="font-mono tabular-nums text-muted-foreground">
               {formatTimestamp(beat.approxStartSeconds)}
