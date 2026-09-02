@@ -36,9 +36,11 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 // going out on, so it needs enough deeply analysed videos underneath it to
 // have something to read it against).
 //
-// Neither gate hides the list itself. Plans already made stay reachable
-// whatever the account can do today; what a gate withholds is the button that
-// starts another one.
+// A gate replaces the list rather than sitting above an empty one: an account
+// that cannot start a plan yet has no use for a heading over a placeholder
+// telling it to start one. The exception is plans already made, which stay
+// reachable whatever the account can do today, so the list still renders for
+// them and only the button that starts another is withheld.
 type PlannerAccess =
   // The account's plan carries no uploads: the upgrade wall.
   | { status: "locked" }
@@ -165,10 +167,12 @@ export default async function Page() {
           </PaidFeatureCard>
         )}
 
-        <VideoPlanList
-          plans={plans.map(toListItem)}
-          canCreate={access.status === "ok"}
-        />
+        {(access.status === "ok" || plans.length > 0) && (
+          <VideoPlanList
+            plans={plans.map(toListItem)}
+            canCreate={access.status === "ok"}
+          />
+        )}
       </div>
     </>
   )
