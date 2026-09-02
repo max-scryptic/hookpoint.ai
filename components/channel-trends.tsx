@@ -35,14 +35,15 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import {
-  EARLY_TRENDS_VIDEO_THRESHOLD,
-  ESTABLISHED_TRENDS_VIDEO_THRESHOLD,
   type ChannelSnapshot,
   type ChannelTrendsData,
 } from "@/lib/channel-trends"
+import { CHANNEL_TRENDS_VIDEO_THRESHOLD } from "@/lib/deep-analysis-library"
 
-// The Channel Trends page body: the unlock meter, the library's headline
-// numbers, then three tabs.
+// The Channel Trends page body. Below CHANNEL_TRENDS_VIDEO_THRESHOLD deeply
+// analysed videos it is the unlock meter and the card explaining what is being
+// built, and nothing else: no tiles, no tabs, no partially-open page. At the
+// threshold it opens whole, as the library's headline numbers and three tabs.
 //
 //   Retention  what the library actually did to viewers: the three most-viewed
 //              uploads and the three least-viewed averaged onto one axis, over
@@ -67,28 +68,22 @@ import {
 // text on this page. Hyphens are fine. See lib/copy-guardrails.ts; enforced by
 // lib/__tests__/copy-guardrails.test.ts.
 
-// The progressive-unlock meter. Building toward EARLY it counts down to the
-// first trends; from EARLY it counts toward full strength; at ESTABLISHED the
-// meter has nothing left to say, so it disappears and the snapshot tiles take
-// the top of the page. The bar itself is the shared one every library-gated
-// feature uses (components/library-progress.tsx); this only decides the target
-// and what the line above it says.
+// The unlock meter, shown while the page is still shut. Once the library
+// reaches the threshold the meter has nothing left to say, so it disappears and
+// the snapshot tiles take the top of the page. The bar itself is the shared one
+// every library-gated feature uses (components/library-progress.tsx); this only
+// decides what the line above it says.
 function StageProgress({ data }: { data: ChannelTrendsData }) {
   if (data.stage === "established") {
     return null
   }
 
-  const target =
-    data.stage === "early"
-      ? ESTABLISHED_TRENDS_VIDEO_THRESHOLD
-      : EARLY_TRENDS_VIDEO_THRESHOLD
+  const target = CHANNEL_TRENDS_VIDEO_THRESHOLD
   const remaining = target - data.libraryVideoCount
   const message =
-    data.stage === "early"
-      ? `${data.libraryVideoCount} of ${target} videos - trends strengthening as your library grows.`
-      : data.libraryVideoCount === 0
-        ? `Analyse ${target} videos with their raw source files to unlock early trends.`
-        : `Deeply analyse ${plural(remaining, "more video")} to unlock early trends.`
+    data.libraryVideoCount === 0
+      ? `Analyse ${target} videos with their raw source files to unlock your channel trends.`
+      : `Deeply analyse ${plural(remaining, "more video")} to unlock your channel trends.`
 
   return (
     <LibraryProgress
@@ -175,28 +170,17 @@ function BuildingCard() {
           of your content.
         </p>
         <p className="mt-3 text-sm text-muted-foreground">
-          Once {EARLY_TRENDS_VIDEO_THRESHOLD} videos are in, this page starts
-          surfacing the patterns that repeat across your channel: what loses
-          viewers, what holds them, and how your hooks behave.
+          Once {CHANNEL_TRENDS_VIDEO_THRESHOLD} videos are in, this page opens
+          and surfaces the patterns that repeat across your channel: what loses
+          viewers, what holds them, and how your hooks behave. It waits for all
+          of them because a pattern read off two or three uploads is one video
+          speaking for your whole channel.
         </p>
       </div>
       <Link href="/analyse-video" className={buttonVariants()}>
         Analyse a video
       </Link>
     </Card>
-  )
-}
-
-// A one-line caveat shown above early-stage trends so a three-video pattern
-// never reads with full-library authority.
-function EarlySignalNote({ data }: { data: ChannelTrendsData }) {
-  if (data.stage !== "early") return null
-  return (
-    <p className="text-xs text-muted-foreground">
-      Early signals from {plural(data.libraryVideoCount, "video")} - treat these
-      as leads, not verdicts. They firm up as your library approaches{" "}
-      {ESTABLISHED_TRENDS_VIDEO_THRESHOLD} videos.
-    </p>
   )
 }
 
@@ -221,7 +205,7 @@ function TrendsPanel({
 }
 
 export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
-  const showTrends = data.stage === "early" || data.stage === "established"
+  const showTrends = data.stage === "established"
   const hasRetention = retentionPanelHasContent(data)
   const hasPackaging = packagingPanelHasContent(data)
   const hasScript = scriptPanelHasContent(data)
@@ -232,7 +216,6 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
       {showTrends ? (
         <>
           <ChannelSnapshotCards snapshot={data.snapshot} />
-          <EarlySignalNote data={data} />
           <ChannelTrendsTabs
             retention={
               hasRetention ? (

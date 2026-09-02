@@ -48,8 +48,10 @@ import {
 import type { RetentionPoint } from "@/lib/youtube/youtube"
 
 // Below three curves an "average" is a coincidence of two uploads, not a
-// channel shape. Matches the library's own early-trends threshold, so the
-// curve appears on the same upload that unlocks the rest of the tab.
+// channel shape. A data-quality floor of its own rather than a gate: the page
+// only opens at CHANNEL_TRENDS_VIDEO_THRESHOLD (lib/deep-analysis-library.ts),
+// which is comfortably above this, so what this actually guards is a library
+// whose videos mostly carry no stored curve to average.
 export const CHANNEL_CURVE_MIN_VIDEOS = 3
 
 // The shared axis: 0%, 1%, ... 100% of each video's runtime. YouTube reports

@@ -2,7 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 // deep_analysis_complete belongs to one video and links to its report;
 // channel_trends_ready belongs to the library as a whole (it fires when the
-// creator's deep-analysis count reaches ESTABLISHED_TRENDS_VIDEO_THRESHOLD),
+// creator's deep-analysis count reaches CHANNEL_TRENDS_VIDEO_THRESHOLD in
+// lib/deep-analysis-library.ts, which is where the page opens),
 // carries no video and links to the trends page. Both are written by the
 // database trigger in supabase/migrations, never by the app.
 export type NotificationKind = "deep_analysis_complete" | "channel_trends_ready"

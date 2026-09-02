@@ -98,9 +98,9 @@ function RetentionCurveCard({ curve }: { curve: ChannelRetentionCurve }) {
   )
 }
 
-// A library can reach the early stage on its event synthesis alone, with no
-// stored curves to average, so the tab is dropped from the bar rather than
-// opened empty.
+// A library can open the page on its event synthesis alone, with no stored
+// curves to average, so the tab is dropped from the bar rather than opened
+// empty.
 export function retentionPanelHasContent(data: ChannelTrendsData): boolean {
   return data.averageCurve != null
 }

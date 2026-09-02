@@ -1,9 +1,9 @@
 import { PlusIcon } from "lucide-react"
 
 import {
-  EARLY_TRENDS_VIDEO_THRESHOLD,
-  ESTABLISHED_TRENDS_VIDEO_THRESHOLD,
-} from "@/lib/channel-trends"
+  CHANNEL_TRENDS_VIDEO_THRESHOLD,
+  VIDEO_PLANNER_VIDEO_THRESHOLD,
+} from "@/lib/deep-analysis-library"
 import { PLAN_BY_ID } from "@/lib/plans"
 
 // The questions a creator asks before signing up, answered from what the
@@ -47,7 +47,7 @@ const FAQS: { question: string; answer: string }[] = [
   {
     question: "How many videos before Channel Trends tells me anything?",
     answer:
-      `The first patterns appear at ${EARLY_TRENDS_VIDEO_THRESHOLD} analysed videos and firm up from ${ESTABLISHED_TRENDS_VIDEO_THRESHOLD}. Every deep dive you run adds its retention events to your private library, so the picture of what works on your channel keeps sharpening as you use the product.`,
+      `Channel Trends opens at ${CHANNEL_TRENDS_VIDEO_THRESHOLD} deeply analysed videos, and the Video Planner at ${VIDEO_PLANNER_VIDEO_THRESHOLD}. Both wait for a library big enough to read a pattern off rather than showing you one upload speaking for your whole channel. Every deep dive you run adds its retention events to that private library, so the picture of what works on your channel keeps sharpening as you use the product.`,
   },
   {
     question: "Does it work for a small channel?",

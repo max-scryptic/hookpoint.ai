@@ -84,6 +84,17 @@ export function OnboardingHintsProvider({
   )
 }
 
+// The first of several hints that is still to be met, or null when none of them
+// is. For a place that can only show one bubble at a time and has more than one
+// to give: the caller lists them in the order they should be met, shows only
+// the one that comes back, and the next appears as each is dismissed.
+export function useFirstPendingHint(
+  candidates: readonly OnboardingHint[],
+): OnboardingHint | null {
+  const { pending } = useContext(OnboardingHintsContext)
+  return candidates.find((hint) => pending.has(hint)) ?? null
+}
+
 // Whether one hint is still to be met, and the way to retire it. `dismiss` is
 // safe to call unconditionally - from the very handler the hint is teaching, so
 // using the feature is what puts the hint away - and does nothing once the hint
@@ -117,11 +128,19 @@ const ANCHOR_GAP = 8
 // of pushing it down, and leaves nothing to settle back when it goes.
 export function AnchoredHintCallout({
   anchorRef,
+  align = "end",
   children,
 }: {
   // The element to point at. Nothing is drawn until it has been measured.
   anchorRef: React.RefObject<HTMLElement | null>
-  // The bubble, normally a <HintCallout arrow={{ side: "top", align: "end" }} />.
+  // Which of the bubble's edges is pinned to the anchor, and so which end of it
+  // the arrow is drawn at. "end" pins the right edge, which is what a control
+  // out in the page wants: the bubble grows leftward, away from the window's
+  // right edge. "start" pins the left edge, for an anchor hard against the left
+  // of the window (a sidebar entry), where an end-pinned bubble would be drawn
+  // mostly off-screen. Match it to the arrow given to the HintCallout inside.
+  align?: "start" | "end"
+  // The bubble, normally a <HintCallout arrow={{ side: "top", align }} />.
   children: React.ReactNode
 }) {
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null)
@@ -151,20 +170,36 @@ export function AnchoredHintCallout({
   }, [anchorRef])
 
   // Nothing to place against on the server or the first client render, where
-  // the anchor has yet to be measured.
-  if (!anchorRect) return null
+  // the anchor has yet to be measured. A zero-sized box is an anchor that is
+  // mounted but not shown (the sidebar's mobile sheet while closed), which
+  // would otherwise put a bubble in the corner of the window pointing at
+  // nothing; the ResizeObserver above brings it back the moment it has a box.
+  if (!anchorRect || anchorRect.width === 0 || anchorRect.height === 0) {
+    return null
+  }
+
+  // The arrow's centre, which is what the bubble is placed by: whichever edge
+  // is pinned, it is pinned ARROW_INSET away from the middle of the anchor, so
+  // the arrow lands on the middle of what it points at. Never closer to the
+  // window's edge than the gap it stands off the anchor by, so an anchor hard
+  // against that edge does not push the bubble off it.
+  const arrowCentre = anchorRect.left + anchorRect.width / 2
+  const edge =
+    align === "start"
+      ? { left: Math.max(ANCHOR_GAP, arrowCentre - ARROW_INSET) }
+      : {
+          right: Math.max(
+            ANCHOR_GAP,
+            window.innerWidth - (arrowCentre + ARROW_INSET),
+          ),
+        }
 
   return createPortal(
     <div
-      // Pinned by its right edge so that the arrow, drawn a fixed distance in
-      // from that edge, stays on the anchor however wide the bubble ends up.
+      // Pinned by one edge so that the arrow, drawn a fixed distance in from
+      // that edge, stays on the anchor however wide the bubble ends up.
       className="fixed z-50 w-72 max-w-[80vw] text-left whitespace-normal"
-      style={{
-        top: anchorRect.bottom + ANCHOR_GAP,
-        right:
-          window.innerWidth -
-          (anchorRect.left + anchorRect.width / 2 + ARROW_INSET),
-      }}
+      style={{ top: anchorRect.bottom + ANCHOR_GAP, ...edge }}
     >
       {children}
     </div>,

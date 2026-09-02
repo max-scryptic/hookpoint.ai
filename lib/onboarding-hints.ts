@@ -35,6 +35,18 @@ export const ONBOARDING_HINTS = [
   // The deeper analysis adds a tab per conclusion to the windows below the
   // chart, alongside the transcript's own "Script" reading. Marks them as new.
   "deep_analysis_window_tabs",
+  // The two library gates opening. Both point at a sidebar entry the creator
+  // has walked past since they signed up, which until now answered with a
+  // meter: Channel Trends at CHANNEL_TRENDS_VIDEO_THRESHOLD deeply analysed
+  // videos, the Video Planner at VIDEO_PLANNER_VIDEO_THRESHOLD (both in
+  // lib/deep-analysis-library.ts).
+  //
+  // Unlike every hint above, these two are not pending from signup: the
+  // sidebar only offers one once the library actually reaches its threshold
+  // and the account's plan carries the feature (see app/(app)/layout.tsx), so
+  // "pending" here means "earned and not yet met" rather than "not yet seen".
+  "channel_trends_unlocked",
+  "video_planner_unlocked",
 ] as const
 
 export type OnboardingHint = (typeof ONBOARDING_HINTS)[number]
