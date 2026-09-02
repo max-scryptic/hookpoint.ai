@@ -3,8 +3,8 @@
 // aggregations. Built over the same channel event records the synthesizer's
 // channelHistory summary uses (lib/channel-event-history.ts), but richer -
 // trends carry contributing video titles and example narratives so the page
-// can show its evidence - and the library's size drives the progressive
-// unlock stages the page renders.
+// can show its evidence - and the library's size decides whether the page is
+// open at all.
 //
 // Beyond the per-kind tallies, this module scores how RELEVANT each pattern
 // is, because raw frequency ranks the noisy event types first (scene cuts
@@ -39,6 +39,7 @@ import {
   type ChannelExtremesProfile,
   type ChannelStyleProfile,
 } from "@/lib/channel-taxonomy-trends"
+import { CHANNEL_TRENDS_VIDEO_THRESHOLD } from "@/lib/deep-analysis-library"
 import type {
   HookDelivery,
   PackagingTaxonomy,
@@ -50,25 +51,23 @@ import type { RetentionWindowKind } from "@/lib/retention-windows"
 import type { ScriptTaxonomy } from "@/lib/script-taxonomy"
 import type { RetentionPoint } from "@/lib/youtube/youtube"
 
-// Trend confidence grows with library size: below EARLY the page only shows
-// the library filling up; from EARLY trends appear labelled as early signals;
-// from ESTABLISHED they're presented at full strength. EARLY deliberately sits
-// just above the synthesizer's own two-video minimum - a pattern needs a few
-// videos before a page dedicated to it reads as credible. ESTABLISHED is six
-// because that is where the band-split views stop being a rounding exercise:
-// six covered videos put three above the median and three below it, so the
-// top band, the bottom band and the middle line each have real shape.
-export const EARLY_TRENDS_VIDEO_THRESHOLD = 3
-export const ESTABLISHED_TRENDS_VIDEO_THRESHOLD = 6
-
-export type ChannelTrendsStage = "empty" | "building" | "early" | "established"
+// The page is shut until the library can carry it and then opens whole: below
+// CHANNEL_TRENDS_VIDEO_THRESHOLD (lib/deep-analysis-library.ts) it shows the
+// library filling up and nothing else, at it every trend appears at full
+// strength. There is no half-open middle: a partial page hedged its own
+// findings as early signals, which is a page teaching the creator to discount
+// what it says.
+//
+// "empty" and "building" are both shut and differ only in what the meter says,
+// since a creator with nothing in the library is being told what to start
+// rather than how far is left.
+export type ChannelTrendsStage = "empty" | "building" | "established"
 
 export function channelTrendsStage(
   libraryVideoCount: number,
 ): ChannelTrendsStage {
   if (libraryVideoCount <= 0) return "empty"
-  if (libraryVideoCount < EARLY_TRENDS_VIDEO_THRESHOLD) return "building"
-  if (libraryVideoCount < ESTABLISHED_TRENDS_VIDEO_THRESHOLD) return "early"
+  if (libraryVideoCount < CHANNEL_TRENDS_VIDEO_THRESHOLD) return "building"
   return "established"
 }
 

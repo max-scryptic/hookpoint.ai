@@ -302,7 +302,7 @@ function SurfaceCard({
         {preview}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className="w-fit rounded-md border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-sm font-semibold text-purple-700 dark:text-purple-300">
+            <span className="w-fit rounded-md border border-blue-500/40 bg-blue-500/10 px-2 py-0.5 text-sm font-semibold text-blue-700 dark:border-blue-400/40 dark:bg-blue-400/10 dark:text-blue-300">
               {label}
             </span>
             {read.summary && (

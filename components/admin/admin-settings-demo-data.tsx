@@ -51,15 +51,18 @@ interface ClearResult {
   planRemoved: boolean
 }
 
-// The choices offered rather than a free number field: the interesting
-// thresholds are the ones the Channel Trends page unlocks at (3 videos for its
-// early stage, 6 for established), so the menu names them instead of leaving an
-// admin to discover them.
+// The choices offered rather than a free number field: the interesting counts
+// are the ones a library-gated feature opens at, so the menu names them instead
+// of leaving an admin to discover them. Both gates count DEEPLY analysed videos
+// and the seed only deep-analyses part of the library it writes (see
+// DEEP_ANALYSED_SHARE in lib/admin/demo-data/seed.ts), so each label names the
+// deep count a size actually lands on: 9 videos is what opens Channel Trends
+// (6 deep) and 14 is what opens the Video Planner (10 deep).
 const VIDEO_COUNTS = [
-  { value: 3, label: "3 videos (early trends)" },
-  { value: 6, label: "6 videos (established trends)" },
-  { value: 9, label: "9 videos (recommended)" },
-  { value: 14, label: "14 videos" },
+  { value: 3, label: "3 videos (2 deep, both gates shut)" },
+  { value: 6, label: "6 videos (4 deep, both gates shut)" },
+  { value: 9, label: "9 videos (6 deep, Channel Trends open)" },
+  { value: 14, label: "14 videos (10 deep, Video Planner open)" },
   { value: 18, label: "18 videos (everything)" },
 ] as const
 

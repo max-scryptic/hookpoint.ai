@@ -4,10 +4,10 @@ import { Card, CardContent } from "@/components/ui/card"
 // the count against the target it is climbing toward, and the bar itself.
 //
 // Shared so every feature gated on library size shows the same thing in the
-// same place: Channel Trends counts toward its early and established stages
-// (components/channel-trends.tsx), the Video Planner counts toward the library
-// it grounds a plan in (app/(app)/video-planner/page.tsx). The caller writes
-// the message, because only it knows what is on the other side of the bar.
+// same place: Channel Trends counts toward the library its patterns are read
+// off (components/channel-trends.tsx), the Video Planner toward the library it
+// grounds a plan in (app/(app)/video-planner/page.tsx). The caller writes the
+// message, because only it knows what is on the other side of the bar.
 //
 // Purely presentational, and carries no colour of its own beyond the primary
 // fill: the message says everything the bar does, so the meter still reads with

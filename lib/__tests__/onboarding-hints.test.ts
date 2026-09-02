@@ -71,6 +71,8 @@ describe("getPendingOnboardingHints", () => {
       "first_video_analysis_row_menu",
       "report_tip_actions",
       "deep_analysis_window_tabs",
+      "channel_trends_unlocked",
+      "video_planner_unlocked",
     ])
   })
 

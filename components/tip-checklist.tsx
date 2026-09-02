@@ -144,12 +144,12 @@ function CategoryFilter({
   )
 }
 
-// Tinted the same purple as the Title / Thumbnail / Hook badges on a video's
+// Tinted the same colour as the Title / Thumbnail / Hook badges on a video's
 // packaging cards, so a category reads as a label at a glance rather than as
 // another grey line of metadata.
 function CategoryBadge({ category }: { category: TipCategory }) {
   return (
-    <span className="inline-block rounded-md border border-purple-500/40 bg-purple-500/10 px-1.5 py-0.5 text-xs font-medium whitespace-nowrap text-purple-700 dark:text-purple-300">
+    <span className="inline-block rounded-md border border-blue-500/40 bg-blue-500/10 px-1.5 py-0.5 text-xs font-medium whitespace-nowrap text-blue-700 dark:border-blue-400/40 dark:bg-blue-400/10 dark:text-blue-300">
       {TIP_CATEGORY_LABELS[category]}
     </span>
   )

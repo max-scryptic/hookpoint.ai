@@ -47,10 +47,6 @@ import {
   HintTargetGlow,
   useOnboardingHint,
 } from "@/components/onboarding-hints"
-import {
-  ALIGNMENT_PART_LABEL,
-  PackagingAlignmentScore,
-} from "@/components/packaging-alignment-score"
 import { RecommendationCallout } from "@/components/recommendation-callout"
 import { RetentionEventsInfo } from "@/components/retention-events-info"
 import {
@@ -77,7 +73,6 @@ import {
   type PackagingComponentFeedback,
   type PackagingComponentKey,
 } from "@/lib/packaging-alignment"
-import type { PackagingTaxonomy } from "@/lib/packaging-taxonomy"
 import type {
   RetentionAttribution,
   RetentionMomentAttribution,
@@ -518,7 +513,7 @@ function MultimodalInsightBody({
 }) {
   return (
     <div className="flex gap-2 rounded-lg border bg-muted/30 p-3 text-sm">
-      <SparklesIcon className="mt-0.5 size-4 shrink-0 text-violet-500" />
+      <SparklesIcon className="mt-0.5 size-4 shrink-0 text-blue-500" />
       <div>
         <p>{cleanCopy(insight.narrative)}</p>
         <p className="mt-1 text-xs text-muted-foreground">
@@ -1171,10 +1166,8 @@ function HoldList({
 // Title / Thumbnail / Hook alignment (LLM + vision over the thumbnail)
 // ---------------------------------------------------------------------------
 
-// The model's read of the three surfaces a viewer meets, one per tab, with the
-// alignment score this video was given at analysis time behind a fourth tab
-// after them, all of it headed by the two-sentence summary of the packaging as
-// a whole.
+// The model's read of the three surfaces a viewer meets, one per tab, headed by
+// the two-sentence summary of the packaging as a whole.
 function PackagingAlignmentSection({
   alignment,
   hasThumbnail,
@@ -1201,33 +1194,26 @@ function PackagingAlignmentSection({
       {alignment.components ? (
         <PackagingComponentTabs
           components={alignment.components}
-          taxonomy={alignment.taxonomy}
           hookQuote={hookQuote}
         />
       ) : (
         // Older alignments were stored before the per-component breakdown
-        // existed, so there is no tab bar to hang the alignment read off:
-        // fall back to the flat two-column layout, with the alignment card
-        // heading it the way it used to head the tabs.
-        <>
-          {alignment.taxonomy && (
-            <AlignmentCard taxonomy={alignment.taxonomy} titled />
-          )}
-          <div className="grid gap-3 sm:grid-cols-2">
-            <PointsCard
-              title="What worked well"
-              tone="good"
-              points={(alignment.whatWorked ?? []).slice(0, 3)}
-            />
-            <PointsCard
-              title="What could be improved"
-              tone="warn"
-              points={prioritizePackagingImprovements(
-                alignment.whatCouldBeBetter ?? [],
-              ).slice(0, 3)}
-            />
-          </div>
-        </>
+        // existed, so there is nothing to hang a tab bar off: fall back to the
+        // flat two-column layout.
+        <div className="grid gap-3 sm:grid-cols-2">
+          <PointsCard
+            title="What worked well"
+            tone="good"
+            points={(alignment.whatWorked ?? []).slice(0, 3)}
+          />
+          <PointsCard
+            title="What could be improved"
+            tone="warn"
+            points={prioritizePackagingImprovements(
+              alignment.whatCouldBeBetter ?? [],
+            ).slice(0, 3)}
+          />
+        </div>
       )}
     </div>
   )
@@ -1253,55 +1239,6 @@ function PackagingSummary({ summary }: { summary: string }) {
       <p className="mt-2 text-sm text-muted-foreground">
         {limitSentences(cleanCopy(summary))}
       </p>
-    </div>
-  )
-}
-
-// How tightly this video's title, thumbnail and hook promise one thing, drawn
-// as the same readout channel trends puts behind a library-wide average and the
-// packaging head-to-head puts in each of its two columns
-// (components/packaging-alignment-score.tsx), so the number a creator meets here
-// is visibly the number those pages are averaging and ranking.
-//
-// It sits behind the fourth packaging tab, so it is normally framed by the same
-// badge the other three tabs open with; `titled` gives it the plain heading it
-// wore when it headed the section instead, for the older alignments that have no
-// tab bar to sit in.
-function AlignmentCard({
-  taxonomy,
-  titled = false,
-}: {
-  taxonomy: PackagingTaxonomy
-  titled?: boolean
-}) {
-  // Stored 0..1, printed 0-10 to one decimal, the same scaling the channel
-  // average uses, so 0.78 reads as 7.8 on both pages.
-  const score = Math.round(taxonomy.alignmentScore * 100) / 10
-
-  // The two links the headline is made of. Both come off the enriched (v2)
-  // taxonomy, so a video analysed before that existed shows the headline alone.
-  const cross = taxonomy.detail?.cross
-  const parts = cross
-    ? [
-        {
-          label: ALIGNMENT_PART_LABEL.titleThumbnailMatch,
-          value: cross.titleThumbnailMatch,
-        },
-        {
-          label: ALIGNMENT_PART_LABEL.hookDeliversPromise,
-          value: cross.hookDeliversPromise,
-        },
-      ]
-    : []
-
-  return (
-    <div className="flex w-full flex-col gap-3 rounded-xl border bg-card p-4">
-      {titled ? (
-        <h3 className="text-sm font-medium">Alignment</h3>
-      ) : (
-        <PackagingComponentBadge label="Alignment" />
-      )}
-      <PackagingAlignmentScore score={score} parts={parts} />
     </div>
   )
 }
@@ -1340,20 +1277,16 @@ const PACKAGING_COMPONENT_ORDER: PackagingComponentKey[] = [
   "hook",
 ]
 
-// The three surfaces a viewer meets, then how well they agree, in the same
-// reading order and behind the same glyphs as the packaging head-to-head
+// The three surfaces a viewer meets, in the same reading order and behind the
+// same glyphs as the packaging head-to-head
 // (components/packaging-comparison.tsx) and the channel-wide packaging strip
 // (components/channel-trends-packaging-tabs.tsx), so a creator meets the same
-// four objects wherever the product talks about packaging. Alignment comes last
-// because it is about the other three rather than a surface of its own, and it
-// is dropped where the video has no stored taxonomy to score.
+// objects wherever the product talks about packaging.
 function PackagingComponentTabs({
   components,
-  taxonomy = null,
   hookQuote = null,
 }: {
   components: NonNullable<PackagingAlignment["components"]>
-  taxonomy?: PackagingTaxonomy | null
   hookQuote?: string | null
 }) {
   return (
@@ -1368,12 +1301,6 @@ function PackagingComponentTabs({
             </TabsTrigger>
           )
         })}
-        {taxonomy && (
-          <TabsTrigger value="alignment">
-            <AlignHorizontalJustifyCenterIcon className="text-muted-foreground" />
-            Alignment
-          </TabsTrigger>
-        )}
       </TabsList>
 
       {PACKAGING_COMPONENT_ORDER.map((key) => (
@@ -1385,20 +1312,14 @@ function PackagingComponentTabs({
           />
         </TabsContent>
       ))}
-
-      {taxonomy && (
-        <TabsContent value="alignment" className="w-full">
-          <AlignmentCard taxonomy={taxonomy} />
-        </TabsContent>
-      )}
     </Tabs>
   )
 }
 
-// The purple name every packaging tab opens with.
+// The coloured name every packaging tab opens with.
 function PackagingComponentBadge({ label }: { label: string }) {
   return (
-    <span className="w-fit rounded-md border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-sm font-semibold text-purple-700 dark:text-purple-300">
+    <span className="w-fit rounded-md border border-blue-500/40 bg-blue-500/10 px-2 py-0.5 text-sm font-semibold text-blue-700 dark:border-blue-400/40 dark:bg-blue-400/10 dark:text-blue-300">
       {label}
     </span>
   )
@@ -1649,7 +1570,7 @@ export function AnalysedVideoDetail({
   }, [playbackWindow])
 
   const detectedHooks = retentionWindows.filter((w) => w.kind === "hook")
-  // The opening hook line, surfaced next to the purple "Hook" badge in the
+  // The opening hook line, surfaced next to the coloured "Hook" badge in the
   // packaging section above so it reads without hovering the retention list.
   // Read off every hook window detected rather than off the rows below, since
   // it quotes the opening rather than reporting a finding about it.
@@ -2014,7 +1935,7 @@ export function AnalysedVideoDetail({
             <Tabs defaultValue="packaging">
               <TabsList>
                 <TabsTrigger value="packaging">
-                  <AlignHorizontalJustifyCenterIcon className="text-purple-600 dark:text-purple-400" />
+                  <AlignHorizontalJustifyCenterIcon className="text-blue-600 dark:text-blue-400" />
                   Title, Thumbnail &amp; Hook
                 </TabsTrigger>
                 <TabsTrigger value="metadata">

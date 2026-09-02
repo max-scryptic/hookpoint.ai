@@ -2,7 +2,9 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { describe, expect, it } from "vitest"
 
 import {
+  CHANNEL_TRENDS_VIDEO_THRESHOLD,
   countDeeplyAnalysedVideos,
+  earnedLibraryUnlocks,
   VIDEO_PLANNER_VIDEO_THRESHOLD,
 } from "@/lib/deep-analysis-library"
 
@@ -67,5 +69,57 @@ describe("countDeeplyAnalysedVideos", () => {
 describe("VIDEO_PLANNER_VIDEO_THRESHOLD", () => {
   it("is the ten videos the planner needs to ground a plan in", () => {
     expect(VIDEO_PLANNER_VIDEO_THRESHOLD).toBe(10)
+  })
+})
+
+describe("CHANNEL_TRENDS_VIDEO_THRESHOLD", () => {
+  it("is the six videos the trends page needs before it opens at all", () => {
+    expect(CHANNEL_TRENDS_VIDEO_THRESHOLD).toBe(6)
+  })
+})
+
+describe("earnedLibraryUnlocks", () => {
+  const paid = { canReadTrends: true, canPlanVideos: true }
+
+  it("announces nothing while both gates are shut", () => {
+    expect(
+      earnedLibraryUnlocks(CHANNEL_TRENDS_VIDEO_THRESHOLD - 1, paid),
+    ).toEqual([])
+  })
+
+  it("announces the trends page on the analysis that opens it", () => {
+    expect(earnedLibraryUnlocks(CHANNEL_TRENDS_VIDEO_THRESHOLD, paid)).toEqual([
+      "channel_trends_unlocked",
+    ])
+  })
+
+  it("does not announce the planner until its own higher threshold", () => {
+    expect(
+      earnedLibraryUnlocks(VIDEO_PLANNER_VIDEO_THRESHOLD - 1, paid),
+    ).toEqual(["channel_trends_unlocked"])
+  })
+
+  it("announces both, earliest gate first, for a library past the pair", () => {
+    expect(earnedLibraryUnlocks(VIDEO_PLANNER_VIDEO_THRESHOLD, paid)).toEqual([
+      "channel_trends_unlocked",
+      "video_planner_unlocked",
+    ])
+  })
+
+  // Pointing a creator at a page their plan answers with an upgrade wall is
+  // worse than saying nothing at all.
+  it("stays quiet about a feature the account's plan does not carry", () => {
+    expect(
+      earnedLibraryUnlocks(VIDEO_PLANNER_VIDEO_THRESHOLD, {
+        canReadTrends: false,
+        canPlanVideos: false,
+      }),
+    ).toEqual([])
+    expect(
+      earnedLibraryUnlocks(VIDEO_PLANNER_VIDEO_THRESHOLD, {
+        canReadTrends: true,
+        canPlanVideos: false,
+      }),
+    ).toEqual(["channel_trends_unlocked"])
   })
 })
