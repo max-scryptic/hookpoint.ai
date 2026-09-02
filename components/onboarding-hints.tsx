@@ -117,10 +117,14 @@ const ANCHOR_GAP = 8
 // of pushing it down, and leaves nothing to settle back when it goes.
 export function AnchoredHintCallout({
   anchorRef,
+  align = "end",
   children,
 }: {
   // The element to point at. Nothing is drawn until it has been measured.
   anchorRef: React.RefObject<HTMLElement | null>
+  // Which edge of the bubble carries the arrow. End preserves the original
+  // right-pinned placement; start lets a bubble grow rightward from its anchor.
+  align?: "start" | "end"
   // The bubble, normally a <HintCallout arrow={{ side: "top", align: "end" }} />.
   children: React.ReactNode
 }) {
@@ -156,14 +160,19 @@ export function AnchoredHintCallout({
 
   return createPortal(
     <div
-      // Pinned by its right edge so that the arrow, drawn a fixed distance in
-      // from that edge, stays on the anchor however wide the bubble ends up.
+      // Pinned by the same edge that carries the arrow so the arrow, drawn a
+      // fixed distance in from that edge, stays on the anchor however wide the
+      // bubble ends up.
       className="fixed z-50 w-72 max-w-[80vw] text-left whitespace-normal"
       style={{
         top: anchorRect.bottom + ANCHOR_GAP,
-        right:
-          window.innerWidth -
-          (anchorRect.left + anchorRect.width / 2 + ARROW_INSET),
+        ...(align === "start"
+          ? { left: anchorRect.left + anchorRect.width / 2 - ARROW_INSET }
+          : {
+              right:
+                window.innerWidth -
+                (anchorRect.left + anchorRect.width / 2 + ARROW_INSET),
+            }),
       }}
     >
       {children}

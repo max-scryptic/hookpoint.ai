@@ -42,6 +42,7 @@ import {
 } from "@/components/retention-chart"
 import { FirstTipHintProvider } from "@/components/first-tip-hint"
 import {
+  AnchoredHintCallout,
   HintCallout,
   HintTargetGlow,
   useOnboardingHint,
@@ -697,22 +698,24 @@ function NewFootageTabDot({ shown }: { shown: boolean }) {
 }
 
 // The callout that explains those dots, hung off the tab strip it points at the
-// way the chart's coach mark hangs off its marker: absolutely placed, so it
-// floats over the row's feedback instead of pushing the lists down the page
-// when it appears - and leaves nothing to settle back when it goes.
+// way the chart's coach mark hangs off its marker: rendered in a portal, so it
+// floats over the row's feedback instead of pushing the lists down the page, and
+// escapes the rounded list's clipping edge.
 //
 // It sits below the strip rather than above it so the tabs themselves stay
 // clickable: opening one is what the hint is asking for.
 function FootageTabsHintCallout({
   shown,
+  anchorRef,
   onDismiss,
 }: {
   shown: boolean
+  anchorRef: React.RefObject<HTMLDivElement | null>
   onDismiss: () => void
 }) {
   if (!shown) return null
   return (
-    <div className="absolute top-full left-0 z-20 mt-2 w-max">
+    <AnchoredHintCallout anchorRef={anchorRef} align="start">
       <HintCallout
         title="New tabs, read from your footage"
         arrow={{ side: "top", align: "start" }}
@@ -722,7 +725,7 @@ function FootageTabsHintCallout({
         and audio, alongside what the script alone says. Open one to see its
         evidence.
       </HintCallout>
-    </div>
+    </AnchoredHintCallout>
   )
 }
 
@@ -775,6 +778,7 @@ function WindowFeedback({
     deepFeedback,
   )
   const hasDeep = uniqueDeep.length > 0
+  const tabHintAnchorRef = useRef<HTMLDivElement>(null)
 
   if (script && hasDeep) {
     return (
@@ -782,7 +786,7 @@ function WindowFeedback({
         {header(
           // Sized to the tab strip (w-fit), so the glow hung on it traces the
           // tabs rather than the width of the header row they sit in.
-          <div className="relative w-fit">
+          <div ref={tabHintAnchorRef} className="relative w-fit">
             <TabsList>
               <TabsTrigger value="script">Script</TabsTrigger>
               {uniqueDeep.map(({ insight }, index) => (
@@ -797,6 +801,7 @@ function WindowFeedback({
             />
             <FootageTabsHintCallout
               shown={anchorsFootageTabsHint && footageTabsHint.pending}
+              anchorRef={tabHintAnchorRef}
               onDismiss={footageTabsHint.dismiss}
             />
           </div>
@@ -830,7 +835,7 @@ function WindowFeedback({
         onValueChange={onTabChange}
       >
         {header(
-          <div className="relative w-fit">
+          <div ref={tabHintAnchorRef} className="relative w-fit">
             <TabsList>
               {uniqueDeep.map(({ insight }, index) => (
                 <TabsTrigger key={insight.id} value={`deep-${insight.id}`}>
@@ -844,6 +849,7 @@ function WindowFeedback({
             />
             <FootageTabsHintCallout
               shown={anchorsFootageTabsHint && footageTabsHint.pending}
+              anchorRef={tabHintAnchorRef}
               onDismiss={footageTabsHint.dismiss}
             />
           </div>
