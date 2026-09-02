@@ -16,6 +16,7 @@ import {
   videoViews,
   type ChannelVideo,
 } from "@/lib/channel-trends"
+import { CHANNEL_TRENDS_VIDEO_THRESHOLD } from "@/lib/deep-analysis-library"
 import type {
   PackagingDetail,
   PackagingTaxonomy,
@@ -61,13 +62,17 @@ function video(
 }
 
 describe("channelTrendsStage", () => {
-  it("maps library size onto the progressive unlock stages", () => {
+  it("keeps the page shut until the library reaches the threshold", () => {
     expect(channelTrendsStage(0)).toBe("empty")
     expect(channelTrendsStage(1)).toBe("building")
     expect(channelTrendsStage(2)).toBe("building")
-    expect(channelTrendsStage(3)).toBe("early")
-    expect(channelTrendsStage(5)).toBe("early")
-    expect(channelTrendsStage(6)).toBe("established")
+    // The old half-open stage. Three videos is a lead, not a trend, and the
+    // page no longer shows one.
+    expect(channelTrendsStage(3)).toBe("building")
+    expect(channelTrendsStage(5)).toBe("building")
+    expect(channelTrendsStage(CHANNEL_TRENDS_VIDEO_THRESHOLD)).toBe(
+      "established",
+    )
     expect(channelTrendsStage(25)).toBe("established")
   })
 })
@@ -95,7 +100,7 @@ describe("buildChannelTrends", () => {
       windowCount: 7,
     })
 
-    expect(data.stage).toBe("early")
+    expect(data.stage).toBe("building")
     expect(data.libraryVideoCount).toBe(3)
     expect(data.windowCount).toBe(7)
     expect(data.eventCount).toBe(4)
