@@ -9,8 +9,8 @@
    * Viewlio brand theme - carried over from Viewlio unchanged, and the
    * palette the Viewlio mark was drawn against.
    * Brand blue (hue ~264) drives primary actions (buttons, focus rings, links);
-   * brand lavender/purple (hue ~292) carries accents, the sidebar highlight and
-   * charts; navy (hue ~270) sets the dark-mode surface to match the logo.
+   * soft lavender carries the light-mode accent wash, and navy (hue ~270) sets
+   * the dark-mode surface to match the logo.
    */
   color-scheme: light;
   /*
@@ -169,25 +169,25 @@ body {
   --secondary-foreground: oklch(0.97 0.008 285);
   --muted: oklch(0.3 0.035 272);
   --muted-foreground: oklch(0.72 0.03 285);
-  --accent: oklch(0.32 0.06 285);
-  --accent-foreground: oklch(0.92 0.04 292);
+  --accent: oklch(0.32 0.07 264);
+  --accent-foreground: oklch(0.9 0.055 252);
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.55 0.16 264);
   --chart-1: oklch(0.62 0.19 264);
-  --chart-2: oklch(0.7 0.13 292);
-  --chart-3: oklch(0.75 0.11 305);
+  --chart-2: oklch(0.7 0.13 252);
+  --chart-3: oklch(0.75 0.11 238);
   --chart-4: oklch(0.66 0.16 250);
-  --chart-5: oklch(0.6 0.13 280);
+  --chart-5: oklch(0.6 0.13 264);
   --sidebar: oklch(0.18 0.042 270);
   --sidebar-foreground: oklch(0.97 0.008 285);
-  --sidebar-primary: oklch(0.7 0.13 292);
+  --sidebar-primary: oklch(0.68 0.14 264);
   --sidebar-primary-foreground: oklch(0.18 0.04 270);
-  --sidebar-accent: oklch(0.32 0.06 285);
-  --sidebar-accent-foreground: oklch(0.92 0.04 292);
+  --sidebar-accent: oklch(0.32 0.07 264);
+  --sidebar-accent-foreground: oklch(0.9 0.055 252);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.7 0.13 292);
+  --sidebar-ring: oklch(0.68 0.14 264);
   --landing-band: oklch(0.237 0.038 270);
 }
 

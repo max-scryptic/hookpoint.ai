@@ -180,10 +180,10 @@ function TipRow({
             and the two pieces that are worth reading were buried in the middle
             of it. */}
         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          {/* Tinted the same purple as the Title / Thumbnail / Hook badges on
+          {/* Tinted the same colour as the Title / Thumbnail / Hook badges on
               a video's packaging cards, so a category reads as a label at a
               glance rather than as another grey line of metadata. */}
-          <span className="rounded-md border border-purple-500/40 bg-purple-500/10 px-1.5 py-0.5 font-medium text-purple-700 dark:text-purple-300">
+          <span className="rounded-md border border-purple-500/40 bg-purple-500/10 px-1.5 py-0.5 font-medium text-purple-700 dark:border-blue-400/40 dark:bg-blue-400/10 dark:text-blue-300">
             {TIP_CATEGORY_LABELS[tip.category]}
           </span>
           <span>Saved {format(new Date(tip.createdAt), "d MMM yyyy")}</span>

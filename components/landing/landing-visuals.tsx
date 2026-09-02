@@ -298,7 +298,7 @@ const SIGNAL_BADGES = [
   { label: "Scene cut", tone: "bg-blue-500/10 text-blue-700 dark:text-blue-400" },
   {
     label: "Topic shift",
-    tone: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
+    tone: "bg-violet-500/10 text-violet-700 dark:bg-sky-400/10 dark:text-sky-300",
   },
   {
     label: "Pacing change",
@@ -447,7 +447,7 @@ export function EvidenceVisual({ className }: { className?: string }) {
     {
       time: "2:41",
       label: "Cut to desk",
-      tone: "text-violet-600 dark:text-violet-400",
+      tone: "text-violet-600 dark:text-sky-400",
       subject: "bottom-1.5 left-[38%] size-7 -translate-x-1/2",
     },
     {

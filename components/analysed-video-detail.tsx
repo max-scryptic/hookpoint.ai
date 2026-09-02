@@ -516,7 +516,7 @@ function MultimodalInsightBody({
 }) {
   return (
     <div className="flex gap-2 rounded-lg border bg-muted/30 p-3 text-sm">
-      <SparklesIcon className="mt-0.5 size-4 shrink-0 text-violet-500" />
+      <SparklesIcon className="mt-0.5 size-4 shrink-0 text-blue-500" />
       <div>
         <p>{cleanCopy(insight.narrative)}</p>
         <p className="mt-1 text-xs text-muted-foreground">
@@ -1388,10 +1388,10 @@ function PackagingComponentTabs({
   )
 }
 
-// The purple name every packaging tab opens with.
+// The coloured name every packaging tab opens with.
 function PackagingComponentBadge({ label }: { label: string }) {
   return (
-    <span className="w-fit rounded-md border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-sm font-semibold text-purple-700 dark:text-purple-300">
+    <span className="w-fit rounded-md border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-sm font-semibold text-purple-700 dark:border-blue-400/40 dark:bg-blue-400/10 dark:text-blue-300">
       {label}
     </span>
   )
@@ -1642,7 +1642,7 @@ export function AnalysedVideoDetail({
   }, [playbackWindow])
 
   const detectedHooks = retentionWindows.filter((w) => w.kind === "hook")
-  // The opening hook line, surfaced next to the purple "Hook" badge in the
+  // The opening hook line, surfaced next to the coloured "Hook" badge in the
   // packaging section above so it reads without hovering the retention list.
   // Read off every hook window detected rather than off the rows below, since
   // it quotes the opening rather than reporting a finding about it.
@@ -1990,7 +1990,7 @@ export function AnalysedVideoDetail({
           <Tabs defaultValue="packaging">
             <TabsList>
               <TabsTrigger value="packaging">
-                <AlignHorizontalJustifyCenterIcon className="text-purple-600 dark:text-purple-400" />
+                <AlignHorizontalJustifyCenterIcon className="text-purple-600 dark:text-blue-400" />
                 Title, Thumbnail &amp; Hook
               </TabsTrigger>
               <TabsTrigger value="metadata">

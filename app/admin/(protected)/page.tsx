@@ -66,9 +66,9 @@ const CATEGORY_STYLES: Record<
   },
   video: {
     label: "Video analysis",
-    dot: "bg-violet-500",
-    border: "border-l-violet-500",
-    icon: "text-violet-500",
+    dot: "bg-sky-500",
+    border: "border-l-sky-500",
+    icon: "text-sky-500",
   },
   economics: {
     label: "Economics",
