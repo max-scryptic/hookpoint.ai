@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button"
 // back to: an unfinished draft is a row in the list, not a form abandoned in a
 // tab.
 export function NewVideoPlanButton({
-  label = "New Video",
+  label = "New Video Plan",
   variant = "default",
 }: {
   label?: string
