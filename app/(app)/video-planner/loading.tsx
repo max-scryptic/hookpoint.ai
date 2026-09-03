@@ -56,7 +56,7 @@ export default function Loading() {
           <div className="flex flex-col gap-3 rounded-xl border bg-card p-4">
             {[0, 1, 2].map((index) => (
               <div key={index} className="flex items-center gap-3">
-                <Skeleton className="aspect-video w-24 shrink-0 sm:w-28" />
+                <Skeleton className="aspect-video w-24 shrink-0 rounded-[var(--radius-thumbnail)] sm:w-28" />
                 <Skeleton className="h-4 w-full max-w-sm" />
               </div>
             ))}

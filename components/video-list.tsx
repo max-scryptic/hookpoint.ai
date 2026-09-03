@@ -89,7 +89,7 @@ export function Thumbnail({ video }: { video: RecentVideo }) {
       href={`https://www.youtube.com/watch?v=${video.id}`}
       target="_blank"
       rel="noopener noreferrer"
-      className="group relative block aspect-video w-32 shrink-0 overflow-hidden rounded-lg bg-muted sm:w-40"
+      className="group relative block aspect-video w-32 shrink-0 overflow-hidden rounded-[var(--radius-thumbnail)] bg-muted sm:w-40"
     >
       {/* Private and scheduled uploads carry a thumbnail URL that YouTube's CDN
           refuses to serve, so this falls back to a placeholder on a failed load
