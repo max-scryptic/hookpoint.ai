@@ -17,9 +17,9 @@ import { InvalidTitlesError, normaliseTitles } from "@/lib/video-plans/titles"
 // source file's, and the row is what the planner's list has to show while the
 // creator is still filling it in.
 //
-// Titles are optional here. "New Video" opens an empty draft, and the creator
-// types into it on the plan's own page; what a plan cannot be read without is
-// enforced where the read is started (planReadiness), not here.
+// Titles are optional here. "New Video Plan" opens an empty draft, and the
+// creator types into it on the plan's own page; what a plan cannot be read
+// without is enforced where the read is started (planReadiness), not here.
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
   const {
