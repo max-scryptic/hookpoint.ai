@@ -20,9 +20,7 @@ import type { VideoPlanStatus } from "@/lib/video-plans/video-plans"
 export interface VideoPlanListItem {
   id: string
   titles: string[]
-  // The images the creator intends to publish with. One today, because a plan
-  // holds one thumbnail; an array so a plan that later holds several needs
-  // nothing here to change.
+  // The images the creator is weighing up for the upload.
   thumbnailUrls: string[]
   status: VideoPlanStatus
   createdAt: string
@@ -66,15 +64,15 @@ export function VideoPlanList({
         // filled rather than a heading over nothing.
         <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed p-10 text-center">
           <ClapperboardIcon className="size-6 text-muted-foreground" />
-          <p className="text-sm font-medium">No planned videos yet</p>
+          <p className="text-sm font-medium">No videos in planning yet</p>
           <p className="max-w-md text-sm text-muted-foreground">
-            Start a plan for the cut you are about to publish. You add the
-            titles, thumbnail options and footage on the
-            plan&apos;s own page, and can come back to finish it later.
+            Add the cut you are about to publish. You can add the titles,
+            thumbnail options and footage on its own page, then come back to
+            finish it later.
           </p>
           {canCreate && (
             <div className="mt-2">
-              <NewVideoPlanButton label="Create your first plan" />
+              <NewVideoPlanButton label="New Video" />
             </div>
           )}
         </div>
@@ -100,7 +98,7 @@ export function VideoPlanList({
             <TableBody>
               {plans.map((plan) => {
                 const href = `/video-planner/${plan.id}`
-                const name = plan.titles[0] ?? "Untitled plan"
+                const name = plan.titles[0] ?? "Untitled video"
                 return (
                   <TableRow
                     key={plan.id}

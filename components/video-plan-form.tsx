@@ -436,7 +436,7 @@ export function VideoPlanForm({
         method: "POST",
       })
       if (!response.ok) {
-        setError(await messageFrom(response, "Could not start the plan."))
+        setError(await messageFrom(response, "Could not start the video."))
         setStarting(false)
         return
       }
@@ -673,7 +673,7 @@ export function VideoPlanForm({
           ) : (
             <FileVideoIcon className="size-4" />
           )}
-          {starting ? "Starting your plan…" : "Start video plan"}
+          {starting ? "Starting your review…" : "Review video"}
         </Button>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
