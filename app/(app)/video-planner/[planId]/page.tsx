@@ -102,7 +102,7 @@ export default async function Page({
             <h1 className="text-2xl font-semibold tracking-normal">{name}</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               {draft
-                ? "Add your footage, the titles you are weighing up and your thumbnail, then review the video."
+                ? "Add your titles, thumbnail options and footage, then review the video."
                 : "How your title, thumbnail and hook line up, before you publish."}
             </p>
           </div>
@@ -118,7 +118,7 @@ export default async function Page({
           ) : (
             <PaidFeatureCard feature="Video planning">
               Any cut can be checked before it goes live: upload the footage
-              with the titles you are weighing up and the thumbnail, and the
+              with the titles you are weighing up and the thumbnails, and the
               plan tells you which title the video actually delivers on, how the
               thumbnail holds up beside it, and what to change before you
               publish.

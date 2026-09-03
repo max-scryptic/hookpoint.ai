@@ -20,9 +20,7 @@ import type { VideoPlanStatus } from "@/lib/video-plans/video-plans"
 export interface VideoPlanListItem {
   id: string
   titles: string[]
-  // The images the creator intends to publish with. One today, because a plan
-  // holds one thumbnail; an array so a plan that later holds several needs
-  // nothing here to change.
+  // The images the creator is weighing up for the upload.
   thumbnailUrls: string[]
   status: VideoPlanStatus
   createdAt: string
@@ -68,8 +66,8 @@ export function VideoPlanList({
           <ClapperboardIcon className="size-6 text-muted-foreground" />
           <p className="text-sm font-medium">No videos in planning yet</p>
           <p className="max-w-md text-sm text-muted-foreground">
-            Add the cut you are about to publish. You can upload the footage,
-            the titles you are weighing up and the thumbnail, then come back to
+            Add the cut you are about to publish. You can add the titles,
+            thumbnail options and footage on its own page, then come back to
             finish it later.
           </p>
         </div>

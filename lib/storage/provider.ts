@@ -44,15 +44,17 @@ export function buildVideoPlanSourceFileObjectPath(params: {
   return `${params.userId}/plans/${params.videoPlanId}/${params.sourceFileId}/${safeName}`
 }
 
-// Where a plan's thumbnail lives, in its own bucket. One object per plan,
-// replaced in place when a new thumbnail is picked, with the extension carried
-// over so storage reports a sensible content type.
+// Where a plan's thumbnail option lives, in its own bucket. Each slot gets one
+// object, replaced in place when a new thumbnail is picked, with the extension
+// carried over so storage reports a sensible content type.
 export function buildVideoPlanThumbnailObjectPath(params: {
   userId: string
   videoPlanId: string
   extension: string
+  slot?: number
 }): string {
-  return `${params.userId}/${params.videoPlanId}/thumbnail.${params.extension}`
+  const index = Number.isInteger(params.slot) ? params.slot! : 0
+  return `${params.userId}/${params.videoPlanId}/thumbnail-${index + 1}.${params.extension}`
 }
 
 // Reduces a client-provided filename to a safe storage leaf: keeps the

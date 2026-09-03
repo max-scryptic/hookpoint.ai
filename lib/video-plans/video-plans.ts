@@ -10,6 +10,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import type { TranscriptCue } from "@/lib/youtube/youtube"
+import { MAX_THUMBNAILS } from "@/lib/video-plans/config"
 import type { VideoPlanPackaging } from "@/lib/video-plans/packaging-plan"
 
 export type VideoPlanStatus = "draft" | "processing" | "ready" | "failed"
@@ -21,6 +22,9 @@ export interface VideoPlan {
   thumbnailStoragePath: string | null
   thumbnailMimeType: string | null
   thumbnailSizeBytes: number | null
+  thumbnailStoragePaths: Array<string | null>
+  thumbnailMimeTypes: Array<string | null>
+  thumbnailSizeBytesList: Array<number | null>
   status: VideoPlanStatus
   failureReason: string | null
   // The whole spoken script, in the same shape a published video's caption
@@ -38,6 +42,9 @@ interface VideoPlanRow {
   thumbnail_storage_path: string | null
   thumbnail_mime_type: string | null
   thumbnail_size_bytes: number | null
+  thumbnail_storage_paths?: Array<string | null> | null
+  thumbnail_mime_types?: Array<string | null> | null
+  thumbnail_size_bytes_list?: Array<number | null> | null
   status: VideoPlanStatus
   failure_reason: string | null
   transcript: TranscriptCue[] | null
@@ -47,16 +54,61 @@ interface VideoPlanRow {
 }
 
 const COLUMNS =
-  "id, user_id, titles, thumbnail_storage_path, thumbnail_mime_type, thumbnail_size_bytes, status, failure_reason, transcript, packaging_plan, created_at, updated_at"
+  "id, user_id, titles, thumbnail_storage_path, thumbnail_mime_type, thumbnail_size_bytes, thumbnail_storage_paths, thumbnail_mime_types, thumbnail_size_bytes_list, status, failure_reason, transcript, packaging_plan, created_at, updated_at"
+
+function normaliseStringSlots(
+  values: Array<string | null> | null | undefined,
+  fallback: string | null,
+): Array<string | null> {
+  const source = values?.length ? values : fallback ? [fallback] : []
+  return source
+    .slice(0, MAX_THUMBNAILS)
+    .map((value) => (value && value.trim() ? value : null))
+}
+
+function normaliseNumberSlots(
+  values: Array<number | null> | null | undefined,
+  fallback: number | null,
+): Array<number | null> {
+  const source = values?.length ? values : fallback != null ? [fallback] : []
+  return source
+    .slice(0, MAX_THUMBNAILS)
+    .map((value) => (typeof value === "number" ? value : null))
+}
 
 export function mapVideoPlanRow(row: VideoPlanRow): VideoPlan {
+  const thumbnailStoragePaths = normaliseStringSlots(
+    row.thumbnail_storage_paths,
+    row.thumbnail_storage_path,
+  )
+  const thumbnailMimeTypes = normaliseStringSlots(
+    row.thumbnail_mime_types,
+    row.thumbnail_mime_type,
+  )
+  const thumbnailSizeBytesList = normaliseNumberSlots(
+    row.thumbnail_size_bytes_list,
+    row.thumbnail_size_bytes,
+  )
+  const primaryIndex = thumbnailStoragePaths.findIndex(Boolean)
+  const primaryStoragePath =
+    primaryIndex >= 0 ? thumbnailStoragePaths[primaryIndex] : null
+
   return {
     id: row.id,
     userId: row.user_id,
     titles: row.titles ?? [],
-    thumbnailStoragePath: row.thumbnail_storage_path,
-    thumbnailMimeType: row.thumbnail_mime_type,
-    thumbnailSizeBytes: row.thumbnail_size_bytes,
+    thumbnailStoragePath: primaryStoragePath,
+    thumbnailMimeType:
+      primaryIndex >= 0
+        ? (thumbnailMimeTypes[primaryIndex] ?? row.thumbnail_mime_type)
+        : row.thumbnail_mime_type,
+    thumbnailSizeBytes:
+      primaryIndex >= 0
+        ? (thumbnailSizeBytesList[primaryIndex] ?? row.thumbnail_size_bytes)
+        : row.thumbnail_size_bytes,
+    thumbnailStoragePaths,
+    thumbnailMimeTypes,
+    thumbnailSizeBytesList,
     status: row.status,
     failureReason: row.failure_reason,
     transcript: row.transcript,
@@ -132,6 +184,9 @@ export interface UpdateVideoPlanInput {
   thumbnailStoragePath?: string | null
   thumbnailMimeType?: string | null
   thumbnailSizeBytes?: number | null
+  thumbnailStoragePaths?: Array<string | null>
+  thumbnailMimeTypes?: Array<string | null>
+  thumbnailSizeBytesList?: Array<number | null>
   status?: VideoPlanStatus
   failureReason?: string | null
   transcript?: TranscriptCue[] | null
@@ -147,6 +202,12 @@ function toRow(input: UpdateVideoPlanInput): Record<string, unknown> {
     row.thumbnail_mime_type = input.thumbnailMimeType
   if ("thumbnailSizeBytes" in input)
     row.thumbnail_size_bytes = input.thumbnailSizeBytes
+  if ("thumbnailStoragePaths" in input)
+    row.thumbnail_storage_paths = input.thumbnailStoragePaths
+  if ("thumbnailMimeTypes" in input)
+    row.thumbnail_mime_types = input.thumbnailMimeTypes
+  if ("thumbnailSizeBytesList" in input)
+    row.thumbnail_size_bytes_list = input.thumbnailSizeBytesList
   if ("status" in input) row.status = input.status
   if ("failureReason" in input) row.failure_reason = input.failureReason
   if ("transcript" in input) row.transcript = input.transcript
@@ -203,11 +264,14 @@ export type PlanReadiness =
 // so the form's own enablement rule and the server's refusal to start
 // processing are the same rule rather than two that can drift.
 export function planReadiness(
-  plan: Pick<VideoPlan, "titles" | "thumbnailStoragePath">,
+  plan: Pick<VideoPlan, "titles"> & {
+    thumbnailStoragePath?: string | null
+    thumbnailStoragePaths?: Array<string | null> | null
+  },
   footageIsReady: boolean,
 ): PlanReadiness {
   if (plan.titles.length === 0) return { ready: false, reason: "no_titles" }
-  if (!plan.thumbnailStoragePath) {
+  if (!plan.thumbnailStoragePath && !plan.thumbnailStoragePaths?.some(Boolean)) {
     return { ready: false, reason: "no_thumbnail" }
   }
   if (!footageIsReady) return { ready: false, reason: "no_footage" }
