@@ -17,7 +17,7 @@ import { InvalidTitlesError, normaliseTitles } from "@/lib/video-plans/titles"
 // source file's, and the row is what the planner's list has to show while the
 // creator is still filling it in.
 //
-// Titles are optional here. "New plan" opens an empty draft, and the creator
+// Titles are optional here. "New Video" opens an empty draft, and the creator
 // types into it on the plan's own page; what a plan cannot be read without is
 // enforced where the read is started (planReadiness), not here.
 export async function POST(request: NextRequest) {
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Failed to create video plan", error)
     return NextResponse.json(
-      { error: "internal_error", message: "Could not start the plan." },
+      { error: "internal_error", message: "Could not start the video." },
       { status: 500 },
     )
   }

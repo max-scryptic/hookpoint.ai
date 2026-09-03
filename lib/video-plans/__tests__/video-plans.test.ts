@@ -51,7 +51,7 @@ describe("normaliseTitles", () => {
   it("lets a draft hold no titles at all", () => {
     expect(normaliseTitles([], { allowEmpty: true })).toEqual([])
     expect(normaliseTitles(["", "  "], { allowEmpty: true })).toEqual([])
-    // "New plan" sends no titles at all, which is the same empty draft.
+    // "New Video" sends no titles at all, which is the same empty draft.
     expect(normaliseTitles(undefined, { allowEmpty: true })).toEqual([])
     expect(normaliseTitles(null, { allowEmpty: true })).toEqual([])
   })

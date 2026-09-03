@@ -66,11 +66,11 @@ export function VideoPlanList({
         // filled rather than a heading over nothing.
         <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed p-10 text-center">
           <ClapperboardIcon className="size-6 text-muted-foreground" />
-          <p className="text-sm font-medium">No planned videos yet</p>
+          <p className="text-sm font-medium">No videos in planning yet</p>
           <p className="max-w-md text-sm text-muted-foreground">
-            Start a plan for the cut you are about to publish. You add the
-            footage, the titles you are weighing up and the thumbnail on the
-            plan&apos;s own page, and can come back to finish it later.
+            Add the cut you are about to publish. You can upload the footage,
+            the titles you are weighing up and the thumbnail, then come back to
+            finish it later.
           </p>
         </div>
       ) : (
@@ -95,7 +95,7 @@ export function VideoPlanList({
             <TableBody>
               {plans.map((plan) => {
                 const href = `/video-planner/${plan.id}`
-                const name = plan.titles[0] ?? "Untitled plan"
+                const name = plan.titles[0] ?? "Untitled video"
                 return (
                   <TableRow
                     key={plan.id}
