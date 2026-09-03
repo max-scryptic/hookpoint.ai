@@ -70,11 +70,6 @@ export function VideoPlanList({
             thumbnail options and footage on its own page, then come back to
             finish it later.
           </p>
-          {canCreate && (
-            <div className="mt-2">
-              <NewVideoPlanButton label="New Video" />
-            </div>
-          )}
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border bg-card">
