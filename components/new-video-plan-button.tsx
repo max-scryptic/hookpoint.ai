@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button"
 // back to: an unfinished draft is a row in the list, not a form abandoned in a
 // tab.
 export function NewVideoPlanButton({
-  label = "New plan",
+  label = "New Video",
   variant = "default",
 }: {
   label?: string
@@ -35,7 +35,7 @@ export function NewVideoPlanButton({
         const data = (await response.json().catch(() => null)) as {
           message?: string
         } | null
-        setError(data?.message ?? "Could not start a new plan.")
+        setError(data?.message ?? "Could not start a new video.")
         setBusy(false)
         return
       }
@@ -43,7 +43,7 @@ export function NewVideoPlanButton({
       router.push(`/video-planner/${plan.id}`)
       router.refresh()
     } catch {
-      setError("Could not start a new plan.")
+      setError("Could not start a new video.")
       setBusy(false)
     }
   }
