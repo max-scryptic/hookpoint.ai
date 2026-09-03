@@ -149,9 +149,16 @@ export async function DELETE(
       })
     }
 
-    if (plan.thumbnailStoragePath) {
+    const thumbnailPaths = [
+      ...plan.thumbnailStoragePaths,
+      plan.thumbnailStoragePath,
+    ].filter((path, index, paths): path is string => {
+      return Boolean(path) && paths.indexOf(path) === index
+    })
+
+    for (const path of thumbnailPaths) {
       await getThumbnailStorageProvider()
-        .deleteObject(plan.thumbnailStoragePath)
+        .deleteObject(path)
         .catch((error) => {
           console.error("Failed to delete plan thumbnail object", error)
         })

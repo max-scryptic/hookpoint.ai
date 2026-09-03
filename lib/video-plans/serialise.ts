@@ -7,7 +7,10 @@
 // /api/video-plans/:id/thumbnail, which signs a short-lived URL per request.
 
 import { transcriptForSegment } from "@/lib/youtube/youtube"
-import { PLAN_HOOK_WINDOW_SECONDS } from "@/lib/video-plans/config"
+import {
+  MAX_THUMBNAILS,
+  PLAN_HOOK_WINDOW_SECONDS,
+} from "@/lib/video-plans/config"
 import type { VideoPlanPackaging } from "@/lib/video-plans/packaging-plan"
 import type { VideoPlan, VideoPlanStatus } from "@/lib/video-plans/video-plans"
 
@@ -19,6 +22,7 @@ export interface SerialisedVideoPlan {
   // Whether a thumbnail has been stored, which is all the client needs to know:
   // where it lives is the server's business.
   hasThumbnail: boolean
+  thumbnailSlots: boolean[]
   // The spoken opening alone, sliced out of the stored script.
   hookTranscript: string | null
   packagingPlan: VideoPlanPackaging | null
@@ -32,8 +36,14 @@ export function serialiseVideoPlan(plan: VideoPlan): SerialisedVideoPlan {
     titles: plan.titles,
     status: plan.status,
     failureReason: plan.failureReason,
-    hasThumbnail: plan.thumbnailStoragePath != null,
-      // Only the opening reaches the browser. The whole script can be tens of
+    hasThumbnail:
+      plan.thumbnailStoragePath != null ||
+      plan.thumbnailStoragePaths.some(Boolean),
+    thumbnailSlots: Array.from(
+      { length: MAX_THUMBNAILS },
+      (_, index) => Boolean(plan.thumbnailStoragePaths[index]),
+    ),
+    // Only the opening reaches the browser. The whole script can be tens of
     // kilobytes and the report shows the hook alone, so the rest stays on the
     // server until retention prediction has a use for it.
     hookTranscript: plan.transcript

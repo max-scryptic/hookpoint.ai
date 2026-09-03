@@ -69,7 +69,7 @@ export function VideoPlanList({
           <p className="text-sm font-medium">No planned videos yet</p>
           <p className="max-w-md text-sm text-muted-foreground">
             Start a plan for the cut you are about to publish. You add the
-            footage, the titles you are weighing up and the thumbnail on the
+            titles, thumbnail options and footage on the
             plan&apos;s own page, and can come back to finish it later.
           </p>
           {canCreate && (

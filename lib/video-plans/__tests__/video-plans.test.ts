@@ -11,7 +11,7 @@ import {
   normaliseTitles,
   TITLE_MAX_LENGTH,
 } from "@/lib/video-plans/titles"
-import { planReadiness } from "@/lib/video-plans/video-plans"
+import { mapVideoPlanRow, planReadiness } from "@/lib/video-plans/video-plans"
 
 describe("normaliseTitles", () => {
   it("trims and keeps the creator's order", () => {
@@ -168,5 +168,49 @@ describe("planReadiness", () => {
       ready: false,
       reason: "no_footage",
     })
+  })
+})
+
+describe("mapVideoPlanRow", () => {
+  const baseRow = {
+    id: "plan-1",
+    user_id: "user-1",
+    titles: ["A title"],
+    thumbnail_storage_path: null,
+    thumbnail_mime_type: null,
+    thumbnail_size_bytes: null,
+    status: "draft" as const,
+    failure_reason: null,
+    transcript: null,
+    packaging_plan: null,
+    created_at: "2026-09-03T00:00:00.000Z",
+    updated_at: "2026-09-03T00:00:00.000Z",
+  }
+
+  it("keeps legacy single-thumbnail rows as the first slot", () => {
+    const plan = mapVideoPlanRow({
+      ...baseRow,
+      thumbnail_storage_path: "user/plan/thumbnail.jpg",
+      thumbnail_mime_type: "image/jpeg",
+      thumbnail_size_bytes: 123,
+    })
+
+    expect(plan.thumbnailStoragePath).toBe("user/plan/thumbnail.jpg")
+    expect(plan.thumbnailStoragePaths).toEqual(["user/plan/thumbnail.jpg"])
+    expect(plan.thumbnailMimeTypes).toEqual(["image/jpeg"])
+    expect(plan.thumbnailSizeBytesList).toEqual([123])
+  })
+
+  it("chooses the first populated thumbnail slot as the primary thumbnail", () => {
+    const plan = mapVideoPlanRow({
+      ...baseRow,
+      thumbnail_storage_paths: [null, "user/plan/thumbnail-2.png"],
+      thumbnail_mime_types: [null, "image/png"],
+      thumbnail_size_bytes_list: [null, 456],
+    })
+
+    expect(plan.thumbnailStoragePath).toBe("user/plan/thumbnail-2.png")
+    expect(plan.thumbnailMimeType).toBe("image/png")
+    expect(plan.thumbnailSizeBytes).toBe(456)
   })
 })

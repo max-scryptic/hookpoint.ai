@@ -109,9 +109,11 @@ function toListItem(plan: VideoPlan): VideoPlanListItem {
   return {
     id: plan.id,
     titles: plan.titles,
-    thumbnailUrls: plan.thumbnailStoragePath
-      ? [`/api/video-plans/${plan.id}/thumbnail`]
-      : [],
+    thumbnailUrls: plan.thumbnailStoragePaths
+      .map((path, index) =>
+        path ? `/api/video-plans/${plan.id}/thumbnail?slot=${index}` : null,
+      )
+      .filter((url): url is string => Boolean(url)),
     status: plan.status,
     createdAt: plan.createdAt,
   }
@@ -149,9 +151,8 @@ export default async function Page() {
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Check your packaging before it goes live. Every video you are
-            planning is here: open one to add the cut, the titles you are
-            weighing up and the thumbnail, and we will tell you which title fits
-            and what to change.
+            planning is here: open one to add the titles, thumbnail options and
+            cut, and we will tell you which title fits and what to change.
           </p>
         </div>
 
@@ -161,7 +162,7 @@ export default async function Page() {
         {access.status === "locked" && (
           <PaidFeatureCard feature="Video planning">
             Any cut can be checked before it goes live: upload the footage with
-            the titles you are weighing up and the thumbnail, and the plan tells
+            the titles you are weighing up and the thumbnails, and the plan tells
             you which title the video actually delivers on, how the thumbnail
             holds up beside it, and what to change before you publish.
           </PaidFeatureCard>
