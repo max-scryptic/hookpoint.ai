@@ -72,11 +72,6 @@ export function VideoPlanList({
             footage, the titles you are weighing up and the thumbnail on the
             plan&apos;s own page, and can come back to finish it later.
           </p>
-          {canCreate && (
-            <div className="mt-2">
-              <NewVideoPlanButton label="Create your first plan" />
-            </div>
-          )}
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border bg-card">
