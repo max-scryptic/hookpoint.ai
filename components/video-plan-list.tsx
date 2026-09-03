@@ -135,7 +135,7 @@ export function VideoPlanList({
 function ThumbnailCell({ urls }: { urls: string[] }) {
   if (urls.length === 0) {
     return (
-      <div className="flex aspect-video w-24 shrink-0 items-center justify-center rounded-md border border-dashed text-muted-foreground sm:w-28">
+      <div className="flex aspect-video w-24 shrink-0 items-center justify-center rounded-[var(--radius-thumbnail)] border border-dashed text-muted-foreground sm:w-28">
         <ImageIcon className="size-4" />
       </div>
     )
@@ -151,7 +151,7 @@ function ThumbnailCell({ urls }: { urls: string[] }) {
           key={url}
           src={url}
           alt=""
-          className="aspect-video w-24 shrink-0 rounded-md border bg-muted object-cover sm:w-28"
+          className="aspect-video w-24 shrink-0 rounded-[var(--radius-thumbnail)] border bg-muted object-cover sm:w-28"
         />
       ))}
     </div>

@@ -272,7 +272,7 @@ function SurfaceEvidence({
   if (surface === "thumbnail") {
     return (
       <EvidenceQuote className="p-2">
-        <div className="relative aspect-video w-full overflow-hidden rounded-sm bg-background">
+        <div className="relative aspect-video w-full overflow-hidden rounded-[var(--radius-thumbnail)] bg-background">
           <VideoThumbnail
             src={video.thumbnailUrl}
             alt=""

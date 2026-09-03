@@ -41,7 +41,7 @@ export default function Loading() {
       <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
         {/* Thumbnail + title */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-          <Skeleton className="aspect-video w-full shrink-0 rounded-xl sm:w-64" />
+          <Skeleton className="aspect-video w-full shrink-0 rounded-[var(--radius-thumbnail)] sm:w-64" />
           <div className="flex-1 space-y-2 py-1">
             <Skeleton className="h-7 w-2/3 max-w-md" />
             <Skeleton className="h-4 w-full max-w-lg" />

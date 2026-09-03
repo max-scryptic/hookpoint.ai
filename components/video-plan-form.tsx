@@ -566,12 +566,12 @@ export function VideoPlanForm({
                       `/api/video-plans/${plan.id}/thumbnail?slot=${index}`
                     }
                     alt={`Thumbnail option ${index + 1}`}
-                    className="aspect-video w-full rounded-md border bg-muted object-cover"
+                    className="aspect-video w-full rounded-[var(--radius-thumbnail)] border bg-muted object-cover"
                   />
                 ) : (
                   <button
                     type="button"
-                    className="flex aspect-video w-full items-center justify-center rounded-md border border-dashed text-muted-foreground transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex aspect-video w-full items-center justify-center rounded-[var(--radius-thumbnail)] border border-dashed text-muted-foreground transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={busy}
                     onClick={() => chooseThumbnail(index)}
                     aria-label={`Choose thumbnail option ${index + 1}`}

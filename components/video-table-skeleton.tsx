@@ -65,7 +65,7 @@ export function VideoTableRowsSkeleton({ rows = 6 }: { rows?: number }) {
             <TableRow key={index} className="align-top">
               <TableCell className="px-4 py-3">
                 <div className="flex gap-3 sm:gap-4">
-                  <Skeleton className="aspect-video w-32 shrink-0 rounded-lg sm:w-40" />
+                  <Skeleton className="aspect-video w-32 shrink-0 rounded-[var(--radius-thumbnail)] sm:w-40" />
                   <div className="min-w-0 flex-1 space-y-2 py-0.5">
                     <Skeleton className="h-4 w-3/4" />
                     <Skeleton className="h-3 w-1/2" />

@@ -44,7 +44,7 @@ import { cn } from "@/lib/utils"
 function VideoCell({ video }: { video: AdminComparisonVideo }) {
   return (
     <div className="flex items-start gap-3">
-      <div className="relative aspect-video w-24 shrink-0 overflow-hidden rounded-md bg-muted sm:w-28">
+      <div className="relative aspect-video w-24 shrink-0 overflow-hidden rounded-[var(--radius-thumbnail)] bg-muted sm:w-28">
         <VideoThumbnail
           src={video.thumbnailUrl}
           alt=""

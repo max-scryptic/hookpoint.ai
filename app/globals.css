@@ -86,6 +86,17 @@
    * other exception, the user avatar, is a full circle and needs no token.)
    */
   --radius-brand: 0.625rem;
+  /*
+   * Video thumbnails - the one other piece of content that arrives with its own
+   * conventions rather than being drawn by this app. A thumbnail is a picture of
+   * a YouTube video, read against the memory of YouTube, so it keeps YouTube's
+   * own 12px corner wherever it appears (listings, comparisons, plan slots, the
+   * report header, the source player and every skeleton standing in for one)
+   * instead of squaring off with the chrome around it. Use it through
+   * `rounded-[var(--radius-thumbnail)]`; the chrome that *holds* a thumbnail -
+   * cards, table cells - still takes the square --radius above.
+   */
+  --radius-thumbnail: 0.75rem;
   --sidebar: oklch(1 0 0);
   --sidebar-foreground: oklch(0.18 0.02 264);
   --sidebar-primary: oklch(0.54 0.2 264);

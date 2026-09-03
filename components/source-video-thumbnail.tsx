@@ -160,7 +160,7 @@ export function SourceVideoThumbnail({
   title: string
 }) {
   return (
-    <div className="relative aspect-video w-full shrink-0 overflow-hidden rounded-xl bg-muted sm:w-64">
+    <div className="relative aspect-video w-full shrink-0 overflow-hidden rounded-[var(--radius-thumbnail)] bg-muted sm:w-64">
       <VideoThumbnail src={thumbnailUrl} alt={title} sizes="256px" />
     </div>
   )
@@ -306,7 +306,7 @@ export function SourceVideoPlayer({
       } ${isInteractive ? "pointer-events-auto" : "pointer-events-none"}`}
       aria-hidden={!isVisible}
     >
-      <div className="relative size-full overflow-hidden rounded-xl border border-black/10 bg-black shadow-2xl ring-1 ring-black/5 dark:border-white/10">
+      <div className="relative size-full overflow-hidden rounded-[var(--radius-thumbnail)] border border-black/10 bg-black shadow-2xl ring-1 ring-black/5 dark:border-white/10">
         {playbackUrl && (
           <video
             ref={videoRef}

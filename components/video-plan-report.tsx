@@ -203,7 +203,7 @@ function PackagingReport({
                 <img
                   src={`/api/video-plans/${planId}/thumbnail`}
                   alt="Your thumbnail"
-                  className="aspect-video w-48 rounded-lg border object-cover"
+                  className="aspect-video w-48 rounded-[var(--radius-thumbnail)] border object-cover"
                 />
               </div>
             }

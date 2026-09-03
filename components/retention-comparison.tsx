@@ -114,7 +114,7 @@ function VideoHeaderCard({
   return (
     <Card className="flex flex-col gap-3 p-4">
       <div className="flex items-start gap-3">
-        <div className="relative aspect-video w-32 shrink-0 overflow-hidden rounded-lg bg-muted sm:w-40">
+        <div className="relative aspect-video w-32 shrink-0 overflow-hidden rounded-[var(--radius-thumbnail)] bg-muted sm:w-40">
           <VideoThumbnail
             src={summary.thumbnailUrl}
             alt={summary.title ?? "Video thumbnail"}
