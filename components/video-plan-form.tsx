@@ -34,6 +34,7 @@ import {
 import {
   ACCEPTED_THUMBNAIL_EXTENSIONS,
   ACCEPTED_THUMBNAIL_TYPES,
+  MAX_THUMBNAILS,
 } from "@/lib/video-plans/config"
 import type { SerialisedVideoPlan } from "@/lib/video-plans/serialise"
 import { MAX_TITLES, TITLE_MAX_LENGTH } from "@/lib/video-plans/titles"
@@ -96,17 +97,25 @@ export function VideoPlanForm({
   const [footagePhase, setFootagePhase] = useState<FootagePhase>({
     phase: "idle",
   })
-  const [hasThumbnail, setHasThumbnail] = useState(plan.hasThumbnail)
-  // An object URL for a thumbnail picked in this sitting; a thumbnail already
-  // on the plan is fetched from the signing route instead.
-  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null)
-  const [thumbnailBusy, setThumbnailBusy] = useState(false)
+  const [thumbnailSlots, setThumbnailSlots] = useState<boolean[]>(
+    Array.from(
+      { length: MAX_THUMBNAILS },
+      (_, index) => plan.thumbnailSlots[index] ?? false,
+    ),
+  )
+  // Object URLs for thumbnails picked in this sitting; thumbnails already on
+  // the plan are fetched from the signing route instead.
+  const [thumbnailPreviews, setThumbnailPreviews] = useState<
+    Array<string | null>
+  >(Array.from({ length: MAX_THUMBNAILS }, () => null))
+  const [thumbnailBusySlot, setThumbnailBusySlot] = useState<number | null>(null)
   const [savingTitles, setSavingTitles] = useState(false)
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const videoInputRef = useRef<HTMLInputElement>(null)
   const thumbnailInputRef = useRef<HTMLInputElement>(null)
+  const pendingThumbnailSlot = useRef(0)
   // What the server already holds, so a blur that changed nothing costs no
   // round trip. Seeded with the titles this page was rendered from.
   const savedTitles = useRef(JSON.stringify(plan.titles))
@@ -115,8 +124,9 @@ export function VideoPlanForm({
   const pendingDuration = useRef<number | null>(null)
 
   const uploading = footagePhase.phase !== "idle"
-  const busy = uploading || thumbnailBusy || starting
+  const busy = uploading || thumbnailBusySlot != null || starting
   const filledTitles = titles.map((title) => title.trim()).filter(Boolean)
+  const hasThumbnail = thumbnailSlots.some(Boolean)
   const canStart =
     !busy &&
     footage?.ready === true &&
@@ -135,11 +145,14 @@ export function VideoPlanForm({
   // Object URLs outlive the element that used them, so the last one is released
   // when this page goes away. Tracked in a ref rather than read out of state,
   // which by unmount is no longer ours to touch.
-  const thumbnailPreviewRef = useRef<string | null>(null)
+  const thumbnailPreviewRefs = useRef<Array<string | null>>(
+    Array.from({ length: MAX_THUMBNAILS }, () => null),
+  )
   useEffect(() => {
+    const previews = thumbnailPreviewRefs.current
     return () => {
-      if (thumbnailPreviewRef.current) {
-        URL.revokeObjectURL(thumbnailPreviewRef.current)
+      for (const preview of previews) {
+        if (preview) URL.revokeObjectURL(preview)
       }
     }
   }, [])
@@ -354,6 +367,7 @@ export function VideoPlanForm({
     const picked = event.target.files?.[0]
     event.target.value = ""
     if (!picked) return
+    const slot = pendingThumbnailSlot.current
 
     if (!Object.values(ACCEPTED_THUMBNAIL_TYPES).includes(picked.type)) {
       setError(
@@ -363,32 +377,45 @@ export function VideoPlanForm({
     }
 
     setError(null)
-    setThumbnailBusy(true)
+    setThumbnailBusySlot(slot)
     // Shown straight away from the file the browser is holding, so the creator
     // sees what they picked while it is still going up.
-    if (thumbnailPreviewRef.current) {
-      URL.revokeObjectURL(thumbnailPreviewRef.current)
+    if (thumbnailPreviewRefs.current[slot]) {
+      URL.revokeObjectURL(thumbnailPreviewRefs.current[slot])
     }
-    thumbnailPreviewRef.current = URL.createObjectURL(picked)
-    setThumbnailPreview(thumbnailPreviewRef.current)
+    const preview = URL.createObjectURL(picked)
+    thumbnailPreviewRefs.current[slot] = preview
+    setThumbnailPreviews((previous) =>
+      previous.map((value, index) => (index === slot ? preview : value)),
+    )
 
     try {
       const form = new FormData()
       form.append("file", picked)
-      const response = await fetch(`/api/video-plans/${plan.id}/thumbnail`, {
-        method: "POST",
-        body: form,
-      })
+      const response = await fetch(
+        `/api/video-plans/${plan.id}/thumbnail?slot=${slot}`,
+        {
+          method: "POST",
+          body: form,
+        },
+      )
       if (!response.ok) {
         setError(await messageFrom(response, "Could not upload the thumbnail."))
         return
       }
-      setHasThumbnail(true)
+      setThumbnailSlots((previous) =>
+        previous.map((value, index) => (index === slot ? true : value)),
+      )
     } catch {
       setError("Could not upload the thumbnail.")
     } finally {
-      setThumbnailBusy(false)
+      setThumbnailBusySlot(null)
     }
+  }
+
+  function chooseThumbnail(slot: number) {
+    pendingThumbnailSlot.current = slot
+    thumbnailInputRef.current?.click()
   }
 
   // Everything is already on the plan by this point, so starting is: save any
@@ -454,9 +481,127 @@ export function VideoPlanForm({
       />
 
       <PlanStep
+        icon={<TypeIcon className="size-4 text-muted-foreground" />}
+        title="Titles"
+        description={`Start with the title you have in mind. Add up to ${MAX_TITLES} if you are torn between ideas.`}
+      >
+        <div className="flex flex-col gap-3">
+          {titles.map((title, index) => (
+            <div key={index} className="flex flex-col gap-1.5">
+              <Label htmlFor={`plan-title-${index}`} className="text-xs">
+                {index === 0 ? "Title" : `Alternative ${index}`}
+              </Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id={`plan-title-${index}`}
+                  value={title}
+                  maxLength={TITLE_MAX_LENGTH}
+                  disabled={starting}
+                  placeholder={
+                    index === 0
+                      ? "The title you would publish with"
+                      : "Another idea worth weighing"
+                  }
+                  onChange={(event) => setTitleAt(index, event.target.value)}
+                  onBlur={() => void saveTitles(titles)}
+                />
+                {titles.length > 1 && (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Remove alternative ${index}`}
+                    disabled={starting}
+                    onClick={() => removeTitleAt(index)}
+                  >
+                    <XIcon />
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {titles.length < MAX_TITLES && (
+            <Button
+              variant="outline"
+              className="w-fit"
+              disabled={starting}
+              onClick={addTitle}
+            >
+              <PlusIcon className="size-4" />
+              Add another title idea
+            </Button>
+          )}
+        </div>
+      </PlanStep>
+
+      <PlanStep
+        icon={<ImageIcon className="size-4 text-muted-foreground" />}
+        title="Thumbnails"
+        description={`Upload up to ${MAX_THUMBNAILS} options.`}
+      >
+        <div className="grid gap-3 sm:grid-cols-3">
+          {Array.from({ length: MAX_THUMBNAILS }, (_, index) => {
+            const hasSlot = thumbnailSlots[index]
+            const preview = thumbnailPreviews[index]
+            const busySlot = thumbnailBusySlot === index
+            return (
+              <div
+                key={index}
+                className="flex min-w-0 flex-col gap-3 rounded-lg border p-3"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium">Option {index + 1}</p>
+                  {busySlot && (
+                    <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
+                  )}
+                </div>
+                {preview || hasSlot ? (
+                  // Either an object URL for a file the browser already holds
+                  // or the signing route, which mints a fresh URL per request.
+                  // Neither is something next/image can optimise.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={
+                      preview ??
+                      `/api/video-plans/${plan.id}/thumbnail?slot=${index}`
+                    }
+                    alt={`Thumbnail option ${index + 1}`}
+                    className="aspect-video w-full rounded-md border bg-muted object-cover"
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    className="flex aspect-video w-full items-center justify-center rounded-md border border-dashed text-muted-foreground transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={busy}
+                    onClick={() => chooseThumbnail(index)}
+                    aria-label={`Choose thumbnail option ${index + 1}`}
+                  >
+                    <ImageIcon className="size-5" />
+                  </button>
+                )}
+                <Button
+                  variant={hasSlot ? "outline" : "default"}
+                  disabled={busy}
+                  onClick={() => chooseThumbnail(index)}
+                >
+                  <UploadIcon className="size-4" />
+                  {hasSlot ? "Choose another" : "Choose thumbnail"}
+                </Button>
+              </div>
+            )
+          })}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {thumbnailBusySlot != null
+            ? "Uploading your thumbnail…"
+            : `Accepted formats: ${ACCEPTED_THUMBNAIL_EXTENSIONS.join(", ")}.`}
+        </p>
+      </PlanStep>
+
+      <PlanStep
         icon={<FileVideoIcon className="size-4 text-muted-foreground" />}
-        title="Your footage"
-        description="The cut you are about to publish. Nothing is made public; we read its opening to hear the hook your titles and thumbnail have to match."
+        title="Upload video"
+        description="The cut you are about to publish. Nothing is made public; we read its opening to hear the hook your titles and thumbnails have to match."
       >
         {footage ? (
           <div className="flex flex-col gap-3">
@@ -521,101 +666,6 @@ export function VideoPlanForm({
         )}
       </PlanStep>
 
-      <PlanStep
-        icon={<TypeIcon className="size-4 text-muted-foreground" />}
-        title="Your titles"
-        description={`Start with the title you have in mind. Add up to ${MAX_TITLES} if you are torn between ideas, and we will tell you which one fits your thumbnail and hook best.`}
-      >
-        <div className="flex flex-col gap-3">
-          {titles.map((title, index) => (
-            <div key={index} className="flex flex-col gap-1.5">
-              <Label htmlFor={`plan-title-${index}`} className="text-xs">
-                {index === 0 ? "Title" : `Alternative ${index}`}
-              </Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  id={`plan-title-${index}`}
-                  value={title}
-                  maxLength={TITLE_MAX_LENGTH}
-                  disabled={starting}
-                  placeholder={
-                    index === 0
-                      ? "The title you would publish with"
-                      : "Another idea worth weighing"
-                  }
-                  onChange={(event) => setTitleAt(index, event.target.value)}
-                  onBlur={() => void saveTitles(titles)}
-                />
-                {titles.length > 1 && (
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={`Remove alternative ${index}`}
-                    disabled={starting}
-                    onClick={() => removeTitleAt(index)}
-                  >
-                    <XIcon />
-                  </Button>
-                )}
-              </div>
-            </div>
-          ))}
-
-          {titles.length < MAX_TITLES && (
-            <Button
-              variant="outline"
-              className="w-fit"
-              disabled={starting}
-              onClick={addTitle}
-            >
-              <PlusIcon className="size-4" />
-              Add another title idea
-            </Button>
-          )}
-        </div>
-      </PlanStep>
-
-      <PlanStep
-        icon={<ImageIcon className="size-4 text-muted-foreground" />}
-        title="Your thumbnail"
-        description="The image you intend to upload with it."
-      >
-        <div className="flex flex-wrap items-center gap-4">
-          {(thumbnailPreview || hasThumbnail) && (
-            // Either an object URL for a file the browser already holds or the
-            // signing route, which mints a fresh URL per request. Neither is
-            // something next/image can optimise.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={
-                thumbnailPreview ?? `/api/video-plans/${plan.id}/thumbnail`
-              }
-              alt="Your thumbnail"
-              className="aspect-video w-48 rounded-lg border object-cover"
-            />
-          )}
-          <div className="flex flex-col items-start gap-2">
-            <Button
-              variant={hasThumbnail ? "outline" : "default"}
-              disabled={busy}
-              onClick={() => thumbnailInputRef.current?.click()}
-            >
-              {thumbnailBusy ? (
-                <Loader2Icon className="size-4 animate-spin" />
-              ) : (
-                <UploadIcon className="size-4" />
-              )}
-              {hasThumbnail ? "Choose another" : "Choose thumbnail"}
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              {thumbnailBusy
-                ? "Uploading your thumbnail…"
-                : `Accepted formats: ${ACCEPTED_THUMBNAIL_EXTENSIONS.join(", ")}.`}
-            </p>
-          </div>
-        </div>
-      </PlanStep>
-
       <div className="flex flex-col items-start gap-3">
         <Button disabled={!canStart} onClick={start}>
           {starting ? (
@@ -646,9 +696,9 @@ function missingPieceMessage(
   hasThumbnail: boolean,
   titleCount: number,
 ): string {
-  if (!footage?.ready) return "Upload your footage to start the plan."
   if (titleCount === 0) return "Add at least one title idea to start the plan."
   if (!hasThumbnail) return "Add your thumbnail to start the plan."
+  if (!footage?.ready) return "Upload your video to start the plan."
   return "Everything is saved. You can start the plan whenever you are ready."
 }
 

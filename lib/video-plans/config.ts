@@ -36,6 +36,8 @@ export const ACCEPTED_THUMBNAIL_EXTENSIONS = Object.keys(
   ACCEPTED_THUMBNAIL_TYPES,
 )
 
+export const MAX_THUMBNAILS = 3
+
 export const ACCEPTED_THUMBNAIL_MIME_TYPES = [
   ...new Set(Object.values(ACCEPTED_THUMBNAIL_TYPES)),
 ]
