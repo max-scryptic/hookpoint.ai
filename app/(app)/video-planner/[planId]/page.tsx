@@ -68,7 +68,7 @@ export default async function Page({
       ])
     : [null, true]
 
-  const name = plan.titles[0] ?? "Untitled plan"
+  const name = plan.titles[0] ?? "Untitled video"
 
   return (
     <>
@@ -102,7 +102,7 @@ export default async function Page({
             <h1 className="text-2xl font-semibold tracking-normal">{name}</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               {draft
-                ? "Add your footage, the titles you are weighing up and your thumbnail, then start the plan."
+                ? "Add your footage, the titles you are weighing up and your thumbnail, then review the video."
                 : "How your title, thumbnail and hook line up, before you publish."}
             </p>
           </div>
