@@ -161,12 +161,7 @@ export function SourceVideoThumbnail({
 }) {
   return (
     <div className="relative aspect-video w-full shrink-0 overflow-hidden rounded-[var(--radius-thumbnail)] bg-muted sm:w-64">
-      <VideoThumbnail
-        src={thumbnailUrl}
-        alt={title}
-        sizes="(min-width: 640px) 256px, calc(100vw - 64px)"
-        loading="eager"
-      />
+      <VideoThumbnail src={thumbnailUrl} alt={title} sizes="256px" />
     </div>
   )
 }
