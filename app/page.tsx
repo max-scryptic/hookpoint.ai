@@ -121,56 +121,25 @@ function Section({
 }
 
 function SectionHeading({
-  eyebrow,
   title,
   description,
   align = "center",
 }: {
-  eyebrow: string
   title: string
   description: string
   align?: "center" | "start"
 }) {
-  // The heading animates itself a word at a time, so the wrapper only reports
-  // that the block has arrived and the eyebrow and the description ride in
-  // around it: label, then the line reading itself into place, then the
-  // paragraph once the line has finished.
-  const wordCount = title.trim().split(/\s+/).length
-
   return (
     <Reveal
-      quiet
       className={cn(
         "max-w-2xl",
         align === "center" ? "mx-auto text-center" : "text-left"
       )}
     >
-      <p className="landing-rise text-sm font-semibold text-primary">
-        <span
-          // A short rule either side of the eyebrow, so the label reads as a
-          // marker for the section rather than as a stray line of blue text.
-          aria-hidden="true"
-          className={cn(
-            "mr-2 inline-block h-px w-6 bg-primary/40 align-middle",
-            align === "center" && "hidden sm:inline-block"
-          )}
-        />
-        {eyebrow}
-        <span
-          aria-hidden="true"
-          className={cn(
-            "ml-2 hidden h-px w-6 bg-primary/40 align-middle",
-            align === "center" && "sm:inline-block"
-          )}
-        />
-      </p>
-      <h2 className="mt-3 font-heading text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
-        <RevealWords runs={[title]} delay={90} />
+      <h2 className="font-heading text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
+        {title}
       </h2>
-      <p
-        style={delayStyle(160 + wordCount * 30)}
-        className="landing-rise mt-4 text-base leading-relaxed text-muted-foreground text-pretty"
-      >
+      <p className="mt-4 text-base leading-relaxed text-muted-foreground text-pretty">
         {description}
       </p>
     </Reveal>
@@ -194,7 +163,7 @@ function PrimaryCta({
     <Magnetic className={className}>
       <Link
         href={href}
-        className="group/cta inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition duration-300 hover:-translate-y-0.5 hover:bg-primary/90 hover:shadow-xl hover:shadow-primary/35"
+        className="landing-focus group/cta inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition duration-300 hover:-translate-y-0.5 hover:bg-primary/90 hover:shadow-xl hover:shadow-primary/35 active:translate-y-px"
       >
         {children}
         {/* The arrow leans into the direction it points as the button is
@@ -228,15 +197,10 @@ function Hero({
             phone lays this out in, and the copy beside it is dragged wider than
             the screen. */}
         <div className="min-w-0 text-center lg:text-left">
-          <span className="landing-enter inline-flex items-center gap-2 rounded-sm border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary">
-            <SparklesIcon className="size-3.5" />
-            AI retention analysis for YouTube creators
-          </span>
-
           {/* The headline reads itself into place a word at a time. The second
               sentence steps along the brand sweep as it goes, so the payoff
               still arrives in colour now that each word is a box of its own. */}
-          <h1 className="landing-enter landing-quiet mt-6 font-heading text-4xl leading-[1.05] font-semibold tracking-tight text-balance sm:text-5xl lg:text-6xl">
+          <h1 className="landing-enter landing-quiet font-heading text-4xl leading-[1.05] font-semibold tracking-tight text-balance sm:text-5xl lg:text-6xl">
             <RevealWords
               delay={70}
               runs={[
@@ -264,7 +228,7 @@ function Hero({
             </PrimaryCta>
             <a
               href="#how-it-works"
-              className="inline-flex h-11 w-full items-center justify-center rounded-xl border bg-card px-6 text-sm font-semibold transition duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-muted hover:shadow-lg sm:w-auto"
+              className="landing-focus inline-flex h-11 w-full items-center justify-center rounded-xl border bg-card px-6 text-sm font-semibold transition duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-muted hover:shadow-lg active:translate-y-px sm:w-auto"
             >
               See how it works
             </a>
@@ -333,7 +297,6 @@ function Problem() {
       backdrop={<SectionTexture intensity="subtle" />}
     >
       <SectionHeading
-        eyebrow="The problem"
         title="Retention data tells you when. Never why."
         description="Every creator has stared at the same drop-off and guessed. The guess is the expensive part: it costs you the next video too."
       />
@@ -361,19 +324,7 @@ function Problem() {
                   aria-hidden="true"
                   className="pointer-events-none absolute inset-x-0 top-0 h-px origin-left scale-x-0 bg-primary/40 transition-transform duration-500 group-hover:scale-x-100"
                 />
-                {/* The number, oversized and nearly invisible, gives each card
-                    something of its own behind the copy. */}
-                <span
-                  aria-hidden="true"
-                  className="pointer-events-none absolute -top-6 -right-2 font-heading text-8xl font-semibold text-primary/[0.06] transition-colors duration-300 group-hover:text-primary/[0.1]"
-                >
-                  0{index + 1}
-                </span>
-
-                <span className="relative flex size-9 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 font-heading text-sm font-semibold text-primary transition duration-300 group-hover:scale-105 group-hover:border-primary/40 group-hover:bg-primary/15">
-                  0{index + 1}
-                </span>
-                <h3 className="relative mt-4 font-heading text-lg font-semibold transition-colors duration-300 group-hover:text-primary">
+                <h3 className="relative font-heading text-lg font-semibold transition-colors duration-300 group-hover:text-primary">
                   {point.title}
                 </h3>
                 <p className="relative mt-2 text-sm leading-relaxed text-muted-foreground">
@@ -414,7 +365,6 @@ function HowItWorks() {
   return (
     <Section id="how-it-works">
       <SectionHeading
-        eyebrow="How it works"
         title="From connected channel to a fix list in three steps"
         description="No spreadsheets, no manual timestamping, no rewatching your own video at 2x looking for the moment it went wrong."
       />
@@ -549,7 +499,6 @@ function Features() {
   return (
     <Section id="features" className="border-t bg-landing-band">
       <SectionHeading
-        eyebrow="Features"
         title="A retention team, in one tab"
         description="Surfaces that build on each other: a report per video, a head to head for any two, the trends that emerge once your library has a few in it, and a checklist that carries all of it into your next edit."
       />
@@ -651,7 +600,6 @@ function Pricing({ isAuthenticated }: { isAuthenticated: boolean }) {
   return (
     <Section id="pricing">
       <SectionHeading
-        eyebrow="Pricing"
         title="Start free, pay when you go deep"
         description="Analyses of your curve and packaging are included on every plan. Credits only come into it when you want the frame by frame half of the report."
       />
@@ -670,7 +618,6 @@ function Faq() {
       backdrop={<SectionTexture />}
     >
       <SectionHeading
-        eyebrow="FAQ"
         title="Questions creators ask first"
         description="If yours is not here, sign up and ask. The free tier is enough to see whether the reports are worth your time."
       />
@@ -690,33 +637,21 @@ function ClosingCta({
 }) {
   return (
     <section className="relative overflow-hidden border-t px-4 py-24 sm:px-6">
-      {/* Same shape as a section heading: the mark and the copy ride in around
-          the line, which reads itself into place a word at a time. */}
-      <Reveal quiet className="relative mx-auto max-w-2xl text-center">
-        <BrandLogo className="landing-rise mx-auto size-14" />
+      {/* The mark closes the funnel with the same calm, centered hierarchy used
+          by the section headings above. */}
+      <Reveal className="relative mx-auto max-w-2xl text-center">
+        <BrandLogo className="mx-auto size-14" />
         <h2 className="mt-6 font-heading text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
-          <RevealWords
-            delay={90}
-            runs={["Your next video does not have to repeat this one"]}
-          />
+          Your next video does not have to repeat this one
         </h2>
-        <p
-          style={delayStyle(420)}
-          className="landing-rise mt-4 leading-relaxed text-muted-foreground text-pretty"
-        >
+        <p className="mt-4 leading-relaxed text-muted-foreground text-pretty">
           Connect your channel, run your first analysis, and find out what the
           curve has been trying to tell you.
         </p>
-        <div
-          style={delayStyle(500)}
-          className="landing-rise mt-8 flex justify-center"
-        >
+        <div className="mt-8 flex justify-center">
           <PrimaryCta href={primaryHref}>{primaryLabel}</PrimaryCta>
         </div>
-        <p
-          style={delayStyle(560)}
-          className="landing-rise mt-4 text-sm text-muted-foreground"
-        >
+        <p className="mt-4 text-sm text-muted-foreground">
           Free to start. Upgrade only when you want the deep dives.
         </p>
       </Reveal>
@@ -739,22 +674,22 @@ function SiteFooter() {
         </div>
 
         <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
-          <a href="#features" className="transition-colors hover:text-foreground">
+          <a href="#features" className="landing-focus transition-colors hover:text-foreground">
             Features
           </a>
-          <a href="#pricing" className="transition-colors hover:text-foreground">
+          <a href="#pricing" className="landing-focus transition-colors hover:text-foreground">
             Pricing
           </a>
-          <a href="#faq" className="transition-colors hover:text-foreground">
+          <a href="#faq" className="landing-focus transition-colors hover:text-foreground">
             FAQ
           </a>
-          <Link href="/privacy" className="transition-colors hover:text-foreground">
+          <Link href="/privacy" className="landing-focus transition-colors hover:text-foreground">
             Privacy
           </Link>
-          <Link href="/terms" className="transition-colors hover:text-foreground">
+          <Link href="/terms" className="landing-focus transition-colors hover:text-foreground">
             Terms
           </Link>
-          <Link href="/login" className="transition-colors hover:text-foreground">
+          <Link href="/login" className="landing-focus transition-colors hover:text-foreground">
             Log in
           </Link>
         </nav>

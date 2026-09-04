@@ -63,8 +63,15 @@ export function LandingHeader({ isAuthenticated }: { isAuthenticated: boolean })
   useEffect(() => {
     if (!menuOpen) return
     const onResize = () => setMenuOpen(false)
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuOpen(false)
+    }
     window.addEventListener("resize", onResize)
-    return () => window.removeEventListener("resize", onResize)
+    window.addEventListener("keydown", onKeyDown)
+    return () => {
+      window.removeEventListener("resize", onResize)
+      window.removeEventListener("keydown", onKeyDown)
+    }
   }, [menuOpen])
 
   return (
@@ -79,7 +86,7 @@ export function LandingHeader({ isAuthenticated }: { isAuthenticated: boolean })
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center gap-3 px-4 sm:px-6">
         <Link
           href="/"
-          className="flex items-center gap-2 font-heading text-base font-semibold tracking-tight"
+          className="landing-focus flex items-center gap-2 font-heading text-base font-semibold tracking-tight"
         >
           <BrandLogo className="size-8" />
           Viewlio
@@ -90,10 +97,11 @@ export function LandingHeader({ isAuthenticated }: { isAuthenticated: boolean })
             <a
               key={section.id}
               href={`#${section.id}`}
+              aria-current={activeSection === section.id ? "location" : undefined}
               className={cn(
-                "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+                "landing-focus rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
                 activeSection === section.id
-                  ? "text-foreground"
+                  ? "bg-primary/10 text-primary"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
@@ -108,7 +116,7 @@ export function LandingHeader({ isAuthenticated }: { isAuthenticated: boolean })
           {isAuthenticated ? (
             <Link
               href="/analyse-video"
-              className="inline-flex h-9 items-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              className="landing-focus inline-flex h-10 items-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 active:translate-y-px"
             >
               Go to app
             </Link>
@@ -116,13 +124,13 @@ export function LandingHeader({ isAuthenticated }: { isAuthenticated: boolean })
             <>
               <Link
                 href="/login"
-                className="hidden h-9 items-center rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:inline-flex"
+                className="landing-focus hidden h-10 items-center rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:inline-flex"
               >
                 Log in
               </Link>
               <Link
                 href="/signup"
-                className="inline-flex h-9 items-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+                className="landing-focus inline-flex h-10 items-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 active:translate-y-px"
               >
                 Start free
               </Link>
@@ -133,8 +141,9 @@ export function LandingHeader({ isAuthenticated }: { isAuthenticated: boolean })
             type="button"
             aria-label={menuOpen ? "Close menu" : "Open menu"}
             aria-expanded={menuOpen}
+            aria-controls="landing-mobile-menu"
             onClick={() => setMenuOpen((open) => !open)}
-            className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:hidden"
+            className="landing-focus inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:hidden"
           >
             {menuOpen ? (
               <XIcon className="size-5" />
@@ -146,13 +155,17 @@ export function LandingHeader({ isAuthenticated }: { isAuthenticated: boolean })
       </div>
 
       {menuOpen && (
-        <nav className="border-t bg-background/95 px-4 py-3 backdrop-blur-lg md:hidden">
+        <nav
+          id="landing-mobile-menu"
+          className="border-t bg-background/95 px-4 py-3 backdrop-blur-lg md:hidden"
+        >
           {SECTIONS.map((section) => (
             <a
               key={section.id}
               href={`#${section.id}`}
+              aria-current={activeSection === section.id ? "location" : undefined}
               onClick={() => setMenuOpen(false)}
-              className="block rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="landing-focus block rounded-lg px-3 py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               {section.label}
             </a>
@@ -161,7 +174,7 @@ export function LandingHeader({ isAuthenticated }: { isAuthenticated: boolean })
             <Link
               href="/login"
               onClick={() => setMenuOpen(false)}
-              className="block rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:hidden"
+              className="landing-focus block rounded-lg px-3 py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:hidden"
             >
               Log in
             </Link>
@@ -183,7 +196,7 @@ function ThemeToggle() {
       type="button"
       aria-label="Toggle light and dark theme"
       onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-      className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      className="landing-focus inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
     >
       {/* Which glyph shows is decided by the theme class on the document rather
           than by React state. The server cannot know the reader's theme, so
