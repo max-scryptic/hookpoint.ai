@@ -359,9 +359,13 @@ function NoRetentionTips({
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex flex-col">
-      <span className="text-xl font-semibold tabular-nums">{value}</span>
-      <span className="text-xs text-muted-foreground">{label}</span>
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <span className="font-heading text-xl font-semibold tabular-nums">
+        {value}
+      </span>
+      <span className="text-xs leading-snug text-muted-foreground">
+        {label}
+      </span>
     </div>
   )
 }
@@ -1869,9 +1873,9 @@ export function AnalysedVideoDetail({
 
   return (
     <FirstTipHintProvider enabled={showTipActionsHint}>
-      <div className="flex flex-col gap-6">
-        <div ref={insightAreaRef} className="flex flex-col gap-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-stretch">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-10 pb-4">
+        <div ref={insightAreaRef} className="flex flex-col gap-10">
+          <div className="flex flex-col gap-5 border bg-card p-4 sm:flex-row sm:items-stretch sm:p-5">
             {/* Rendered even without a usable thumbnail (private and scheduled
                 uploads have one YouTube won't serve), so the header keeps its
                 shape and shows the placeholder rather than collapsing. */}
@@ -1881,16 +1885,16 @@ export function AnalysedVideoDetail({
                 title={video.title}
               />
             </div>
-            <div className="flex flex-1 flex-col">
-              <h1 className="text-2xl font-semibold tracking-normal">
+            <div className="flex min-w-0 flex-1 flex-col">
+              <h1 className="font-heading text-xl leading-tight font-semibold text-balance sm:text-2xl">
                 {video.title}
               </h1>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-2 max-w-[70ch] text-sm text-muted-foreground">
                 Audience retention across this video, with the moments where you
                 lost and held the most viewers.
               </p>
               {analyticsSummary && (
-                <div className="mt-4 flex flex-wrap items-end gap-x-8 gap-y-3 sm:mt-auto sm:pt-4">
+                <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 border-t pt-4 sm:mt-auto sm:grid-cols-4 sm:pt-5">
                   <Metric
                     label="Views"
                     value={formatCompactNumber(
@@ -1926,23 +1930,33 @@ export function AnalysedVideoDetail({
             </div>
           </div>
 
-          <section className="flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <PackageIcon className="size-4 text-muted-foreground" />
-              <h2 className="text-sm font-medium">Packaging</h2>
+          <section
+            aria-labelledby="packaging-heading"
+            className="flex flex-col gap-4"
+          >
+            <div className="flex items-center gap-2.5 border-b pb-3">
+              <PackageIcon className="size-4 text-primary" aria-hidden="true" />
+              <h2
+                id="packaging-heading"
+                className="font-heading text-base font-medium"
+              >
+                Packaging
+              </h2>
             </div>
 
             <Tabs defaultValue="packaging">
-              <TabsList>
-                <TabsTrigger value="packaging">
-                  <AlignHorizontalJustifyCenterIcon className="text-blue-600 dark:text-blue-400" />
-                  Title, Thumbnail &amp; Hook
-                </TabsTrigger>
-                <TabsTrigger value="metadata">
-                  <ListChecksIcon className="text-teal-600 dark:text-teal-400" />
-                  Metadata
-                </TabsTrigger>
-              </TabsList>
+              <div className="max-w-full overflow-x-auto pb-1">
+                <TabsList aria-label="Packaging analysis views">
+                  <TabsTrigger value="packaging">
+                    <AlignHorizontalJustifyCenterIcon className="text-blue-600 dark:text-blue-400" />
+                    Title, Thumbnail &amp; Hook
+                  </TabsTrigger>
+                  <TabsTrigger value="metadata">
+                    <ListChecksIcon className="text-teal-600 dark:text-teal-400" />
+                    Metadata
+                  </TabsTrigger>
+                </TabsList>
+              </div>
 
               <TabsContent value="packaging">
                 <PackagingAlignmentSection
@@ -1958,10 +1972,18 @@ export function AnalysedVideoDetail({
             </Tabs>
           </section>
 
-          <section className="flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <AreaChartIcon className="size-4 text-muted-foreground" />
-              <h2 className="text-sm font-medium">Audience retention</h2>
+          <section
+            aria-labelledby="retention-heading"
+            className="flex flex-col gap-4"
+          >
+            <div className="flex items-center gap-2.5 border-b pb-3">
+              <AreaChartIcon className="size-4 text-primary" aria-hidden="true" />
+              <h2
+                id="retention-heading"
+                className="font-heading text-base font-medium"
+              >
+                Audience retention
+              </h2>
             </div>
             {/* The chart and its insight lists share one positioning context so the
                 floating source video can be `position: sticky` across both. It
@@ -1974,7 +1996,7 @@ export function AnalysedVideoDetail({
               {video.thumbnailUrl && (
                 <div className="pointer-events-none absolute inset-0 z-20">
                   <div className="sticky top-4 flex justify-end px-5 pt-5">
-                    <div className="w-1/2 max-w-84">
+                    <div className="w-[calc(100%_-_2.5rem)] sm:w-1/2 sm:max-w-84">
                       <SourceVideoPlayer
                         videoId={video.id}
                         thumbnailUrl={video.thumbnailUrl}
@@ -2041,40 +2063,44 @@ export function AnalysedVideoDetail({
                 {/* The info affordance sits inline to the right of the tabs, so
                     the explanation of how a window is picked (and what it takes
                     to earn a tip) is one click from the list it describes. */}
-                <div className="flex items-center gap-1">
-                  <TabsList>
-                    {hookWindows.length > 0 && (
-                      <TabsTrigger value="hook">
-                        <HookIcon className="text-yellow-500 dark:text-yellow-400" />
-                        Hook
-                      </TabsTrigger>
-                    )}
-                    {drops.length > 0 && (
-                      <TabsTrigger value="drop-offs">
-                        <TrendingDownIcon className="text-destructive" />
-                        Drop-offs
-                      </TabsTrigger>
-                    )}
-                    {gains.length > 0 && (
-                      <TabsTrigger value="gains">
-                        <TrendingUpIcon className="text-emerald-600 dark:text-emerald-400" />
-                        Gains
-                      </TabsTrigger>
-                    )}
-                    {holds.length > 0 && (
-                      <TabsTrigger value="holds">
-                        <MinusIcon className="text-teal-600 dark:text-teal-400" />
-                        Holds
-                      </TabsTrigger>
-                    )}
-                    {pacingStretches.length > 0 && (
-                      <TabsTrigger value="pacing">
-                        <GaugeIcon className="text-blue-600 dark:text-blue-400" />
-                        Pacing
-                      </TabsTrigger>
-                    )}
-                  </TabsList>
-                  <RetentionEventsInfo />
+                <div className="flex max-w-full items-center gap-1">
+                  <div className="min-w-0 overflow-x-auto pb-1">
+                    <TabsList aria-label="Retention insight types">
+                      {hookWindows.length > 0 && (
+                        <TabsTrigger value="hook">
+                          <HookIcon className="text-yellow-500 dark:text-yellow-400" />
+                          Hook
+                        </TabsTrigger>
+                      )}
+                      {drops.length > 0 && (
+                        <TabsTrigger value="drop-offs">
+                          <TrendingDownIcon className="text-destructive" />
+                          Drop-offs
+                        </TabsTrigger>
+                      )}
+                      {gains.length > 0 && (
+                        <TabsTrigger value="gains">
+                          <TrendingUpIcon className="text-emerald-600 dark:text-emerald-400" />
+                          Gains
+                        </TabsTrigger>
+                      )}
+                      {holds.length > 0 && (
+                        <TabsTrigger value="holds">
+                          <MinusIcon className="text-teal-600 dark:text-teal-400" />
+                          Holds
+                        </TabsTrigger>
+                      )}
+                      {pacingStretches.length > 0 && (
+                        <TabsTrigger value="pacing">
+                          <GaugeIcon className="text-blue-600 dark:text-blue-400" />
+                          Pacing
+                        </TabsTrigger>
+                      )}
+                    </TabsList>
+                  </div>
+                  <div className="shrink-0 self-start pt-1">
+                    <RetentionEventsInfo />
+                  </div>
                 </div>
 
                 {hookWindows.length > 0 && (
