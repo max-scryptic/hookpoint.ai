@@ -24,7 +24,6 @@ export function VideoThumbnail({
   src,
   alt,
   sizes,
-  loading = "lazy",
   className = "object-cover",
   iconClassName = "size-6",
 }: {
@@ -34,9 +33,6 @@ export function VideoThumbnail({
   alt: string
   // Passed straight to next/image; callers size their own container.
   sizes: string
-  // Report headers can opt into eager loading when the thumbnail is above the
-  // fold; library and comparison thumbnails keep the lazy default.
-  loading?: "eager" | "lazy"
   // Extra image styling (e.g. the listing's hover zoom). Replaces the default,
   // so pass `object-cover` through when overriding.
   className?: string
@@ -67,7 +63,6 @@ export function VideoThumbnail({
       alt={alt}
       fill
       sizes={sizes}
-      loading={loading}
       className={className}
       onError={() => setFailedSrc(src)}
     />

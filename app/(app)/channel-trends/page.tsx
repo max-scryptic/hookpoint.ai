@@ -1,6 +1,3 @@
-import Link from "next/link"
-import { CircleAlertIcon, RefreshCwIcon } from "lucide-react"
-
 import { ChannelTrends, ChannelTrendsLocked } from "@/components/channel-trends"
 import { refreshAnalysedVideoStats } from "@/lib/analysed-video-stats"
 import { requireAuthenticatedUser } from "@/lib/auth"
@@ -13,8 +10,6 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
 } from "@/components/ui/breadcrumb"
-import { buttonVariants } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 
@@ -77,7 +72,7 @@ export default async function Page() {
           <h1 className="text-2xl font-semibold tracking-normal">
             Channel Trends
           </h1>
-          <p className="mt-1 max-w-prose text-sm text-muted-foreground">
+          <p className="mt-1 text-sm text-muted-foreground">
             What repeats across your channel: where you lose viewers, what your
             packaging earns, and what your best videos say. Every analysis makes
             it sharper.
@@ -87,29 +82,10 @@ export default async function Page() {
         {result.status === "ok" && <ChannelTrends data={result.data} />}
         {result.status === "locked" && <ChannelTrendsLocked />}
         {result.status === "error" && (
-          <Card
-            role="alert"
-            className="max-w-2xl items-start gap-4 p-6 sm:flex-row sm:items-center"
-          >
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-              <CircleAlertIcon className="size-4" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h2 className="font-heading text-base font-medium">
-                Channel trends could not load
-              </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Your library is safe. Try loading the page again.
-              </p>
-            </div>
-            <Link
-              href="/channel-trends"
-              className={buttonVariants({ variant: "outline" })}
-            >
-              <RefreshCwIcon />
-              Try again
-            </Link>
-          </Card>
+          <div className="rounded-xl border bg-card p-8 text-sm text-muted-foreground">
+            We couldn&apos;t load your channel trends right now. Please try
+            again later.
+          </div>
         )}
       </div>
     </>
