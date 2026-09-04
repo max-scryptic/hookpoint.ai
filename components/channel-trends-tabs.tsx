@@ -40,9 +40,13 @@ export function ChannelTrendsTabs({
 
   return (
     <Tabs defaultValue={tabs[0].value} className="gap-4">
-      <TabsList>
+      <TabsList className="grid w-full grid-cols-[repeat(auto-fit,minmax(min(100%,6.5rem),1fr))] sm:inline-flex sm:w-fit">
         {tabs.map((tab) => (
-          <TabsTrigger key={tab.value} value={tab.value}>
+          <TabsTrigger
+            key={tab.value}
+            value={tab.value}
+            className="min-h-9 px-2.5 sm:px-3"
+          >
             <tab.Icon />
             {tab.label}
           </TabsTrigger>
