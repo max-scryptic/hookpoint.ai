@@ -427,8 +427,8 @@ body {
 @keyframes landing-reveal {
   from {
     opacity: 0;
-    transform: translateY(1.5rem);
-    filter: blur(6px);
+    transform: translateY(1rem);
+    filter: blur(2px);
   }
   to {
     opacity: 1;
@@ -440,7 +440,6 @@ body {
   from {
     opacity: 0;
     transform: translateY(0.5rem);
-    filter: blur(4px);
   }
   to {
     opacity: 1;
@@ -456,7 +455,7 @@ body {
   from {
     opacity: 0;
     transform: translateY(110%);
-    filter: blur(8px);
+    filter: blur(4px);
   }
   to {
     opacity: 1;
@@ -554,7 +553,7 @@ body {
    * why there is no matching opacity: 0 rule to undo. */
   .landing-enter,
   .landing-reveal[data-revealed="true"] {
-    animation: landing-reveal 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: landing-reveal 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
     animation-delay: var(--landing-delay, 0ms);
   }
 
@@ -717,4 +716,17 @@ body {
 
 .landing-word {
   display: inline-block;
+}
+
+/* Landing controls share one deliberate keyboard treatment. The outline sits
+ * outside the crisp component geometry so it stays visible on cards, bands,
+ * and the fixed header in both themes. */
+.landing-focus:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+
+#landing-root ::selection {
+  background: color-mix(in oklch, var(--primary) 28%, transparent);
+  color: var(--foreground);
 }

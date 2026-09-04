@@ -143,7 +143,7 @@ export function ReportVisual({ className }: { className?: string }) {
               d={CURVE_AREA}
               fill="url(#hp-curve-fill)"
               className="landing-fade"
-              style={delayStyle(700)}
+              style={delayStyle(350)}
             />
             {/* The curve draws itself left to right once the card arrives, so
                 the reader watches the retention story rather than finding it
@@ -157,7 +157,7 @@ export function ReportVisual({ className }: { className?: string }) {
               strokeLinecap="round"
               vectorEffect="non-scaling-stroke"
               className="landing-draw"
-              style={delayStyle(150)}
+              style={delayStyle(80)}
             />
 
             {/* The drop-off and the gain, marked on the curve itself. They are
@@ -176,7 +176,7 @@ export function ReportVisual({ className }: { className?: string }) {
               vectorEffect="non-scaling-stroke"
               strokeOpacity="0.7"
               className="landing-fade"
-              style={delayStyle(900)}
+              style={delayStyle(500)}
             />
             {/* The gain is drawn in the same green the Gains tile uses, so the
                 two are read as the same fact. */}
@@ -186,7 +186,7 @@ export function ReportVisual({ className }: { className?: string }) {
               x2="300"
               y2="150"
               className="landing-fade text-emerald-500"
-              style={delayStyle(1050)}
+              style={delayStyle(600)}
               stroke="currentColor"
               strokeWidth="1.5"
               strokeDasharray="4 4"
@@ -196,14 +196,14 @@ export function ReportVisual({ className }: { className?: string }) {
           </ChartFrame>
 
           {/* Markers ride above the stretched SVG so they stay circular. */}
-          <Marker className="left-[40%] top-[59%]" tone="bad" delay={950} />
-          <Marker className="left-[75%] top-[67%]" tone="good" delay={1100} />
+          <Marker className="left-[40%] top-[59%]" tone="bad" delay={550} />
+          <Marker className="left-[75%] top-[67%]" tone="good" delay={650} />
 
           {/* Sits above the curve and clear of the gain marker further right,
               so nothing the chart is pointing at ends up underneath it. */}
           <div
             className="landing-pop absolute top-[4%] left-[41%] hidden max-w-[44%] origin-bottom-left rounded-lg border bg-popover/95 p-2.5 text-left shadow-lg backdrop-blur sm:block"
-            style={delayStyle(1200)}
+            style={delayStyle(700)}
           >
             <p className="text-[10px] font-semibold tracking-wide text-destructive uppercase">
               Drop-off at 2:41
@@ -220,7 +220,7 @@ export function ReportVisual({ className }: { className?: string }) {
             <Badge
               key={badge.label}
               className={badge.tone}
-              style={delayStyle(1300 + index * 90)}
+              style={delayStyle(760 + index * 55)}
             >
               {badge.label}
             </Badge>
@@ -256,7 +256,7 @@ const HERO_CHIPS = [
     value: "71% held",
     tone: "bg-amber-500",
     position: "top-[46%] -left-6",
-    delay: 1500,
+    delay: 850,
     float: "0.5rem",
     duration: "6s",
   },
@@ -265,7 +265,7 @@ const HERO_CHIPS = [
     value: "3 for the next edit",
     tone: "bg-primary",
     position: "-top-8 right-6",
-    delay: 1650,
+    delay: 950,
     float: "0.65rem",
     duration: "7.5s",
   },
@@ -274,7 +274,7 @@ const HERO_CHIPS = [
     value: "Frame level",
     tone: "bg-emerald-500",
     position: "-bottom-6 left-14",
-    delay: 1800,
+    delay: 1050,
     float: "0.45rem",
     duration: "6.8s",
   },

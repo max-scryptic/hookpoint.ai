@@ -69,7 +69,7 @@ export function LandingFaq() {
           key={faq.question}
           className="group transition-colors duration-200 open:bg-muted/30 hover:bg-muted/40"
         >
-          <summary className="flex cursor-pointer list-none items-start justify-between gap-4 p-5 text-left font-medium transition-colors hover:text-primary group-open:text-primary [&::-webkit-details-marker]:hidden">
+          <summary className="landing-focus flex cursor-pointer list-none items-start justify-between gap-4 p-5 text-left font-medium transition-colors hover:text-primary group-open:text-primary [&::-webkit-details-marker]:hidden">
             <span className="text-sm sm:text-base">{faq.question}</span>
             <PlusIcon className="mt-0.5 size-5 shrink-0 text-muted-foreground transition-transform duration-300 group-hover:text-primary group-open:rotate-[135deg] group-open:text-primary" />
           </summary>

@@ -78,7 +78,7 @@ function BillingToggle({
             aria-checked={period === option}
             onClick={() => onChange(option)}
             className={cn(
-              "rounded-lg px-4 py-2 text-sm font-medium transition-colors",
+              "landing-focus rounded-lg px-4 py-2 text-sm font-medium transition-colors",
               period === option
                 ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:text-foreground"
@@ -180,7 +180,7 @@ function PlanCard({
       <Link
         href={href}
         className={cn(
-          "mt-6 inline-flex h-10 items-center justify-center rounded-lg text-sm font-medium transition duration-300",
+          "landing-focus mt-6 inline-flex h-10 items-center justify-center rounded-lg text-sm font-medium transition duration-300 active:translate-y-px",
           plan.featured
             ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20 hover:bg-primary/90 hover:shadow-lg hover:shadow-primary/30"
             : "border bg-background hover:border-primary/30 hover:bg-muted"
