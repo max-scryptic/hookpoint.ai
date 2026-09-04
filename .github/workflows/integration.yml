@@ -49,5 +49,8 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Detect design issues
+        run: npm run design:detect
+
       - name: Build
         run: npm run build

@@ -17,6 +17,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+.impeccable/config.local.json
+.impeccable/hook.ndjson
 
 # env
 .env

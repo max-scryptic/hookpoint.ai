@@ -256,7 +256,7 @@ export function RetentionCurvesCard({
         divergence={data.divergence}
       />
       {note != null && (
-        <p className="rounded-r-md border-l-2 border-l-amber-500/60 bg-amber-500/5 px-3 py-2 text-xs text-muted-foreground">
+        <p className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-muted-foreground">
           {note}
         </p>
       )}

@@ -1,0 +1,18 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [
+      ".agents/**",
+      ".github/agents/**",
+      ".github/skills/**"
+    ],
+    "ignoreValues": [],
+    "designSystem": {
+      "enabled": true
+    }
+  },
+  "hook": {
+    "enabled": true,
+    "quiet": false
+  }
+}

@@ -462,12 +462,12 @@ export function RetentionChart({
             const isHinted = hintedInsight?.id === insight.id
             const isHovered = hoveredInsightId === insight.id
             const tone = insightTone[insight.kind]
-            // Scale up smoothly on hover, and further when selected. A gentle
-            // overshoot easing gives the growth a little life rather than a snap.
+            // Scale up smoothly on hover, and further when selected, without
+            // making the marker feel springy against the data underneath.
             const scale = isActive ? 1.5 : isHovered ? 1.22 : 1
             const haloScale = isActive ? 2.4 : isHovered ? 2 : 1.4
             const haloOpacity = isActive ? 0.32 : isHovered ? 0.2 : 0
-            const grow = "cubic-bezier(0.34, 1.56, 0.64, 1)"
+            const grow = "cubic-bezier(0.22, 1, 0.36, 1)"
             const transformOrigin = `${x}px ${y}px`
 
             return (

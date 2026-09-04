@@ -37,6 +37,12 @@ const UNSCANNED_DIRECTORIES = new Set([
   "public",
 ])
 
+const UNSCANNED_DIRECTORY_PATHS = new Set([
+  ".agents",
+  ".github/agents",
+  ".github/skills",
+])
+
 // The extensions we write code, copy and comments in. package-lock.json and the
 // other generated JSON are left out: nothing in them is ours to word.
 const SCANNED_EXTENSIONS = [
@@ -59,6 +65,8 @@ function scannedSourceFiles(directory: string): string[] {
     const path = join(directory, entry.name)
     if (entry.isDirectory()) {
       if (UNSCANNED_DIRECTORIES.has(entry.name)) continue
+      const repositoryPath = relative(process.cwd(), path).split(sep).join("/")
+      if (UNSCANNED_DIRECTORY_PATHS.has(repositoryPath)) continue
       found.push(...scannedSourceFiles(path))
       continue
     }

@@ -92,12 +92,11 @@ function SideDot({ side }: { side: ScriptReportSide }) {
   )
 }
 
-// The frame one video's points sit in, the same tinted and ruled panel the
-// packaging columns quote their material in, so a video's own material stays
-// distinct from the report's prose about the pair below it.
+// The frame one video's points sit in, matching the packaging evidence panel so
+// a video's own material stays distinct from the report's prose about the pair.
 function SidePoints({ points }: { points: string[] }) {
   return (
-    <div className="rounded-md border-l-2 border-muted-foreground/30 bg-muted/40 py-2 pr-3 pl-3">
+    <div className="rounded-md border border-muted-foreground/20 bg-muted/40 px-3 py-2">
       <ul className="flex flex-col gap-1.5">
         {points.map((point, index) => (
           <li
