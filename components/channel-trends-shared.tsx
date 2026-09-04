@@ -147,8 +147,8 @@ export function Chip({ children }: { children: ReactNode }) {
   )
 }
 
-// The advice block inside an insight or playbook card. Ruled off with a neutral
-// left edge, the same one the comparison reports quote their evidence behind.
+// The advice block inside an insight or playbook card. A soft full frame keeps
+// it distinct from the report prose without turning it into a side tab.
 export function CalloutBlock({
   label,
   children,
@@ -157,7 +157,7 @@ export function CalloutBlock({
   children: ReactNode
 }) {
   return (
-    <div className="rounded-r-md border-l-2 border-muted-foreground/30 bg-muted/40 px-3 py-2">
+    <div className="rounded-md border border-muted-foreground/20 bg-muted/40 px-3 py-2">
       <span className="mb-0.5 block text-xs font-medium tracking-wide text-muted-foreground uppercase">
         {label}
       </span>

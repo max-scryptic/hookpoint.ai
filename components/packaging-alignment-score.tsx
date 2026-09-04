@@ -46,7 +46,7 @@ export interface AlignmentScorePart {
 }
 
 // The frame a piece of a video's own material sits in: its words, its real
-// thumbnail, or its alignment numbers, tinted and ruled off so they read as
+// thumbnail, or its alignment numbers, softly framed so they read as
 // that video's own material rather than as the report's prose about it.
 export function EvidencePanel({
   children,
@@ -60,7 +60,7 @@ export function EvidencePanel({
   return (
     <div
       className={cn(
-        "rounded-md border-l-2 border-muted-foreground/30 bg-muted/40 py-2 pr-3 pl-3",
+        "rounded-md border border-muted-foreground/20 bg-muted/40 px-3 py-2",
         className,
       )}
     >

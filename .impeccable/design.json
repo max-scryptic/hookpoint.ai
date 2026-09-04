@@ -1,0 +1,196 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-04T00:00:00.000Z",
+  "title": "Design System: Viewlio",
+  "extensions": {
+    "colorMeta": {
+      "background": {
+        "role": "neutral",
+        "displayName": "Cool Page",
+        "canonical": "oklch(0.958 0.006 264)",
+        "tonalRamp": [
+          "oklch(0.15 0.006 264)",
+          "oklch(0.25 0.006 264)",
+          "oklch(0.35 0.006 264)",
+          "oklch(0.48 0.006 264)",
+          "oklch(0.62 0.006 264)",
+          "oklch(0.76 0.006 264)",
+          "oklch(0.88 0.006 264)",
+          "oklch(0.958 0.006 264)"
+        ]
+      },
+      "primary": {
+        "role": "primary",
+        "displayName": "Signal Blue",
+        "canonical": "oklch(0.54 0.2 264)",
+        "tonalRamp": [
+          "oklch(0.18 0.2 264)",
+          "oklch(0.28 0.2 264)",
+          "oklch(0.38 0.2 264)",
+          "oklch(0.48 0.2 264)",
+          "oklch(0.54 0.2 264)",
+          "oklch(0.66 0.16 264)",
+          "oklch(0.78 0.1 264)",
+          "oklch(0.9 0.04 264)"
+        ]
+      },
+      "accent": {
+        "role": "secondary",
+        "displayName": "Analysis Mist",
+        "canonical": "oklch(0.95 0.03 264)",
+        "tonalRamp": [
+          "oklch(0.18 0.03 264)",
+          "oklch(0.3 0.03 264)",
+          "oklch(0.42 0.03 264)",
+          "oklch(0.54 0.03 264)",
+          "oklch(0.66 0.03 264)",
+          "oklch(0.78 0.03 264)",
+          "oklch(0.88 0.03 264)",
+          "oklch(0.95 0.03 264)"
+        ]
+      },
+      "card": {
+        "role": "neutral",
+        "displayName": "White Work Surface",
+        "canonical": "oklch(1 0 0)",
+        "tonalRamp": [
+          "oklch(0.15 0 0)",
+          "oklch(0.28 0 0)",
+          "oklch(0.42 0 0)",
+          "oklch(0.56 0 0)",
+          "oklch(0.7 0 0)",
+          "oklch(0.84 0 0)",
+          "oklch(0.94 0 0)",
+          "oklch(1 0 0)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Public hero headlines and rare first-screen statements."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Major landing sections and route-level workspace headings."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Card titles, panel headers, table section titles, and compact dashboard headings."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Reports, explanations, settings copy, legal copy, and form help."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Buttons, tabs, badges, filters, table headers, and metric labels."
+      }
+    },
+    "motion": [
+      {
+        "name": "state-transition",
+        "value": "transition-colors 200ms ease",
+        "purpose": "Default hover and selected-state feedback for controls."
+      },
+      {
+        "name": "landing-reveal",
+        "value": "CSS-driven reveal with reduced-motion guard",
+        "purpose": "Public page section and word reveals that support attention without hiding content from reduced-motion users."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Compact primary action for app surfaces.",
+      "html": "<button class=\"ds-button-primary\">Analyze video</button>",
+      "css": ".ds-button-primary { display: inline-flex; height: 32px; align-items: center; justify-content: center; gap: 6px; border: 1px solid transparent; border-radius: 2px; background: oklch(0.54 0.2 264); color: oklch(0.985 0 0); padding: 0 10px; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 14px; font-weight: 500; white-space: nowrap; transition: background-color 200ms ease, transform 150ms ease, box-shadow 200ms ease; } .ds-button-primary:hover { background: oklch(0.48 0.2 264); } .ds-button-primary:active { transform: translateY(1px); } .ds-button-primary:focus-visible { outline: 3px solid color-mix(in oklch, oklch(0.54 0.2 264), transparent 50%); outline-offset: 1px; }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Flat work surface with tonal separation.",
+      "html": "<article class=\"ds-card\"><h3>Retention window</h3><p>Drop at 0:42 after the promise shifted.</p></article>",
+      "css": ".ds-card { border-radius: 2.5px; background: oklch(1 0 0); color: oklch(0.18 0.02 264); padding: 16px; box-shadow: inset 0 0 0 1px color-mix(in oklch, oklch(0.18 0.02 264), transparent 90%); font-family: Inter, ui-sans-serif, system-ui, sans-serif; } .ds-card h3 { margin: 0 0 4px; font-family: Sora, Inter, ui-sans-serif, system-ui, sans-serif; font-size: 16px; line-height: 1.35; font-weight: 500; } .ds-card p { margin: 0; color: oklch(0.52 0.025 264); font-size: 14px; line-height: 1.5; }"
+    },
+    {
+      "name": "Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Compact field for filters, forms, and settings.",
+      "html": "<input class=\"ds-input\" value=\"Video URL\" aria-label=\"Video URL\" />",
+      "css": ".ds-input { height: 32px; width: 100%; min-width: 0; border: 1px solid oklch(0.91 0.012 264); border-radius: 2px; background: oklch(1 0 0); color: oklch(0.18 0.02 264); padding: 4px 10px; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 14px; transition: border-color 200ms ease, box-shadow 200ms ease; } .ds-input:focus-visible { border-color: oklch(0.54 0.2 264); outline: none; box-shadow: 0 0 0 3px color-mix(in oklch, oklch(0.54 0.2 264), transparent 50%); }"
+    },
+    {
+      "name": "Tabs",
+      "kind": "nav",
+      "description": "Segmented navigation for report and settings views.",
+      "html": "<div class=\"ds-tabs\"><button class=\"ds-tab ds-tab-active\">Retention</button><button class=\"ds-tab\">Packaging</button><button class=\"ds-tab\">Script</button></div>",
+      "css": ".ds-tabs { display: inline-flex; align-items: center; gap: 4px; border: 1px solid oklch(0.91 0.012 264); border-radius: 2px; background: oklch(0.915 0.035 264); padding: 4px; color: oklch(0.52 0.025 264); font-family: Inter, ui-sans-serif, system-ui, sans-serif; } .ds-tab { border: 0; border-radius: 1.5px; background: transparent; color: inherit; padding: 6px 12px; font-size: 14px; font-weight: 500; white-space: nowrap; transition: background-color 200ms ease, color 200ms ease; } .ds-tab:hover { color: oklch(0.18 0.02 264); } .ds-tab-active { background: oklch(1 0 0); color: oklch(0.18 0.02 264); box-shadow: 0 1px 2px rgb(0 0 0 / 0.06); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Retention Lab",
+    "overview": "Viewlio's interface should feel like a working analysis bench for creators: focused, evidence-rich, and calm enough to make judgment easier. The system favors square geometry, restrained tonal layers, exact labels, and dense but readable layouts over decorative panels or broad marketing flourish.\n\nThe visual language is built around one disciplined blue/indigo family. Color marks action, focus, selection, and chart identity; structure comes mostly from lightness, borders, and spacing. The product can be expressive on the public landing page, but the authenticated workspace should stay quiet and operational.",
+    "keyCharacteristics": [
+      "Square-cornered product chrome with one deliberate softer exception for the brand mark.",
+      "Blue/indigo as the controlling family, with chart colors used only when separation is needed.",
+      "Sora headings over Inter body text for a precise editorial/technical tone.",
+      "Tonal surface steps instead of heavy shadows or glass effects.",
+      "Evidence-first layouts that keep moments, metrics, tips, and controls close together."
+    ],
+    "rules": [
+      {
+        "name": "The One-Hue Rule",
+        "body": "Interface tints should stay on the brand hue unless a chart, badge taxonomy, destructive state, or external asset genuinely needs separation.",
+        "section": "colors"
+      },
+      {
+        "name": "The Signal Rarity Rule",
+        "body": "Primary blue should mark choices and destinations. Do not flood whole app surfaces with high-chroma blue.",
+        "section": "colors"
+      },
+      {
+        "name": "The No-Theater Type Rule",
+        "body": "Do not introduce italic serif, novelty display faces, gradient text, negative tracking, or oversized hero type inside compact app surfaces.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tonal Depth Rule",
+        "body": "Use surface tokens, borders, and spacing before adding shadows. A shadow should respond to state or make a floating layer legible, not decorate a static card.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do use semantic tokens from `app/globals.css` instead of hardcoded visual values.",
+      "Do keep app surfaces dense, aligned, and readable for repeated analysis work.",
+      "Do preserve light and dark theme parity when adding new UI.",
+      "Do make each report/control state obvious without relying only on color.",
+      "Do keep public-page motion tied to attention, reveal, or pointer state."
+    ],
+    "donts": [
+      "Don't introduce rounded SaaS cards, glassmorphism, glow-heavy panels, bokeh/orb backgrounds, or purple-blue gradient hero defaults.",
+      "Don't nest decorative cards inside cards when a full-width section, table, list, or grouped row would communicate hierarchy more clearly.",
+      "Don't make the workspace feel like a marketing landing page; the authenticated app is an Operate surface.",
+      "Don't fabricate proof, social evidence, performance claims, or analytics outcomes in visual copy."
+    ]
+  }
+}

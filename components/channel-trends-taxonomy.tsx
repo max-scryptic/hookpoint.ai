@@ -559,7 +559,7 @@ export function ExtremesRadarCard({
       )}
 
       {bare ? null : lead ? (
-        <div className="flex flex-col gap-2 rounded-r-md border-l-2 border-muted-foreground/30 bg-muted/40 px-3 py-2.5">
+        <div className="flex flex-col gap-2 rounded-md border border-muted-foreground/20 bg-muted/40 px-3 py-2.5">
           <div>
             <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
               Where they separate most
