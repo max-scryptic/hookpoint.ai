@@ -240,7 +240,7 @@ export function EvidenceDisclosure({
 }) {
   return (
     <Collapsible>
-      <CollapsibleTrigger className="group -mx-2 flex min-h-8 items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50">
+      <CollapsibleTrigger className="group flex items-center gap-1 text-xs font-medium text-muted-foreground">
         <ChevronDownIcon className="size-3.5 transition-transform duration-200 group-data-[panel-open]:rotate-180" />
         {label}
       </CollapsibleTrigger>

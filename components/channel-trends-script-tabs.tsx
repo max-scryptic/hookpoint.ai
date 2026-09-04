@@ -58,13 +58,9 @@ export function ScriptSurfaceTabs({
 
   return (
     <Tabs defaultValue={tabs[0].value} className="gap-4">
-      <TabsList className="grid w-full grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))] sm:inline-flex sm:w-fit">
+      <TabsList>
         {tabs.map((tab) => (
-          <TabsTrigger
-            key={tab.value}
-            value={tab.value}
-            className="min-h-9 px-2.5 sm:px-3"
-          >
+          <TabsTrigger key={tab.value} value={tab.value}>
             <tab.Icon className="size-4" />
             {tab.label}
           </TabsTrigger>

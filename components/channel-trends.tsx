@@ -141,39 +141,19 @@ function ChannelSnapshotCards({ snapshot }: { snapshot: ChannelSnapshot }) {
   )
 
   return (
-    <section aria-labelledby="channel-baseline-title">
-      <div className="mb-3">
-        <h2
-          id="channel-baseline-title"
-          className="font-heading text-base font-medium"
-        >
-          Channel baseline
-        </h2>
-        <p className="mt-0.5 max-w-prose text-sm text-muted-foreground">
-          Medians across your deeply analysed library, so one breakout upload
-          cannot skew the picture.
-        </p>
-      </div>
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-3">
-        {tiles.map(({ label, value, icon: Icon }) => (
-          <Card key={label} size="sm" className="min-w-0">
-            <CardHeader className="gap-2">
-              <div className="flex items-start justify-between gap-3">
-                <CardDescription className="leading-snug">
-                  {label}
-                </CardDescription>
-                <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                  <Icon className="size-3.5" />
-                </span>
-              </div>
-              <CardTitle className="text-2xl leading-none tabular-nums">
-                {value}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-        ))}
-      </div>
-    </section>
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      {tiles.map(({ label, value, icon: Icon }) => (
+        <Card key={label} size="sm">
+          <CardHeader>
+            <CardDescription className="flex items-center gap-1.5">
+              <Icon className="size-4" />
+              {label}
+            </CardDescription>
+            <CardTitle className="text-2xl tabular-nums">{value}</CardTitle>
+          </CardHeader>
+        </Card>
+      ))}
+    </div>
   )
 }
 
@@ -217,9 +197,7 @@ function TrendsPanel({
   return (
     <section className="flex flex-col gap-3">
       {description && (
-        <p className="max-w-prose text-sm text-muted-foreground">
-          {description}
-        </p>
+        <p className="text-sm text-muted-foreground">{description}</p>
       )}
       {children}
     </section>
