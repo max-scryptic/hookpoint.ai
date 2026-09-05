@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { ArrowUpRightIcon } from "lucide-react"
 
+import { RetentionChart } from "@/components/retention-chart"
 import { RetentionComparisonChart } from "@/components/retention-comparison-chart"
 import { VideoThumbnail } from "@/components/video-thumbnail"
 import { buttonVariants } from "@/components/ui/button"
@@ -211,6 +212,60 @@ export function RetentionComparisonVideos({
     <div className="grid gap-3 lg:grid-cols-2">
       <VideoHeaderCard video={data.a} side="a" href={videoHrefs?.a} />
       <VideoHeaderCard video={data.b} side="b" href={videoHrefs?.b} />
+    </div>
+  )
+}
+
+function VideoRetentionCurve({
+  video,
+  side,
+}: {
+  video: ComparisonVideo
+  side: Side
+}) {
+  const headingId = `video-${side}-retention-heading`
+  const title = video.summary.title ?? "Untitled video"
+
+  return (
+    <section className="min-w-0 space-y-2" aria-labelledby={headingId}>
+      <div className="min-w-0">
+        <div className="flex items-center gap-1.5">
+          <SideDot side={side} />
+          <h2 id={headingId} className="text-sm font-medium">
+            {SIDE_META[side].name} retention
+          </h2>
+        </div>
+        <p
+          className="mt-0.5 truncate text-xs text-muted-foreground"
+          title={title}
+        >
+          {title}
+        </p>
+      </div>
+      <RetentionChart
+        points={video.curve}
+        durationSeconds={video.summary.durationSeconds}
+        color={SIDE_META[side].dot}
+        ariaLabel={`${SIDE_META[side].name} audience retention curve for ${title}`}
+      />
+    </section>
+  )
+}
+
+// The Retention tab keeps each video's real timeline and percentage axis intact
+// instead of normalizing both curves onto one plot. Matching columns let the
+// creator scan the shape of each curve while the labels and chart colors stay
+// tied to the shared video cards above the tabs. The columns stack on narrow
+// screens so neither graph becomes too small to inspect.
+export function RetentionComparisonCharts({
+  data,
+}: {
+  data: RetentionComparisonData
+}) {
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <VideoRetentionCurve video={data.a} side="a" />
+      <VideoRetentionCurve video={data.b} side="b" />
     </div>
   )
 }
