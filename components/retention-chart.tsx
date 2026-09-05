@@ -71,6 +71,8 @@ function formatTimestamp(totalSeconds: number): string {
 export function RetentionChart({
   points,
   durationSeconds,
+  color = "var(--chart-1)",
+  ariaLabel = "Audience retention curve",
   insights = [],
   selectedInsightId = null,
   hint = null,
@@ -79,6 +81,8 @@ export function RetentionChart({
 }: {
   points: RetentionPoint[]
   durationSeconds: number
+  color?: string
+  ariaLabel?: string
   insights?: RetentionChartInsight[]
   // Selection is controlled by the parent so it can share a single source of
   // truth with anything else that needs to know an insight is open (e.g. an
@@ -279,7 +283,7 @@ export function RetentionChart({
           viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
           className="block w-full"
           role="img"
-          aria-label="Audience retention curve"
+          aria-label={ariaLabel}
           onPointerMove={handleMove}
           onPointerLeave={() => {
             setHoverIndex(null)
@@ -289,8 +293,8 @@ export function RetentionChart({
         >
           <defs>
             <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--chart-1)" stopOpacity="0.35" />
-              <stop offset="100%" stopColor="var(--chart-1)" stopOpacity="0.02" />
+              <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+              <stop offset="100%" stopColor={color} stopOpacity="0.02" />
             </linearGradient>
             {/* Soft blur for the marker halo, so the hover/selection glow reads as
                 a gentle diffuse light rather than a hard-edged translucent disc. */}
@@ -378,7 +382,7 @@ export function RetentionChart({
           <path
             d={model.linePath}
             fill="none"
-            stroke="var(--chart-1)"
+            stroke={color}
             strokeWidth={2}
             strokeLinejoin="round"
             strokeLinecap="round"

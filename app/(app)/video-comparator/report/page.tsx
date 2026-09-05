@@ -5,7 +5,10 @@ import { ArrowLeftIcon } from "lucide-react"
 import { PackagingComparison } from "@/components/packaging-comparison"
 import { PaidFeatureCard } from "@/components/paid-feature-card"
 import { ScriptComparison } from "@/components/script-comparison"
-import { RetentionComparisonVideos } from "@/components/retention-comparison"
+import {
+  RetentionComparisonCharts,
+  RetentionComparisonVideos,
+} from "@/components/retention-comparison"
 import { VideoComparisonTabs } from "@/components/video-comparison-tabs"
 import { buttonVariants } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -129,10 +132,10 @@ async function loadActiveComparison(
   // Every read here is a stored read: the written head-to-heads come back as
   // JSON from the comparison row, and the packaging diff is derived from each
   // video's stored analysis. The script tab is the written report alone, so
-  // nothing is derived for it. The retention comparison is still loaded because
-  // the video cards above the tabs and the page heading are built from it, but
-  // it no longer has a tab of its own. Packaging is best-effort, since a failure
-  // or gap in it must never cost the user the rest of the report.
+  // nothing is derived for it. The retention comparison supplies the video
+  // cards above the tabs, the page heading, and both curves in the Retention tab.
+  // Packaging is best-effort, since a failure or gap in it must never cost the
+  // user the rest of the report.
   const [data, packaging, reports] = await Promise.all([
     getRetentionComparison(supabase, userId, sideA, sideB),
     getPackagingComparison(supabase, userId, sideA, sideB).catch((error) => {
@@ -317,8 +320,8 @@ export default async function Page({
               : "Comparison Report"}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            How these two videos&apos; packaging compares, and what each script
-            does differently.
+            Compare how these two videos retained viewers, how their packaging
+            stacks up, and what each script does differently.
           </p>
         </div>
 
@@ -326,6 +329,9 @@ export default async function Page({
           <>
             <RetentionComparisonVideos data={result.active.data} />
             <VideoComparisonTabs
+              retention={
+                <RetentionComparisonCharts data={result.active.data} />
+              }
               packaging={
                 <PackagingComparisonSection
                   packaging={result.active.packaging}

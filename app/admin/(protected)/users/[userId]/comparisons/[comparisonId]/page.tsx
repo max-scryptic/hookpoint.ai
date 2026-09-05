@@ -6,7 +6,10 @@ import { ArrowLeftIcon } from "lucide-react"
 
 import { AdminBreadcrumbLabel } from "@/components/admin/admin-breadcrumb-label"
 import { PackagingComparison } from "@/components/packaging-comparison"
-import { RetentionComparisonVideos } from "@/components/retention-comparison"
+import {
+  RetentionComparisonCharts,
+  RetentionComparisonVideos,
+} from "@/components/retention-comparison"
 import { ScriptComparison } from "@/components/script-comparison"
 import { VideoComparisonTabs } from "@/components/video-comparison-tabs"
 import { Card } from "@/components/ui/card"
@@ -76,8 +79,7 @@ export default async function AdminUserComparisonDetailPage({
   // the way they were generated. Packaging is best-effort, since a failure or a
   // gap in it must not cost the rest of the report. The script tab is the
   // written report alone, so nothing is derived for it. The retention
-  // comparison is still loaded for the video cards above the tabs, but it no
-  // longer has a tab of its own.
+  // comparison supplies the shared video cards and both curves in its tab.
   const [data, packaging, reports] = await Promise.all([
     getRetentionComparison(supabase, userId, comparison.a.id, comparison.b.id),
     getPackagingComparison(
@@ -122,8 +124,8 @@ export default async function AdminUserComparisonDetailPage({
           <h1 className="text-2xl font-semibold tracking-normal">{heading}</h1>
           <p className="text-sm text-muted-foreground">
             Compared {formatDate(comparison.createdAt)}. The report this user
-            sees: how the packaging stacks up, and what each script does
-            differently.
+            sees: how the videos retained viewers, how the packaging stacks up,
+            and what each script does differently.
           </p>
         </div>
       </div>
@@ -133,6 +135,9 @@ export default async function AdminUserComparisonDetailPage({
       )}
 
       <VideoComparisonTabs
+        retention={
+          data != null ? <RetentionComparisonCharts data={data} /> : undefined
+        }
         packaging={
           packaging != null ? (
             <PackagingComparison
