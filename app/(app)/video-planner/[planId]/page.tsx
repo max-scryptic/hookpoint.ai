@@ -102,7 +102,7 @@ export default async function Page({
             <h1 className="text-2xl font-semibold tracking-normal">{name}</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               {draft
-                ? "Add your titles, thumbnail options and footage, then review the video."
+                ? "Add your title, thumbnail and footage. Set up an A/B test if you have other packaging ideas."
                 : "How your title, thumbnail and hook line up, before you publish."}
             </p>
           </div>
@@ -118,10 +118,9 @@ export default async function Page({
           ) : (
             <PaidFeatureCard feature="Video planning">
               Any cut can be checked before it goes live: upload the footage
-              with the titles you are weighing up and the thumbnails, and the
-              plan tells you which title the video actually delivers on, how the
-              thumbnail holds up beside it, and what to change before you
-              publish.
+              with the title and thumbnail you plan to publish, add any A/B
+              packaging ideas you are weighing up, and the plan tells you how
+              the hook, title and thumbnail line up before you publish.
             </PaidFeatureCard>
           )
         ) : (

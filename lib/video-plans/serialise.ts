@@ -12,11 +12,16 @@ import {
   PLAN_HOOK_WINDOW_SECONDS,
 } from "@/lib/video-plans/config"
 import type { VideoPlanPackaging } from "@/lib/video-plans/packaging-plan"
-import type { VideoPlan, VideoPlanStatus } from "@/lib/video-plans/video-plans"
+import type {
+  VideoPlan,
+  VideoPlanPackagingMode,
+  VideoPlanStatus,
+} from "@/lib/video-plans/video-plans"
 
 export interface SerialisedVideoPlan {
   id: string
   titles: string[]
+  packagingMode: VideoPlanPackagingMode
   status: VideoPlanStatus
   failureReason: string | null
   // Whether a thumbnail has been stored, which is all the client needs to know:
@@ -34,6 +39,7 @@ export function serialiseVideoPlan(plan: VideoPlan): SerialisedVideoPlan {
   return {
     id: plan.id,
     titles: plan.titles,
+    packagingMode: plan.packagingMode,
     status: plan.status,
     failureReason: plan.failureReason,
     hasThumbnail:
