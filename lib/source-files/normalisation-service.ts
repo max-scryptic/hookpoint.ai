@@ -310,6 +310,14 @@ export async function applyNormalisationCallback(
   if (callback.outcome === "progress") return
   if (sourceFile.normalisationStatus === "ready") return
 
+  if (sourceFile.videoPlanId) {
+    await updateSourceFile(admin, sourceFile.userId, sourceFile.id, {
+      normalisationStatus: "skipped",
+      normalisationError: null,
+    })
+    return
+  }
+
   if (callback.outcome === "error") {
     await updateSourceFile(admin, sourceFile.userId, sourceFile.id, {
       normalisationStatus: "failed",

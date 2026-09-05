@@ -49,6 +49,31 @@ export type GenerateOutcome =
   | { status: "processing" }
   | { status: "failed"; message: string }
 
+type PackagingGenerationPhase =
+  | "claim"
+  | "thumbnail"
+  | "source"
+  | "transcript"
+  | "transcript_save"
+  | "packaging"
+  | "report_save"
+
+const PACKAGING_FAILURE_MESSAGES: Record<PackagingGenerationPhase, string> = {
+  claim: "We couldn't start reading this plan. Try again in a moment.",
+  thumbnail:
+    "We couldn't read the thumbnail for this plan. Try re-uploading it.",
+  source:
+    "We couldn't read the uploaded footage for this plan. Try re-uploading it.",
+  transcript:
+    "We couldn't transcribe the uploaded footage for this plan. Try again in a moment.",
+  transcript_save:
+    "We transcribed the footage but couldn't save the transcript. Try again in a moment.",
+  packaging:
+    "We couldn't generate the packaging read this time. Try again in a moment.",
+  report_save:
+    "We generated the packaging read but couldn't save it. Try again in a moment.",
+}
+
 // Reads one of the plan's thumbnails back out of storage as a data URI, which
 // is how the packaging call sends it (see GeneratePackagingPlanInput). The
 // provider interface exposes signed reads rather than raw bytes, so this
@@ -128,10 +153,12 @@ export async function generatePlanPackaging(
     )
   }
 
-  const claimed = await claimPackagingPlan(supabase, userId, planId)
-  if (!claimed) return { status: "processing" }
-
+  let claimed = false
+  let phase: PackagingGenerationPhase = "claim"
   try {
+    claimed = await claimPackagingPlan(supabase, userId, planId)
+    if (!claimed) return { status: "processing" }
+
     const thumbnailStorage = getThumbnailStorageProvider()
     const storedThumbnails = thumbnailSources(plan)
     const thumbnails =
@@ -140,21 +167,21 @@ export async function generatePlanPackaging(
         : plan.packagingMode === "title-and-thumbnail"
           ? storedThumbnails.slice(0, plan.titles.length)
           : storedThumbnails
-    const [thumbnailDataUris, sourceUrl] = await Promise.all([
-      Promise.all(
-        thumbnails.map((thumbnail) =>
-          readThumbnailDataUri(
-            thumbnailStorage,
-            thumbnail.path,
-            thumbnail.mimeType,
-          ),
+    phase = "thumbnail"
+    const thumbnailDataUris = await Promise.all(
+      thumbnails.map((thumbnail) =>
+        readThumbnailDataUri(
+          thumbnailStorage,
+          thumbnail.path,
+          thumbnail.mimeType,
         ),
       ),
-      sourceStorage.createSignedReadUrl(
-        source.storagePath,
-        SIGNED_READ_EXPIRY_SECONDS,
-      ),
-    ])
+    )
+    phase = "source"
+    const sourceUrl = await sourceStorage.createSignedReadUrl(
+      source.storagePath,
+      SIGNED_READ_EXPIRY_SECONDS,
+    )
 
     // The whole script, not just the opening. Packaging reads the first thirty
     // seconds of it below; the rest is stored because retention prediction is
@@ -167,14 +194,17 @@ export async function generatePlanPackaging(
     // for: the retry below finds it and goes straight to packaging.
     let cues = plan.transcript
     if (!cues) {
+      phase = "transcript"
       const transcribed = await transcribeFootage(sourceUrl, {
         durationSeconds: sourceFile.uploadedDurationSeconds,
         logContext: { userId },
       })
       cues = transcribed.cues
+      phase = "transcript_save"
       await updateVideoPlan(supabase, userId, planId, { transcript: cues })
     }
 
+    phase = "packaging"
     const packaging = await generateVideoPlanPackaging(
       {
         titles: plan.titles,
@@ -187,6 +217,7 @@ export async function generatePlanPackaging(
       { userId },
     )
 
+    phase = "report_save"
     const updated = await updateVideoPlan(supabase, userId, planId, {
       // Model-written prose rendered verbatim on the page, so it is scrubbed of
       // dashes on the way in. See the copy guardrail in lib/copy-guardrails.ts.
@@ -197,15 +228,20 @@ export async function generatePlanPackaging(
     await releasePackagingPlanClaim(supabase, userId, planId, "done")
     return { status: "ready", plan: updated }
   } catch (error) {
-    console.error("Failed to generate video plan packaging", error)
-    await releasePackagingPlanClaim(supabase, userId, planId, "failed").catch(
-      () => {},
-    )
+    console.error("Failed to generate video plan packaging", {
+      phase,
+      error,
+    })
+    if (claimed) {
+      await releasePackagingPlanClaim(supabase, userId, planId, "failed").catch(
+        () => {},
+      )
+    }
     return await fail(
       supabase,
       userId,
       planId,
-      "We couldn't read your packaging this time. Try again in a moment.",
+      PACKAGING_FAILURE_MESSAGES[phase],
     )
   }
 }
