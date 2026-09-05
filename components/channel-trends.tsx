@@ -184,26 +184,6 @@ function BuildingCard() {
   )
 }
 
-// One tab's body. The tab bar already names and illustrates the section, so the
-// panel opens with the standfirst that would otherwise sit under a heading,
-// then the cards.
-function TrendsPanel({
-  description,
-  children,
-}: {
-  description?: string
-  children: React.ReactNode
-}) {
-  return (
-    <section className="flex flex-col gap-3">
-      {description && (
-        <p className="text-sm text-muted-foreground">{description}</p>
-      )}
-      {children}
-    </section>
-  )
-}
-
 export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
   const showTrends = data.stage === "established"
   const hasRetention = retentionPanelHasContent(data)
@@ -218,25 +198,13 @@ export function ChannelTrends({ data }: { data: ChannelTrendsData }) {
           <ChannelSnapshotCards snapshot={data.snapshot} />
           <ChannelTrendsTabs
             retention={
-              hasRetention ? (
-                <TrendsPanel description="How much of your videos gets watched, from your most-viewed uploads to your least-viewed.">
-                  <RetentionPanel data={data} />
-                </TrendsPanel>
-              ) : undefined
+              hasRetention ? <RetentionPanel data={data} /> : undefined
             }
             packaging={
-              hasPackaging ? (
-                <TrendsPanel description="What your packaging promises, surface by surface: your hooks, your titles, your thumbnails, and how tightly the three of them agree.">
-                  <PackagingPanel data={data} />
-                </TrendsPanel>
-              ) : undefined
+              hasPackaging ? <PackagingPanel data={data} /> : undefined
             }
             script={
-              hasScript ? (
-                <TrendsPanel description="What your videos actually say, measured against how much of them gets watched.">
-                  <ScriptPanel data={data} />
-                </TrendsPanel>
-              ) : undefined
+              hasScript ? <ScriptPanel data={data} /> : undefined
             }
           />
         </>
