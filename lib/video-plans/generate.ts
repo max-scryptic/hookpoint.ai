@@ -49,20 +49,18 @@ export type GenerateOutcome =
   | { status: "processing" }
   | { status: "failed"; message: string }
 
-// Reads the plan's thumbnail back out of storage as a data URI, which is how
-// the packaging call sends it (see GeneratePackagingPlanInput). The provider
-// interface exposes signed reads rather than raw bytes, so this fetches its own
-// signed URL - one extra hop against our own storage, and no key handed out.
+// Reads one of the plan's thumbnails back out of storage as a data URI, which
+// is how the packaging call sends it (see GeneratePackagingPlanInput). The
+// provider interface exposes signed reads rather than raw bytes, so this
+// fetches its own signed URL - one extra hop against our own storage, and no
+// key handed out.
 async function readThumbnailDataUri(
   storage: StorageProvider,
-  plan: VideoPlan,
+  path: string,
+  mimeType: string | null,
 ): Promise<string> {
-  if (!plan.thumbnailStoragePath) {
-    throw new Error("The plan has no thumbnail to read")
-  }
-
   const url = await storage.createSignedReadUrl(
-    plan.thumbnailStoragePath,
+    path,
     SIGNED_READ_EXPIRY_SECONDS,
   )
   const response = await fetch(url, { cache: "no-store" })
@@ -71,8 +69,29 @@ async function readThumbnailDataUri(
   }
 
   const buffer = Buffer.from(await response.arrayBuffer())
-  const mimeType = plan.thumbnailMimeType ?? "image/jpeg"
-  return `data:${mimeType};base64,${buffer.toString("base64")}`
+  return `data:${mimeType ?? "image/jpeg"};base64,${buffer.toString("base64")}`
+}
+
+function thumbnailSources(
+  plan: VideoPlan,
+): Array<{ path: string; mimeType: string | null }> {
+  const sources = plan.thumbnailStoragePaths
+    .map((path, index) =>
+      path
+        ? {
+            path,
+            mimeType: plan.thumbnailMimeTypes[index] ?? plan.thumbnailMimeType,
+          }
+        : null,
+    )
+    .filter((source): source is { path: string; mimeType: string | null } =>
+      Boolean(source),
+    )
+
+  if (sources.length > 0) return sources
+  return plan.thumbnailStoragePath
+    ? [{ path: plan.thumbnailStoragePath, mimeType: plan.thumbnailMimeType }]
+    : []
 }
 
 // Generates and stores the packaging read for a plan, unless it already has one
@@ -113,8 +132,24 @@ export async function generatePlanPackaging(
   if (!claimed) return { status: "processing" }
 
   try {
-    const [thumbnailDataUri, sourceUrl] = await Promise.all([
-      readThumbnailDataUri(getThumbnailStorageProvider(), plan),
+    const thumbnailStorage = getThumbnailStorageProvider()
+    const storedThumbnails = thumbnailSources(plan)
+    const thumbnails =
+      plan.packagingMode === "single" || plan.packagingMode === "title"
+        ? storedThumbnails.slice(0, 1)
+        : plan.packagingMode === "title-and-thumbnail"
+          ? storedThumbnails.slice(0, plan.titles.length)
+          : storedThumbnails
+    const [thumbnailDataUris, sourceUrl] = await Promise.all([
+      Promise.all(
+        thumbnails.map((thumbnail) =>
+          readThumbnailDataUri(
+            thumbnailStorage,
+            thumbnail.path,
+            thumbnail.mimeType,
+          ),
+        ),
+      ),
       sourceStorage.createSignedReadUrl(
         source.storagePath,
         SIGNED_READ_EXPIRY_SECONDS,
@@ -143,7 +178,8 @@ export async function generatePlanPackaging(
     const packaging = await generateVideoPlanPackaging(
       {
         titles: plan.titles,
-        thumbnailDataUri,
+        packagingMode: plan.packagingMode,
+        thumbnailDataUris,
         // Sliced with the same helper the published report uses, so "the hook"
         // means the same span of speech on both.
         hookTranscript: transcriptForSegment(cues, 0, PLAN_HOOK_WINDOW_SECONDS),

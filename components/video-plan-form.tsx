@@ -9,7 +9,6 @@ import {
   PlusIcon,
   TypeIcon,
   UploadIcon,
-  XIcon,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -77,6 +76,8 @@ const AB_TEST_OPTIONS: Array<{
 ]
 
 function initialAbTestMode(plan: SerialisedVideoPlan): AbTestMode | null {
+  if (plan.packagingMode !== "single") return plan.packagingMode
+
   const titleOptions = plan.titles.filter((title) => title.trim()).length
   const thumbnailOptions = plan.thumbnailSlots.filter(Boolean).length
 
@@ -157,6 +158,7 @@ export function VideoPlanForm({
   >(Array.from({ length: MAX_THUMBNAILS }, () => null))
   const [thumbnailBusySlot, setThumbnailBusySlot] = useState<number | null>(null)
   const [savingTitles, setSavingTitles] = useState(false)
+  const [savingPackagingMode, setSavingPackagingMode] = useState(false)
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -166,22 +168,46 @@ export function VideoPlanForm({
   // What the server already holds, so a blur that changed nothing costs no
   // round trip. Seeded with the titles this page was rendered from.
   const savedTitles = useRef(JSON.stringify(plan.titles))
+  const savedPackagingMode = useRef(plan.packagingMode)
   // The duration read off the file in this sitting, which the completion
   // endpoint wants. Only meaningful between picking a file and completing it.
   const pendingDuration = useRef<number | null>(null)
 
   const uploading = footagePhase.phase !== "idle"
-  const busy = uploading || thumbnailBusySlot != null || starting
+  const busy =
+    uploading || thumbnailBusySlot != null || savingPackagingMode || starting
   const activeTitles =
     abTestMode === "thumbnail" ? titles.slice(0, 1) : titles
   const filledTitles = activeTitles.map((title) => title.trim()).filter(Boolean)
-  const hasThumbnail = thumbnailSlots.some(Boolean)
+  const hasThumbnail = thumbnailSlots[0] === true
+  const firstTwoTitlesReady = [0, 1].every((index) =>
+    Boolean(activeTitles[index]?.trim()),
+  )
+  const firstTwoThumbnailsReady = [0, 1].every(
+    (index) => thumbnailSlots[index],
+  )
+  const firstTwoPairsReady = [0, 1].every(
+    (index) => Boolean(titles[index]?.trim()) && thumbnailSlots[index],
+  )
+  const optionalPairsComplete = Array.from(
+    { length: Math.min(MAX_TITLES, MAX_THUMBNAILS) - 2 },
+    (_, offset) => offset + 2,
+  ).every((index) => Boolean(titles[index]?.trim()) === thumbnailSlots[index])
+  const abTestReady =
+    abTestMode == null ||
+    (abTestMode === "title" && firstTwoTitlesReady) ||
+    (abTestMode === "thumbnail" && firstTwoThumbnailsReady) ||
+    (abTestMode === "title-and-thumbnail" &&
+      firstTwoPairsReady &&
+      optionalPairsComplete)
   const canStart =
     !busy &&
     footage?.ready === true &&
     hasThumbnail &&
     filledTitles.length > 0 &&
-    !savingTitles
+    abTestReady &&
+    !savingTitles &&
+    !savingPackagingMode
 
   // Leaving mid-transfer would abort the upload and leave the plan without its
   // footage. Only guards while bytes are actually moving: everything else here
@@ -258,14 +284,9 @@ export function VideoPlanForm({
     )
   }
 
-  function addTitle() {
-    setTitles((previous) =>
-      previous.length >= MAX_TITLES ? previous : [...previous, ""],
-    )
-  }
-
   function selectAbTestMode(mode: AbTestMode) {
     setAbTestMode(mode)
+    void savePackagingMode(mode)
 
     if (mode === "thumbnail") {
       const next = [titles[0] ?? ""]
@@ -282,13 +303,27 @@ export function VideoPlanForm({
     )
   }
 
-  // Removing a title is the one edit with no blur behind it, so it saves on the
-  // spot rather than waiting for the next one.
-  function removeTitleAt(index: number) {
-    if (titles.length <= 1) return
-    const next = titles.filter((_, i) => i !== index)
-    setTitles(next)
-    void saveTitles(next)
+  async function savePackagingMode(mode: AbTestMode) {
+    if (mode === savedPackagingMode.current) return
+
+    setSavingPackagingMode(true)
+    try {
+      const response = await fetch(`/api/video-plans/${plan.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ packagingMode: mode }),
+      })
+      if (!response.ok) {
+        setError(await messageFrom(response, "Could not save the A/B test."))
+        return
+      }
+      savedPackagingMode.current = mode
+      setError(null)
+    } catch {
+      setError("Could not save the A/B test.")
+    } finally {
+      setSavingPackagingMode(false)
+    }
   }
 
   async function onPickVideo(event: React.ChangeEvent<HTMLInputElement>) {
@@ -485,6 +520,96 @@ export function VideoPlanForm({
     thumbnailInputRef.current?.click()
   }
 
+  function renderTitleField(index: number, label: string) {
+    const required = abTestMode ? index < 2 : index === 0
+    return (
+      <div key={`title-${index}`} className="space-y-2">
+        <Label htmlFor={`title-${index}`}>
+          {label}
+          {required ? (
+            <span className="text-muted-foreground"> (required)</span>
+          ) : null}
+        </Label>
+        <Input
+          id={`title-${index}`}
+          value={titles[index] ?? ""}
+          maxLength={TITLE_MAX_LENGTH}
+          disabled={busy}
+          placeholder={
+            abTestMode === "title" || abTestMode === "title-and-thumbnail"
+              ? `Add title ${index + 1}`
+              : "Add your title"
+          }
+          onChange={(event) => setTitleAt(index, event.target.value)}
+          onBlur={() => void saveTitles(activeTitles)}
+        />
+      </div>
+    )
+  }
+
+  function renderThumbnailSlot(index: number, label: string) {
+    const preview = thumbnailPreviews[index]
+    const uploaded = thumbnailSlots[index]
+    const busySlot = thumbnailBusySlot === index
+    const required = abTestMode ? index < 2 : index === 0
+
+    return (
+      <div key={`thumbnail-${index}`} className="space-y-2">
+        <Label>
+          {label}
+          {required ? (
+            <span className="text-muted-foreground"> (required)</span>
+          ) : null}
+        </Label>
+        <div className="overflow-hidden rounded-lg border bg-muted/25">
+          {preview ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={preview}
+              alt=""
+              className="aspect-video w-full object-cover"
+            />
+          ) : uploaded ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={`/api/video-plans/${plan.id}/thumbnail?slot=${index}`}
+              alt=""
+              className="aspect-video w-full object-cover"
+            />
+          ) : (
+            <button
+              type="button"
+              disabled={busy}
+              aria-label={`Add ${label.toLowerCase()}`}
+              onClick={() => chooseThumbnail(index)}
+              className="flex aspect-video w-full flex-col items-center justify-center gap-2 border border-dashed border-transparent text-sm text-muted-foreground transition-colors hover:bg-muted/60 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
+            >
+              <ImageIcon className="size-5" />
+              Add thumbnail
+            </button>
+          )}
+        </div>
+        {preview || uploaded ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={busy}
+            aria-label={`Choose another ${label.toLowerCase()}`}
+            onClick={() => chooseThumbnail(index)}
+          >
+            {busySlot ? (
+              <Loader2Icon className="size-4 animate-spin" />
+            ) : (
+              <UploadIcon className="size-4" />
+            )}
+            {busySlot ? "Uploading" : "Choose another"}
+          </Button>
+        ) : null}
+      </div>
+    )
+  }
+
   // Everything is already on the plan by this point, so starting is: save any
   // title still sitting unblurred in the box, then ask for the read. The page
   // re-renders from the server afterwards, which is what swaps this form for
@@ -598,7 +723,7 @@ export function VideoPlanForm({
                   <p className="text-sm font-medium">
                     Option {String.fromCharCode(65 + index)}
                   </p>
-                  {renderTitleField(index, `Title ${index + 1}`, true)}
+                  {renderTitleField(index, `Title ${index + 1}`)}
                   {renderThumbnailSlot(index, `Thumbnail ${index + 1}`)}
                 </div>
               ))}
@@ -613,7 +738,6 @@ export function VideoPlanForm({
                   renderTitleField(
                     index,
                     abTestMode === "title" ? `Title ${index + 1}` : "Title",
-                    abTestMode === "title",
                   ),
                 )}
               </div>
@@ -744,11 +868,21 @@ export function VideoPlanForm({
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 
-        {!error && !canStart && !busy && !savingTitles && (
-          <p className="text-sm text-muted-foreground">
-            {missingPieceMessage(footage, hasThumbnail, filledTitles.length)}
-          </p>
-        )}
+        {!error &&
+          !canStart &&
+          !busy &&
+          !savingTitles &&
+          !savingPackagingMode && (
+            <p className="text-sm text-muted-foreground">
+              {missingPieceMessage({
+                footage,
+                hasThumbnail,
+                titleCount: filledTitles.length,
+                abTestMode,
+                abTestReady,
+              })}
+            </p>
+          )}
       </div>
     </div>
   )
@@ -757,13 +891,30 @@ export function VideoPlanForm({
 // What is still needed, checked in the order the page asks for it. Says one
 // thing at a time: a creator who has just landed on an empty plan does not need
 // all three read back to them.
-function missingPieceMessage(
-  footage: Footage | null,
-  hasThumbnail: boolean,
-  titleCount: number,
-): string {
+function missingPieceMessage({
+  footage,
+  hasThumbnail,
+  titleCount,
+  abTestMode,
+  abTestReady,
+}: {
+  footage: Footage | null
+  hasThumbnail: boolean
+  titleCount: number
+  abTestMode: AbTestMode | null
+  abTestReady: boolean
+}): string {
   if (titleCount === 0) return "Add at least one title idea to start the plan."
   if (!hasThumbnail) return "Add your thumbnail to start the plan."
+  if (!abTestReady) {
+    if (abTestMode === "title") {
+      return "Add at least two title options to run a title A/B test."
+    }
+    if (abTestMode === "thumbnail") {
+      return "Add at least two thumbnail options to run a thumbnail A/B test."
+    }
+    return "Complete the required title and thumbnail combinations to run an A/B test."
+  }
   if (!footage?.ready) return "Upload your video to start the plan."
   return "Everything is saved. You can start the plan whenever you are ready."
 }

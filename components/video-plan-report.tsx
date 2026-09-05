@@ -20,6 +20,7 @@ import type { SerialisedVideoPlan } from "@/lib/video-plans/serialise"
 import type {
   VideoPlanPackaging,
   VideoPlanSurfaceRead,
+  VideoPlanThumbnailRead,
   VideoPlanTitleRead,
 } from "@/lib/video-plans/packaging-plan"
 
@@ -149,6 +150,11 @@ function PackagingReport({
   packaging: VideoPlanPackaging
   hookTranscript: string | null
 }) {
+  const thumbnailReads =
+    packaging.thumbnails && packaging.thumbnails.length > 0
+      ? packaging.thumbnails
+      : [{ index: 0, ...packaging.thumbnail }]
+
   return (
     <div className="flex flex-col gap-4">
       <div className="rounded-xl border bg-card p-4">
@@ -166,7 +172,7 @@ function PackagingReport({
           </TabsTrigger>
           <TabsTrigger value="thumbnail">
             <ImageIcon className="text-muted-foreground" />
-            Thumbnail
+            {thumbnailReads.length > 1 ? "Thumbnails" : "Thumbnail"}
           </TabsTrigger>
           <TabsTrigger value="hook">
             <HookIcon className="text-muted-foreground" />
@@ -192,22 +198,25 @@ function PackagingReport({
         </TabsContent>
 
         <TabsContent value="thumbnail" className="w-full">
-          <SurfaceCard
-            label="Thumbnail"
-            read={packaging.thumbnail}
-            preview={
-              <div className="shrink-0">
-                {/* Signed per request by the thumbnail route, so there is no
-                    stable URL for next/image to optimise. */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={`/api/video-plans/${planId}/thumbnail`}
-                  alt="Your thumbnail"
-                  className="aspect-video w-48 rounded-[var(--radius-thumbnail)] border object-cover"
-                />
-              </div>
-            }
-          />
+          <div className="flex flex-col gap-3">
+            {thumbnailReads.map((thumbnail) => (
+              <ThumbnailCard
+                key={thumbnail.index}
+                planId={planId}
+                read={thumbnail}
+                recommended={
+                  thumbnail.index ===
+                  (packaging.recommendedThumbnailIndex ?? 0)
+                }
+                reason={
+                  thumbnail.index ===
+                  (packaging.recommendedThumbnailIndex ?? 0)
+                    ? (packaging.recommendedThumbnailReason ?? null)
+                    : null
+                }
+              />
+            ))}
+          </div>
         </TabsContent>
 
         <TabsContent value="hook" className="w-full">
@@ -219,6 +228,40 @@ function PackagingReport({
         </TabsContent>
       </Tabs>
     </div>
+  )
+}
+
+function ThumbnailCard({
+  planId,
+  read,
+  recommended,
+  reason,
+}: {
+  planId: string
+  read: VideoPlanThumbnailRead
+  recommended: boolean
+  reason: string | null
+}) {
+  const label = `Thumbnail ${read.index + 1}`
+  return (
+    <SurfaceCard
+      label={label}
+      read={read}
+      recommended={recommended}
+      reason={reason}
+      preview={
+        <div className="shrink-0">
+          {/* Signed per request by the thumbnail route, so there is no stable
+              URL for next/image to optimise. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`/api/video-plans/${planId}/thumbnail?slot=${read.index}`}
+            alt={label}
+            className="aspect-video w-48 rounded-[var(--radius-thumbnail)] border object-cover"
+          />
+        </div>
+      }
+    />
   )
 }
 
@@ -287,6 +330,8 @@ function SurfaceCard({
   read,
   preview,
   quote,
+  recommended = false,
+  reason,
 }: {
   label: string
   read: VideoPlanSurfaceRead
@@ -295,6 +340,8 @@ function SurfaceCard({
   // hover: on a plan it is the one thing the creator has not seen written down,
   // because we transcribed it from their own footage.
   quote?: string | null
+  recommended?: boolean
+  reason?: string | null
 }) {
   return (
     <div className="flex w-full flex-col gap-4 rounded-xl border bg-card p-4">
@@ -305,12 +352,24 @@ function SurfaceCard({
             <span className="w-fit rounded-md border border-blue-500/40 bg-blue-500/10 px-2 py-0.5 text-sm font-semibold text-blue-700 dark:border-blue-400/40 dark:bg-blue-400/10 dark:text-blue-300">
               {label}
             </span>
+            {recommended && (
+              <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                <CheckCircle2Icon className="size-3" />
+                Recommended
+              </span>
+            )}
             {read.summary && (
               <span className="text-sm text-muted-foreground">
                 {cleanCopy(read.summary)}
               </span>
             )}
           </div>
+
+          {reason && (
+            <p className="mt-3 text-sm text-muted-foreground">
+              {cleanCopy(reason)}
+            </p>
+          )}
 
           {quote && (
             <p className="mt-3 flex gap-2 text-sm italic text-muted-foreground">

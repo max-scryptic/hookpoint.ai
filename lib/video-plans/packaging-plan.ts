@@ -57,6 +57,10 @@ export interface VideoPlanSurfaceRead {
   examples: TipExample[]
 }
 
+export interface VideoPlanThumbnailRead extends VideoPlanSurfaceRead {
+  index: number
+}
+
 export interface VideoPlanPackaging {
   // Two short sentences on how the packaging holds together as a whole.
   overall: string
@@ -68,6 +72,9 @@ export interface VideoPlanPackaging {
   // Why that one, in a sentence.
   recommendedTitleReason: string
   thumbnail: VideoPlanSurfaceRead
+  thumbnails?: VideoPlanThumbnailRead[]
+  recommendedThumbnailIndex?: number
+  recommendedThumbnailReason?: string
   hook: VideoPlanSurfaceRead
   model: string
   generatedAt: string
@@ -115,6 +122,9 @@ const PACKAGING_PLAN_SCHEMA = {
     "recommendedTitleIndex",
     "recommendedTitleReason",
     "thumbnail",
+    "thumbnails",
+    "recommendedThumbnailIndex",
+    "recommendedThumbnailReason",
     "hook",
   ],
   properties: {
@@ -123,6 +133,26 @@ const PACKAGING_PLAN_SCHEMA = {
     recommendedTitleIndex: { type: "integer" },
     recommendedTitleReason: { type: "string" },
     thumbnail: SURFACE_SCHEMA,
+    thumbnails: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "index",
+          "summary",
+          "whatWorks",
+          "whatToChange",
+          "examples",
+        ],
+        properties: {
+          index: { type: "integer" },
+          ...SURFACE_SCHEMA.properties,
+        },
+      },
+    },
+    recommendedThumbnailIndex: { type: "integer" },
+    recommendedThumbnailReason: { type: "string" },
     hook: SURFACE_SCHEMA,
   },
 } as const
@@ -148,6 +178,9 @@ interface ModelOutput {
   recommendedTitleIndex: number
   recommendedTitleReason: string
   thumbnail: ModelSurfaceOutput
+  thumbnails: Array<ModelSurfaceOutput & { index: number }>
+  recommendedThumbnailIndex: number
+  recommendedThumbnailReason: string
   hook: ModelSurfaceOutput
 }
 
@@ -176,6 +209,14 @@ function isModelOutput(value: unknown): value is ModelOutput {
         typeof (title as ModelTitleOutput).alignmentScore === "number",
     ) &&
     isSurfaceOutput(candidate.thumbnail) &&
+    Array.isArray(candidate.thumbnails) &&
+    candidate.thumbnails.every(
+      (thumbnail) =>
+        isSurfaceOutput(thumbnail) &&
+        typeof (thumbnail as { index?: unknown }).index === "number",
+    ) &&
+    typeof candidate.recommendedThumbnailIndex === "number" &&
+    typeof candidate.recommendedThumbnailReason === "string" &&
     isSurfaceOutput(candidate.hook)
   )
 }
@@ -248,11 +289,16 @@ function extractOutputText(response: {
 
 export interface GeneratePackagingPlanInput {
   titles: string[]
-  // The thumbnail as a data URI. The image lives in a private bucket, so it is
-  // sent inline rather than as a URL: a signed URL would have to be reachable
-  // by OpenAI's fetcher, and handing a third party a live key to our storage to
+  packagingMode:
+    | "single"
+    | "title"
+    | "thumbnail"
+    | "title-and-thumbnail"
+  // The thumbnails as data URIs. The images live in a private bucket, so they
+  // are sent inline rather than as URLs: signed URLs would have to be reachable
+  // by OpenAI's fetcher, and handing a third party live keys to our storage to
   // save a base64 encode is a poor trade.
-  thumbnailDataUri: string
+  thumbnailDataUris: string[]
   // The spoken opening, transcribed from the footage. Empty when the opening
   // had no speech in it, which the prompt is told to work around rather than
   // invent around.
@@ -267,6 +313,9 @@ export async function generateVideoPlanPackaging(
 ): Promise<VideoPlanPackaging> {
   if (input.titles.length === 0) {
     throw new Error("A video plan needs at least one title to review")
+  }
+  if (input.thumbnailDataUris.length === 0) {
+    throw new Error("A video plan needs at least one thumbnail to review")
   }
 
   const apiKey = process.env.OPENAI_API_KEY
@@ -290,9 +339,9 @@ export async function generateVideoPlanPackaging(
     },
     body: JSON.stringify({
       model,
-      // Up to three title reads plus two surface reads, each carrying three
-      // worked examples alongside its own prose.
-      max_output_tokens: 8_000,
+      // Up to three title reads, three thumbnail reads and the hook, each
+      // carrying worked examples alongside its own prose.
+      max_output_tokens: 10_000,
       input: [
         {
           role: "developer",
@@ -304,11 +353,22 @@ export async function generateVideoPlanPackaging(
             {
               type: "input_text",
               text: JSON.stringify({
+                packagingMode: input.packagingMode,
                 titles: input.titles,
+                thumbnailOptions: input.thumbnailDataUris.map((_, index) => ({
+                  index,
+                  label: `Thumbnail ${index + 1}`,
+                })),
                 hookTranscript: input.hookTranscript,
               }),
             },
-            { type: "input_image", image_url: input.thumbnailDataUri },
+            ...input.thumbnailDataUris.flatMap((imageUrl, index) => [
+              {
+                type: "input_text" as const,
+                text: `Thumbnail ${index + 1}`,
+              },
+              { type: "input_image" as const, image_url: imageUrl },
+            ]),
           ],
         },
       ],
@@ -354,6 +414,18 @@ export async function generateVideoPlanPackaging(
   }
 
   const titles = alignTitleReads(input.titles, parsed.titles)
+  const thumbnails = parsed.thumbnails
+    .filter((thumbnail) => Number.isInteger(thumbnail.index))
+    .filter((thumbnail) => thumbnail.index >= 0)
+    .filter((thumbnail) => thumbnail.index < input.thumbnailDataUris.length)
+    .map((thumbnail) => ({
+      index: thumbnail.index,
+      ...toSurfaceRead(thumbnail),
+    }))
+  const recommendedThumbnailIndex = clampRecommendedIndex(
+    parsed.recommendedThumbnailIndex,
+    input.thumbnailDataUris.length,
+  )
 
   return {
     overall: parsed.overall,
@@ -363,7 +435,13 @@ export async function generateVideoPlanPackaging(
       titles.length,
     ),
     recommendedTitleReason: parsed.recommendedTitleReason,
-    thumbnail: toSurfaceRead(parsed.thumbnail),
+    thumbnail:
+      thumbnails.find(
+        (thumbnail) => thumbnail.index === recommendedThumbnailIndex,
+      ) ?? toSurfaceRead(parsed.thumbnail),
+    thumbnails,
+    recommendedThumbnailIndex,
+    recommendedThumbnailReason: parsed.recommendedThumbnailReason,
     hook: toSurfaceRead(parsed.hook),
     model,
     generatedAt: new Date().toISOString(),

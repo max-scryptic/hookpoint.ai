@@ -14,11 +14,28 @@ import { MAX_THUMBNAILS } from "@/lib/video-plans/config"
 import type { VideoPlanPackaging } from "@/lib/video-plans/packaging-plan"
 
 export type VideoPlanStatus = "draft" | "processing" | "ready" | "failed"
+export type VideoPlanPackagingMode =
+  | "single"
+  | "title"
+  | "thumbnail"
+  | "title-and-thumbnail"
+
+export function isVideoPlanPackagingMode(
+  value: unknown,
+): value is VideoPlanPackagingMode {
+  return (
+    value === "single" ||
+    value === "title" ||
+    value === "thumbnail" ||
+    value === "title-and-thumbnail"
+  )
+}
 
 export interface VideoPlan {
   id: string
   userId: string
   titles: string[]
+  packagingMode: VideoPlanPackagingMode
   thumbnailStoragePath: string | null
   thumbnailMimeType: string | null
   thumbnailSizeBytes: number | null
@@ -39,6 +56,7 @@ interface VideoPlanRow {
   id: string
   user_id: string
   titles: string[] | null
+  packaging_mode?: VideoPlanPackagingMode | null
   thumbnail_storage_path: string | null
   thumbnail_mime_type: string | null
   thumbnail_size_bytes: number | null
@@ -54,7 +72,7 @@ interface VideoPlanRow {
 }
 
 const COLUMNS =
-  "id, user_id, titles, thumbnail_storage_path, thumbnail_mime_type, thumbnail_size_bytes, thumbnail_storage_paths, thumbnail_mime_types, thumbnail_size_bytes_list, status, failure_reason, transcript, packaging_plan, created_at, updated_at"
+  "id, user_id, titles, packaging_mode, thumbnail_storage_path, thumbnail_mime_type, thumbnail_size_bytes, thumbnail_storage_paths, thumbnail_mime_types, thumbnail_size_bytes_list, status, failure_reason, transcript, packaging_plan, created_at, updated_at"
 
 function normaliseStringSlots(
   values: Array<string | null> | null | undefined,
@@ -97,6 +115,7 @@ export function mapVideoPlanRow(row: VideoPlanRow): VideoPlan {
     id: row.id,
     userId: row.user_id,
     titles: row.titles ?? [],
+    packagingMode: row.packaging_mode ?? "single",
     thumbnailStoragePath: primaryStoragePath,
     thumbnailMimeType:
       primaryIndex >= 0
@@ -181,6 +200,7 @@ export async function listVideoPlans(
 
 export interface UpdateVideoPlanInput {
   titles?: string[]
+  packagingMode?: VideoPlanPackagingMode
   thumbnailStoragePath?: string | null
   thumbnailMimeType?: string | null
   thumbnailSizeBytes?: number | null
@@ -196,6 +216,7 @@ export interface UpdateVideoPlanInput {
 function toRow(input: UpdateVideoPlanInput): Record<string, unknown> {
   const row: Record<string, unknown> = {}
   if ("titles" in input) row.titles = input.titles
+  if ("packagingMode" in input) row.packaging_mode = input.packagingMode
   if ("thumbnailStoragePath" in input)
     row.thumbnail_storage_path = input.thumbnailStoragePath
   if ("thumbnailMimeType" in input)
@@ -265,15 +286,41 @@ export type PlanReadiness =
 // processing are the same rule rather than two that can drift.
 export function planReadiness(
   plan: Pick<VideoPlan, "titles"> & {
+    packagingMode?: VideoPlanPackagingMode
     thumbnailStoragePath?: string | null
     thumbnailStoragePaths?: Array<string | null> | null
   },
   footageIsReady: boolean,
 ): PlanReadiness {
   if (plan.titles.length === 0) return { ready: false, reason: "no_titles" }
-  if (!plan.thumbnailStoragePath && !plan.thumbnailStoragePaths?.some(Boolean)) {
+
+  const thumbnailSlots = plan.thumbnailStoragePaths ?? []
+  const hasPrimaryThumbnail =
+    thumbnailSlots[0] != null || Boolean(plan.thumbnailStoragePath)
+  const mode = plan.packagingMode ?? "single"
+
+  if (!hasPrimaryThumbnail) {
     return { ready: false, reason: "no_thumbnail" }
   }
+  if (mode === "title" && plan.titles.length < 2) {
+    return { ready: false, reason: "no_titles" }
+  }
+  if (mode === "thumbnail" && !thumbnailSlots[1]) {
+    return { ready: false, reason: "no_thumbnail" }
+  }
+  if (mode === "title-and-thumbnail") {
+    if (!plan.titles[1]?.trim()) return { ready: false, reason: "no_titles" }
+    if (!thumbnailSlots[1]) return { ready: false, reason: "no_thumbnail" }
+    const optionalTitle = Boolean(plan.titles[2]?.trim())
+    const optionalThumbnail = Boolean(thumbnailSlots[2])
+    if (optionalTitle && !optionalThumbnail) {
+      return { ready: false, reason: "no_thumbnail" }
+    }
+    if (optionalThumbnail && !optionalTitle) {
+      return { ready: false, reason: "no_titles" }
+    }
+  }
+
   if (!footageIsReady) return { ready: false, reason: "no_footage" }
   return { ready: true }
 }
