@@ -213,7 +213,7 @@ export function ComparisonProcessing({
         </p>
       </div>
 
-      <div className="w-full space-y-1.5">
+      <div className="w-full">
         <div
           className="h-1.5 w-full overflow-hidden rounded-sm bg-muted"
           role="progressbar"
@@ -227,18 +227,6 @@ export function ComparisonProcessing({
             style={{ width: `${displayProgress}%` }}
           />
         </div>
-        <p className="text-xs text-muted-foreground">
-          {isDone
-            ? isUpdate
-              ? // Says the one thing the creator cannot see from here: this was
-                // a pair they already had, so the history has not grown. Without
-                // it, they go back to the list looking for a new row, find none,
-                // and reasonably conclude the report they just watched being
-                // written has gone missing.
-                "All done. This pair was already in your history, so it has been updated where it is rather than added again."
-              : "All done. Your report is saved, so you can re-open it any time."
-            : "This takes a couple of minutes. Keep this tab open and we'll show you the report the moment it's ready. Leaving stops it and undoes it, so anything it charged goes back."}
-        </p>
       </div>
 
       {isDone && (
