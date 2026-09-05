@@ -97,17 +97,18 @@ export default async function Page({
         </div>
       </header>
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-normal">{name}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {draft
-                ? "Add your title, thumbnail and footage. Set up an A/B test if you have other packaging ideas."
-                : "How your title, thumbnail and hook line up, before you publish."}
-            </p>
+        {draft && (
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-normal">{name}</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Add your title, thumbnail and footage. Set up an A/B test if
+                you have other packaging ideas.
+              </p>
+            </div>
+            <VideoPlanDeleteButton planId={plan.id} />
           </div>
-          <VideoPlanDeleteButton planId={plan.id} />
-        </div>
+        )}
 
         {draft ? (
           canUpload ? (

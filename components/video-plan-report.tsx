@@ -1,11 +1,14 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useState, type ReactNode } from "react"
 import {
+  AreaChartIcon,
   AlertTriangleIcon,
   CheckCircle2Icon,
+  ImageOffIcon,
   ImageIcon,
   Loader2Icon,
+  PackageIcon,
   QuoteIcon,
   RefreshCwIcon,
   TypeIcon,
@@ -86,52 +89,134 @@ export function VideoPlanReport({
 
   if (plan.packagingPlan) {
     return (
-      <PackagingReport
-        planId={plan.id}
-        packaging={plan.packagingPlan}
-        hookTranscript={plan.hookTranscript}
-      />
+      <PlanReportLayout plan={plan}>
+        <PackagingReport
+          planId={plan.id}
+          packaging={plan.packagingPlan}
+          hookTranscript={plan.hookTranscript}
+        />
+      </PlanReportLayout>
     )
   }
 
   if (plan.status === "failed") {
     return (
-      <div className="flex flex-col items-start gap-3 rounded-xl border bg-card p-6">
-        <div className="flex items-start gap-2">
-          <AlertTriangleIcon className="mt-0.5 size-4 text-amber-500" />
-          <div>
-            <p className="text-sm font-medium">
-              We couldn&apos;t read your packaging
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {plan.failureReason ??
-                "Something went wrong while reading this plan."}
-            </p>
+      <PlanReportLayout plan={plan}>
+        <div className="flex flex-col items-start gap-3 rounded-xl border bg-card p-6">
+          <div className="flex items-start gap-2">
+            <AlertTriangleIcon className="mt-0.5 size-4 text-amber-500" />
+            <div>
+              <p className="text-sm font-medium">
+                We couldn&apos;t read your packaging
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {plan.failureReason ??
+                  "Something went wrong while reading this plan."}
+              </p>
+            </div>
           </div>
+          <Button onClick={retry} disabled={retrying}>
+            {retrying ? (
+              <Loader2Icon className="size-4 animate-spin" />
+            ) : (
+              <RefreshCwIcon className="size-4" />
+            )}
+            Try again
+          </Button>
         </div>
-        <Button onClick={retry} disabled={retrying}>
-          {retrying ? (
-            <Loader2Icon className="size-4 animate-spin" />
-          ) : (
-            <RefreshCwIcon className="size-4" />
-          )}
-          Try again
-        </Button>
-      </div>
+      </PlanReportLayout>
     )
   }
 
   return (
-    <div className="flex items-start gap-3 rounded-xl border bg-card p-6">
-      <Loader2Icon className="mt-0.5 size-4 animate-spin text-muted-foreground" />
-      <div>
-        <p className="text-sm font-medium">Reading your packaging…</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          We&apos;re listening to your opening and weighing your titles against
-          your thumbnail. This runs in the background, so you can leave this
-          page and come back.
-        </p>
+    <PlanReportLayout plan={plan}>
+      <div className="flex items-start gap-3 rounded-xl border bg-card p-6">
+        <Loader2Icon className="mt-0.5 size-4 animate-spin text-muted-foreground" />
+        <div>
+          <p className="text-sm font-medium">Reading your packaging…</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            We&apos;re listening to your opening and weighing your titles against
+            your thumbnail. This runs in the background, so you can leave this
+            page and come back.
+          </p>
+        </div>
       </div>
+    </PlanReportLayout>
+  )
+}
+
+function PlanReportLayout({
+  plan,
+  children,
+}: {
+  plan: SerialisedVideoPlan
+  children: ReactNode
+}) {
+  const title = plan.titles[0] ?? "Untitled video"
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-stretch">
+        <PlanThumbnail plan={plan} title={title} />
+        <div className="flex flex-1 flex-col">
+          <h1 className="text-2xl font-semibold tracking-normal">{title}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            How your title, thumbnail and hook line up, before you publish.
+          </p>
+        </div>
+      </div>
+
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center gap-2">
+          <PackageIcon className="size-4 text-muted-foreground" />
+          <h2 className="text-sm font-medium">Packaging</h2>
+        </div>
+        {children}
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center gap-2">
+          <AreaChartIcon className="size-4 text-muted-foreground" />
+          <h2 className="text-sm font-medium">Retention</h2>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function PlanThumbnail({
+  plan,
+  title,
+}: {
+  plan: SerialisedVideoPlan
+  title: string
+}) {
+  const [failed, setFailed] = useState(false)
+  const src = plan.hasThumbnail
+    ? `/api/video-plans/${plan.id}/thumbnail?slot=0`
+    : null
+
+  return (
+    <div className="relative aspect-video w-full shrink-0 overflow-hidden rounded-[var(--radius-thumbnail)] bg-muted sm:w-64">
+      {src && !failed ? (
+        // Signed per request by the thumbnail route, so there is no stable URL
+        // for next/image to optimise.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={src}
+          alt={title}
+          className="h-full w-full object-cover"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <div
+          className="flex h-full w-full items-center justify-center text-muted-foreground"
+          role="img"
+          aria-label={`${title} (no thumbnail available)`}
+        >
+          <ImageOffIcon className="size-6" aria-hidden="true" />
+        </div>
+      )}
     </div>
   )
 }
@@ -154,6 +239,8 @@ function PackagingReport({
     packaging.thumbnails && packaging.thumbnails.length > 0
       ? packaging.thumbnails
       : [{ index: 0, ...packaging.thumbnail }]
+  const hasTitleTest = packaging.titles.length > 1
+  const hasThumbnailTest = thumbnailReads.length > 1
 
   return (
     <div className="flex flex-col gap-4">
@@ -186,9 +273,11 @@ function PackagingReport({
               <TitleCard
                 key={index}
                 read={title}
-                recommended={index === packaging.recommendedTitleIndex}
+                recommended={
+                  hasTitleTest && index === packaging.recommendedTitleIndex
+                }
                 reason={
-                  index === packaging.recommendedTitleIndex
+                  hasTitleTest && index === packaging.recommendedTitleIndex
                     ? packaging.recommendedTitleReason
                     : null
                 }
@@ -205,12 +294,14 @@ function PackagingReport({
                 planId={planId}
                 read={thumbnail}
                 recommended={
+                  hasThumbnailTest &&
                   thumbnail.index ===
-                  (packaging.recommendedThumbnailIndex ?? 0)
+                    (packaging.recommendedThumbnailIndex ?? 0)
                 }
                 reason={
+                  hasThumbnailTest &&
                   thumbnail.index ===
-                  (packaging.recommendedThumbnailIndex ?? 0)
+                    (packaging.recommendedThumbnailIndex ?? 0)
                     ? (packaging.recommendedThumbnailReason ?? null)
                     : null
                 }
