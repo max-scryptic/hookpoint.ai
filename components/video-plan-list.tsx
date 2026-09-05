@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { ClapperboardIcon, ImageIcon } from "lucide-react"
 
 import { NewVideoPlanButton } from "@/components/new-video-plan-button"
+import { ReportTypeBadge } from "@/components/report-type-badge"
 import {
   Table,
   TableBody,
@@ -184,6 +185,14 @@ function TitlesCell({ titles }: { titles: string[] }) {
 }
 
 function PlanStatusBadge({ status }: { status: VideoPlanStatus }) {
+  if (status === "processing") {
+    return <ReportTypeBadge type="processing" />
+  }
+
+  if (status === "ready") {
+    return <ReportTypeBadge type="complete" />
+  }
+
   const { label, className } = planBadge(status)
   return (
     <span
@@ -199,12 +208,6 @@ function planBadge(status: VideoPlanStatus): {
   className: string
 } {
   switch (status) {
-    case "ready":
-      return {
-        label: "Ready",
-        className:
-          "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-      }
     case "failed":
       return {
         label: "Needs a retry",
