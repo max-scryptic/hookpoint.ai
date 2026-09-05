@@ -60,6 +60,12 @@ export const CHANNEL_CURVE_MIN_VIDEOS = 3
 // the end keeps the headline readouts off interpolated positions.
 export const CHANNEL_CURVE_GRID_POINTS = 101
 
+// The hook comparison uses one shared clock instead of one shared percentage:
+// 0:00, 0:01, ... 0:30. A one-second grid is fine enough to inspect the
+// opening beat by beat without pretending the source curve is frame-precise.
+export const HOOK_RETENTION_SECONDS = 30
+export const HOOK_CURVE_GRID_POINTS = HOOK_RETENTION_SECONDS + 1
+
 // A stored curve with only a handful of samples is a truncated fetch rather
 // than a shape, and interpolating it across the whole axis would invent the
 // stretches it never covered.
@@ -132,6 +138,21 @@ export interface ChannelRetentionCurvePoint {
   // The 95% margin on that average, in watch-ratio points. Zero at the start,
   // where every curve is 100% by definition rather than by estimate.
   margin: number | null
+}
+
+export interface ChannelHookRetentionPoint {
+  // Seconds elapsed from the start of every contributing upload, 0..30.
+  elapsedSeconds: number
+  watchRatio: number
+  margin: number | null
+}
+
+export interface ChannelHookRetentionCurve {
+  points: ChannelHookRetentionPoint[]
+  videoCount: number
+  totalViews: number
+  // Ranked on views among the videos eligible for this fixed 30-second axis.
+  bands: ChannelRetentionBands | null
 }
 
 // One contributing video, resampled onto the shared grid so the page can draw
@@ -214,6 +235,9 @@ export interface ChannelRetentionCurve {
   // one line. Null until six videos carry both a curve and a view count, because
   // two bands drawn from overlapping videos would compare a library with itself.
   bands: ChannelRetentionBands | null
+  // The same comparison on an absolute 0:00 to 0:30 clock. Null when fewer
+  // than three contributing uploads have a known runtime of at least 30s.
+  hook: ChannelHookRetentionCurve | null
 }
 
 // Viewer counts turned into weights, with no single video allowed more than
@@ -368,6 +392,70 @@ function steepestDrop(
   return steepest
 }
 
+function buildHookRetentionCurve(
+  contributors: readonly (ChannelRetentionVideoInput & {
+    retention: RetentionPoint[]
+    views: number
+  })[],
+): ChannelHookRetentionCurve | null {
+  const eligible = contributors.flatMap((video) =>
+    video.durationSeconds != null &&
+    video.durationSeconds >= HOOK_RETENTION_SECONDS
+      ? [{ ...video, durationSeconds: video.durationSeconds }]
+      : [],
+  )
+  if (eligible.length < CHANNEL_CURVE_MIN_VIDEOS) return null
+
+  const seconds = Array.from(
+    { length: HOOK_CURVE_GRID_POINTS },
+    (_, index) => index,
+  )
+  const series = eligible.map((video) =>
+    seconds.map(
+      (elapsedSeconds) =>
+        watchRatioAt(video.retention, elapsedSeconds / video.durationSeconds) ??
+        0,
+    ),
+  )
+  const views = eligible.map((video) => video.views)
+  const weights = cappedViewWeights(views)
+  const totalWeight = weights.reduce((total, weight) => total + weight, 0)
+  const points: ChannelHookRetentionPoint[] = seconds.map(
+    (elapsedSeconds, gridIndex) => {
+      const contributions: WeightedProportion[] = series.map(
+        (watchRatios, videoIndex) => ({
+          proportion: watchRatios[gridIndex],
+          weight: weights[videoIndex],
+          sampleSize: views[videoIndex],
+        }),
+      )
+      return {
+        elapsedSeconds,
+        watchRatio:
+          contributions.reduce(
+            (total, contribution) =>
+              total + contribution.weight * contribution.proportion,
+            0,
+          ) / totalWeight,
+        margin:
+          gridIndex === 0 ? 0 : weightedProportionMarginOfError(contributions),
+      }
+    },
+  )
+  const members = eligible.map((video) => ({
+    id: video.id,
+    title: video.title,
+    views: video.views,
+  }))
+
+  return {
+    points,
+    videoCount: eligible.length,
+    totalViews: views.reduce((total, value) => total + value, 0),
+    bands: retentionBands(series, members),
+  }
+}
+
 // The library's average curve, or null when too few videos carry both a stored
 // curve and the view count the weighting needs.
 export function buildChannelRetentionCurve(
@@ -458,5 +546,6 @@ export function buildChannelRetentionCurve(
         views: video.views,
       })),
     ),
+    hook: buildHookRetentionCurve(contributors),
   }
 }

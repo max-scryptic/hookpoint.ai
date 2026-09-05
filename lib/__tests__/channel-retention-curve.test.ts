@@ -5,6 +5,7 @@ import {
   cappedViewWeights,
   channelCurveMaxWeightShare,
   CHANNEL_CURVE_GRID_POINTS,
+  HOOK_CURVE_GRID_POINTS,
   type ChannelRetentionVideoInput,
 } from "@/lib/channel-retention-curve"
 import type { RetentionPoint } from "@/lib/youtube/youtube"
@@ -33,6 +34,28 @@ function jaggedCurve(middle: number, swing: number): RetentionPoint[] {
       watchRatio: middle + (index % 2 === 0 ? swing : -swing),
       relativePerformance: null,
       timestampSeconds: elapsedRatio * 600,
+    }
+  })
+}
+
+// The same opening on videos of different lengths: retention reaches `endRatio`
+// at 30 seconds. A normalized comparison places that point at different x
+// positions; the hook comparison must line it up on one clock.
+function timedHookCurve(
+  durationSeconds: number,
+  endRatio: number,
+): RetentionPoint[] {
+  return Array.from({ length: 101 }, (_, index) => {
+    const elapsedRatio = index / 100
+    const elapsedSeconds = elapsedRatio * durationSeconds
+    return {
+      elapsedRatio,
+      watchRatio: Math.max(
+        0.05,
+        1 - (1 - endRatio) * (elapsedSeconds / 30),
+      ),
+      relativePerformance: null,
+      timestampSeconds: elapsedSeconds,
     }
   })
 }
@@ -427,5 +450,46 @@ describe("buildChannelRetentionCurve", () => {
       video("c", 3_000, linearCurve(0.5), null),
     ])
     expect(curve!.averageDurationSeconds).toBeNull()
+    expect(curve!.hook).toBeNull()
+  })
+
+  it("aligns hook retention on the same first 30 seconds across runtimes", () => {
+    const curve = buildChannelRetentionCurve([
+      video("short-format", 3_000, timedHookCurve(60, 0.4), 60),
+      video("mid-format", 3_000, timedHookCurve(300, 0.4), 300),
+      video("long-format", 3_000, timedHookCurve(900, 0.4), 900),
+    ])
+
+    expect(curve!.hook).not.toBeNull()
+    expect(curve!.hook!.points).toHaveLength(HOOK_CURVE_GRID_POINTS)
+    expect(curve!.hook!.points[0].elapsedSeconds).toBe(0)
+    expect(curve!.hook!.points[15].watchRatio).toBeCloseTo(0.7, 6)
+    expect(curve!.hook!.points[30].elapsedSeconds).toBe(30)
+    expect(curve!.hook!.points[30].watchRatio).toBeCloseTo(0.4, 6)
+  })
+
+  it("keeps videos shorter than 30 seconds out of the hook comparison", () => {
+    const curve = buildChannelRetentionCurve([
+      video("long-1", 6_000, timedHookCurve(60, 0.5), 60),
+      video("long-2", 5_000, timedHookCurve(90, 0.5), 90),
+      video("long-3", 4_000, timedHookCurve(120, 0.5), 120),
+      video("long-4", 3_000, timedHookCurve(180, 0.5), 180),
+      video("long-5", 2_000, timedHookCurve(240, 0.5), 240),
+      video("long-6", 1_000, timedHookCurve(300, 0.5), 300),
+      video("too-short", 100_000, linearCurve(0.9), 20),
+    ])
+
+    expect(curve!.hook!.videoCount).toBe(6)
+    expect(curve!.hook!.totalViews).toBe(21_000)
+    expect(curve!.hook!.bands!.top.videos.map((entry) => entry.id)).toEqual([
+      "long-1",
+      "long-2",
+      "long-3",
+    ])
+    expect(curve!.hook!.bands!.bottom.videos.map((entry) => entry.id)).toEqual([
+      "long-4",
+      "long-5",
+      "long-6",
+    ])
   })
 })

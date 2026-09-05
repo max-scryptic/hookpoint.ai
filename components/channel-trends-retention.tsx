@@ -1,4 +1,4 @@
-import { AreaChartIcon, TrophyIcon } from "lucide-react"
+import { AreaChartIcon, TimerIcon, TrophyIcon } from "lucide-react"
 
 import { ChannelRetentionCurveChart } from "@/components/channel-trends-retention-curve"
 import {
@@ -92,7 +92,32 @@ function RetentionCurveCard({ curve }: { curve: ChannelRetentionCurve }) {
       <ChannelRetentionCurveChart
         points={curve.points}
         bands={curve.bands}
-        averageDurationSeconds={curve.averageDurationSeconds}
+        axis={{
+          kind: "percentage",
+          averageDurationSeconds: curve.averageDurationSeconds,
+        }}
+      />
+    </TrendCard>
+  )
+}
+
+function HookRetentionCard({ curve }: { curve: ChannelRetentionCurve }) {
+  const hook = curve.hook
+  if (hook == null) return null
+  return (
+    <TrendCard
+      icon={TimerIcon}
+      title="Your hook retention"
+      description={
+        hook.bands == null
+          ? "Your channel average through the first 30 seconds of each video."
+          : "Your three most-viewed uploads and your three least-viewed, compared on the same 0:00 to 0:30 clock."
+      }
+    >
+      <ChannelRetentionCurveChart
+        points={hook.points}
+        bands={hook.bands}
+        axis={{ kind: "seconds", durationSeconds: 30 }}
       />
     </TrendCard>
   )
@@ -115,6 +140,7 @@ export function RetentionPanel({ data }: { data: ChannelTrendsData }) {
           name above it. */}
       {curve.bands != null && <RetentionBandsCard bands={curve.bands} />}
       <RetentionCurveCard curve={curve} />
+      <HookRetentionCard curve={curve} />
     </div>
   )
 }
