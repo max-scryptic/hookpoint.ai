@@ -468,13 +468,14 @@ export async function completeSourceFileUpload(
     filenameValidationStatus: outcome.filenameValidationStatus,
     filenameSimilarityScore: outcome.filenameSimilarityScore,
     failureReason: outcome.failureReason,
+    ...(sourceFile.videoPlanId ? { normalisationStatus: "skipped" as const } : {}),
   })
 
-  // Once the upload is good, hand the original off to be normalised into a 360p
-  // proxy (after which the original is deleted). Best-effort and gated: when
-  // normalisation is disabled this returns the row unchanged, so the original
-  // simply remains the served file.
-  if (updated.uploadStatus === "ready") {
+  // Plan-owned uploads only need their audio transcribed for the packaging
+  // read. Do not send them through Qencode: there is no retention-window media
+  // extraction yet, and normalisation deletes the original after the proxy
+  // lands, which can race a plan generation that is already reading it.
+  if (updated.uploadStatus === "ready" && !updated.videoPlanId) {
     return startNormalisation(supabase, storage, updated)
   }
 

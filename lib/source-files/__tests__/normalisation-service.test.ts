@@ -87,6 +87,7 @@ function rowFor(base: SourceFile, payload: Record<string, unknown> = {}) {
     user_id: base.userId,
     analysed_video_id: base.analysedVideoId,
     youtube_video_id: base.youtubeVideoId,
+    video_plan_id: base.videoPlanId,
     original_filename: base.originalFilename,
     storage_provider: base.storageProvider,
     storage_path: base.storagePath,
@@ -111,6 +112,7 @@ function rowFor(base: SourceFile, payload: Record<string, unknown> = {}) {
     normalisation_task_token: base.normalisationTaskToken,
     normalisation_error: base.normalisationError,
     original_deleted_at: base.originalDeletedAt,
+    deep_credits_charged: base.deepCreditsCharged,
     created_at: base.createdAt,
     updated_at: base.updatedAt,
     ...payload,
@@ -506,6 +508,31 @@ describe("pickCallbackVideo", () => {
 describe("applyNormalisationCallback", () => {
   const proxyPath = "user-1/vid-1/sf-1/proxy-1080p.mp4"
   const videoUrl = "https://storage.qencode.com/e207/out.mp4"
+
+  it("skips callbacks for plan-owned uploads and keeps the original", async () => {
+    const sf = makeSourceFile({
+      analysedVideoId: null,
+      youtubeVideoId: null,
+      videoPlanId: "plan-1",
+      normalisationStatus: "processing",
+      proxyStoragePath: proxyPath,
+    })
+    const { supabase, updates } = makeUpdateSupabase(sf)
+    const storage = fakeStorage(true)
+
+    await applyNormalisationCallback(supabase, storage, sf, {
+      taskToken: "task-1",
+      outcome: "completed",
+      videos: [{ url: videoUrl, tag: "playback", height: 1080 }],
+    })
+
+    expect(storage.putObjectFromUrl).not.toHaveBeenCalled()
+    expect(storage.deleteObject).not.toHaveBeenCalled()
+    expect(updates[0]).toMatchObject({
+      normalisation_status: "skipped",
+      normalisation_error: null,
+    })
+  })
 
   it("on completion: pulls the output, marks ready, and deletes the original", async () => {
     const sf = makeSourceFile({

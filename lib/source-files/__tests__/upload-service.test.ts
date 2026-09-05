@@ -514,7 +514,9 @@ describe("completeSourceFileUpload for a video plan", () => {
       return { data: null, error: null }
     })
 
-    await completeSourceFileUpload(supabase, fakeStorage(true), {
+    const storage = fakeStorage(true)
+
+    await completeSourceFileUpload(supabase, storage, {
       userId: "user-1",
       sourceFileId: "sf-1",
       clientDurationSeconds: 431,
@@ -526,7 +528,9 @@ describe("completeSourceFileUpload for a video plan", () => {
       uploaded_duration_seconds: 431,
       duration_validation_status: null,
       failure_reason: null,
+      normalisation_status: "skipped",
     })
+    expect(storage.createSignedReadUrl).not.toHaveBeenCalled()
   })
 
   it("records no duration when the browser could not read one", async () => {
@@ -542,7 +546,9 @@ describe("completeSourceFileUpload for a video plan", () => {
       return { data: null, error: null }
     })
 
-    await completeSourceFileUpload(supabase, fakeStorage(true), {
+    const storage = fakeStorage(true)
+
+    await completeSourceFileUpload(supabase, storage, {
       userId: "user-1",
       sourceFileId: "sf-1",
     })
@@ -552,7 +558,9 @@ describe("completeSourceFileUpload for a video plan", () => {
     expect(updatePayload).toMatchObject({
       upload_status: "ready",
       uploaded_duration_seconds: null,
+      normalisation_status: "skipped",
     })
+    expect(storage.createSignedReadUrl).not.toHaveBeenCalled()
   })
 })
 
