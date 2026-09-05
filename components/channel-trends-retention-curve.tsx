@@ -5,6 +5,7 @@ import { useCallback, useMemo, useState } from "react"
 import type {
   ChannelRetentionBand,
   ChannelRetentionBands,
+  ChannelHookRetentionPoint,
   ChannelRetentionCurvePoint,
 } from "@/lib/channel-retention-curve"
 
@@ -231,13 +232,15 @@ function BandLegendItem({
 export function ChannelRetentionCurveChart({
   points,
   bands,
-  averageDurationSeconds,
+  axis,
 }: {
-  points: ChannelRetentionCurvePoint[]
+  points: ChannelRetentionCurvePoint[] | ChannelHookRetentionPoint[]
   // Null on a library too small for two full, disjoint bands, which leaves the
   // channel average as the only line there is to draw.
   bands: ChannelRetentionBands | null
-  averageDurationSeconds: number | null
+  axis:
+    | { kind: "percentage"; averageDurationSeconds: number | null }
+    | { kind: "seconds"; durationSeconds: number }
 }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
   // The band pulled to the front, from either the pointer on the key or a pin
@@ -273,7 +276,7 @@ export function ChannelRetentionCurveChart({
       watchRatios
         .map(
           (watchRatio, index) =>
-            `${index === 0 ? "M" : "L"}${xFor(points[index].elapsedRatio).toFixed(2)},${yFor(watchRatio).toFixed(2)}`,
+            `${index === 0 ? "M" : "L"}${xFor(index / (points.length - 1)).toFixed(2)},${yFor(watchRatio).toFixed(2)}`,
         )
         .join(" ")
 
@@ -309,11 +312,25 @@ export function ChannelRetentionCurveChart({
           ...model.lines.filter((line) => line.band === highlighted),
         ]
   const hovered = hoverIndex == null ? null : points[hoverIndex]
+  const hoveredPosition =
+    hoverIndex == null ? null : hoverIndex / (points.length - 1)
+  const xTicks =
+    axis.kind === "seconds"
+      ? [0, 5, 10, 15, 20, 25, axis.durationSeconds].map((seconds) => ({
+          position: seconds / axis.durationSeconds,
+          label: formatTimestamp(seconds),
+        }))
+      : [0, 0.25, 0.5, 0.75, 1].map((ratio) => ({
+          position: ratio,
+          label: percent(ratio),
+        }))
   const readout =
-    hovered == null || hoverIndex == null
+    hovered == null || hoverIndex == null || hoveredPosition == null
       ? null
       : [
-          `${percent(hovered.elapsedRatio)} in`,
+          axis.kind === "seconds"
+            ? formatTimestamp(hoveredPosition * axis.durationSeconds)
+            : `${percent(hoveredPosition)} in`,
           ...(bands == null
             ? [`${percent(hovered.watchRatio)} still watching`]
             : [
@@ -321,11 +338,12 @@ export function ChannelRetentionCurveChart({
                 `bottom 3 by views ${percent(bands.bottom.watchRatios[hoverIndex])}`,
                 `channel ${percent(hovered.watchRatio)}`,
               ]),
-          ...(averageDurationSeconds == null
-            ? []
-            : [
-                `around ${formatTimestamp(hovered.elapsedRatio * averageDurationSeconds)}`,
-              ]),
+          ...(axis.kind === "percentage" &&
+          axis.averageDurationSeconds != null
+            ? [
+                `around ${formatTimestamp(hoveredPosition * axis.averageDurationSeconds)}`,
+              ]
+            : []),
         ].join(" · ")
 
   return (
@@ -335,7 +353,11 @@ export function ChannelRetentionCurveChart({
         className="w-full"
         role="img"
         aria-label={
-          bands == null
+          axis.kind === "seconds"
+            ? bands == null
+              ? "Your channel's average audience retention through the first 30 seconds"
+              : "Audience retention through the first 30 seconds averaged across your 3 most-viewed videos, your 3 least-viewed videos and your whole channel"
+            : bands == null
             ? "Your channel's average audience retention curve"
             : "Audience retention averaged across your 3 most-viewed videos, your 3 least-viewed videos and your whole channel"
         }
@@ -369,16 +391,22 @@ export function ChannelRetentionCurveChart({
           )
         })}
 
-        {[0, 0.25, 0.5, 0.75, 1].map((ratio) => (
+        {xTicks.map((tick) => (
           <text
-            key={`x-${ratio}`}
-            x={model.xFor(ratio)}
+            key={`x-${tick.position}`}
+            x={model.xFor(tick.position)}
             y={HEIGHT - 8}
-            textAnchor={ratio === 0 ? "start" : ratio === 1 ? "end" : "middle"}
+            textAnchor={
+              tick.position === 0
+                ? "start"
+                : tick.position === 1
+                  ? "end"
+                  : "middle"
+            }
             fontSize={12}
             fill="var(--muted-foreground)"
           >
-            {percent(ratio)}
+            {tick.label}
           </text>
         ))}
 
@@ -403,9 +431,9 @@ export function ChannelRetentionCurveChart({
 
         {hovered && (
           <line
-            x1={model.xFor(hovered.elapsedRatio)}
+            x1={model.xFor(hoveredPosition ?? 0)}
             y1={PAD.top}
-            x2={model.xFor(hovered.elapsedRatio)}
+            x2={model.xFor(hoveredPosition ?? 0)}
             y2={PAD.top + PLOT_H}
             stroke="var(--muted-foreground)"
             strokeWidth={1}
@@ -448,7 +476,9 @@ export function ChannelRetentionCurveChart({
           <span className="font-mono tabular-nums">{readout}</span>
         ) : (
           <span className="text-muted-foreground">
-            Position is % of each video&apos;s runtime.
+            {axis.kind === "seconds"
+              ? "Position is time from the start of each video."
+              : "Position is % of each video's runtime."}
           </span>
         )}
       </div>
