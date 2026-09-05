@@ -384,6 +384,25 @@ export interface ChannelSubscriberConversion {
   patterns: SubscriberPattern[]
 }
 
+// --- Reach vs retention: which uploads travelled and held viewers ----------
+
+export const REACH_RETENTION_MIN_COVERED_VIDEOS = 3
+
+export interface ChannelReachRetentionPoint {
+  id: string
+  title: string | null
+  views: number
+  averageViewPercentage: number
+}
+
+export interface ChannelReachRetentionScatter {
+  points: ChannelReachRetentionPoint[]
+  medianViews: number
+  medianRetentionPercent: number
+  coveredVideoCount: number
+  libraryVideoCount: number
+}
+
 // --- Packaging patterns: what high-reach packaging does differently --------
 
 // Reach is views per day between publish and the analytics snapshot, because
@@ -559,6 +578,8 @@ export interface ChannelTrendsData {
   recurrence: ChannelRecurrence | null
   // Null until enough library videos carry an analytics snapshot.
   subscribers: ChannelSubscriberConversion | null
+  // Null until enough videos carry both total views and average retention.
+  reachRetention: ChannelReachRetentionScatter | null
   // Null until enough library videos carry views and a publish date.
   packaging: ChannelPackagingPatterns | null
   // The library's headline medians, for the tiles above the tabs.
@@ -1229,6 +1250,40 @@ export function buildSubscriberConversion(
   }
 }
 
+export function buildReachRetentionScatter(
+  videos: ChannelVideo[],
+  libraryVideoCount: number,
+): ChannelReachRetentionScatter | null {
+  const points = videos.flatMap((video): ChannelReachRetentionPoint[] => {
+    if (
+      video.views == null ||
+      video.views <= 0 ||
+      video.averageViewPercentage == null
+    ) {
+      return []
+    }
+    return [
+      {
+        id: video.id,
+        title: video.title,
+        views: video.views,
+        averageViewPercentage: video.averageViewPercentage,
+      },
+    ]
+  })
+  if (points.length < REACH_RETENTION_MIN_COVERED_VIDEOS) return null
+
+  return {
+    points: points.sort((a, b) => a.views - b.views || a.id.localeCompare(b.id)),
+    medianViews: median(points.map((point) => point.views)),
+    medianRetentionPercent: median(
+      points.map((point) => point.averageViewPercentage),
+    ),
+    coveredVideoCount: points.length,
+    libraryVideoCount,
+  }
+}
+
 // Flattens a taxonomy into the countable trait flags the band contrast runs
 // over.
 export function packagingFeatures(
@@ -1448,6 +1503,7 @@ export function buildChannelTrends(params: {
     ),
     recurrence: buildChannelRecurrence(records, videos, signature),
     subscribers: buildSubscriberConversion(records, videos, libraryVideoCount),
+    reachRetention: buildReachRetentionScatter(videos, libraryVideoCount),
     packaging: buildPackagingPatterns(videos, libraryVideoCount),
     snapshot: buildChannelSnapshot(videos, libraryVideoCount),
     averageCurve: buildChannelRetentionCurve(videos),

@@ -1,5 +1,6 @@
 import { AreaChartIcon, TimerIcon, TrophyIcon } from "lucide-react"
 
+import { ChannelReachRetentionScatterChart } from "@/components/channel-trends-reach-retention-scatter"
 import { ChannelRetentionCurveChart } from "@/components/channel-trends-retention-curve"
 import {
   BandVideoPair,
@@ -123,6 +124,20 @@ function HookRetentionCard({ curve }: { curve: ChannelRetentionCurve }) {
   )
 }
 
+function ReachRetentionCard({ data }: { data: ChannelTrendsData }) {
+  const scatter = data.reachRetention
+  if (scatter == null) return null
+  return (
+    <TrendCard
+      icon={AreaChartIcon}
+      title="Reach against retention"
+      description="Every covered upload by total views and the average share watched."
+    >
+      <ChannelReachRetentionScatterChart scatter={scatter} />
+    </TrendCard>
+  )
+}
+
 // A library can open the page on its event synthesis alone, with no stored
 // curves to average, so the tab is dropped from the bar rather than opened
 // empty.
@@ -141,6 +156,7 @@ export function RetentionPanel({ data }: { data: ChannelTrendsData }) {
       {curve.bands != null && <RetentionBandsCard bands={curve.bands} />}
       <RetentionCurveCard curve={curve} />
       <HookRetentionCard curve={curve} />
+      <ReachRetentionCard data={data} />
     </div>
   )
 }
