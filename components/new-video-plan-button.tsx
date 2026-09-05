@@ -35,7 +35,9 @@ export function NewVideoPlanButton({
         const data = (await response.json().catch(() => null)) as {
           message?: string
         } | null
-        setError(data?.message ?? "Could not start a new video.")
+        setError(
+          data?.message ?? "We couldn't create a new video plan. Please try again.",
+        )
         setBusy(false)
         return
       }
@@ -43,7 +45,7 @@ export function NewVideoPlanButton({
       router.push(`/video-planner/${plan.id}`)
       router.refresh()
     } catch {
-      setError("Could not start a new video.")
+      setError("We couldn't create a new video plan. Please try again.")
       setBusy(false)
     }
   }
