@@ -1,8 +1,10 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import type { CSSProperties } from "react"
 
 import { formatCompactNumber } from "@/components/channel-trends-shared"
+import { VideoThumbnail } from "@/components/video-thumbnail"
 import type {
   ChannelReachRetentionPoint,
   ChannelReachRetentionScatter,
@@ -32,6 +34,14 @@ function clamp(value: number, min: number, max: number): number {
 
 function pointLabel(point: ChannelReachRetentionPoint): string {
   return `${point.title ?? "Untitled video"}: ${formatCompactNumber(point.views)} views, ${Math.round(point.averageViewPercentage)}% watched`
+}
+
+function tooltipSide(x: number): "left" | "right" {
+  return x > WIDTH * 0.62 ? "left" : "right"
+}
+
+function tooltipY(y: number): number {
+  return (clamp(y, PAD.top + 92, HEIGHT - PAD.bottom - 24) / HEIGHT) * 100
 }
 
 export function ChannelReachRetentionScatterChart({
@@ -82,15 +92,23 @@ export function ChannelReachRetentionScatterChart({
     activeId == null
       ? null
       : scatter.points.find((point) => point.id === activeId) ?? null
+  const activePosition =
+    active == null
+      ? null
+      : {
+          x: model.xFor(active.views),
+          y: model.yFor(active.averageViewPercentage),
+        }
 
   return (
     <div className="rounded-xl border bg-card p-4">
-      <svg
-        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        className="w-full"
-        role="img"
-        aria-label="Total views against average percentage watched for every covered video"
-      >
+      <div className="relative">
+        <svg
+          viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+          className="w-full"
+          role="img"
+          aria-label="Total views against average percentage watched for every covered video"
+        >
         {model.yTicks.map((value) => {
           const y = model.yFor(value)
           return (
@@ -202,7 +220,79 @@ export function ChannelReachRetentionScatterChart({
             </g>
           )
         })}
-      </svg>
+        </svg>
+        {active && activePosition && (
+          <div
+            className={`pointer-events-none absolute left-1/2 z-10 w-[min(22rem,calc(100%-1rem))] -translate-x-1/2 ${
+              tooltipSide(activePosition.x) === "left"
+                ? "sm:right-[calc(100%_-_var(--tooltip-x)_+_0.75rem)] sm:left-auto sm:translate-x-0"
+                : "sm:left-[calc(var(--tooltip-x)_+_0.75rem)] sm:translate-x-0"
+            } top-[var(--tooltip-y)] -translate-y-1/2 rounded-md border bg-popover p-2.5 text-popover-foreground shadow-xl`}
+            style={
+              {
+                "--tooltip-x": `${(activePosition.x / WIDTH) * 100}%`,
+                "--tooltip-y": `${tooltipY(activePosition.y)}%`,
+              } as CSSProperties
+            }
+          >
+            <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-3">
+              <div className="relative aspect-video overflow-hidden rounded-[var(--radius-thumbnail)] bg-muted">
+                <VideoThumbnail
+                  src={active.thumbnailUrl}
+                  alt={active.title ?? "Video thumbnail"}
+                  sizes="120px"
+                  iconClassName="size-5"
+                />
+              </div>
+              <div className="min-w-0">
+                <p className="line-clamp-2 text-sm leading-tight font-medium">
+                  {active.title ?? "Untitled video"}
+                </p>
+                {active.description && (
+                  <p className="mt-1 line-clamp-3 text-xs leading-snug text-muted-foreground">
+                    {active.description}
+                  </p>
+                )}
+              </div>
+            </div>
+            <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t pt-2 text-xs">
+              <div>
+                <dt className="text-muted-foreground">Views</dt>
+                <dd className="font-mono tabular-nums">
+                  {formatCompactNumber(active.views)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Avg watched</dt>
+                <dd className="font-mono tabular-nums">
+                  {Math.round(active.averageViewPercentage)}%
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Views vs median</dt>
+                <dd className="font-mono tabular-nums">
+                  {active.views >= scatter.medianViews ? "+" : ""}
+                  {formatCompactNumber(active.views - scatter.medianViews)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Watched vs median</dt>
+                <dd className="font-mono tabular-nums">
+                  {active.averageViewPercentage >=
+                  scatter.medianRetentionPercent
+                    ? "+"
+                    : ""}
+                  {Math.round(
+                    active.averageViewPercentage -
+                      scatter.medianRetentionPercent,
+                  )}
+                  pp
+                </dd>
+              </div>
+            </dl>
+          </div>
+        )}
+      </div>
 
       <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs">
         <span className="text-muted-foreground">

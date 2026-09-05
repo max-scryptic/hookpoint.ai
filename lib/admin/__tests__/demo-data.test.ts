@@ -79,6 +79,8 @@ function trendsFor(payloads: DemoVideoPayload[]) {
     videos: payloads.map((payload) => ({
       id: payload.videoId,
       title: payload.title,
+      description: payload.videoDetails.description ?? null,
+      thumbnailUrl: payload.videoDetails.thumbnailUrl,
       dateAnalysed: payload.dateAnalysed,
       views: payload.analyticsSummary.views,
       subscribersGained: payload.analyticsSummary.subscribersGained,

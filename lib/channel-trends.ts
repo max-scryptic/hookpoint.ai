@@ -112,6 +112,8 @@ export interface ChannelKindTrends {
 export interface ChannelVideo {
   id: string
   title: string | null
+  description: string | null
+  thumbnailUrl: string | null
   dateAnalysed: string | null
   views: number | null
   subscribersGained: number | null
@@ -391,6 +393,8 @@ export const REACH_RETENTION_MIN_COVERED_VIDEOS = 3
 export interface ChannelReachRetentionPoint {
   id: string
   title: string | null
+  description: string | null
+  thumbnailUrl: string | null
   views: number
   averageViewPercentage: number
 }
@@ -1266,6 +1270,8 @@ export function buildReachRetentionScatter(
       {
         id: video.id,
         title: video.title,
+        description: video.description,
+        thumbnailUrl: video.thumbnailUrl,
         views: video.views,
         averageViewPercentage: video.averageViewPercentage,
       },
@@ -1640,7 +1646,7 @@ async function loadVideos(
   const { data, error } = await supabase
     .from("analysed_videos")
     .select(
-      "id, video_title, date_analysed, analytics_summary, retention, published_at:video_details->>publishedAt, duration_seconds:video_details->durationSeconds, packaging_taxonomy:packaging_alignment->taxonomy, script_taxonomy",
+      "id, video_title, description:video_details->>description, thumbnail_url:video_details->>thumbnailUrl, date_analysed, analytics_summary, retention, published_at:video_details->>publishedAt, duration_seconds:video_details->durationSeconds, packaging_taxonomy:packaging_alignment->taxonomy, script_taxonomy",
     )
     .eq("user_id", userId)
     .in("id", videoIds)
@@ -1653,6 +1659,8 @@ async function loadVideos(
     (data ?? []) as unknown as {
       id: string
       video_title: string | null
+      description: string | null
+      thumbnail_url: string | null
       date_analysed: string | null
       analytics_summary: {
         views?: number | null
@@ -1672,6 +1680,8 @@ async function loadVideos(
   ).map((row) => ({
     id: row.id,
     title: row.video_title,
+    description: row.description,
+    thumbnailUrl: row.thumbnail_url,
     dateAnalysed: row.date_analysed,
     views: row.analytics_summary?.views ?? null,
     subscribersGained: row.analytics_summary?.subscribersGained ?? null,
