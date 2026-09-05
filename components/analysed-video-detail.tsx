@@ -13,7 +13,6 @@ import {
   MinusIcon,
   PackageIcon,
   QuoteIcon,
-  SparklesIcon,
   TrendingDownIcon,
   TrendingUpIcon,
   TriangleAlertIcon,
@@ -493,77 +492,6 @@ function ScriptFeedbackBody({
   )
 }
 
-function MultimodalInsight({
-  insight,
-}: {
-  insight: RankedRetentionWindowEvent | undefined
-}) {
-  if (!insight) return null
-  return (
-    <div className="ml-10">
-      <MultimodalInsightBody insight={insight} />
-    </div>
-  )
-}
-
-function MultimodalInsightBody({
-  insight,
-}: {
-  insight: RankedRetentionWindowEvent
-}) {
-  return (
-    <div className="flex gap-2 rounded-lg border bg-muted/30 p-3 text-sm">
-      <SparklesIcon className="mt-0.5 size-4 shrink-0 text-blue-500" />
-      <div>
-        <p>{cleanCopy(insight.narrative)}</p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Multimodal evidence · {insight.evidenceQuality} confidence
-        </p>
-      </div>
-    </div>
-  )
-}
-
-function ActionableRecommendation({
-  recommendation,
-  section,
-}: {
-  recommendation: DeepAnalysisRecommendation | undefined
-  section: string
-}) {
-  if (!recommendation) return null
-  return (
-    <div className="ml-10">
-      <ActionableRecommendationBody
-        recommendation={recommendation}
-        section={section}
-      />
-    </div>
-  )
-}
-
-function ActionableRecommendationBody({
-  recommendation,
-  section,
-}: {
-  recommendation: DeepAnalysisRecommendation
-  section: string
-}) {
-  return (
-    <>
-      <TryCallout
-        section={`${section}: Deep analysis`}
-        examples={recommendation.examples}
-      >
-        {recommendation.action}
-      </TryCallout>
-      <p className="mt-1 text-xs text-muted-foreground">
-        {cleanCopy(recommendation.expectedPurpose)}
-      </p>
-    </>
-  )
-}
-
 // The deep (multimodal) insight plus its actionable recommendation, formatted
 // identically to ScriptFeedbackBody so every tab reads the same: the white
 // evidence line, then the blue tip. No bordered box, evidence-source
@@ -870,11 +798,15 @@ function WindowFeedback({
     <>
       {header(null)}
       <AttributionNote attribution={script} section={section} />
-      <MultimodalInsight insight={uniqueDeep[0]?.insight} />
-      <ActionableRecommendation
-        recommendation={uniqueDeep[0]?.recommendation}
-        section={section}
-      />
+      {uniqueDeep[0] && (
+        <div className="ml-10">
+          <DeepFeedbackBody
+            insight={uniqueDeep[0].insight}
+            recommendation={uniqueDeep[0].recommendation}
+            section={section}
+          />
+        </div>
+      )}
     </>
   )
 }
