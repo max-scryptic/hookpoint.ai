@@ -9,6 +9,7 @@ import {
   buildChannelSnapshot,
   buildChannelTrends,
   buildPackagingPatterns,
+  buildReachRetentionScatter,
   buildSubscriberConversion,
   channelTrendsStage,
   packagingFeatures,
@@ -222,7 +223,63 @@ describe("buildChannelTrends", () => {
     expect(data.playbook).toEqual([])
     expect(data.recurrence).toBeNull()
     expect(data.subscribers).toBeNull()
+    expect(data.reachRetention).toBeNull()
     expect(data.packaging).toBeNull()
+  })
+})
+
+describe("buildReachRetentionScatter", () => {
+  it("builds covered points from total views and average retention", () => {
+    const scatter = buildReachRetentionScatter(
+      [
+        video("one", "One", null, {
+          views: 100,
+          averageViewPercentage: 50,
+        }),
+        video("two", "Two", null, {
+          views: 1_000,
+          averageViewPercentage: 62,
+        }),
+        video("three", "Three", null, {
+          views: 10_000,
+          averageViewPercentage: 40,
+        }),
+        video("missing-retention", "Missing retention", null, {
+          views: 5_000,
+        }),
+      ],
+      4,
+    )
+
+    expect(scatter).toMatchObject({
+      medianViews: 1_000,
+      medianRetentionPercent: 50,
+      coveredVideoCount: 3,
+      libraryVideoCount: 4,
+    })
+    expect(scatter?.points.map((point) => point.id)).toEqual([
+      "one",
+      "two",
+      "three",
+    ])
+  })
+
+  it("waits for enough videos with both metrics", () => {
+    expect(
+      buildReachRetentionScatter(
+        [
+          video("one", "One", null, {
+            views: 100,
+            averageViewPercentage: 50,
+          }),
+          video("two", "Two", null, {
+            views: 1_000,
+            averageViewPercentage: 62,
+          }),
+        ],
+        2,
+      ),
+    ).toBeNull()
   })
 })
 
@@ -1197,4 +1254,3 @@ describe("buildChannelTrends packaging extremes", () => {
     )
   })
 })
-
