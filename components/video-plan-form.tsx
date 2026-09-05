@@ -628,7 +628,7 @@ export function VideoPlanForm({
         method: "POST",
       })
       if (!response.ok) {
-        setError(await messageFrom(response, "Could not start the video."))
+        setError(await messageFrom(response, "Could not start the video plan."))
         setStarting(false)
         return
       }

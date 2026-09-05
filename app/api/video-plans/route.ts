@@ -95,7 +95,10 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Failed to create video plan", error)
     return NextResponse.json(
-      { error: "internal_error", message: "Could not start the video." },
+      {
+        error: "internal_error",
+        message: "We couldn't create a new video plan. Please try again.",
+      },
       { status: 500 },
     )
   }
