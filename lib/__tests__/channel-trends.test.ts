@@ -45,6 +45,8 @@ function video(
   return {
     id,
     title,
+    description: null,
+    thumbnailUrl: null,
     dateAnalysed,
     views: null,
     subscribersGained: null,
@@ -233,6 +235,8 @@ describe("buildReachRetentionScatter", () => {
     const scatter = buildReachRetentionScatter(
       [
         video("one", "One", null, {
+          description: "Opening line. Full promise.",
+          thumbnailUrl: "https://img.youtube.com/vi/one/hqdefault.jpg",
           views: 100,
           averageViewPercentage: 50,
         }),
@@ -262,6 +266,11 @@ describe("buildReachRetentionScatter", () => {
       "two",
       "three",
     ])
+    expect(scatter?.points[0]).toMatchObject({
+      id: "one",
+      description: "Opening line. Full promise.",
+      thumbnailUrl: "https://img.youtube.com/vi/one/hqdefault.jpg",
+    })
   })
 
   it("waits for enough videos with both metrics", () => {
