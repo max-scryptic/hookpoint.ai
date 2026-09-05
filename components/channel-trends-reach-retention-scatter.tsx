@@ -298,14 +298,10 @@ export function ChannelReachRetentionScatterChart({
         <span className="text-muted-foreground">
           Total views use a log scale. Dotted guides mark your library medians.
         </span>
-        {active ? (
-          <span className="font-mono tabular-nums">{pointLabel(active)}</span>
-        ) : (
-          <span className="font-mono tabular-nums text-muted-foreground">
-            {scatter.coveredVideoCount} of {scatter.libraryVideoCount} videos
-            covered
-          </span>
-        )}
+        <span className="font-mono tabular-nums text-muted-foreground">
+          {scatter.coveredVideoCount} of {scatter.libraryVideoCount} videos
+          covered
+        </span>
       </div>
     </div>
   )
