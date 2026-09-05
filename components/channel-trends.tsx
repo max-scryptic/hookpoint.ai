@@ -39,6 +39,7 @@ import {
   type ChannelTrendsData,
 } from "@/lib/channel-trends"
 import { CHANNEL_TRENDS_VIDEO_THRESHOLD } from "@/lib/deep-analysis-library"
+import { cn } from "@/lib/utils"
 
 // The Channel Trends page body. Below CHANNEL_TRENDS_VIDEO_THRESHOLD deeply
 // analysed videos it is the unlock meter and the card explaining what is being
@@ -139,9 +140,16 @@ function ChannelSnapshotCards({ snapshot }: { snapshot: ChannelSnapshot }) {
   ].filter(
     (tile): tile is typeof tile & { value: string } => tile.value != null,
   )
+  const largeGridColumns = {
+    1: "lg:grid-cols-1",
+    2: "lg:grid-cols-2",
+    3: "lg:grid-cols-3",
+    4: "lg:grid-cols-4",
+    5: "lg:grid-cols-5",
+  }[tiles.length]
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+    <div className={cn("grid gap-3 sm:grid-cols-2", largeGridColumns)}>
       {tiles.map(({ label, value, icon: Icon }) => (
         <Card key={label} size="sm">
           <CardHeader>
