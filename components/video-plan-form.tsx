@@ -52,6 +52,42 @@ type FootagePhase =
   | { phase: "uploading"; progress: number }
   | { phase: "saving" }
 
+type AbTestMode = "title" | "thumbnail" | "title-and-thumbnail"
+
+const AB_TEST_OPTIONS: Array<{
+  value: AbTestMode
+  label: string
+  description: string
+}> = [
+  {
+    value: "title",
+    label: "Title only",
+    description: "One thumbnail with up to three titles.",
+  },
+  {
+    value: "thumbnail",
+    label: "Thumbnail only",
+    description: "One title with up to three thumbnails.",
+  },
+  {
+    value: "title-and-thumbnail",
+    label: "Title and thumbnail",
+    description: "Up to three matched title and thumbnail combinations.",
+  },
+]
+
+function initialAbTestMode(plan: SerialisedVideoPlan): AbTestMode | null {
+  const titleOptions = plan.titles.filter((title) => title.trim()).length
+  const thumbnailOptions = plan.thumbnailSlots.filter(Boolean).length
+
+  if (titleOptions > 1 && thumbnailOptions > 1) {
+    return "title-and-thumbnail"
+  }
+  if (thumbnailOptions > 1) return "thumbnail"
+  if (titleOptions > 1) return "title"
+  return null
+}
+
 // What the page knows about the footage attached to this plan. Filled from the
 // plan's source-file row on the server, then kept up to date in the browser as
 // an upload lands, so a creator who reloads sees the same thing either way.
@@ -87,11 +123,22 @@ export function VideoPlanForm({
   sourceFile: SerialisedSourceFile | null
 }) {
   const router = useRouter()
+  const initialTestMode = initialAbTestMode(plan)
 
   // One empty title to start: the second and third appear only when asked for,
   // so a creator with a single idea is never looking at two blank boxes.
   const [titles, setTitles] = useState<string[]>(
-    plan.titles.length > 0 ? plan.titles : [""],
+    initialTestMode === "title" || initialTestMode === "title-and-thumbnail"
+      ? Array.from(
+          { length: MAX_TITLES },
+          (_, index) => plan.titles[index] ?? "",
+        )
+      : plan.titles.length > 0
+        ? plan.titles
+        : [""],
+  )
+  const [abTestMode, setAbTestMode] = useState<AbTestMode | null>(
+    initialTestMode,
   )
   const [footage, setFootage] = useState<Footage | null>(footageFrom(sourceFile))
   const [footagePhase, setFootagePhase] = useState<FootagePhase>({
@@ -125,7 +172,9 @@ export function VideoPlanForm({
 
   const uploading = footagePhase.phase !== "idle"
   const busy = uploading || thumbnailBusySlot != null || starting
-  const filledTitles = titles.map((title) => title.trim()).filter(Boolean)
+  const activeTitles =
+    abTestMode === "thumbnail" ? titles.slice(0, 1) : titles
+  const filledTitles = activeTitles.map((title) => title.trim()).filter(Boolean)
   const hasThumbnail = thumbnailSlots.some(Boolean)
   const canStart =
     !busy &&
@@ -212,6 +261,24 @@ export function VideoPlanForm({
   function addTitle() {
     setTitles((previous) =>
       previous.length >= MAX_TITLES ? previous : [...previous, ""],
+    )
+  }
+
+  function selectAbTestMode(mode: AbTestMode) {
+    setAbTestMode(mode)
+
+    if (mode === "thumbnail") {
+      const next = [titles[0] ?? ""]
+      setTitles(next)
+      void saveTitles(next)
+      return
+    }
+
+    setTitles((previous) =>
+      Array.from(
+        { length: MAX_TITLES },
+        (_, index) => previous[index] ?? "",
+      ),
     )
   }
 
@@ -427,7 +494,7 @@ export function VideoPlanForm({
     setError(null)
 
     try {
-      if (!(await saveTitles(titles))) {
+      if (!(await saveTitles(activeTitles))) {
         setStarting(false)
         return
       }
@@ -482,120 +549,119 @@ export function VideoPlanForm({
 
       <PlanStep
         icon={<TypeIcon className="size-4 text-muted-foreground" />}
-        title="Titles"
-        description={`Start with the title you have in mind. Add up to ${MAX_TITLES} if you are torn between ideas.`}
+        title="Title & thumbnail"
+        description={
+          abTestMode
+            ? "Add the packaging options you are considering for this video."
+            : "Start with the title and thumbnail you plan to publish."
+        }
       >
-        <div className="flex flex-col gap-3">
-          {titles.map((title, index) => (
-            <div key={index} className="flex flex-col gap-1.5">
-              <Label htmlFor={`plan-title-${index}`} className="text-xs">
-                {index === 0 ? "Title" : `Alternative ${index}`}
-              </Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  id={`plan-title-${index}`}
-                  value={title}
-                  maxLength={TITLE_MAX_LENGTH}
-                  disabled={starting}
-                  placeholder={
-                    index === 0
-                      ? "The title you would publish with"
-                      : "Another idea worth weighing"
-                  }
-                  onChange={(event) => setTitleAt(index, event.target.value)}
-                  onBlur={() => void saveTitles(titles)}
-                />
-                {titles.length > 1 && (
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={`Remove alternative ${index}`}
-                    disabled={starting}
-                    onClick={() => removeTitleAt(index)}
-                  >
-                    <XIcon />
-                  </Button>
-                )}
-              </div>
-            </div>
-          ))}
-
-          {titles.length < MAX_TITLES && (
-            <Button
-              variant="outline"
-              className="w-fit"
-              disabled={starting}
-              onClick={addTitle}
+        <div className="flex flex-col gap-5">
+          {abTestMode ? (
+            <div
+              role="group"
+              aria-label="A/B test type"
+              className="grid gap-2 sm:grid-cols-3"
             >
-              <PlusIcon className="size-4" />
-              Add another title idea
-            </Button>
-          )}
-        </div>
-      </PlanStep>
-
-      <PlanStep
-        icon={<ImageIcon className="size-4 text-muted-foreground" />}
-        title="Thumbnails"
-        description={`Upload up to ${MAX_THUMBNAILS} options.`}
-      >
-        <div className="grid gap-3 sm:grid-cols-3">
-          {Array.from({ length: MAX_THUMBNAILS }, (_, index) => {
-            const hasSlot = thumbnailSlots[index]
-            const preview = thumbnailPreviews[index]
-            const busySlot = thumbnailBusySlot === index
-            return (
-              <div
-                key={index}
-                className="flex min-w-0 flex-col gap-3 rounded-lg border p-3"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium">Option {index + 1}</p>
-                  {busySlot && (
-                    <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
-                  )}
-                </div>
-                {preview || hasSlot ? (
-                  // Either an object URL for a file the browser already holds
-                  // or the signing route, which mints a fresh URL per request.
-                  // Neither is something next/image can optimise.
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={
-                      preview ??
-                      `/api/video-plans/${plan.id}/thumbnail?slot=${index}`
-                    }
-                    alt={`Thumbnail option ${index + 1}`}
-                    className="aspect-video w-full rounded-[var(--radius-thumbnail)] border bg-muted object-cover"
-                  />
-                ) : (
+              {AB_TEST_OPTIONS.map((option) => {
+                const selected = option.value === abTestMode
+                return (
                   <button
+                    key={option.value}
                     type="button"
-                    className="flex aspect-video w-full items-center justify-center rounded-[var(--radius-thumbnail)] border border-dashed text-muted-foreground transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50"
+                    aria-pressed={selected}
                     disabled={busy}
-                    onClick={() => chooseThumbnail(index)}
-                    aria-label={`Choose thumbnail option ${index + 1}`}
+                    onClick={() => selectAbTestMode(option.value)}
+                    className={`flex min-h-20 flex-col items-start justify-center rounded-lg border px-3 py-2.5 text-left outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 ${
+                      selected
+                        ? "border-primary bg-accent text-foreground"
+                        : "bg-card hover:bg-muted/60"
+                    }`}
                   >
-                    <ImageIcon className="size-5" />
+                    <span className="text-sm font-medium">{option.label}</span>
+                    <span className="mt-1 text-xs text-muted-foreground">
+                      {option.description}
+                    </span>
                   </button>
-                )}
-                <Button
-                  variant={hasSlot ? "outline" : "default"}
-                  disabled={busy}
-                  onClick={() => chooseThumbnail(index)}
+                )
+              })}
+            </div>
+          ) : null}
+
+          {abTestMode === "title-and-thumbnail" ? (
+            <div className="grid gap-3 lg:grid-cols-3">
+              {Array.from({ length: MAX_TITLES }, (_, index) => (
+                <div
+                  key={index}
+                  className="flex min-w-0 flex-col gap-3 rounded-lg border bg-muted/25 p-3"
                 >
-                  <UploadIcon className="size-4" />
-                  {hasSlot ? "Choose another" : "Choose thumbnail"}
-                </Button>
+                  <p className="text-sm font-medium">
+                    Option {String.fromCharCode(65 + index)}
+                  </p>
+                  {renderTitleField(index, `Title ${index + 1}`, true)}
+                  {renderThumbnailSlot(index, `Thumbnail ${index + 1}`)}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-col gap-3">
+                {(abTestMode === "title"
+                  ? Array.from({ length: MAX_TITLES }, (_, index) => index)
+                  : [0]
+                ).map((index) =>
+                  renderTitleField(
+                    index,
+                    abTestMode === "title" ? `Title ${index + 1}` : "Title",
+                    abTestMode === "title",
+                  ),
+                )}
               </div>
-            )
-          })}
+
+              <div
+                className={
+                  abTestMode === "thumbnail"
+                    ? "grid gap-3 sm:grid-cols-3"
+                    : "max-w-sm"
+                }
+              >
+                {(abTestMode === "thumbnail"
+                  ? Array.from({ length: MAX_THUMBNAILS }, (_, index) => index)
+                  : [0]
+                ).map((index) =>
+                  renderThumbnailSlot(
+                    index,
+                    abTestMode === "thumbnail"
+                      ? `Thumbnail ${index + 1}`
+                      : "Thumbnail",
+                  ),
+                )}
+              </div>
+            </>
+          )}
+
+          {abTestMode ? null : (
+            <div className="flex flex-col items-start gap-1.5 border-t pt-4">
+              <Button
+                variant="outline"
+                disabled={busy}
+                onClick={() => selectAbTestMode("title")}
+              >
+                <PlusIcon className="size-4" />
+                Set up A/B test
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Compare up to three titles, thumbnails, or matched combinations.
+              </p>
+            </div>
+          )}
+
+          <p className="text-xs text-muted-foreground">
+            {thumbnailBusySlot != null
+              ? "Uploading your thumbnail…"
+              : `Accepted thumbnail formats: ${ACCEPTED_THUMBNAIL_EXTENSIONS.join(", ")}.`}
+          </p>
         </div>
-        <p className="text-xs text-muted-foreground">
-          {thumbnailBusySlot != null
-            ? "Uploading your thumbnail…"
-            : `Accepted formats: ${ACCEPTED_THUMBNAIL_EXTENSIONS.join(", ")}.`}
-        </p>
       </PlanStep>
 
       <PlanStep
