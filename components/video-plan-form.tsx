@@ -745,16 +745,25 @@ export function VideoPlanForm({
                 </div>
               ))}
             </div>
+          ) : abTestMode === "title" ? (
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(16rem,1fr)] lg:items-start">
+              <div className="flex min-w-0 flex-col gap-3">
+                {Array.from({ length: MAX_TITLES }, (_, index) =>
+                  renderTitleField(index, `Title ${index + 1}`),
+                )}
+              </div>
+
+              <div className="min-w-0">
+                {renderThumbnailSlot(0, "Thumbnail")}
+              </div>
+            </div>
           ) : (
             <>
               <div className="flex flex-col gap-3">
-                {(abTestMode === "title"
-                  ? Array.from({ length: MAX_TITLES }, (_, index) => index)
-                  : [0]
-                ).map((index) =>
+                {[0].map((index) =>
                   renderTitleField(
                     index,
-                    abTestMode === "title" ? `Title ${index + 1}` : "Title",
+                    "Title",
                   ),
                 )}
               </div>
