@@ -158,6 +158,16 @@ export async function DELETE(
     return NextResponse.json({ deleted: true })
   }
 
+  if (plan.status !== "draft") {
+    return NextResponse.json(
+      {
+        error: "not_draft",
+        message: "Only draft plans can be deleted.",
+      },
+      { status: 409 },
+    )
+  }
+
   try {
     const sourceFile = await getSourceFileForVideoPlan(supabase, user.id, planId)
     const sourceStorage = getStorageProvider()
