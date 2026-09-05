@@ -9,6 +9,7 @@ import {
   PlusIcon,
   TypeIcon,
   UploadIcon,
+  XIcon,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -37,7 +38,10 @@ import {
 } from "@/lib/video-plans/config"
 import type { SerialisedVideoPlan } from "@/lib/video-plans/serialise"
 import { MAX_TITLES, TITLE_MAX_LENGTH } from "@/lib/video-plans/titles"
-import { PLAN_READINESS_MESSAGE } from "@/lib/video-plans/video-plans"
+import {
+  PLAN_READINESS_MESSAGE,
+  type VideoPlanPackagingMode,
+} from "@/lib/video-plans/video-plans"
 
 const VIDEO_ACCEPT = ACCEPTED_EXTENSIONS.map((ext) => `.${ext}`).join(",")
 const THUMBNAIL_ACCEPT = ACCEPTED_THUMBNAIL_EXTENSIONS.map(
@@ -76,17 +80,7 @@ const AB_TEST_OPTIONS: Array<{
 ]
 
 function initialAbTestMode(plan: SerialisedVideoPlan): AbTestMode | null {
-  if (plan.packagingMode !== "single") return plan.packagingMode
-
-  const titleOptions = plan.titles.filter((title) => title.trim()).length
-  const thumbnailOptions = plan.thumbnailSlots.filter(Boolean).length
-
-  if (titleOptions > 1 && thumbnailOptions > 1) {
-    return "title-and-thumbnail"
-  }
-  if (thumbnailOptions > 1) return "thumbnail"
-  if (titleOptions > 1) return "title"
-  return null
+  return plan.packagingMode === "single" ? null : plan.packagingMode
 }
 
 // What the page knows about the footage attached to this plan. Filled from the
@@ -303,7 +297,15 @@ export function VideoPlanForm({
     )
   }
 
-  async function savePackagingMode(mode: AbTestMode) {
+  function cancelAbTest() {
+    const nextTitles = [titles[0] ?? ""]
+    setAbTestMode(null)
+    setTitles(nextTitles)
+    void savePackagingMode("single")
+    void saveTitles(nextTitles)
+  }
+
+  async function savePackagingMode(mode: VideoPlanPackagingMode) {
     if (mode === savedPackagingMode.current) return
 
     setSavingPackagingMode(true)
@@ -680,6 +682,21 @@ export function VideoPlanForm({
             ? "Add the packaging options you are considering for this video."
             : "Start with the title and thumbnail you plan to publish."
         }
+        action={
+          abTestMode ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              disabled={busy}
+              aria-label="Cancel A/B test"
+              title="Cancel A/B test"
+              onClick={cancelAbTest}
+            >
+              <XIcon className="size-4" />
+            </Button>
+          ) : null
+        }
       >
         <div className="flex flex-col gap-5">
           {abTestMode ? (
@@ -923,21 +940,26 @@ function PlanStep({
   icon,
   title,
   description,
+  action,
   children,
 }: {
   icon: React.ReactNode
   title: string
   description: string
+  action?: React.ReactNode
   children: React.ReactNode
 }) {
   return (
     <Card className="gap-4 p-6">
-      <div className="flex items-start gap-2">
-        <span className="mt-0.5">{icon}</span>
-        <div>
-          <h2 className="text-sm font-medium">{title}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-2">
+          <span className="mt-0.5">{icon}</span>
+          <div>
+            <h2 className="text-sm font-medium">{title}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+          </div>
         </div>
+        {action}
       </div>
       {children}
     </Card>
