@@ -32,6 +32,7 @@ import { UpgradeToUploadPrompt } from "@/components/unlock-full-report-cta"
 import { useNavigationGuard } from "@/hooks/use-navigation-guard"
 import { ACCEPTED_EXTENSIONS, isAcceptedExtension } from "@/lib/source-files/config"
 import type { SerialisedSourceFile } from "@/lib/source-files/serialise"
+import { cn } from "@/lib/utils"
 import {
   compareDuration,
   computeFilenameSimilarity,
@@ -58,6 +59,81 @@ const ACCEPT_ATTR = ACCEPTED_EXTENSIONS.map((ext) => `.${ext}`).join(",")
 // report can scroll the reader down to this card without both sides hard-coding
 // the same string.
 export const SOURCE_FILE_UPLOAD_SECTION_ID = "source-file-upload"
+
+export function UploadVideoCard({
+  icon,
+  title,
+  description,
+  children,
+  className,
+}: {
+  icon: React.ReactNode
+  title: string
+  description?: string
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <div className={cn("rounded-xl border bg-card p-4", className)}>
+      <div className="flex items-start gap-2">
+        <span className="mt-0.5">{icon}</span>
+        <div className="min-w-0">
+          <h2 className="text-sm font-medium">{title}</h2>
+          {description && (
+            <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+          )}
+        </div>
+      </div>
+      <div className="mt-4">{children}</div>
+    </div>
+  )
+}
+
+export function UploadedVideoFileSummary({
+  filename,
+  sizeBytes,
+  durationSeconds,
+  suffix,
+  action,
+  progress,
+  status,
+}: {
+  filename: string
+  sizeBytes: number | null
+  durationSeconds: number | null
+  suffix?: string
+  action?: React.ReactNode
+  progress?: number
+  status?: string
+}) {
+  const pct = progress == null ? null : Math.round(progress * 100)
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium">{filename}</p>
+          <p className="text-sm text-muted-foreground">
+            {sizeBytes != null ? `${formatBytes(sizeBytes)} · ` : ""}
+            {formatDuration(durationSeconds)}
+            {suffix ? ` · ${suffix}` : ""}
+          </p>
+        </div>
+        {action && <div className="sm:ml-auto">{action}</div>}
+      </div>
+
+      {pct != null && (
+        <div className="h-2 w-full max-w-md overflow-hidden rounded-sm bg-muted">
+          <div
+            className="h-full rounded-sm bg-primary transition-[width] duration-150"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      )}
+
+      {status && <p className="text-sm text-muted-foreground">{status}</p>}
+    </div>
+  )
+}
 
 type ClientState =
   | { phase: "idle" }
@@ -412,11 +488,6 @@ export function SourceFileUpload({
       tabIndex={-1}
       className="flex scroll-mt-4 flex-col gap-3 outline-none"
     >
-      <div className="flex items-center gap-2">
-        <FileVideoIcon className="size-4 text-muted-foreground" />
-        <h2 className="text-sm font-medium">Raw source file</h2>
-      </div>
-
       <input
         ref={inputRef}
         type="file"
@@ -425,7 +496,10 @@ export function SourceFileUpload({
         onChange={onPick}
       />
 
-      <div className="rounded-xl border bg-card p-4">
+      <UploadVideoCard
+        icon={<FileVideoIcon className="size-4 text-muted-foreground" />}
+        title="Raw source file"
+      >
         {uploadsLocked ? (
           <UpgradeToUploadPrompt message={uploadsLocked} />
         ) : (
@@ -443,7 +517,7 @@ export function SourceFileUpload({
             retryState={retryState}
           />
         )}
-      </div>
+      </UploadVideoCard>
 
       <Dialog open={showUploadedDialog} onOpenChange={setShowUploadedDialog}>
         <DialogContent className="gap-6 p-8">

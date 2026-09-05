@@ -16,6 +16,10 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  UploadedVideoFileSummary,
+  UploadVideoCard,
+} from "@/components/source-file-upload"
 import { useNavigationGuard } from "@/hooks/use-navigation-guard"
 import {
   ACCEPTED_EXTENSIONS,
@@ -23,8 +27,6 @@ import {
 } from "@/lib/source-files/config"
 import type { SerialisedSourceFile } from "@/lib/source-files/serialise"
 import {
-  formatBytes,
-  formatDuration,
   readVideoDuration,
   uploadFileMultipart,
   uploadToSignedUrl,
@@ -811,58 +813,44 @@ export function VideoPlanForm({
         </div>
       </PlanStep>
 
-      <PlanStep
+      <UploadVideoCard
         icon={<FileVideoIcon className="size-4 text-muted-foreground" />}
         title="Upload video"
         description="The cut you are about to publish. Nothing is made public; we read its opening to hear the hook your titles and thumbnails have to match."
       >
         {footage ? (
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium">
-                  {footage.filename}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {footage.sizeBytes != null
-                    ? `${formatBytes(footage.sizeBytes)} · `
-                    : ""}
-                  {formatDuration(footage.durationSeconds)}
-                  {footagePhase.phase === "idle" && !footage.ready
-                    ? " · not uploaded"
-                    : ""}
-                </p>
-              </div>
+          <UploadedVideoFileSummary
+            filename={footage.filename}
+            sizeBytes={footage.sizeBytes}
+            durationSeconds={footage.durationSeconds}
+            suffix={
+              footagePhase.phase === "idle" && !footage.ready
+                ? "not uploaded"
+                : undefined
+            }
+            progress={
+              footagePhase.phase === "uploading"
+                ? footagePhase.progress
+                : undefined
+            }
+            status={
+              uploading
+                ? footagePhase.phase === "uploading"
+                  ? `Uploading ${Math.round(footagePhase.progress * 100)}%. Keep this page open until it finishes.`
+                  : "Saving your footage…"
+                : undefined
+            }
+            action={
               <Button
                 variant="outline"
-                className="sm:ml-auto"
                 disabled={busy}
                 onClick={() => videoInputRef.current?.click()}
               >
                 <UploadIcon className="size-4" />
                 Choose another
               </Button>
-            </div>
-
-            {footagePhase.phase === "uploading" && (
-              <div className="h-2 w-full max-w-md overflow-hidden rounded-sm bg-muted">
-                <div
-                  className="h-full rounded-sm bg-primary transition-[width] duration-150"
-                  style={{
-                    width: `${Math.round(footagePhase.progress * 100)}%`,
-                  }}
-                />
-              </div>
-            )}
-
-            {uploading && (
-              <p className="text-sm text-muted-foreground">
-                {footagePhase.phase === "uploading"
-                  ? `Uploading ${Math.round(footagePhase.progress * 100)}%. Keep this page open until it finishes.`
-                  : "Saving your footage…"}
-              </p>
-            )}
-          </div>
+            }
+          />
         ) : (
           <div className="flex flex-col items-start gap-2">
             <Button
@@ -877,7 +865,7 @@ export function VideoPlanForm({
             </p>
           </div>
         )}
-      </PlanStep>
+      </UploadVideoCard>
 
       <div className="flex flex-col items-start gap-3">
         <Button disabled={!canStart} onClick={start}>
