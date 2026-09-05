@@ -800,17 +800,14 @@ export function VideoPlanForm({
                 <PlusIcon className="size-4" />
                 Set up A/B test
               </Button>
-              <p className="text-xs text-muted-foreground">
-                Compare up to three titles, thumbnails, or matched combinations.
-              </p>
             </div>
           )}
 
-          <p className="text-xs text-muted-foreground">
-            {thumbnailBusySlot != null
-              ? "Uploading your thumbnail…"
-              : `Accepted thumbnail formats: ${ACCEPTED_THUMBNAIL_EXTENSIONS.join(", ")}.`}
-          </p>
+          {thumbnailBusySlot != null ? (
+            <p className="text-xs text-muted-foreground">
+              Uploading your thumbnail…
+            </p>
+          ) : null}
         </div>
       </PlanStep>
 
